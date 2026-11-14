@@ -10012,8 +10012,8 @@ def test_a_doubled_taken_id_refuses_the_repair(
     """Criterion 5. Planted fault: the first row of an ID wins and the call starts."""
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
     seed_tests(world)
-    world.write_record([("L1-1", "taken — test_a", "no")])
-    world.write_findings(VERDICT, released_block([released_cells("L1-1", "taken — test_c", "no", "released finding")]))
+    world.write_record([("L1-1", "taken — test_a", "no"), ("L1-1", "taken — test_c", "no")])
+    world.write_findings(VERDICT)
     world.script(claude=[{"stdout": "must not run"}])
     assert world.run("repair") == 2
     assert world.calls() == []
@@ -10062,6 +10062,599 @@ def test_repair_refuses_legacy_completed_taken_statuses_before_call(
     world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "rejected — covered", "")]))
     script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+
+
+NEWEST_BLOCK_SHAPES = {
+    "empty": lambda: [phase6_block([])],
+    "no-finding": lambda: [phase6_block([]), "No finding."],
+    "rows": lambda: [phase6_block([phase6_cells("F-new", FIXED, "new fixed finding")])],
+}
+
+
+@pytest.mark.parametrize("stage2_off", [False, True])
+@pytest.mark.parametrize("record_present", [False, True])
+@pytest.mark.parametrize("record_origin", ["base", "invalid"])
+@pytest.mark.parametrize("status", ["taken — test_a", "TAKEN — test_a"])
+def test_repair_rejects_invalid_origins_in_selected_history(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+    record_present: bool,
+    record_origin: str,
+    stage2_off: bool,
+) -> None:
+    """Criterion 1. Planted fault: an older block's taken row or a selected released row escapes the Origin check."""
+    seed_tests(world)
+    if record_present:
+        world.write_record([("L1-1", status, "no")])
+        set_row_origin(world, "L1-1", record_origin)
+    old = phase6_cells("F-old", status, "older phase finding")
+    options = ("--stage2-off", "unavailable") if stage2_off else ()
+    for shape, newest_parts in NEWEST_BLOCK_SHAPES.items():
+        for origin in INVALID_ORIGINS:
+            released = released_cells("L1-3", status, "no", "released finding")
+            released[3] = origin
+            old[3] = origin
+            world.write_findings(released_block([released]), phase6_block([old]), *newest_parts(), VERDICT)
+            before = origin_state(world)
+            capsys.readouterr()
+            assert world.run("repair", "demo", *options) == 2, (shape, origin, status, record_present, stage2_off)
+            error = capsys.readouterr().err
+            assert "invalid Origin" in error, (shape, origin, status, record_present, stage2_off, error)
+            assert "F-old" in error and "L1-3" in error, (shape, origin)
+            if record_present and record_origin == "invalid":
+                assert "L1-1 (loop.md, Origin `invalid`)" in error, (shape, origin)
+            else:
+                assert "L1-1" not in error, (shape, origin)  # the record row is valid, or absent
+            assert origin_state(world) == before, (shape, origin)
+            assert world.calls() == [], (shape, origin)
+
+
+@pytest.mark.parametrize("place", ["record", "released", "phase-6"])
+@pytest.mark.parametrize("status", ["taken — fix", "fixed — tests/test_fix.py::test_fix", "rejected — covered"])
+@pytest.mark.parametrize("origin", ["base", "invalid"])
+def test_repair_and_origin_check_resolve_latest_finding(world: World, place: str, status: str, origin: str) -> None:
+    """Option D: selection and Origin admission see the same latest row, never its history."""
+    old = phase6_cells("L1-1", "taken — old decision", "historical finding")
+    old[3] = "invalid"
+    latest = phase6_cells("L1-1", status, "current finding")
+    latest[3] = origin
+    if place == "record":
+        world.write_record([("L1-1", status, "no")])
+        set_row_origin(world, "L1-1", origin)
+        world.write_findings(phase6_block([old]))
+    elif place == "released":
+        latest = released_cells("L1-1", status, "no", "current finding")
+        latest[3] = origin
+        world.write_findings(phase6_block([old]), released_block([latest]))
+    else:
+        world.write_findings(phase6_block([old]), phase6_block([latest]))
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    record = world.record().read_text(encoding="utf-8") if place == "record" else None
+    taken, waiting = stage2.repair_targets(ctx, record)
+    assert waiting == []
+    assert [(source, row[0], row[3], row[7]) for source, row in taken] == (
+        [(place, "L1-1", origin, status)] if status.startswith("taken") else []
+    ), "only the latest row of a repeated ID may be selected"
+    refusal = stage2.target_origin_refusal(record, world.text())
+    if status.startswith("taken") and origin == "invalid":
+        assert refusal is not None
+        assert "L1-1" in refusal and ("loop.md" if place == "record" else "findings.md") in refusal
+        assert "block " not in refusal and "## Phase" not in refusal
+    else:
+        assert refusal is None, "historical provenance must not override the resolved current row"
+
+
+@pytest.mark.parametrize("place", ["released", "phase-6"])
+def test_resolver_refuses_duplicate_ids_within_one_table(place: str) -> None:
+    """Duplicate IDs in one table refuse even when only one row is taken."""
+    block = released_block if place == "released" else phase6_block
+    row = (
+        released_cells("L1-1", "taken — fix", "no", "finding")
+        if place == "released"
+        else phase6_cells("L1-1", "taken — fix", "finding")
+    )
+    duplicate = row.copy()
+    duplicate[7] = "rejected — different decision"
+    text = block([row, duplicate])
+    with pytest.raises(stage2.Refused, match="same id.*L1-1.*findings.md"):
+        stage2.resolve_finding_rows(None, text)
+
+
+@pytest.mark.parametrize("source", ["phase-6", "record", "later-table"])
+@pytest.mark.parametrize("status", ["taken — old decision", FIXED])
+def test_repair_verb_ignores_shadowed_invalid_origin(world: World, source: str, status: str) -> None:
+    """L8-1: a superseded accepted row must not re-enter the second Origin check."""
+    repair_world(world)
+    if source in {"phase-6", "later-table"}:
+        old = phase6_cells("L1-1", status, "superseded finding")
+        old[3] = "invalid"
+        if source == "later-table":
+            world.record().unlink()
+            latest = phase6_cells("L1-1", "taken — fix", "current finding")
+            world.write_findings(
+                phase6_block([old]) + "\n\n" + stage2.render_table(stage2.ROW_COLUMNS, [latest]), VERDICT
+            )
+        else:
+            world.write_findings(phase6_block([old]), VERDICT)
+        history = phase6_block([old])
+    else:
+        path = world.record()
+        old_text = path.read_text(encoding="utf-8")
+        old = stage2.record_rows(old_text)[0]
+        old[3], old[7] = "invalid", status
+        history = stage2.render_table(stage2.ROW_COLUMNS, [old])
+        path.write_text(history + "\n\n" + old_text, encoding="utf-8")
+    assert world.run("repair") == 0, "superseded invalid Origin must not refuse the full repair verb"
+    assert len(repair_calls(world)) == 1
+    current_record = world.record().read_text(encoding="utf-8") if world.record().exists() else None
+    assert history in (current_record if source == "record" else world.text())
+    current = (
+        stage2.record_rows(current_record) if current_record is not None else stage2.findings_rows(world.text())[1]
+    )
+    assert current[-1][7].startswith("fixed")
+
+
+def test_repair_checks_stale_record_before_fixed_statuses_and_commit(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L8-2: a changed record refuses before findings marks or a checkpoint exist."""
+    baseline = repair_world(world)
+    row = phase6_cells("F-1", "taken — fix", "finding")
+    world.write_findings(phase6_block([row]), VERDICT)
+    script_repair(
+        world,
+        [repair_step(stdout="L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix")],
+        make=[{"stdout": "green\n"}],
+    )
+    real = stage2.run_attempts
+
+    def run(*args, **kwargs):
+        before = kwargs["before_commit"]
+
+        def mutate_then_mark():
+            path = world.record()
+            path.write_text(path.read_text(encoding="utf-8").replace("test_a", "concurrent edit"), encoding="utf-8")
+            before()
+
+        kwargs["before_commit"] = mutate_then_mark
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_attempts", run)
+    assert world.run("repair") == 2, "a stale record must refuse before the checkpoint"
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "stale-row refusal must precede the checkpoint"
+    assert stage2.findings_rows(world.text())[1][0] == row, "findings must remain unmarked on stale-record refusal"
+    assert "concurrent edit" in world.record().read_text(encoding="utf-8")
+    assert "changed since resolution" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("boundary", ["separator", "header", "blank", "prose", "non-finding row"])
+def test_resolver_duplicate_ids_follow_table_boundaries(boundary: str) -> None:
+    """A separator keeps the table's IDs; a new header or non-row ends their scope."""
+    row = phase6_cells("F-1", "taken — fix", "finding")
+    line = "| " + " | ".join(row) + " |"
+    between = {
+        "separator": "| " + " | ".join(["---"] * len(row)) + " |",
+        "header": "| " + " | ".join(stage2.ROW_COLUMNS) + " |",
+        "blank": "",
+        "prose": "Another table follows.",
+        "non-finding row": "| Other | Columns |",
+    }[boundary]
+    text = "\n".join(["## Phase 6", line, between, line])
+    if boundary == "separator":
+        with pytest.raises(stage2.Refused, match="same id.*F-1.*findings.md"):
+            stage2.resolve_finding_rows(None, text)
+    else:
+        try:
+            resolved = stage2.resolve_finding_rows(None, text)
+        except stage2.Refused as error:
+            pytest.fail(f"IDs in distinct tables must resolve to the latest row: {error}")
+        assert len(resolved) == 1 and resolved[0].line == 3
+
+
+@pytest.mark.parametrize("status", [FIXED, "rejected — covered"])
+def test_repair_ignores_decided_duplicate_in_released_history(
+    world: World, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    """Decided duplicate history is a notice, never a demand to rewrite a released block."""
+    repair_world(world)
+    old = released_cells("L9-1", status, "no", "historical finding")
+    old[3] = "legacy provenance"
+    world.write_findings(released_block([old, old.copy()]), phase6_block([]), VERDICT)
+    before = released_block([old, old.copy()])
+    assert world.run("repair") == 0, "decided duplicate history must not hold an unrelated repair"
+    assert before in world.text()
+    error = capsys.readouterr().err
+    assert "notice" in error.lower() and "L9-1" in error and "findings.md" in error
+
+
+def test_repair_preserves_unicode_separator_in_finding(world: World) -> None:
+    """A Unicode prose separator must not shift the physical line marked fixed."""
+    seed_tests(world)
+    old = phase6_cells("F-old", FIXED, "first\u2028continued")
+    target = phase6_cells("F-2", "taken — fix", "second")
+    world.write_findings(phase6_block([old, target]), VERDICT)
+    script_repair(world, [repair_step(stdout="F-2: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0, "the target must stay on its physical row and get its fixed mark"
+    text = world.text()
+    assert "| " + " | ".join(old) + " |" in text
+    target[7] = "fixed — tests/test_fix.py::test_fix"
+    assert phase6_block([old, target]) + "\n\n" + VERDICT in text, (
+        "repair must replace the target in place, not append a second row"
+    )
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_repair_resolves_before_call_only(world: World, monkeypatch: pytest.MonkeyPatch, duplicate: bool) -> None:
+    """Duplicates refuse before a call; status writers use the already resolved admission rows."""
+    repair_world(world)
+    if duplicate:
+        row = phase6_cells("F-1", "taken — fix", "finding")
+        world.write_findings(phase6_block([row, row.copy()]), VERDICT)
+    original = stage2.resolve_finding_rows
+
+    def resolve(*args, **kwargs):
+        assert not world.calls("codex"), "status writers must not resolve or refuse after the model call"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "resolve_finding_rows", resolve)
+    assert world.run("repair") == (2 if duplicate else 0)
+    assert len(world.calls("codex")) == (0 if duplicate else 1)
+
+
+def test_repair_names_findings_shadowed_by_record(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """A crash's released copy remains unchanged but its record override is named."""
+    repair_world(world)
+    old = released_cells("L1-1", "taken — test_a", "no", "released copy")
+    world.write_findings(released_block([old]), VERDICT)
+    assert world.run("repair") == 0
+    assert released_block([old]) in world.text()
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "findings.md" in error and "loop.md" in error
+    assert "shadow" in error.lower()
+    assert stage2.record_rows(world.record().read_text(encoding="utf-8"))[0][7].startswith("fixed")
+
+
+def test_repair_admission_uses_one_snapshot(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Selection and both Origin checks share one record and findings read."""
+    repair_world(world)
+    original_read = stage2.read_record
+    original_text = Path.read_text
+    reads = []
+    finding_reads = []
+    observed = []
+
+    def read_record(change, root):
+        text = original_read(change, root)
+        reads.append(text)
+        return text
+
+    def read_text(path, *args, **kwargs):
+        text = original_text(path, *args, **kwargs)
+        if path == world.findings:
+            finding_reads.append(text)
+        return text
+
+    for name in ("repair_targets", "target_origin_refusal", "origin_refusal"):
+        original = getattr(stage2, name)
+
+        def observe(*args, _name=name, _original=original, **kwargs):
+            observed.append((_name, len(reads), len(finding_reads)))
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(stage2, name, observe)
+    monkeypatch.setattr(stage2, "read_record", read_record)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(stage2, "run_attempts", lambda *_args, **_kwargs: None)
+    assert world.run("repair") == 0
+    assert [name for name, _, _ in observed] == ["repair_targets", "target_origin_refusal", "origin_refusal"]
+    assert [n for _, n, _ in observed] == [1, 1, 1], "all admission checks need the same single record read"
+    assert len({n for _, _, n in observed}) == 1, "no findings reread between admission checks"
+
+
+@pytest.mark.parametrize("identical", [False, True])
+def test_repair_marks_only_the_resolved_finding_row(world: World, identical: bool) -> None:
+    """A successful repair changes the current table only, including identical historical cells."""
+    seed_tests(world)
+    old = phase6_cells("F-1", "taken — fix", "historical finding")
+    latest = old.copy()
+    if not identical:
+        latest[5] = "current finding"
+    world.write_findings(phase6_block([old]), phase6_block([latest]))
+    script_repair(world, [repair_step(stdout="F-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0, "a finding repeated across tables must be repaired once"
+    _, rows_now = stage2.findings_rows(world.text())
+    assert rows_now[0] == old
+    assert rows_now[1][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize("mutation", ["replace", "insert", "truncate"])
+def test_repair_refuses_to_mark_a_changed_findings_line(world: World, mutation: str) -> None:
+    """A stale resolved index must refuse rather than overwrite a concurrent edit."""
+    rows = [phase6_cells(ident, "taken — fix", ident) for ident in ("F-1", "F-2")]
+    world.write_findings(phase6_block(rows))
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    resolved = stage2.resolve_finding_rows(None, world.text())
+    taken, _ = stage2.repair_targets(ctx, None, resolved=resolved)
+    lines = world.text().split("\n")
+    index = resolved[-1].line
+    if mutation == "replace":
+        lines[index] = "Unrelated text added after resolution."
+    elif mutation == "insert":
+        lines.insert(index, "Unrelated text added after resolution.")
+    else:
+        lines = lines[:index]
+    changed = "\n".join(lines)
+    world.findings.write_text(changed, encoding="utf-8")
+    fixes = {row[0]: "fixed — tests/test_fix.py::test_fix" for row in rows}
+    try:
+        stage2.mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+    except stage2.Refused as error:
+        assert "F-2" in str(error) and "findings.md" in str(error)
+    except IndexError:
+        pytest.fail("a vanished resolved line must refuse with its finding ID and file")
+    else:
+        pytest.fail("a changed resolved line must refuse before writing any fixed status")
+    assert world.text() == changed, "refusal must preserve the concurrent edit and every other row"
+
+
+@pytest.mark.parametrize("mutation", ["replace", "insert", "truncate"])
+def test_repair_refuses_to_mark_a_changed_record_line(world: World, mutation: str) -> None:
+    """A record edit after resolution must survive without any fixed statuses written."""
+    world.write_record([("L1-1", "taken — fix", "no"), ("L1-2", "taken — fix", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    resolved = stage2.resolve_finding_rows(original, "")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, _ = stage2.repair_targets(ctx, original, resolved=resolved)
+    lines = original.splitlines()
+    index = resolved[-1].line
+    if mutation == "replace":
+        lines[index] = "Unrelated text added after resolution."
+    elif mutation == "insert":
+        lines.insert(index, "Unrelated text added after resolution.")
+    else:
+        lines = lines[:index]
+    changed = "\n".join(lines) + "\n"
+    path.write_text(changed, encoding="utf-8")
+    fixes = {row[0]: "fixed — tests/test_fix.py::test_fix" for _, row in taken}
+    try:
+        stage2.mark_repaired_record("demo", taken, fixes, world.root, lock_held=True, resolved=resolved)
+    except stage2.Refused as error:
+        assert "L1-2" in str(error) and "loop.md" in str(error)
+    except IndexError:
+        pytest.fail("a vanished resolved record line must refuse with its finding ID and file")
+    else:
+        pytest.fail("a changed resolved record line must refuse before writing any fixed status")
+    assert path.read_text(encoding="utf-8") == changed, "refusal must preserve the edit and every other record row"
+
+
+def test_repair_marks_only_the_resolved_record_row(world: World) -> None:
+    """The same resolver also limits record status writes to the latest table's row."""
+    world.write_record([("L1-1", "taken — fix", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    row = stage2.record_rows(original)[0]
+    path.write_text(original + "\n" + stage2.render_table(stage2.ROW_COLUMNS, [row]), encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, _ = stage2.repair_targets(ctx, path.read_text(encoding="utf-8"))
+    assert len(taken) == 1, "a record ID repeated in separate tables is history"
+    stage2.mark_repaired_record(
+        "demo", taken, {"L1-1": "fixed — tests/test_fix.py::test_fix"}, world.root, {"L1-1": "yes"}
+    )
+    rows_now = stage2.record_rows(path.read_text(encoding="utf-8"))
+    assert rows_now[0] == row
+    assert rows_now[1][7:] == ["fixed — tests/test_fix.py::test_fix", "yes"]
+
+
+@pytest.mark.parametrize("pipe", ["|", r"\|"])
+def test_repair_marks_record_status_with_typed_pipe(world: World, pipe: str) -> None:
+    """The stale-row guard uses the resolver's normalized record Status cells."""
+    world.write_record([("L1-1", f"taken — first {pipe} second", "no")])
+    path = world.record()
+    original = path.read_text(encoding="utf-8")
+    row = stage2.record_rows(original)[0]
+    row[7] = f"taken — first {pipe} second"
+    lines = original.split("\n")
+    index = stage2.resolve_finding_rows(original, "")[0].line
+    lines[index] = "| " + " | ".join(row) + " |"
+    original = "\n".join(lines)
+    path.write_text(original, encoding="utf-8")
+    resolved = stage2.resolve_finding_rows(original, "")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    taken, waiting = stage2.repair_targets(ctx, original, resolved=resolved)
+    assert not waiting and len(taken) == 1
+    fixed = "fixed — tests/test_fix.py::test_fix"
+    try:
+        stage2.mark_repaired_record(
+            "demo", taken, {"L1-1": fixed}, world.root, {"L1-1": "yes"}, lock_held=True, resolved=resolved
+        )
+    except stage2.Refused as error:
+        pytest.fail(f"an unchanged record Status with a typed pipe must be marked fixed: {error}")
+    rows = stage2.record_rows(path.read_text(encoding="utf-8"))
+    assert rows == [[*taken[0][1][:7], fixed, "yes"]]
+
+
+def test_repair_origin_refusal_has_no_effects_across_blocks(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 2. Planted fault: a call, probe, audit line, time entry, byte change or commit precedes the refusal."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "base")
+    released = released_cells("L1-3", "taken — test_c", "no", "released finding")
+    released[3] = "fix-r01"
+    old = phase6_cells("F-old", "TAKEN — crit 6", "older phase finding")
+    old[3] = "criterion 1"
+    world.write_findings(phase6_block([old]), released_block([released]), phase6_block([]), VERDICT)
+    before = origin_state(world)
+    plan_before = world.plan.read_bytes()
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        pi=[{"stdout": "must not run"}],
+        codex=[codex_ok("T9", "must not run")],
+        claude=[{"stdout": "must not run"}],
+        make=[{"stdout": "green\n"}],
+    )
+    for options in ((), ("--stage2-off", "unavailable")):
+        capsys.readouterr()
+        assert world.run("repair", "demo", *options) == 2, options
+        error = capsys.readouterr().err
+        assert "invalid Origin" in error and "F-old" in error and "L1-3" in error, (options, error)
+        assert origin_state(world) == before, options
+        assert world.plan.read_bytes() == plan_before, "a time entry was appended before the refusal"
+        assert git(world.root, "rev-parse", "HEAD") == baseline, "a commit was made before the refusal"
+        assert world.calls() == [], options
+
+
+def test_repair_origin_refusal_locates_every_selected_block(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Criterion 3. Planted fault: a bad row or its older block cannot be located, a valid target is accused, or the correction guidance is incomplete."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "oops")
+    first_release = released_cells("L1-3", "taken — test_c", "no", "first released finding")
+    first_release[3] = ""
+    second_release = released_cells("L1-4", "taken — test_d", "no", "second released finding")
+    second_release[3] = "fix-r0"
+    first_phase = phase6_cells("F-1", "taken — crit 6", "first older phase finding")
+    first_phase[3] = "criterion 1"
+    second_phase = phase6_cells("F-2", "taken — crit 7", "second older phase finding")
+    second_phase[3] = "BASE"
+    valid = phase6_cells("F-ok", "taken — crit 8", "valid newest finding")  # Origin `base`
+    world.write_findings(
+        released_block([first_release]),
+        released_block([second_release]),
+        phase6_block([first_phase]),
+        phase6_block([second_phase]),
+        phase6_block([valid]),
+        VERDICT,
+    )
+    capsys.readouterr()
+    assert world.run("repair") == 2
+    error = capsys.readouterr().err
+    assert "L1-1 (loop.md, Origin `oops`)" in error
+    assert "L1-3 (findings.md, Origin ``)" in error
+    assert "L1-4 (findings.md, Origin `fix-r0`)" in error
+    assert "F-1 (findings.md, Origin `criterion 1`)" in error
+    assert "F-2 (findings.md, Origin `BASE`)" in error
+    assert "F-ok" not in error, "a valid selected row was accused"
+    assert "`base`" in error and "`fix-r<N>`" in error and "positive whole number" in error
+    assert "The orchestrator sets it" in error and "correct the cell" in error
+    assert "not the reviewer's answer" in error
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize("origin", ["base", "fix-r1", "fix-r12"])
+def test_repair_preserves_valid_origins_across_blocks(world: World, origin: str) -> None:
+    """Criterion 4. Planted fault: the target check refuses a canonical value, omits an older target from the batch, or rewrites an Origin while marking fixed."""
+    baseline = repair_world(world, ("L1-1", "taken — test_a", "no"))
+    set_row_origin(world, "L1-1", origin)
+    # Superseded rows that no repair selects keep their exemption: their invalid Origin must not block.
+    stale_fixed = released_cells("L1-9", FIXED, "no", "stale released repair")
+    stale_fixed[3] = "diff reading"
+    stale_rejected = phase6_cells("F-rej", "rejected — covered", "stale rejection")
+    stale_rejected[3] = "criterion 1"
+    released = released_cells("L1-3", "taken — test_c", "no", "released finding")
+    released[3] = origin
+    old = phase6_cells("F-old", "taken — crit 6", "older phase finding")
+    old[3] = origin
+    world.write_findings(
+        phase6_block([stale_rejected]),
+        released_block([stale_fixed]),
+        released_block([released]),
+        phase6_block([old]),
+        phase6_block([]),
+        VERDICT,
+    )
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-old: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    for listed in (
+        "- L1-1 [MAJOR, MAINT] src/app.py:1: finding of L1-1 — Status: taken — test_a",
+        "- L1-3 [MAJOR, MAINT] src/app.py:1: released finding — Status: taken — test_c",
+        "- F-old [MAJOR, SPEC] spec.md:3: older phase finding — Status: taken — crit 6",
+    ):
+        assert listed in prompt, listed
+    fixed = "fixed — tests/test_fix.py::test_fix"
+    saved = world.record().read_text(encoding="utf-8")
+    assert {row[0]: (row[3], row[7]) for row in stage2.record_rows(saved)} == {"L1-1": (origin, fixed)}
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    assert {row[0]: (row[3], row[7]) for row in released_now} == {
+        "L1-9": ("diff reading", FIXED),
+        "L1-3": (origin, fixed),
+    }
+    assert {row[0]: (row[3], row[7]) for row in phase6_now} == {
+        "F-rej": ("criterion 1", "rejected — covered"),
+        "F-old": (origin, fixed),
+    }
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+
+
+def test_origin_history_check_is_limited_to_repair_targets(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. Planted fault: another verb calls the target check, or repair audits unselected historical rows."""
+    real_check = stage2.target_origin_refusal
+
+    def forbidden_target_check(*_args: object) -> None:
+        pytest.fail("only repair may check the selected rows' Origins")
+
+    monkeypatch.setattr(stage2, "target_origin_refusal", forbidden_target_check)
+    stale = phase6_cells("F-old", FIXED, "superseded phase-6 finding")
+    stale[3] = "scope"
+    legacy_release = released_cells("L1-9", FIXED, "no", "stale released repair")
+    legacy_release[3] = "diff reading"
+    # Ordinary release ignores superseded provenance and never reaches the target check.
+    world.write_record([("L1-1", FIXED, "no")])
+    world.write_findings(phase6_block([stale]), phase6_block([]), VERDICT)
+    assert world.run("release-loop") == 0
+    # The loop keeps its newest-block scope with the guard standing.
+    world.write_record([("L2-1", FIXED, "no")], number=2)
+    world.write_findings(phase6_block([stale]), released_block([legacy_release]), phase6_block([]), VERDICT)
+    world.script(
+        pi=[{"stdout": rows(1)}] * 4,
+        codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+    )
+    assert world.run("review-loop") == 0
+    # The phase-6 review keeps its scope too.
+    world.write_record([("L2-1", FIXED, "no")], number=2)
+    world.write_findings(phase6_block([stale]), released_block([legacy_release]), phase6_block([]), VERDICT)
+    commit_review_findings(world)
+    world.script(
+        pi=[{"stdout": rows(1)}] * 4,
+        codex=[codex_ok("T9", "No finding."), codex_ok("T9", "L2-1: agree")],
+    )
+    assert world.run("review") == 0
+
+    # Repair audits its selected rows alone: unselected fixed and rejected history never blocks it.
+    monkeypatch.setattr(stage2, "target_origin_refusal", real_check)
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    set_row_origin(world, "L1-1", "base")
+    stale_rejected = phase6_cells("F-rej", "rejected — covered", "stale rejection")
+    stale_rejected[3] = "criterion 1"
+    world.write_findings(
+        phase6_block([stale_rejected]),
+        released_block([legacy_release]),
+        phase6_block([]),
+        VERDICT,
+    )
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    assert {row[0]: (row[3], row[7]) for row in released_now} == {"L1-9": ("diff reading", FIXED)}
+    assert {row[0]: (row[3], row[7]) for row in phase6_now} == {"F-rej": ("criterion 1", "rejected — covered")}
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
@@ -11282,6 +11875,138 @@ def test_work_measurement_failure_prevents_acceptance(
     assert world.run("implement") == 1
     assert git(world.root, "rev-parse", "HEAD") == baseline
     assert "could not measure whether the attempt produced work" in world.text()
+
+
+# ---------------------------------------------------------------------------
+# The runner's own ledger clearing cannot qualify an attempt (bead coding-harness-twbl)
+# ---------------------------------------------------------------------------
+
+# A plan whose pending entry names the test the first attempt plants; the second row holds the
+# ledger's shape stable beside the cleared one.
+MARKED_LEDGER_PLAN = (
+    "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+    "- 1: not yet written tests/test_fix.py::test_fix — the attempt writes it\n"
+    "- 2: not a test — nobody writes a test for this row\n\n## Time used\n"
+)
+
+
+def seeded_ledger_plan(world: World) -> None:
+    """A committed plan with the pending entry, so every attempt's pre-call bytes carry the marker."""
+    world.plan.write_text(MARKED_LEDGER_PLAN, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan with a pending ledger marker")
+
+
+def counting_capture(monkeypatch: pytest.MonkeyPatch, clearings: list[int]) -> None:
+    """The real clearing capture, with the number of entries each verification recorded."""
+    real = stage2.capture_ledger_clearing
+
+    def capture(root: Path, plan: Path, evidence: stage2.ClearingEvidence | None) -> None:
+        real(root, plan, evidence)
+        clearings.append(0 if evidence is None else len(evidence.records))
+
+    monkeypatch.setattr(stage2, "capture_ledger_clearing", capture)
+
+
+@pytest.mark.parametrize(
+    ("verb", "forced_full"),
+    [("implement", False), ("repair", True), ("repair", False)],
+    ids=["implement-full", "repair-full-fallback", "repair-targeted"],
+)
+def test_runner_ledger_clearing_cannot_qualify_a_retry(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verb: str, forced_full: bool
+) -> None:
+    """Criteria 1 and 4. Planted fault: a time-body-only retry is accepted because verification
+    cleared the retained test's runner-owned marker; or a marker-only retry loses its diagnostic,
+    its rejected records or its taken rows, or checkpoints or reports success on exhaustion."""
+    seeded_ledger_plan(world)
+    clearings: list[int] = []
+    counting_capture(monkeypatch, clearings)
+    targeted = None
+    if verb == "repair" and not forced_full:
+        # The actual targeted path, not the fallback: attempt 1's targeted pytest is the one red run.
+        targeted = targeted_mode(monkeypatch)
+        targeted.outcomes["pytest"] = lambda _command: RED_PYTEST if len(targeted.of("pytest")) == 2 else None
+    first = work_step(verb)
+    if verb == "implement":
+        first = {**first, "plant": {**first["plant"], "tests/test_fix.py": FIX_TEST}}
+    if verb == "repair" and forced_full:
+        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover.
+        first = {**first, "plant": {**first["plant"], "verification-scope.txt": "requires full verification\n"}}
+    baseline = script_work(
+        world,
+        verb,
+        [first, idle_step("time-body-only"), idle_step("time-body-only")],
+        [{"stdout": "red\n", "exit": 1}, GREEN, GREEN],
+    )
+    held = world.record().read_text(encoding="utf-8") if verb == "repair" else None
+    assert world.run(verb) == 1, "a retry whose model spent only the time body was accepted"
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert clearings == [1, 1, 1], clearings
+    entries = runner_entries(world.plan)
+    assert len(entries) == 3
+    assert all("rejected" in line and "accepted" not in line for line in entries)
+    assert world.text().count("Stage-2 call,") == 3
+    text = world.text()
+    assert text.count(stage2.NO_WORK) == 2, text
+    # The retained test stayed across the retries; each retry's clearing (counted above) shows the
+    # restored plan brought the marker back before verification cleared it again.
+    assert (world.root / "tests" / "test_fix.py").is_file()
+    assert "verified and committed" not in capsys.readouterr().out
+    if held is not None:
+        assert world.record().read_text(encoding="utf-8") == held, "a repair row was marked without a fix"
+    if targeted is not None:
+        assert targeted.of("make") == [], "the repair did not take the actual targeted path"
+        assert text.count("targeted verification, not the full `make verify`") == 3
+
+
+@pytest.mark.parametrize("fault", ["capture", "undo", "undo-with-earlier-work"])
+def test_ledger_discount_measurement_failure_prevents_acceptance(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fault: str
+) -> None:
+    """Criterion 5. Planted fault: unreadable or mismatched clearing evidence is treated as work
+    and the attempt reaches a checkpoint, instead of being rejected with its reason."""
+    seeded_ledger_plan(world)
+    if fault == "capture":
+        monkeypatch.setattr(stage2, "_clearing_records", lambda *_args, **_kwargs: None)
+    else:
+        real_prepare = stage2.prepare_derived
+
+        def tampering(root: Path, env: dict[str, str], key: str | None) -> list[str]:
+            # After stamping: the cleared line no longer holds the bytes the clearing wrote.
+            problems = real_prepare(root, env, key)
+            if not problems:
+                world.plan.write_text(
+                    world.plan.read_text(encoding="utf-8").replace(
+                        "- 1: tests/test_fix.py::test_fix — the attempt writes it",
+                        "- 1: tests/test_fix.py::test_fix — tampered after the clearing",
+                    ),
+                    encoding="utf-8",
+                )
+            return problems
+
+        monkeypatch.setattr(stage2, "prepare_derived", tampering)
+    steps = [
+        {
+            "stdout": "done",
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                # This path sorts before the plan: work here must not bypass validation.
+                **({"docs/note.md": f"Model work in attempt {attempt}\n"} if fault == "undo-with-earlier-work" else {}),
+            },
+            "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+        }
+        for attempt in range(3)
+    ]
+    baseline = script_work(world, "implement", steps, [GREEN] * 3)
+    assert world.run("implement") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    text = world.text()
+    assert text.count(stage2.NO_WORK) == 3
+    assert "could not measure whether the attempt produced work" in text
+    assert ("cannot explain" if fault == "capture" else "no longer holds the bytes") in text
+    assert "verified and committed" not in capsys.readouterr().out
 
 
 def test_nonempty_repair_still_requires_answer_proof(world: World) -> None:
@@ -17192,9 +17917,9 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
     seen = []
     real = stage2.mark_repaired_findings
 
-    def spy_findings(ctx: stage2.Context, taken: list, fixes: dict) -> None:
+    def spy_findings(ctx: stage2.Context, taken: list, fixes: dict, **options: object) -> None:
         seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
-        real(ctx, taken, fixes)
+        real(ctx, taken, fixes, **options)
 
     def spy_record(
         _change: str, _taken: list, _fixes: dict, _root: Path, _marks: dict | None = None, **_options: object
@@ -23696,6 +24421,107 @@ def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, 
     assert problems and "plan" in problems[0]
 
 
+# ---------------------------------------------------------------------------
+# The clearing discount keeps model work visible (bead coding-harness-twbl)
+# ---------------------------------------------------------------------------
+
+CLEARED_ENTRY = "- 1: not yet written tests/test_new.py::test_new — the attempt writes it"
+REWRITTEN_ENTRY = "- 1: not yet written tests/test_new.py::test_new — a better proof"
+MODEL_CLEARED_ENTRY = "- 1: tests/test_new.py::test_new — the attempt writes it"
+
+
+def seeded_pending_entry(world: World) -> None:
+    """A committed plan with one pending entry whose test already exists."""
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        f"{CLEARED_ENTRY}\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_new.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "pending entry and its test")
+
+
+@pytest.mark.parametrize(
+    ("edit", "expected"),
+    [
+        ("clearing-only", False),
+        ("plan-prose", True),
+        ("ledger-rewrite", True),
+        ("model-cleared-marker", True),
+        ("other-file", True),
+    ],
+)
+def test_ledger_discount_preserves_model_work(world: World, edit: str, expected: bool) -> None:
+    """Criterion 2. Planted fault: the clearing discount hides model prose, a ledger rewrite, a
+    model-cleared marker or another file's edit - or fails to discount a bare runner clearing."""
+    seeded_pending_entry(world)
+    before = stage2.worktree_tree(world.root)
+    plan = world.plan
+    if edit == "plan-prose":
+        plan.write_text(plan.read_text(encoding="utf-8").replace("# Plan\n", "# Plan changed\n"), encoding="utf-8")
+    elif edit == "ledger-rewrite":
+        plan.write_text(plan.read_text(encoding="utf-8").replace(CLEARED_ENTRY, REWRITTEN_ENTRY), encoding="utf-8")
+    elif edit == "model-cleared-marker":
+        plan.write_text(plan.read_text(encoding="utf-8").replace(CLEARED_ENTRY, MODEL_CLEARED_ENTRY), encoding="utf-8")
+    elif edit == "other-file":
+        (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    evidence = stage2.ClearingEvidence()
+    stage2.capture_ledger_clearing(world.root, plan, evidence)
+    after = stage2.worktree_tree(world.root)
+    assert len(evidence.records) == (0 if edit == "model-cleared-marker" else 1), evidence
+    worked = stage2.attempt_has_work(
+        world.root, before, after, world.findings, plan, model_after=after, clearing=evidence
+    )
+    assert worked is expected, edit
+
+
+@pytest.mark.parametrize("mode", ["full", "targeted"])
+def test_ledger_discount_keeps_clearing_in_both_verify_modes(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Criterion 3. Planted fault: full or targeted verification skips the eligible entries once
+    capture is wired in, or rewrites the fenced and missing-test entries it must leave marked."""
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_new.py").write_text(
+        "def test_new():\n    assert True\n\n\ndef test_target():\n    assert True\n", encoding="utf-8"
+    )
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — cleared\n"
+        "- 2: not yet written tests/test_new.py::test_missing — missing stays\n"
+        "- 3: not yet written tests/test_new.py::test_target — cleared too\n\n"
+        "~~~\n"
+        "- 9: not yet written tests/test_new.py::test_fenced — a fenced example\n"
+        "~~~\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "pending entries in both kinds")
+    commands = targeted_mode(monkeypatch)
+    evidence = stage2.ClearingEvidence()
+    if mode == "full":
+        problems = stage2.verify_attempt(world.root, world.plan, clearing=evidence)
+    else:
+        baseline = git(world.root, "rev-parse", "HEAD")
+        problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, clearing=evidence)
+    assert problems == [], problems
+    if mode == "targeted":
+        assert commands.of("make") == [], "the targeted check fell back to full verification"
+    # The section's first line is the blank one under the heading, so the entries stand at 1, 2, 3.
+    assert [(record.section, record.position) for record in evidence.records] == [(0, 1), (0, 3)]
+    assert [record.before for record in evidence.records] == [
+        "- 1: not yet written tests/test_new.py::test_new — cleared",
+        "- 3: not yet written tests/test_new.py::test_target — cleared too",
+    ]
+    text = world.plan.read_text(encoding="utf-8")
+    assert "- 1: tests/test_new.py::test_new — cleared" in text
+    assert "- 3: tests/test_new.py::test_target — cleared too" in text
+    assert "- 2: not yet written tests/test_new.py::test_missing — missing stays" in text
+    assert "- 9: not yet written tests/test_new.py::test_fenced — a fenced example" in text
+
+
 @pytest.mark.parametrize("interruption", [KeyboardInterrupt, stage2.Terminated])
 def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     world: World, monkeypatch, tmp_path: Path, interruption
@@ -25295,3 +26121,28 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
     else:
         assert chosen.fallback is None, chosen.fallback
         assert chosen.tests == ["tests/test_seed.py"]
+
+
+def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """coding-harness-dq4u: the targeted pytest step shares the full check's step limit (it measured 8.5 to 10.5
+    minutes on the swarm tests, past the 5-minute tool limit); the gates keep the tool limit."""
+    python = tmp_path / stage2.PYTEST[0]
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    seen: list[tuple[str, float | None, str | None]] = []
+
+    def record(command, *_args, timeout=None, limit=None, **_kwargs):
+        seen.append((command[0], timeout, limit))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(stage2, "launch", record)
+    gate = {"id": "some-gate", "enforcement": "block", "command": "true"}
+    chosen = stage2.Targeted(["tests/test_x.py"], [], [gate])
+    assert stage2.run_targeted(tmp_path, {}, None, chosen) == ([], [])
+    assert stage2.TARGETED_PYTEST_SECONDS == stage2.VERIFY_SECONDS
+    minutes = stage2.TARGETED_PYTEST_SECONDS // 60
+    pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
+    assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
+    assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
