@@ -63,6 +63,11 @@ def _canonical(value):
     raise UnsupportedReference("value has no canonical JSON representation")
 
 
+def _atx_title(rest):
+    # The title of an ATX heading: its text without the optional closing run of marks.
+    return re.sub(r"(?:^|[ \t]+)#+[ \t]*$", "", rest or "").strip()
+
+
 def _markdown_scan(lines):
     active = []
     headings = []
@@ -86,8 +91,7 @@ def _markdown_scan(lines):
         active.append(index)
         match = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)", text)
         if match:
-            title = re.sub(r"(?:^|[ \t]+)#+[ \t]*$", "", match.group(2) or "").strip()
-            headings.append((index, len(match.group(1)), title))
+            headings.append((index, len(match.group(1)), _atx_title(match.group(2))))
     return active, headings
 
 
@@ -101,12 +105,18 @@ def _markdown_extent(lines, reference):
     target = "Acceptance criteria" if criterion else reference
     matches = _heading_matches(headings, target, bool(criterion))
     if not matches:
-        # A seat may copy a heading with its opening ATX marks. Exact titles keep priority: the
-        # second comparison runs only after a titleless exact pass, on the same frozen scan, so
-        # literal hash titles keep their meaning and duplicates stay ambiguous without a fallback.
-        stripped = re.sub(r"^#{1,6}[ \t]+", "", target)
-        if stripped != target:
-            matches = _heading_matches(headings, stripped, bool(criterion))
+        # A seat may copy a whole heading line. Exact titles keep priority: the second comparison
+        # runs only after a titleless exact pass, on the same frozen scan, so literal hash titles
+        # keep their meaning and duplicates stay ambiguous without a fallback. The copy is read as
+        # the scan reads a heading line (opening run, optional closing run), and its opening run
+        # must be the cited heading's own: marks of another level name another heading.
+        copied = re.fullmatch(r"(#{1,6})[ \t]+(.*)", target)
+        if copied:
+            matches = _heading_matches(headings, _atx_title(copied.group(2)), bool(criterion))
+            if len(matches) == 1 and matches[0][1] != len(copied.group(1)):
+                raise UnsupportedReference(
+                    f"heading is level {matches[0][1]}, but the citation copies {len(copied.group(1))} opening marks"
+                )
     if len(matches) != 1:
         raise UnsupportedReference("heading is absent or ambiguous")
     start, level = matches[0]

@@ -68,7 +68,7 @@ def test_reference_heading_keeps_inline_formatting_and_case():
 def test_reference_markdown_accepts_opening_heading_marks(marks, space):
     # Criterion 1. Planted fault: a heading cited with its opening ATX marks fails the exact-title
     # comparison, or resolves to a different frozen extent than its bare title.
-    text = "## Heading\nbody\n\n## Next\nend\n"
+    text = marks + " Heading\nbody\n\n" + marks + " Next\nend\n"
     bare = resolve("a.md", text, "Heading")
     copied = resolve("a.md", text, marks + space + "Heading")
     assert bare["supported"] and copied["supported"]
@@ -78,6 +78,35 @@ def test_reference_markdown_accepts_opening_heading_marks(marks, space):
         bare["excerpt"],
     )
     assert copied["reference"] == marks + space + "Heading", "the recorded reference keeps the seat's spelling"
+
+
+@pytest.mark.parametrize("closing", [" ##", " #", " ######", " ##  ", "\t###"])
+def test_reference_markdown_accepts_a_copied_closing_run(closing):
+    # Criterion 1 (loop rows L1-1, L1-9). Planted fault: the copied line keeps its closing ATX run,
+    # which the heading scan strips from the title, so the most literal copy of a heading fails.
+    text = "## Retry policy ##\nbody\n\n## Next\nend\n"
+    bare = resolve("a.md", text, "Retry policy")
+    copied = resolve("a.md", text, "## Retry policy" + closing)
+    assert bare["supported"] and copied["supported"]
+    assert (copied["start_line"], copied["end_line"], copied["excerpt"]) == (
+        bare["start_line"],
+        bare["end_line"],
+        bare["excerpt"],
+    )
+    assert not resolve("a.md", "## Retry policy\nbody\n", "## Retry policy#")["supported"], (
+        "a mark run glued to the title is title text, as the heading scan reads it"
+    )
+
+
+@pytest.mark.parametrize("cited,actual", [("######", "#"), ("#", "##"), ("###", "##")])
+def test_reference_markdown_copied_marks_must_match_the_heading_level(cited, actual):
+    # Criterion 1 (loop rows L1-1, L1-9). Planted fault: the fallback strips any opening run, so
+    # marks of another level resolve a different heading's extent; the seat is told the level fault.
+    text = actual + " Title\nbody\n"
+    result = resolve("a.md", text, cited + " Title")
+    assert not result["supported"]
+    assert result["reason"] == (f"heading is level {len(actual)}, but the citation copies {len(cited)} opening marks")
+    assert resolve("a.md", text, actual + " Title")["supported"], "the heading's own marks resolve"
 
 
 def test_reference_markdown_prefix_tolerance_keeps_exact_boundaries():
