@@ -46,10 +46,24 @@
 #               seconds / minutes — the cost class of one run of the gate.
 #               The local runner orders a run by it, every seconds gate
 #               before the first minutes gate, declaration order kept within
-#               a class, and stops at the first red blocking gate, naming
-#               the gates it did not run. Hosted CI runs every gate whatever
-#               failed before. A gate that takes minutes and is declared
-#               seconds delays every cheap failure behind it.
+#               a class. The cost class also decides who needs the machine's
+#               verify slot (bead coding-harness-bxxt.6): a minutes gate
+#               does, a seconds gate does not. The seconds gates run before
+#               admission is requested, all of them, and every red one is
+#               reported together; a red blocking one ends the run without
+#               queueing. The minutes gates then run inside one admission
+#               and stop at the first red blocking gate, naming the gates
+#               not run. A tree that changed during the wait has its seconds
+#               gates run again. Hosted CI runs every gate whatever failed
+#               before. A gate that takes minutes and is declared seconds
+#               runs outside the slot and loads the machine unadmitted.
+#   needs_admission  optional boolean (bead coding-harness-bxxt.6): true
+#               puts a seconds gate inside the admission all the same - for
+#               a gate that writes state other runs share. No gate needs it
+#               today: an audit on 2026-11-14 found the seconds gates
+#               read-only towards shared state (the tracker readers each
+#               render into a temporary folder of their own; six at once
+#               ran green).
 #   reason      why this gate exists, in one sentence.
 
 schema_version: 3
