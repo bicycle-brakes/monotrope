@@ -18,7 +18,7 @@
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
 #   bash scripts/verify_all.sh --job docs    # only the document gates (the draft verb, bead coding-harness-77qj)
-#   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
+#   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents skipped
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not (not measured, admission-free)
 
 set -u
@@ -94,7 +94,7 @@ fi
 # cheap gates first without any queue wait, one admission for the protected
 # set, the tree comparison around the cheap pass, and the exact gate frames
 # the evidence parser reads. The local worker default (bead
-# coding-harness-l7sc) moved there too, so both callers size from one place.
+# coding-harness-l7sc) moved there too, so shell and scheduled full checks size from one place.
 #
 # An admission context in the environment belongs to whoever measured it. The
 # scheduler takes its own admission in-process, so the only context it may

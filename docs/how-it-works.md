@@ -165,7 +165,9 @@ These are operator details; you can skip them on a first read.
   every unmarked `seconds` gate — execute before any wait, so a lint failure
   appears in seconds even while another check holds the slot; the queue and
   the memory floor (`scripts/verify_lock.py`) are entered once, by the
-  shared scheduler (`scripts/verify_run.py`), for the `minutes` gates.
+  shared scheduler (`scripts/verify_run.py`), only when no cheap gate failed
+  blocking, for the `minutes` gates and the `seconds` gates marked
+  `needs_admission: true`.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
