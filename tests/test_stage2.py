@@ -1032,9 +1032,10 @@ def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
         and isinstance(node.elts[0], ast.Name)
         and node.elts[0].id == "GIT"
     ]
-    # Seven since red-first-own-refs (bead coding-harness-wkxm): the proofs run in a private clone
-    # through `_git_output`, so the `worktree remove` and `prune` launches are gone.
-    assert len(named) >= 7, "fewer git launches name GIT than the seven this check was written against"
+    # Seven launches since red-first-own-refs (bead coding-harness-wkxm); since decisions.md#Q-8 they all
+    # call `run_git`, which builds the one command naming GIT. The seven launch sites are counted as
+    # `run_git` calls by test_every_git_launch_of_the_runner_goes_through_run_git.
+    assert len(named) == 1, f"one command list names GIT, the one inside run_git; found line(s) {named}"
 
 
 @pytest.mark.parametrize(

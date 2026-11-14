@@ -2495,12 +2495,7 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
         if not tree or tree.split()[0] not in {"100644", "100755"}:
             return False
         try:
-            blob = subprocess.run(
-                [GIT, "-C", str(root), "show", f"{base}:{rel}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
-            )
+            blob = run_git(root, "show", f"{base}:{rel}")
         except subprocess.TimeoutExpired as error:
             raise Refused(f"git show did not finish within {GIT_SECONDS // 60} minutes") from error
         if blob.returncode or b"\0" in blob.stdout:
@@ -2520,18 +2515,10 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
 
 def _merge_base(root: Path) -> str:
     """The merge base with origin/main, refused when there is none."""
-    done = subprocess.run(
-        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**os.environ, "LC_ALL": "C"},
-    )
+    done = run_git(root, "merge-base", "HEAD", "origin/main", text=True, timeout=None)
     base = done.stdout.strip()
     if done.returncode != 0 or not base:
-        raise Refused(
-            "there is no merge base with origin/main; the diff cannot be built. " + git_error_text(done.stderr)
-        )
+        raise Refused("there is no merge base with origin/main; the diff cannot be built. " + done.diagnostic)
     return base
 
 
@@ -4318,20 +4305,18 @@ def _git_output(
     preserve_newlines: bool = False,
 ) -> str:
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
-            capture_output=True,
+        done = run_git(
+            root,
+            *args,
+            env=env,
+            stdin=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             text=not preserve_newlines,
             errors=None if preserve_newlines else "replace",
-            check=False,
-            env={**(os.environ if env is None else env), "LC_ALL": "C"},
-            timeout=GIT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {git_error_text(os.fsdecode(done.stderr))}")
+        raise Refused(f"git {args[0]} failed: {done.diagnostic}")
     return os.fsdecode(done.stdout)
 
 
@@ -4466,6 +4451,47 @@ VERIFY_SECONDS = 45 * 60
 # the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
 TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
+
+
+@dataclass(frozen=True)
+class GitRun:
+    """One finished git command: its status, its output, and git's whole diagnostic."""
+
+    returncode: int
+    stdout: str | bytes
+    stderr: str | bytes
+    diagnostic: str
+
+
+def run_git(
+    root: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    stdin: str | bytes | None = None,
+    text: bool = False,
+    errors: str | None = None,
+    timeout: float | None = GIT_SECONDS,
+) -> GitRun:
+    """The one launch of git in the runner (decisions.md#Q-8): the resolved `GIT`, run in `root`.
+
+    It forces the C locale over the inherited or supplied environment, so git's reason is English
+    and recognisable, and keeps every non-empty line of git's diagnostic in `diagnostic`. The
+    status is returned, never checked: each caller keeps its own verdict. A timeout raises
+    `subprocess.TimeoutExpired` for the caller to name; `timeout=None` waits as before.
+    """
+    done = subprocess.run(
+        [GIT, "-C", str(root), *args],
+        input=stdin,
+        capture_output=True,
+        text=text,
+        errors=errors,
+        check=False,
+        env={**(os.environ if env is None else env), "LC_ALL": "C"},
+        timeout=timeout,
+    )
+    stderr = done.stderr if done.stderr is not None else ("" if text else b"")
+    diagnostic = git_error_text(stderr if isinstance(stderr, str) else os.fsdecode(stderr))
+    return GitRun(done.returncode, done.stdout, stderr, diagnostic)
 
 
 UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
@@ -4658,19 +4684,11 @@ def changed_paths(
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=stdin,
-            capture_output=True,
-            text=False,
-            check=False,
-            env={**(os.environ if env is None else env), "LC_ALL": "C"},
-            timeout=GIT_SECONDS,
-        )
+        done = run_git(root, *args, env=env, stdin=stdin)
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {git_error_text(os.fsdecode(done.stderr))}")
+        raise Refused(f"git {args[0]} failed: {done.diagnostic}")
     return done.stdout
 
 
@@ -5624,19 +5642,16 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
             if entry.name != "scripts":
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
-            archive = subprocess.run(
-                [GIT, "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
-                capture_output=True,
-                check=False,
-                env=env,
-                timeout=GIT_SECONDS,
-            )
+            archive = run_git(root, "archive", "--format=tar", "HEAD", "scripts/", env=env)
         except subprocess.TimeoutExpired as error:
             # The runner's own bound, turned into a diagnostic: an escaping TimeoutExpired would end the
             # run as a traceback and leave the mirror behind (P2 of the #188 review).
             raise Refused(f"the committed scripts could not be read within {GIT_SECONDS // 60} minutes") from error
         if archive.returncode:
-            raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
+            raise Refused(
+                f"the committed scripts could not be read: git archive exited {archive.returncode}: "
+                f"{archive.diagnostic}"
+            )
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
             for member in tar.getmembers():
                 if not member.isfile() or not member.name.startswith("scripts/"):
@@ -6885,12 +6900,7 @@ def checkpoint(
     except Refused as error:
         raise CallFailed(f"the runner checkpoint failed: {error}") from error
     try:
-        ancestor = subprocess.run(
-            [GIT, "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
-            capture_output=True,
-            check=False,
-            timeout=GIT_SECONDS,
-        )
+        ancestor = run_git(root, "merge-base", "--is-ancestor", baseline, "HEAD")
     except subprocess.TimeoutExpired as error:
         raise CallFailed(f"the runner checkpoint could not be measured within {GIT_SECONDS // 60} minutes") from error
     if ancestor.returncode != 0 or count != "1":
@@ -9526,12 +9536,7 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
         if not NEW_ADR.fullmatch(posix):
             continue
         try:
-            held = subprocess.run(
-                [GIT, "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
-            )
+            held = run_git(root, "cat-file", "-e", f"{base}:{posix}")
             present = held.returncode == 0
         except subprocess.TimeoutExpired:
             present = True  # unmeasured reads as present: the path stays a keep
