@@ -88,8 +88,8 @@ OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 # The real bash, resolved when this module loads, before any test puts its stand-in first on PATH:
 # the stand-in hands every non-document bash call to it, wherever the host keeps bash.
 REAL_BASH = shutil.which("bash") or "/bin/bash"
-# The real sh, likewise: a non-plain gate runs under `sh -c` (`verify_run.shell_argv`), and the
-# stand-in hands every sh call to it, so a gate command really runs instead of answering green.
+# The real sh, likewise. The world's `sh` stand-in answers green without running the command; a
+# test whose gate must really run launches its gates under this shell (`_real_gate_shell`).
 REAL_SH = shutil.which("sh") or "/bin/sh"
 
 STAND_IN = """#!@PYTHON@
@@ -132,8 +132,6 @@ if alias == "bash" and not docs_check:
         sys.stderr.write("stand-in: bash steps are not served; script the document check as `docs`\\n")
         raise SystemExit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
-if alias == "sh":
-    os.execv(scenario["_sh"], [scenario["_sh"], *argv])
 log = here / "calls.jsonl"
 
 
@@ -374,7 +372,7 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
-        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH, "_sh": REAL_SH}
+        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH}
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
@@ -2442,6 +2440,17 @@ def _gate_launch(command: list[str]) -> str | None:
     return None
 
 
+def _real_gate_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Launch every non-plain gate under the real sh instead of the world's stand-in.
+
+    A non-plain gate runs under `sh -c` (`verify_run.shell_argv`, loop row L3-4); the world's `sh`
+    stand-in records the call and answers green without running it, so a test that reads what the
+    gate wrote must reach the real shell. The vector keeps its `-c` shape, so `_gate_launch` still
+    reads it as a gate.
+    """
+    monkeypatch.setattr(stage2.verify_run, "shell_argv", lambda resolved: [REAL_SH, "-c", resolved])
+
+
 def test_full_and_draft_checks_share_before_admission_scheduler(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 10 of the cheap-before-admission change. Planted fault: one of the three consumers —
     # the full attempt check, the repair's full fallback, the draft's document check — keeps an outer
@@ -2488,6 +2497,7 @@ def test_full_and_draft_checks_share_before_admission_scheduler(world: World, mo
 
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     monkeypatch.setattr(stage2, "launch", launch)
+    _real_gate_shell(monkeypatch)
     cheap_order = [
         f"gate: echo quick > {marker}",
         "gate: bash scripts/verify_all.sh --job docs",
@@ -2599,6 +2609,7 @@ def test_before_admission_execution_budget_is_shared_and_wait_free(
 
     monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
     monkeypatch.setattr(stage2, "launch", launch)
+    _real_gate_shell(monkeypatch)
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     releaser = threading.Thread(target=release_when_queued)
     releaser.start()
