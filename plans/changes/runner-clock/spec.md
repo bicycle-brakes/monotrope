@@ -64,14 +64,19 @@ the policy clock and the outcome of the process wait where timing is simulated.
    *Basis:* decisions.md#Q-1; research, existing seams and direct reads.
 
 2. If a direct clock read or sleep is introduced outside the clock boundary
-   in the runner, a source test fails without adding an exemption for that site.
+   in the runner, a test fails without adding an exemption for that site: the
+   runtime check of the test session when runner code makes the read, and the
+   source test as a cheap advisory reading of the module.
    *Refuted by:* accepting `time.monotonic`, `time.time`, `time.sleep`,
    `time.perf_counter`, their nanosecond variants, other current-time APIs
    (including CPU clocks and no-argument local/UTC time conversion),
    `date.today` or `datetime.now`/`utcnow`/`today` outside the boundary,
    including imported aliases;
-   or requiring a list of permitted caller functions or source lines.
-   *Basis:* decisions.md#Q-1; research, source-guard precedent.
+   or requiring a list of permitted caller functions or source lines;
+   or a read the runner makes at run time or at import, through any alias,
+   default argument, `__call__` or partial application, that leaves the test
+   session green.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-2; research, source-guard precedent.
 
 3. While verification waits for admission, advancing the injected clock by
    more than the execution allowance leaves that allowance available in full
@@ -127,6 +132,36 @@ the policy clock and the outcome of the process wait where timing is simulated.
   `templates/` and the harness dot-directories — no policy change is required.
 
 ## Boundary
+
+Maintainer, 2026-11-15 (decisions.md Q-2), after the phase-6 review found two
+more shapes the source guard accepts (`time.monotonic.__call__()` and a
+default argument that reads the clock at import, rows F6-1 and F6-2): case
+repair of the static guard stops, and the runtime check is the closing
+mechanism of criterion 2. When the test session starts, before any test
+module imports the runner, it wraps every clock-reading `time` function on
+the `time` module and the clock-reading class methods of `datetime.date` and
+`datetime.datetime` in the types' own dictionaries, the same sets the source
+guard bans (`sleep` and the CPU clocks included). Every alias, `from … import`,
+default argument, `__call__`, `getattr` or partial application the runner
+builds therefore reaches a wrapper, at import as at call time. The wrapper
+judges the Python frame that called it: a frame compiled from
+`scripts/stage2.py` outside the one module-level `clock_now` is recorded and
+refused, and an autouse fixture fails the test on any new record, so a read
+the runner swallows still fails. The standard library, test code and other
+modules read freely. A reference the runner bound before the wrappers is
+found by a scan of the module's globals, its functions' defaults, keyword
+defaults and closures, and its classes' attributes; the session refuses to
+start if the runner was imported first. A conversion called with a `None`
+instant held in a variable is now caught. The source guard and the
+paragraphs below stay as a cheap advisory reading; a runtime finding no
+longer calls for a new static case.
+
+What the runtime check cannot see: a line no test executes (the source guard
+still reads those); a clock callable the runner hands to standard-library
+Python code that then calls it, such as a thread target, since that frame is
+the library's; code run through `eval` or `exec` under another filename; a
+child process, which does not load the test session; and the window in which
+a test itself replaces a wrapper, as a fake clock does.
 
 Orchestrator, 2026-11-15, after the third finding of the source-guard
 completeness mechanism in review-loop round 1 (an annotated alias, the raw
@@ -185,7 +220,8 @@ path reports it; the guard does not claim to catch it.
 
 ## Open decisions
 
-None open. The maintainer's answer in Q-1 is unchanged.
+None open. The maintainer's answer in Q-1 is unchanged; Q-2 (2026-11-15)
+makes the runtime check the closing mechanism of criterion 2.
 
 - [DETAIL] Guard the runner module, including its wall-clock/date reads;
   independent imported components are outside this bounded change. This

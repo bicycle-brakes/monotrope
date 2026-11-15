@@ -128,7 +128,14 @@ existing bounded-change plans.
 - `tests/test_stage2.py` — implementation attempt: clock and process doubles,
   source guard and its fault cases, timing-test conversion and retained real
   lifecycle evidence.
-- `plans/changes/runner-clock/spec.md` — implementation status only; criteria stay fixed.
+- `tests/conftest.py` and `tests/runner_clock_guard.py` — orchestrator hand edit after
+  the maintainer's decision of 2026-11-15 (decisions.md Q-2): the runtime clock guard,
+  installed when the test session starts, and the autouse fixture that fails a test on a
+  runner clock read outside `clock_now`. The clock sets move there from `tests/test_stage2.py`,
+  so the static and the runtime guard share one set.
+- `plans/changes/runner-clock/spec.md` — implementation status only; criteria stay fixed,
+  except criterion 2, which the orchestrator amended by hand on 2026-11-15 for decisions.md
+  Q-2 (the runtime check as its closing mechanism).
   The "Boundary" section is the orchestrator's, added by hand on 2026-11-15 after
   review-loop rounds 1 and 2 found the source-guard completeness mechanism
   (findings.md loop rows); it bounds the guard and changes no criterion.
@@ -170,6 +177,10 @@ registry gates, followed by the runner's full verification.
 - 1: tests/test_stage2.py::test_runner_clock_is_the_only_time_source — a runner time/date read bypasses the clock boundary
 - 2: tests/test_stage2.py::test_runner_clock_guard_rejects_bypasses — a planted direct or aliased acquisition outside the boundary is accepted
 - 2: tests/test_stage2.py::test_runner_clock_guard_accepts_the_boundary — the guard rejects the designated backend or pure date operations
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_catches_bypasses — a runner clock read outside clock_now (through `__call__`, a default read at import, an alias or a partial) passes at run time
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_accepts_the_boundary — the runtime guard refuses the boundary, a pure conversion or the standard library
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_admits_the_real_boundary_and_other_callers — the guard is inert, the runner was imported before it, or it refuses the real boundary
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_finds_references_bound_before_install — an original clock reference bound before the guard escapes it
 - 3: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — queueing reduces execution allowance or an over-budget check succeeds
 - 4: tests/test_stage2.py::test_the_remaining_time_never_outlives_the_round_deadline — the exact fake-clock remaining budget or expiry is wrong
 - 4: tests/test_stage2.py::test_local_checks_preserve_nested_admission — inherited admission is lost or the test still needs a real holder

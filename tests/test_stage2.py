@@ -20,6 +20,7 @@ import contextlib
 import copy
 import datetime as dt
 import fcntl
+import functools
 import importlib
 import inspect
 import json
@@ -33,6 +34,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +51,7 @@ import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
+import runner_clock_guard  # noqa: E402
 import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
@@ -12009,55 +12012,16 @@ UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
 # The runner's one clock boundary (spec runner-clock, criteria 1, 2 and 5)
 # ---------------------------------------------------------------------------
 
-# The complete declared set of `time` functions that read or wait on a machine
-# clock (Python 3.12+: wall, monotonic, performance, CPU and raw POSIX clocks).
-TIME_CLOCK_ATTRS = {
-    "time",
-    "time_ns",
-    "monotonic",
-    "monotonic_ns",
-    "perf_counter",
-    "perf_counter_ns",
-    "process_time",
-    "process_time_ns",
-    "thread_time",
-    "thread_time_ns",
-    "clock_gettime",
-    "clock_gettime_ns",
-    "sleep",
-}
-# The `time` conversions that read the current time only when the instant is
-# left out: the value is the number of positional arguments that makes the call
-# a pure conversion. `strftime(format)` formats now; `strftime(format, tuple)` does not.
-TIME_CONVERSION_ATTRS = {"ctime": 1, "localtime": 1, "gmtime": 1, "asctime": 1, "strftime": 2}
-# The `datetime`/`date` class methods that answer the current wall time or date.
-DATETIME_CLOCK_ATTRS = {"now", "utcnow", "today"}
-CLOCK_MODULES = ("time", "datetime")
-# The `time` callables that neither read nor wait on a clock: pure conversions,
-# clock metadata and the setters (a write, never a reading). With the two sets
-# above they classify every public callable the installed `time` module has;
-# `test_runner_clock_guard_sets_classify_the_installed_modules` holds that.
-TIME_NON_CLOCK_ATTRS = {
-    "clock_getres",
-    "clock_settime",
-    "clock_settime_ns",
-    "get_clock_info",
-    "mktime",
-    "pthread_getcpuclockid",
-    "strptime",
-    "struct_time",
-    "tzset",
-}
-# The `datetime`/`date`/`time` class methods that build a value from their arguments alone.
-DATETIME_NON_CLOCK_ATTRS = {
-    "combine",
-    "fromisocalendar",
-    "fromisoformat",
-    "fromordinal",
-    "fromtimestamp",
-    "strptime",
-    "utcfromtimestamp",
-}
+# The clock sets are shared with the runtime guard (`tests/runner_clock_guard.py`),
+# so the static and the runtime check ban one set. The static guard below is the
+# cheap advisory reading of the source; the runtime guard is the choke point
+# (decisions.md Q-2, spec Boundary).
+TIME_CLOCK_ATTRS = runner_clock_guard.TIME_CLOCK_ATTRS
+TIME_CONVERSION_ATTRS = runner_clock_guard.TIME_CONVERSION_ATTRS
+DATETIME_CLOCK_ATTRS = runner_clock_guard.DATETIME_CLOCK_ATTRS
+CLOCK_MODULES = runner_clock_guard.CLOCK_MODULES
+TIME_NON_CLOCK_ATTRS = runner_clock_guard.TIME_NON_CLOCK_ATTRS
+DATETIME_NON_CLOCK_ATTRS = runner_clock_guard.DATETIME_NON_CLOCK_ATTRS
 
 
 def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
@@ -12402,6 +12366,179 @@ def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -
     """
     source = "import datetime as dt\nimport time\nimport time_records\nR = tuple\n" + snippet
     assert clock_guard_violations(source) == [], f"the guard rejected {tolerated}"
+
+
+RUNNER_FILE = str(REPO_ROOT / "scripts" / "stage2.py")
+
+
+def run_as_runner(snippet: str, entry: str | None = None) -> object:
+    """Execute `snippet` as code of the runner file, then call its `entry`, if named.
+
+    Compiled with the runner's own filename, the snippet's frames are runner
+    frames to the runtime guard, exactly as a line added to `scripts/stage2.py` would be.
+    """
+    namespace: dict[str, object] = {"__name__": "stage2", "time": time, "dt": dt}
+    exec(compile(snippet, RUNNER_FILE, "exec"), namespace)
+    return namespace[entry]() if entry else None  # type: ignore[operator]
+
+
+RUNTIME_BYPASSES = [
+    ("plain-read", "def later():\n    return time.monotonic()\n", "later"),
+    ("dunder-call", "def later():\n    return time.monotonic.__call__()\n", "later"),
+    ("default-at-import", "def clock_now(cached=time.monotonic()):\n    return cached\n", None),
+    ("keyword-default-at-import", "def clock_now(*, cached=dt.date.today()):\n    return cached\n", None),
+    ("module-level-read", "STARTED = time.time()\n", None),
+    ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n", "later"),
+    ("aliased-class", "from datetime import datetime as D\ndef later():\n    return D.now(dt.UTC)\n", "later"),
+    ("getattr-name", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n", "later"),
+    ("vars-lookup", "def later():\n    return vars(time)['perf_counter_ns']()\n", "later"),
+    (
+        "partial",
+        "import functools\n_tick = functools.partial(time.perf_counter)\ndef later():\n    return _tick()\n",
+        "later",
+    ),
+    ("date-today-dunder", "def later():\n    return dt.date.today.__call__()\n", "later"),
+    ("datetime-today", "def later():\n    return dt.datetime.today()\n", "later"),
+    ("datetime-utcnow", "def later():\n    return dt.datetime.utcnow()\n", "later"),
+    ("subclass-now", "class D(dt.datetime):\n    pass\ndef later():\n    return D.now()\n", "later"),
+    ("runtime-none-instant", "def later(instant=None):\n    return time.localtime(instant)\n", "later"),
+    ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n", "later"),
+    ("clock-gettime", "def later():\n    return time.clock_gettime_ns(time.CLOCK_MONOTONIC)\n", "later"),
+    ("sleep", "def later():\n    return time.sleep(0)\n", "later"),
+    (
+        "nested-boundary-name",
+        "def later():\n    def clock_now():\n        return time.time()\n    return clock_now()\n",
+        "later",
+    ),
+    (
+        "class-boundary-name",
+        "class S:\n    @staticmethod\n    def clock_now():\n        return time.time()\ndef later():\n    return S.clock_now()\n",
+        "later",
+    ),
+    (
+        "swallowed",
+        "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n",
+        "later",
+    ),
+]
+
+
+@pytest.mark.parametrize(("planted", "snippet", "entry"), RUNTIME_BYPASSES, ids=[row[0] for row in RUNTIME_BYPASSES])
+def test_runner_clock_runtime_guard_catches_bypasses(planted: str, snippet: str, entry: str | None) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: a clock read from runner code outside clock_now passes at run time.
+
+    The static guard missed `time.monotonic.__call__()` and a default read at
+    import (phase-6 rows F6-1 and F6-2); here every shape reaches a wrapper
+    and is judged by the runner frame that made the call. A read the runner
+    swallows still stands in the record the autouse fixture checks.
+    """
+    with runner_clock_guard.capture() as reads:
+        try:
+            run_as_runner(snippet, entry)
+        except runner_clock_guard.RunnerClockRead:
+            raised = True
+        else:
+            raised = False
+    assert reads, f"the runtime guard let the {planted} bypass read the clock"
+    assert raised or planted == "swallowed", f"the {planted} read was recorded but not refused"
+    assert all(read.filename == RUNNER_FILE for read in reads), reads
+
+
+RUNTIME_TOLERATED = [
+    (
+        "boundary-body",
+        "def clock_now():\n    return (time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        "clock_now",
+    ),
+    (
+        "explicit-conversion",
+        "def later():\n    return time.strftime('%H', time.gmtime(0)), time.localtime(0)\n",
+        "later",
+    ),
+    (
+        "pure-construction",
+        "def later():\n    return dt.datetime.fromtimestamp(0, dt.UTC), dt.date(2026, 1, 1)\n",
+        "later",
+    ),
+    ("standard-library", "import logging\ndef later():\n    return logging.makeLogRecord({}).created\n", "later"),
+]
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet", "entry"), RUNTIME_TOLERATED, ids=[row[0] for row in RUNTIME_TOLERATED]
+)
+def test_runner_clock_runtime_guard_accepts_the_boundary(tolerated: str, snippet: str, entry: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the runtime guard refuses the boundary, a pure conversion or the standard library.
+
+    `clock_now` may acquire, a conversion handed its instant reads nothing,
+    and a standard-library frame (logging stamps its record with
+    `time.time()`) stays free even when runner code called it.
+    """
+    with runner_clock_guard.capture() as reads:
+        run_as_runner(snippet, entry)
+    assert reads == [], f"the runtime guard refused {tolerated}: {reads}"
+
+
+def test_runner_clock_runtime_guard_admits_the_real_boundary_and_other_callers() -> None:
+    """Spec criterion 2. Planted fault: the guard is inert, or it refuses the runner's own clock_now, a test or another file.
+
+    The wrappers must sit where every alias resolves - on the `time` module and
+    in the `datetime` types, a subclass included - and the runner must have
+    been imported after them, so no import-time read went unseen.
+    """
+    assert runner_clock_guard.installation_problems() == []
+    assert runner_clock_guard.import_time_reads() == [], "a runner clock read happened at import"
+    with runner_clock_guard.capture() as reads:
+        reading = stage2.clock_now()
+        time.monotonic()
+        dt.date.today()
+        exec(compile("import time\ntime.time()\n", str(REPO_ROOT / "scripts" / "stage2_go.py"), "exec"), {})
+    assert reading.local_date and reads == [], reads
+
+
+def test_runner_clock_runtime_guard_finds_references_bound_before_install() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: an original clock reference bound before the guard escapes it.
+
+    A module that bound an original at import would read the clock past
+    every wrapper; the scan finds one in each place a binding can hide, and
+    the real runner holds none.
+    """
+    originals = runner_clock_guard.ORIGINALS
+    monotonic = originals["time.monotonic"]
+    bound_now = originals["datetime.now"].__get__(None, dt.datetime)
+    planted = types.ModuleType("planted_runner")
+
+    def with_default(clock=monotonic):
+        return clock
+
+    def with_keyword(*, clock=bound_now):
+        return clock
+
+    def with_closure():
+        return monotonic
+
+    planted_class = type("Holder", (), {"clock": originals["time.time"], "__module__": "planted_runner"})
+    for function in (with_default, with_keyword, with_closure):
+        function.__module__ = "planted_runner"
+        setattr(planted, function.__name__, function)
+    planted.alias = monotonic
+    planted.dunder = monotonic.__call__
+    planted.partial = functools.partial(originals["time.perf_counter"])
+    planted.listed = [originals["date.today"]]
+    planted.Holder = planted_class
+    found = runner_clock_guard.bound_reference_violations(planted)
+    for where in (
+        "global alias",
+        "global dunder",
+        "global partial",
+        "global listed",
+        "function with_default default 0",
+        "function with_keyword keyword default clock",
+        "function with_closure closure monotonic",
+        "class Holder.clock",
+    ):
+        assert any(where in finding for finding in found), f"the scan missed {where}: {found}"
+    assert runner_clock_guard.bound_reference_violations(stage2) == []
 
 
 def test_runner_clock_preserves_time_domains(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
