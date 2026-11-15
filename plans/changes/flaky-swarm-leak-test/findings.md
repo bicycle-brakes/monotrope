@@ -729,7 +729,54 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-9 | MAJOR | SPEC | base | tests/conftest.py:29–52 | A fixture finalizer that catches the refusal from `get_log().read_text()` leaves its test green. Violations are checked only after the test body; finalizer violations are discarded at the next test’s setup. Reproduced with the installed hooks: two tests passed, pytest exited 0, and no violation remained. The function-returned path also escapes the static advisory, so neither check fails the suite. [Acceptance criterion 5] | Codex | taken | — |
+| F6-9 | MAJOR | SPEC | base | tests/conftest.py:29–52 | A fixture finalizer that catches the refusal from `get_log().read_text()` leaves its test green. Violations are checked only after the test body; finalizer violations are discarded at the next test’s setup. Reproduced with the installed hooks: two tests passed, pytest exited 0, and no violation remained. The function-returned path also escapes the static advisory, so neither check fails the suite. [Acceptance criterion 5] | Codex | fixed — orchestrator hand edit a2354a4b | no |
 
 Phase 6 verdict: codex 01a1df9e-04bb-7e00-a9c2-e0d43048cfa8, 2026-11-15
 Reviewer session: codex 01a1df9e-04bb-7e00-a9c2-e0d43048cfa8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1067 files, 4357 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/conftest.py` +12 -3
+> - `tests/test_atomic_test_log.py` +37 -3
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - F6-9: tests/test_atomic_test_log.py::test_runtime_check_fails_a_test_that_swallows_the_refusal: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-1-20261115T143316586499Z-0f48d50f.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1067 files, 4364 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-2-20261115T143316586499Z-0f48d50f.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1067 files, 4370 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-3-20261115T143316586499Z-0f48d50f.md
+> ```
