@@ -10,20 +10,22 @@ updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-xsta
-class: feature
+class: architectural
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-15"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [decisions, research-swarm, answer-reader, correction-prompt, probe, quorum]
+tags: [decisions, research-swarm, answer-reader, correction-prompt, quorum]
 ---
 
 # swarm-answer-reader — Decisions
 
-Class: feature (maintainer, 2026-11-15: the change is explored through the
-research swarm once that swarm works again; it was opened as bounded).
-The minimum is three counted answers, five when the change edits an ADR
-file; five stand below.
+Class: architectural (2026-11-15: the answers amend ADR 0020, so the class
+moved from feature, under which it was first recorded; it was opened as
+bounded in error). The change is explored through the research swarm once
+that swarm works again. The minimum is five counted answers because the
+change edits an ADR; six stand below, and Q-3 was revised by the maintainer
+the same day (addendum at the end).
 
 ## Where these answers come from
 
@@ -152,3 +154,40 @@ research.md header,
 to achieve runs that a single finder cannot stop,
 accepting a map built from two finders where the third is missing, and an
 amendment of ADR 0020 — 2026-11-15
+
+## Q-6 · One reading rule for every swarm stage
+
+asked: 2026-11-15
+answer: Yes: the reading rule of Q-7 in the swarm-report-format change (2026-11-13) applies to every stage of the research swarm.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how the research swarm reads a model's structured answer at each stage.
+  Intention: the haiku finder in run fc0e84ae was refused although its fenced object was valid; a sentence stood before the fence.
+  Today: topic reports are read by `topic_report_payload` in scripts/stage2_research_run.py (a whole JSON object or exactly one json or unlabelled fence; text outside the fence is never read, the rule of Q-7 in swarm-report-format, 2026-11-13); finders, merge and judge are read by `payload_text`, which accepts a fence only when it is the whole answer.
+  Repository change: one shared reader for finders, merge, judge and topics, with the Q-7 rule. Read in the code on origin/main 2026-11-15, the topic reader accepts every answer form the stricter reader accepts plus surrounding prose; this is proposed, not yet replayed against the recorded answers, and the replay comes before the build.
+  Architecture change: yes, an amendment of ADR 0020 by the maintainer before it is built.
+
+In the context of a swarm whose stages read the same kind of answer with two
+different readers,
+facing valid fenced answers refused only because prose stood around the
+fence,
+we decided that the Q-7 reading rule applies to every swarm stage through one
+shared reader,
+to achieve that a stage only turns former refusals into acceptances,
+accepting that text outside the fence is never read — 2026-11-15
+
+## Addendum — 2026-11-15, Q-3 revised by the maintainer
+
+The maintainer withdrew the format probe of Q-3 later the same day and
+answered "ja" to dropping it. The Q-3 record above stays as it was asked and
+first answered; this addendum supersedes its answer.
+
+- Revised answer: no format probe in prepare-explore; the per-model counts of
+  Q-4 show which model often answers in the wrong format.
+- Reason given with the question: both recorded deepseek-v4.1-flash failures
+  lay deep in long answers (char 9979 and char 13598), which a tiny probe
+  cannot see; the haiku case is covered by Q-6; a probe would only add one
+  more point at which a run can stop.
+- Still open for the ADR 0020 amendment: what the merge and the judge, each a
+  single call, do when their one repair retry (Q-2) also fails.
