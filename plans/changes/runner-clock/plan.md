@@ -129,6 +129,12 @@ existing bounded-change plans.
   source guard and its fault cases, timing-test conversion and retained real
   lifecycle evidence.
 - `plans/changes/runner-clock/spec.md` — implementation status only; criteria stay fixed.
+  The "Boundary" section is the orchestrator's, added by hand on 2026-11-15 after
+  review-loop rounds 1 and 2 found the source-guard completeness mechanism
+  (findings.md loop rows); it bounds the guard and changes no criterion.
+- `plans/changes/runner-clock/research.md` — orchestrator only: the
+  "Corrections" section, added by hand on 2026-11-15 for review-loop round 1;
+  the explored research above it stays as drafted.
 - `plans/changes/runner-clock/plan.md` — phase-4 time and criterion-ledger progress.
 - `plans/changes/runner-clock/findings.md` — runner/orchestrator-owned review evidence.
 - `plans/INDEX.md` — runner-owned regeneration after artifact/status changes.

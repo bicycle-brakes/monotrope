@@ -142,11 +142,21 @@ named on their own outside an attribute access, and exempts exactly one
 function object, the single module-level `clock_now` definition; a second
 definition or binding of that name is itself a violation.
 
+Orchestrator, 2026-11-15, after a fourth finding of the same mechanism in
+review-loop round 2 (the banned set's completeness unchecked): "complete" is
+measured, not declared. A test classifies every public callable of the
+installed `time` module and every public class method of the `datetime`
+classes as a clock read, a no-argument conversion or a non-reading callable,
+so a clock function a new interpreter adds fails the suite until it is
+classified.
+
 What a static reading of one module cannot see is outside this guard: a
 clock reached through `importlib`, `__import__` or `sys.modules`; a
 `datetime` or `date` class handed into a function as an argument and called
 there; clock reads inside another module the runner imports (those keep
-their own boundaries, see Protected areas); and waits measured inside the
+their own boundaries, see Protected areas); a clock read through a module
+other than `time` and `datetime`, such as the elapsed time of `os.times()`
+(the runner calls none on 2026-11-15); and waits measured inside the
 standard library, such as a subprocess timeout. On 2026-11-15 the runner's
 uses of `importlib` and `sys.modules` load a probe file and hand on the
 runner module itself, not a clock module. A reviewer reading a new such

@@ -114,6 +114,16 @@ argv = sys.argv[1:]
 # scripted steps line up; the record's path is what says which program ran.
 alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
+# The real-time knobs are retired (spec runner-clock, criterion 4): a step that still asks for a
+# sleep or a barrier would be served without its wait, and a test of an unconsumed allowance would
+# pass vacuously. End loudly instead, like a scripted bash step (review row L2-3).
+RETIRED = {"sleep", "barrier", "barrier_dir", "barrier_seconds", "pi_version_sleep", "pi_refresh_sleep"}
+asked = RETIRED & set(scenario).union(
+    *(set(item) for steps_ in scenario.values() if isinstance(steps_, list) for item in steps_ if isinstance(item, dict))
+)
+if asked:
+    sys.stderr.write("stage2-stand-in: retired timing keys are not served: " + ", ".join(sorted(asked)) + "\\n")
+    sys.exit(97)
 if alias == "bash":
     # No runner verb launches bash any more: every gate goes through `sh -c` in the shared
     # gate executor, so a bash call in a test is never scripted - it runs the real bash, and
@@ -2388,6 +2398,18 @@ class ScriptedProcess:
     def poll(self) -> int | None:
         return self.returncode
 
+    def __getattr__(self, name: str):
+        # Only the members `launch`'s timed branch uses are served; any other one is the double's
+        # limit, said as such, never a bare AttributeError read as a runner fault (review row L2-6).
+        raise AssertionError(f"the process double does not serve `{name}` for {self.__dict__.get('command')}")
+
+    def __enter__(self):
+        # The untimed path (`subprocess.run`) enters the process as a context; the double serves only `communicate`.
+        raise AssertionError(f"the process double serves no context manager (untimed run) for {self.command}")
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
     def communicate(self, timeout=None):
         row = {"command": self.command, "pid": self.pid, "timeout": timeout, "outcome": "drained"}
         gate = self.plan.get("gate")
@@ -2475,6 +2497,16 @@ def test_scripted_programs_fall_back_to_the_genuine_popen(monkeypatch: pytest.Mo
     assert first.launched == [], "the older double ran a command the newer one does not list"
 
 
+def test_scripted_process_names_an_unserved_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: an unserved call on the double surfaces as a bare AttributeError (review row L2-6)."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["doubled"], {"duration": 1.0})])
+    with pytest.raises(AssertionError, match="no context manager.*doubled"):
+        subprocess.run(["doubled"], check=False)
+    with pytest.raises(AssertionError, match="does not serve `wait`.*doubled"):
+        subprocess.Popen(["doubled"]).wait()
+
+
 def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
     # step limit — a short passing check times out after queueing — or the limit dropped, so
@@ -2531,6 +2563,13 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     record.write_text(json.dumps(held), encoding="utf-8")
     monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
     monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+
+    # The planted fault must turn red, not hang: an ordinary admission would queue against the
+    # descriptor this test holds below and poll with no deadline, so it refuses at once (review row L2-1).
+    def queued_for_its_own(*_args, **_kwargs):
+        raise AssertionError("the local check queued for its own admission instead of inheriting")
+
+    monkeypatch.setattr(verify_lock, "_Admission", queued_for_its_own)
     # The admission is genuinely held by an open descriptor of this process: no thread, no sleep.
     lock_fd = os.open(record.parent / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
@@ -4759,6 +4798,17 @@ def test_draft_statement_precheck_ignores_other_changes(world: World) -> None:
     passing_draft(world)
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 1
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [{"codex": [{"sleep": 1.5}]}, {"codex": [{"barrier": "b"}]}, {"pi_version_sleep": 1}, {"pi_refresh_sleep": 1}],
+)
+def test_the_stand_in_refuses_retired_timing_keys(world, scenario):
+    # Planted fault: a scripted sleep or barrier is accepted and silently does nothing (review row L2-3).
+    world.script(**scenario)
+    out = subprocess.run([str(world.bin / "codex"), "exec"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert out.returncode == 97 and "retired timing keys" in out.stderr, "a retired timing key was silently served"
 
 
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
@@ -11983,6 +12033,31 @@ TIME_CONVERSION_ATTRS = {"ctime": 1, "localtime": 1, "gmtime": 1, "asctime": 1, 
 # The `datetime`/`date` class methods that answer the current wall time or date.
 DATETIME_CLOCK_ATTRS = {"now", "utcnow", "today"}
 CLOCK_MODULES = ("time", "datetime")
+# The `time` callables that neither read nor wait on a clock: pure conversions,
+# clock metadata and the setters (a write, never a reading). With the two sets
+# above they classify every public callable the installed `time` module has;
+# `test_runner_clock_guard_sets_classify_the_installed_modules` holds that.
+TIME_NON_CLOCK_ATTRS = {
+    "clock_getres",
+    "clock_settime",
+    "clock_settime_ns",
+    "get_clock_info",
+    "mktime",
+    "pthread_getcpuclockid",
+    "strptime",
+    "struct_time",
+    "tzset",
+}
+# The `datetime`/`date`/`time` class methods that build a value from their arguments alone.
+DATETIME_NON_CLOCK_ATTRS = {
+    "combine",
+    "fromisocalendar",
+    "fromisoformat",
+    "fromordinal",
+    "fromtimestamp",
+    "strptime",
+    "utcfromtimestamp",
+}
 
 
 def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
@@ -12164,6 +12239,35 @@ def test_runner_clock_is_the_only_time_source() -> None:
     assert without_boundary, "the exemption is vacuous: the boundary body reads no clock"
     lines = [int(re.search(r"at line (\d+)$", finding).group(1)) for finding in without_boundary]
     assert all(line in body_lines for line in lines), without_boundary
+
+
+def test_runner_clock_guard_sets_classify_the_installed_modules() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: a clock-reading `time` or `datetime` callable is in no set.
+
+    The banned sets are a declared complete set, so completeness is measured,
+    not assumed: every public callable of the installed `time` module and every
+    public class method of `datetime.date`, `datetime.datetime` and
+    `datetime.time` must be classified as a clock read, a no-argument
+    conversion or a non-reading callable. A new interpreter's clock function
+    fails here until it is classified (review row L2-2).
+    """
+    time_sets = (TIME_CLOCK_ATTRS, set(TIME_CONVERSION_ATTRS), TIME_NON_CLOCK_ATTRS)
+    assert all(
+        not (a & b)
+        for a, b in [(time_sets[0], time_sets[1]), (time_sets[0], time_sets[2]), (time_sets[1], time_sets[2])]
+    )
+    installed = {name for name in dir(time) if not name.startswith("_") and callable(getattr(time, name))}
+    assert installed - set().union(*time_sets) == set(), "an installed time callable is unclassified"
+    assert not DATETIME_CLOCK_ATTRS & DATETIME_NON_CLOCK_ATTRS
+    for cls in (dt.date, dt.datetime, dt.time):
+        methods = {
+            name
+            for name in dir(cls)
+            if not name.startswith("_")
+            and type(inspect.getattr_static(cls, name)).__name__ in {"classmethod", "classmethod_descriptor"}
+        }
+        unclassified = methods - DATETIME_CLOCK_ATTRS - DATETIME_NON_CLOCK_ATTRS
+        assert unclassified == set(), f"a {cls.__name__} class method is unclassified: {sorted(unclassified)}"
 
 
 @pytest.mark.parametrize(
