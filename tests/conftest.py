@@ -31,6 +31,9 @@ def runner_clock_reads() -> Iterator[None]:
     bound = runner_clock_guard.unscanned_bound_reference_violations()
     if bound:
         pytest.fail(f"the runner holds clock references bound past the guard: {bound}")
+    unreported = runner_clock_guard.unreported_import_time_reads()
+    if unreported:
+        pytest.fail("runner code read a machine clock outside clock_now at import: " + "; ".join(map(str, unreported)))
     start = len(runner_clock_guard.READS)
     with runner_clock_guard.in_test():
         yield

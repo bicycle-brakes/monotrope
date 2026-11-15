@@ -180,7 +180,8 @@ registry gates, followed by the runner's full verification.
 - 2: tests/test_stage2.py::test_runner_clock_runtime_guard_catches_bypasses — a runner clock read outside clock_now (through `__call__`, a default read at import, an alias or a partial) passes at run time
 - 2: tests/test_stage2.py::test_runner_clock_runtime_guard_accepts_the_boundary — the runtime guard refuses the boundary, a pure conversion or the standard library
 - 2: tests/test_stage2.py::test_runner_clock_runtime_guard_admits_the_real_boundary_and_other_callers — the guard is inert, the runner was imported before it, or it refuses the real boundary
-- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_finds_references_bound_before_install — an original clock reference bound before the guard escapes it
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_finds_references_bound_before_install — an original clock reference bound before the guard, or a held clock callable such as a dataclass default factory, escapes it
+- 2: tests/test_stage2.py::test_runner_clock_runtime_guard_fails_the_test_through_the_autouse_fixture — the autouse fixture lets a swallowed runner read pass, at run time or at import
 - 3: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — queueing reduces execution allowance or an over-budget check succeeds
 - 4: tests/test_stage2.py::test_the_remaining_time_never_outlives_the_round_deadline — the exact fake-clock remaining budget or expiry is wrong
 - 4: tests/test_stage2.py::test_local_checks_preserve_nested_admission — inherited admission is lost or the test still needs a real holder

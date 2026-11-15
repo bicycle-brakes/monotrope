@@ -21,16 +21,20 @@ list of spellings - decides. The record stands even when runner code swallows
 the exception; the autouse fixture in `tests/conftest.py` fails the test on any
 new record.
 
-A reference the runner bound before `install()` would escape the wrappers;
-`bound_reference_violations` finds such an original in a module's globals, its
-functions' defaults, keyword defaults and closures, and its classes'
-attributes.
+A clock callable the runner holds instead of reading by attribute is the one
+shape a frame check misses: an original bound before `install()` escapes the
+wrappers, and a held wrapper (a dataclass `default_factory`, a thread target)
+can be called from a frame that is not the runner's. `bound_reference_violations`
+finds both in a module's globals, its functions' defaults, keyword defaults and
+closures, and its classes' attributes and dataclass fields; the autouse
+fixture runs it once per imported runner module.
 """
 
 from __future__ import annotations
 
 import contextlib
 import ctypes
+import dataclasses
 import datetime as dt
 import functools
 import gc
@@ -46,8 +50,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # The files whose frames may not read a machine clock outside `clock_now`: the
 # runner as the spec defines it. Every other `scripts/stage2*.py` keeps its own
-# clock boundary (spec, Protected areas); a test-session census on 2026-11-15
-# recorded which of them read the clock directly (decisions.md, Q-2).
+# clock boundary (spec, Terms and Protected areas); a record-only census of the
+# test session on 2026-11-15 found direct reads there (decisions.md, Q-2).
 GUARDED_FILES = frozenset({os.path.realpath(REPO_ROOT / "scripts" / "stage2.py")})
 # The one function whose body may acquire: a module-level definition, so a
 # nested or class-level `clock_now` has a different qualified name.
@@ -259,20 +263,32 @@ def installation_problems() -> list[str]:
     return problems
 
 
-def _original_named(value: object) -> str | None:
-    """The public name of the clock-reading original `value` is, or wraps; None for anything else."""
+def _clock_named(value: object) -> str | None:
+    """The public name of the clock callable `value` is, wraps or binds; None for anything else.
+
+    Both an original and a wrapper count: an original escapes the guard, and a
+    wrapper the runner holds can be called later from a frame that is not the
+    runner's - a dataclass `default_factory` runs in generated `__init__` code,
+    a thread target in the standard library - so the read would pass unseen.
+    """
     for key, original in ORIGINALS.items():
         if value is original:
-            return key
+            return f"the original {key}"
+    for key, wrapper in WRAPPERS.items():
+        func = getattr(wrapper, "__func__", wrapper)
+        if value is wrapper or getattr(value, "__func__", None) is func:
+            return f"the clock callable {key}"
     if isinstance(value, types.BuiltinMethodType):
         owner = getattr(value, "__self__", None)
         if isinstance(owner, type) and issubclass(owner, dt.date) and value.__name__ in DATETIME_CLOCK_ATTRS:
-            return f"{owner.__name__}.{value.__name__}"
+            return f"the original {owner.__name__}.{value.__name__}"
     if isinstance(value, functools.partial):
-        return _original_named(value.func)
+        return _clock_named(value.func)
     wrapped = getattr(value, "__self__", None)
     if isinstance(value, types.MethodWrapperType) and wrapped is not None:
-        return _original_named(wrapped)
+        return _clock_named(wrapped)
+    if isinstance(value, dataclasses.Field):
+        return _clock_named(value.default_factory) or _clock_named(value.default)
     return None
 
 
@@ -301,11 +317,14 @@ def _function_slots(where: str, function: types.FunctionType) -> Iterator[tuple[
 
 
 def bound_reference_violations(module: types.ModuleType) -> list[str]:
-    """Every clock-reading original `module` holds bound rather than resolved through a wrapper.
+    """Every clock callable `module` holds bound rather than reading it by attribute at call time.
 
     It looks where a reference bound at import lives: the module's globals,
     its functions' defaults, keyword defaults and closure cells, and its
-    classes' attributes (with their methods' defaults and closures).
+    classes' attributes (with their methods' defaults and closures and their
+    dataclass fields). An original escapes the wrappers; a held wrapper can be
+    called from a frame that is not the runner's. `clock_now` reads by
+    attribute, so the runner holds neither.
     """
     slots: list[tuple[str, object]] = []
     for name, value in vars(module).items():
@@ -321,9 +340,9 @@ def bound_reference_violations(module: types.ModuleType) -> list[str]:
     found = []
     for where, value in slots:
         for item in _values(value):
-            named = _original_named(item)
+            named = _clock_named(item)
             if named:
-                found.append(f"{module.__name__}: {where} holds the original {named}")
+                found.append(f"{module.__name__}: {where} holds {named}")
     return found
 
 
@@ -344,6 +363,16 @@ def unscanned_bound_reference_violations() -> list[str]:
 def import_time_reads() -> list[Read]:
     """The recorded reads no test was running for: an import or collection read."""
     return [read for read in READS if not read.during_test]
+
+
+_reported: set[int] = set()
+
+
+def unreported_import_time_reads() -> list[Read]:
+    """The import-time reads no test has failed for yet; each is handed out once per session."""
+    found = [read for read in import_time_reads() if id(read) not in _reported]
+    _reported.update(id(read) for read in found)
+    return found
 
 
 @contextlib.contextmanager

@@ -148,20 +148,26 @@ judges the Python frame that called it: a frame compiled from
 `scripts/stage2.py` outside the one module-level `clock_now` is recorded and
 refused, and an autouse fixture fails the test on any new record, so a read
 the runner swallows still fails. The standard library, test code and other
-modules read freely. A reference the runner bound before the wrappers is
-found by a scan of the module's globals, its functions' defaults, keyword
-defaults and closures, and its classes' attributes; the session refuses to
-start if the runner was imported first. A conversion called with a `None`
+modules read freely. A clock callable the runner holds instead of reading by
+attribute - an original bound before the wrappers, or a wrapper that a
+dataclass default factory or a thread target would call later from a frame
+not the runner's - is found by a scan of the module's globals, its functions'
+defaults, keyword defaults and closures, and its classes' attributes and
+dataclass fields; the session refuses to start if the runner was imported
+first. A conversion called with a `None`
 instant held in a variable is now caught. The source guard and the
 paragraphs below stay as a cheap advisory reading; a runtime finding no
 longer calls for a new static case.
 
 What the runtime check cannot see: a line no test executes (the source guard
-still reads those); a clock callable the runner hands to standard-library
-Python code that then calls it, such as a thread target, since that frame is
-the library's; code run through `eval` or `exec` under another filename; a
-child process, which does not load the test session; and the window in which
-a test itself replaces a wrapper, as a fake clock does.
+still reads those); a clock callable the runner passes as an argument at run
+time without holding it, such as `threading.Thread(target=time.sleep)`, since
+the call then comes from the library's frame; code run through `eval` or
+`exec` under another filename; a child process, which does not load the test
+session; and the window in which a test itself replaces a wrapper, as a fake
+clock does. The check relies on CPython: it writes the `datetime` types'
+dictionaries through `gc` and `ctypes`, and the session refuses to start if
+that does not take effect.
 
 Orchestrator, 2026-11-15, after the third finding of the source-guard
 completeness mechanism in review-loop round 1 (an annotated alias, the raw

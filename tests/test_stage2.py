@@ -18,6 +18,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import copy
+import dataclasses
 import datetime as dt
 import fcntl
 import functools
@@ -37,6 +38,7 @@ import time
 import types
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -12371,15 +12373,22 @@ def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -
 RUNNER_FILE = str(REPO_ROOT / "scripts" / "stage2.py")
 
 
-def run_as_runner(snippet: str, entry: str | None = None) -> object:
-    """Execute `snippet` as code of the runner file, then call its `entry`, if named.
+def run_as_runner(snippet: str, entry: str | None = None) -> Any:
+    """Execute `snippet` as code of the runner file; call its `entry` if named, else hand back the namespace.
 
     Compiled with the runner's own filename, the snippet's frames are runner
     frames to the runtime guard, exactly as a line added to `scripts/stage2.py` would be.
     """
-    namespace: dict[str, object] = {"__name__": "stage2", "time": time, "dt": dt}
+    namespace: dict[str, Any] = {"__name__": "stage2", "time": time, "dt": dt}
     exec(compile(snippet, RUNNER_FILE, "exec"), namespace)
-    return namespace[entry]() if entry else None  # type: ignore[operator]
+    return namespace[entry]() if entry else namespace
+
+
+def as_module(namespace: dict[str, Any]) -> types.ModuleType:
+    """The executed snippet as the module object the bound-reference scan reads."""
+    module = types.ModuleType("stage2")
+    vars(module).update(namespace)
+    return module
 
 
 RUNTIME_BYPASSES = [
@@ -12416,6 +12425,12 @@ RUNTIME_BYPASSES = [
         "later",
     ),
     (
+        "dataclass-default-factory",
+        "import dataclasses\n@dataclasses.dataclass\nclass C:\n    t: float = dataclasses.field(default_factory=time.monotonic)\n"
+        "def later():\n    return C()\n",
+        "later",
+    ),
+    (
         "swallowed",
         "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n",
         "later",
@@ -12432,15 +12447,19 @@ def test_runner_clock_runtime_guard_catches_bypasses(planted: str, snippet: str,
     and is judged by the runner frame that made the call. A read the runner
     swallows still stands in the record the autouse fixture checks.
     """
+    held: list[str] = []
     with runner_clock_guard.capture() as reads:
         try:
-            run_as_runner(snippet, entry)
+            namespace = run_as_runner(snippet, None)
+            held = runner_clock_guard.bound_reference_violations(as_module(namespace))
+            if entry:
+                namespace[entry]()
         except runner_clock_guard.RunnerClockRead:
             raised = True
         else:
             raised = False
-    assert reads, f"the runtime guard let the {planted} bypass read the clock"
-    assert raised or planted == "swallowed", f"the {planted} read was recorded but not refused"
+    assert reads or held, f"the runtime guard let the {planted} bypass read the clock"
+    assert raised or held or planted == "swallowed", f"the {planted} read was recorded but not refused"
     assert all(read.filename == RUNNER_FILE for read in reads), reads
 
 
@@ -12475,7 +12494,9 @@ def test_runner_clock_runtime_guard_accepts_the_boundary(tolerated: str, snippet
     `time.time()`) stays free even when runner code called it.
     """
     with runner_clock_guard.capture() as reads:
-        run_as_runner(snippet, entry)
+        namespace = run_as_runner(snippet, None)
+        assert runner_clock_guard.bound_reference_violations(as_module(namespace)) == []
+        namespace[entry]()
     assert reads == [], f"the runtime guard refused {tolerated}: {reads}"
 
 
@@ -12525,6 +12546,12 @@ def test_runner_clock_runtime_guard_finds_references_bound_before_install() -> N
     planted.dunder = monotonic.__call__
     planted.partial = functools.partial(originals["time.perf_counter"])
     planted.listed = [originals["date.today"]]
+    planted.held_wrapper = time.monotonic
+    planted.held_bound = dt.datetime.now
+    planted.Fields = dataclasses.make_dataclass(
+        "Fields", [("t", float, dataclasses.field(default_factory=time.perf_counter))]
+    )
+    planted.Fields.__module__ = "planted_runner"
     planted.Holder = planted_class
     found = runner_clock_guard.bound_reference_violations(planted)
     for where in (
@@ -12536,9 +12563,68 @@ def test_runner_clock_runtime_guard_finds_references_bound_before_install() -> N
         "function with_keyword keyword default clock",
         "function with_closure closure monotonic",
         "class Holder.clock",
+        "global held_wrapper holds the clock callable time.monotonic",
+        "global held_bound holds the clock callable datetime.now",
+        "class Fields.__dataclass_fields__",
     ):
         assert any(where in finding for finding in found), f"the scan missed {where}: {found}"
     assert runner_clock_guard.bound_reference_violations(stage2) == []
+
+
+def test_runner_clock_runtime_guard_fails_the_test_through_the_autouse_fixture(tmp_path: Path) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: the autouse fixture lets a swallowed runner read pass.
+
+    The planted tests above take their records out of the session; this one
+    runs a separate pytest session with the real `tests/conftest.py`, so the
+    fixture itself must fail a test whose runner code swallowed the refusal,
+    at run time and at import, and leave a clean test green.
+    """
+    swallowed = "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n"
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import time\n"
+        f"RUNNER = {RUNNER_FILE!r}\n"
+        f"SWALLOWED = {swallowed!r}\n"
+        "def run():\n"
+        "    namespace = {'time': time}\n"
+        "    exec(compile(SWALLOWED, RUNNER, 'exec'), namespace)\n"
+        "    return namespace['later']()\n"
+        "def test_swallowed_read():\n"
+        "    run()\n"
+        "def test_clean():\n"
+        "    time.time()\n",
+        encoding="utf-8",
+    )
+    importing = tmp_path / "test_import_probe.py"
+    importing.write_text(
+        "import time\n"
+        f"exec(compile({swallowed + 'later()\n'!r}, {RUNNER_FILE!r}, 'exec'), {{'time': time}})\n"
+        "def test_after_import():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    def session(test_file: Path) -> str:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-p", "conftest", "-p", "no:cacheprovider", "-p", "no:xdist", "-rA", "-q"]
+            + [str(test_file)],
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "tests")},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        return output
+
+    output = session(probe)
+    assert re.search(r"ERROR .*test_probe.py::test_swallowed_read", output), output
+    assert re.search(r"PASSED .*test_probe.py::test_clean", output), output
+    output = session(importing)
+    assert re.search(r"ERROR .*test_import_probe.py::test_after_import", output), output
+    assert "outside clock_now at import" in output, output
 
 
 def test_runner_clock_preserves_time_domains(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
