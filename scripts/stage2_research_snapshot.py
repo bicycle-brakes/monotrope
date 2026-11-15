@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -218,11 +220,18 @@ def _sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def stored_binding(manifest, research_path, research_bytes, *, append=None):
+def stored_binding(
+    manifest, research_path, research_bytes, *, append=None, publication=None, publication_day=None, brief=None
+):
     """The resume binding of one frozen state, in the shape the state store keeps (Q-13).
 
     ``research_bytes`` are the frozen bytes of ``research_path``; ``append`` are the exact bytes
-    the runner will add to it, recorded before the write so a crash between the two is covered.
+    the runner will add to them, recorded before the write so a crash between the two is covered.
+    ``publication`` are the runner-prepared bytes the append lands on — the corrected provenance
+    header, the skeleton notices removed — recorded so a resume accepts exactly what was published
+    and nothing else. ``publication_day`` is required whenever ``publication`` is supplied; the
+    exact bytes and day are retained together, so a later resume never recomputes that header
+    from live bytes or a new date.
     """
     paths = dict(manifest["paths"])
     if research_path not in paths or paths[research_path] != _sha256(research_bytes):
@@ -236,20 +245,71 @@ def stored_binding(manifest, research_path, research_bytes, *, append=None):
         if not isinstance(append, bytes):
             raise ResearchSnapshotError("invalid runner-owned research bytes")
         binding["append"] = {"sha256": _sha256(append), "length": len(append)}
+    if publication is not None:
+        if not isinstance(publication, bytes):
+            raise ResearchSnapshotError("invalid runner-prepared research bytes")
+        if not isinstance(publication_day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", publication_day):
+            raise ResearchSnapshotError("runner-prepared research requires a publication day")
+        binding["research_publication_normalised_sha256"] = _sha256(_without_updated(publication))
+        binding["research_publication"] = {
+            "base64": base64.b64encode(publication).decode("ascii"),
+            "day": publication_day,
+        }
+    if brief is not None:
+        if not isinstance(brief, bytes):
+            raise ResearchSnapshotError("invalid prepared research brief")
+        binding["research_brief"] = {"base64": base64.b64encode(brief).decode("ascii"), "sha256": _sha256(brief)}
     return binding
+
+
+def stored_brief(binding):
+    """Read the frozen research portion of a private brief, after source verification."""
+    record = binding.get("research_brief")
+    if record is None:
+        return None
+    try:
+        data = base64.b64decode(record["base64"], validate=True)
+        if _sha256(data) != record["sha256"]:
+            raise ValueError("brief digest mismatch")
+    except (KeyError, TypeError, ValueError, binascii.Error) as error:
+        raise ResearchSnapshotError("malformed stored research brief") from error
+    return data
+
+
+def stored_publication(binding):
+    """Read the exact planned publication and its day, if a new-format binding records them."""
+    record = binding.get("research_publication")
+    if record is None:
+        if "research_publication_normalised_sha256" in binding:
+            raise ResearchSnapshotError("stored publication has no exact bytes and publication day")
+        return None
+    try:
+        data = base64.b64decode(record["base64"], validate=True)
+        day = record["day"]
+        if not isinstance(day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+            raise ValueError("invalid publication day")
+        if _sha256(_without_updated(data)) != binding["research_publication_normalised_sha256"]:
+            raise ValueError("publication bytes do not match their digest")
+    except (KeyError, TypeError, ValueError, binascii.Error) as error:
+        raise ResearchSnapshotError("malformed stored publication") from error
+    return data, day
 
 
 def changed_against_stored(manifest, research_path, research_bytes, stored):
     """Paths whose bytes differ from a stored binding; empty means the binding holds.
 
     HEAD is not compared. ``research.md`` is compared without the stored run's own appended tail
-    (its length and digest must both match) and without the ``updated:`` restamp.
+    (its length and digest must both match) and without the ``updated:`` restamp. When the binding
+    records a publication, the prefix under that tail must additionally be exactly the prepared
+    corrected bytes: the original bytes alone count before the publication was written, and any
+    foreign header or body edit between the two stays a change.
     """
     try:
         research = stored["research"]
         stored_paths = stored["paths"]
         normalised = stored["research_normalised_sha256"]
         append = stored.get("append")
+        publication = stored.get("research_publication_normalised_sha256")
     except (KeyError, TypeError) as error:
         raise ResearchSnapshotError("malformed stored binding") from error
     if research != research_path:
@@ -260,12 +320,20 @@ def changed_against_stored(manifest, research_path, research_bytes, stored):
         for path in set(current) | set(stored_paths)
         if path != research and current.get(path) != stored_paths.get(path)
     }
-    candidates = [research_bytes]  # the append was recorded but never written, or there was none
-    if append is not None and 0 < append["length"] <= len(research_bytes):
+    try:
+        stored_publication(stored)
+        stored_brief(stored)
+    except ResearchSnapshotError:
+        # A corrupt publication cannot authorize reuse, even before its append was written.
+        changed.add(research)
+    # The append was recorded but never written, or there was none: the frozen bytes themselves.
+    holds = _sha256(_without_updated(research_bytes)) == normalised
+    if not holds and append is not None and 0 < append["length"] <= len(research_bytes):
         cut = len(research_bytes) - append["length"]
         if _sha256(research_bytes[cut:]) == append["sha256"]:
-            candidates.append(research_bytes[:cut])
+            expected = normalised if publication is None else publication
+            holds = _sha256(_without_updated(research_bytes[:cut])) == expected
     present = research in current and research in stored_paths
-    if not present or all(_sha256(_without_updated(body)) != normalised for body in candidates):
+    if not present or not holds:
         changed.add(research)
     return sorted(changed)

@@ -443,6 +443,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/docs-job-report-header/plan.md`](changes/docs-job-report-header/plan.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/research.md`](changes/docs-job-report-header/research.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/spec.md`](changes/docs-job-report-header/spec.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
+| [`changes/explore-provenance/decisions.md`](changes/explore-provenance/decisions.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/findings.md`](changes/explore-provenance/findings.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/plan.md`](changes/explore-provenance/plan.md) | draft | partial | 2026-11-09 | coding-harness-g19n |
+| [`changes/explore-provenance/research.md`](changes/explore-provenance/research.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/spec.md`](changes/explore-provenance/spec.md) | draft | partial | 2026-11-09 | coding-harness-g19n |
 | [`changes/go-wire-apis/decisions.md`](changes/go-wire-apis/decisions.md) | draft | none | 2026-11-06 | coding-harness-36za |
 | [`changes/go-wire-apis/findings.md`](changes/go-wire-apis/findings.md) | draft | none | 2026-11-06 | coding-harness-36za |
 | [`changes/go-wire-apis/plan.md`](changes/go-wire-apis/plan.md) | draft | partial | 2026-11-06 | coding-harness-36za |
@@ -580,6 +585,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/targeted-check-more-verbs/decisions.md`](changes/targeted-check-more-verbs/decisions.md) | draft | none | 2026-11-12 | coding-harness-0swp |
+| [`changes/targeted-check-more-verbs/findings.md`](changes/targeted-check-more-verbs/findings.md) | draft | none | 2026-11-11 | coding-harness-0swp |
+| [`changes/targeted-check-more-verbs/plan.md`](changes/targeted-check-more-verbs/plan.md) | draft | none | 2026-11-11 | coding-harness-0swp |
+| [`changes/targeted-check-more-verbs/research.md`](changes/targeted-check-more-verbs/research.md) | draft | none | 2026-11-11 | coding-harness-0swp |
+| [`changes/targeted-check-more-verbs/spec.md`](changes/targeted-check-more-verbs/spec.md) | draft | none | 2026-11-11 | coding-harness-0swp |
 | [`changes/time-records-data/decisions.md`](changes/time-records-data/decisions.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/findings.md`](changes/time-records-data/findings.md) | draft | none | 2026-10-31 | coding-harness-v6vk |
 | [`changes/time-records-data/plan.md`](changes/time-records-data/plan.md) | draft | none | 2026-10-31 | coding-harness-v6vk |

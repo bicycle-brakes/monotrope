@@ -13,6 +13,7 @@ the end reads the repository's own declaration and documents.
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import json
 import os
 import re
@@ -2444,8 +2445,10 @@ def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
     sworld.complete()
     assert sworld.run() == 0
     now = sworld.research.read_text(encoding="utf-8")
-    stamped_seed = re.sub(r"^updated: .*?$", f"updated: {stage2.today()}", seed, count=1, flags=re.M)
-    assert now.startswith(stamped_seed), "only the updated date may change before the append"
+    prepared = stage2.research_publication(
+        seed.encode("utf-8"), producer=stage2_research_run.SWARM_PUBLISHER, day=stage2.today()
+    ).decode("utf-8")
+    assert now.startswith(prepared), "only the publication's own header correction precedes the appended record"
     done = subprocess.run(["git", "status", "--porcelain"], cwd=sworld.root, capture_output=True, text=True, check=True)
     assert [line.split()[-1] for line in done.stdout.splitlines()] == ["plans/changes/demo/research.md"]
     sworld.rewind()
@@ -2461,6 +2464,47 @@ def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
     )
     assert sworld.run() == 1, "a participant's write to research.md is drift, never a clean run"
     assert "research.md" in sworld.research.read_text(encoding="utf-8").split("status:")[-1]
+
+
+def swarm_skeleton() -> str:
+    """The research skeleton exactly as `scripts/new_change.py` writes it, with the swarm's class and neighbours."""
+    import new_change
+
+    header = new_change._frontmatter_template("demo", "demo-1", "framework-architect", dt.date.today().isoformat())
+    header = header.replace(
+        "provenance: human-written\n", "class: feature\nneighbours: []\nprovenance: human-written\n"
+    )
+    return header + new_change.BODY_TEMPLATE.format(titel="demo")
+
+
+def test_swarm_publication_corrects_research_provenance(sworld: SwarmWorld) -> None:
+    # Bead coding-harness-g19n. Planted fault: a swarm publication, complete or incomplete, leaves the
+    # skeleton's false `human-written` header and its empty-file notices in the research file
+    # (spec, criteria 1-4).
+    sworld.research.write_text(swarm_skeleton(), encoding="utf-8")
+    sworld.commit()
+    sworld.complete(**{"judge": [{"exit": 1, "stdout": "AUTO"}]})
+    assert sworld.run() == 1
+    incomplete = sworld.research.read_text(encoding="utf-8")
+    first = manifest_of(sworld)
+    header = incomplete.split("---", 2)[1]
+    producer_line = f'produced_by: {{kind: llm-session, name: stage2-research-swarm, version: "{dt.date.today()}"}}'
+    assert "provenance: ai-drafted-reviewed" in header and "human-written" not in incomplete
+    assert header.count(producer_line) == 1, "the swarm names its orchestration, not one participant model"
+    assert incomplete.count("produced_by:") == 1 and incomplete.count("review:") == 1
+    assert "review: {status: pending, approved_by: null, approved_at: null}" in header
+    assert "file is empty until it has run" not in incomplete, "the skeleton's empty-file notice survives"
+    assert "Bring the provenance up to date" not in incomplete, "the skeleton's blockquote survives"
+    assert "# demo — Research" in incomplete and incomplete.count("```research-swarm/v2 manifest") == 1
+    assert "incomplete" in status_line(incomplete), "the envelope itself was published"
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    complete = sworld.research.read_text(encoding="utf-8")
+    assert complete.startswith(incomplete), "the resumed publication changed the bytes it appended to"
+    resume = manifest_of(sworld)["resume"]
+    assert resume["usable"] is True and resume["source_run"] == first["run_id"], resume
+    assert [call["kind"] for call in sworld.calls()] == ["judge"], "only the judge runs again"
 
 
 @pytest.mark.parametrize("kind", ["repository", "online"])
@@ -3444,17 +3488,17 @@ def test_a_finder_output_survives_a_failed_terminal_write(sworld: SwarmWorld, mo
 def test_a_failed_publication_keeps_the_results_reusable(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criteria 53, 57 (phase-6 F-28). Planted fault: the run is stored as complete before its record is
     # published, so a failed publication makes the next run reject every finished result as published.
-    real = stage2.append
+    real = stage2.publish_research
 
     def failing(*_args, **_kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(stage2, "append", failing)
+    monkeypatch.setattr(stage2, "publish_research", failing)
     sworld.complete()
     with contextlib.suppress(OSError):
         sworld.run()
     assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8"), "nothing was published"
-    monkeypatch.setattr(stage2, "append", real)
+    monkeypatch.setattr(stage2, "publish_research", real)
     (sworld.bin / "calls.jsonl").unlink()
     assert sworld.run() == 0
     resume = manifest_of(sworld)["resume"]
@@ -3492,12 +3536,12 @@ def test_a_run_killed_after_staging_the_clear_is_recovered_on_resume(
 ) -> None:
     # Criterion 53 (phase-6 F-31). Planted fault: a process killed after the store was staged for clearing but
     # before the record was appended leaves every run under a staging name, and resume reports "no stored run".
-    real_append = stage2.append
+    real_publish = stage2.publish_research
 
     def killed(*_args, **_kwargs):
         raise OSError("killed")
 
-    monkeypatch.setattr(stage2, "append", killed)
+    monkeypatch.setattr(stage2, "publish_research", killed)
     real_restore = stage2_research_store.Store.restore_clear
     monkeypatch.setattr(stage2_research_store.Store, "restore_clear", lambda *_args: None)  # no cleanup ran
     sworld.complete()
@@ -3505,7 +3549,7 @@ def test_a_run_killed_after_staging_the_clear_is_recovered_on_resume(
         sworld.run()
     monkeypatch.setattr(stage2_research_store.Store, "restore_clear", real_restore)
     assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8")
-    monkeypatch.setattr(stage2, "append", real_append)
+    monkeypatch.setattr(stage2, "publish_research", real_publish)
     (sworld.bin / "calls.jsonl").unlink()
     assert sworld.run() == 0
     resume = manifest_of(sworld)["resume"]
@@ -3868,6 +3912,26 @@ def test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence(sworld: 
         stage2.declared_class(sworld.root, "demo", None)
     except stage2.Refused as error:
         assert "unterminated" not in str(error)
+
+
+def test_swarm_publication_preserves_prior_producers(sworld: SwarmWorld):
+    import yaml
+
+    text = swarm_skeleton().replace(
+        "provenance: human-written\n",
+        'provenance: ai-drafted-reviewed\nproduced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-04"}\n',
+    )
+    sworld.research.write_text(text)
+    sworld.commit()
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    records = yaml.safe_load(sworld.research.read_text().split("---", 2)[1])["produced_by"]
+    assert isinstance(records, list), "swarm publication must retain earlier contributors"
+    assert [(p["name"], p.get("model")) for p in records] == [
+        ("pi", "GLM 5.3 Flash"),
+        ("pi", "Claude Haiku 5.5"),
+        ("stage2-research-swarm", None),
+    ]
 
 
 def test_deadline_before_open_refuses_by_name(sworld: SwarmWorld) -> None:

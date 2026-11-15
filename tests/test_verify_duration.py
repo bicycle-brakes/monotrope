@@ -681,3 +681,16 @@ def test_writer_refuses_hard_linked_history(tmp_path, capsys):
     code, _, err = _run(capsys, "start")
     assert code == 2 and "refusing" in err
     assert victim.read_text() == "unchanged\n"
+
+
+def test_slip_counter_is_deferred(capsys) -> None:
+    """Q-9: the duration CLI retains its original operations without the deferred counter."""
+    with pytest.raises(SystemExit) as stopped:
+        verify_duration.main(["--help"])
+    assert stopped.value.code == 0
+    help_text = capsys.readouterr().out
+    for operation in ("targeted", "slip", "slips"):
+        assert not re.search(rf"\b{operation}\b", help_text), f"deferred operation {operation} is still exposed"
+    assert verify_duration.EVENTS == ("run_start", "gate", "run_end")
+    for writer in ("append_targeted", "append_slip", "record_local_slip"):
+        assert not hasattr(verify_duration, writer), f"deferred writer {writer} is still callable"
