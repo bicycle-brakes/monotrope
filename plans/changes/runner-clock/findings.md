@@ -591,3 +591,16 @@ Stage-2 call, 2026-11-15: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-15: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/runner-clock/plan.md, plans/changes/runner-clock/spec.md — unchanged
 
 Orchestrator hand repair, 2026-11-15: row F6-3 fixed by hand edit b5e19db9 (Opus subagent, maintainer's approval for the night run) after the Sonnet fallback ended on the weekly Claude plan limit; built on the saved attempt `refs/stage2/attempts/runner-clock/repair-attempt-3-20261115T162728105006Z` (bac97c97) without its meta-test. Targeted check: 167 selected tests in `tests/test_stage2.py` and `tests/test_stage2_fail_fast.py` green; the two cleanup tests and the new record test green ten runs out of ten; ruff clean. The full `make verify` is still required before the phase-6 re-check.
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1083 files, 4384 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+
+Phase 6 verdict: codex 01a1e0a9-78b3-7e53-9770-67d063a38a99, 2026-11-15
+Reviewer session: codex 01a1e0a9-78b3-7e53-9770-67d063a38a99 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
