@@ -377,6 +377,29 @@ def shell_argv(resolved: str) -> list[str]:
 _LIVE_GROUPS: set[int] = set()
 
 
+def _hold_launch_signals() -> tuple[list[int], Callable[[], None]]:
+    """On the main thread, record the run's signals while a gate starts: the pending list and the release.
+
+    Temporary handlers, never `pthread_sigmask`, whose blocked mask the child would inherit - the
+    form of the runner's `defer_launch_signals` and the supervisor's `_deferred_signals`. The
+    release puts the previous handlers back; the caller then delivers what is pending.
+    """
+    pending: list[int] = []
+    installed: dict[int, object] = {}
+    if threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):
+            with contextlib.suppress(ValueError, OSError):
+                installed[signum] = signal.signal(signum, lambda received, _frame: pending.append(received))
+
+    def release() -> None:
+        while installed:
+            signum, handler = installed.popitem()
+            with contextlib.suppress(ValueError, OSError):
+                signal.signal(signum, handler)  # type: ignore[arg-type]
+
+    return pending, release
+
+
 def gate_process(
     root: Path,
     python: str,
@@ -407,16 +430,27 @@ def gate_process(
     descriptor = lock_slot.get("fd")
     if env.get(verify_lock.LOCK_ENV) and descriptor is not None:
         pass_fds = (descriptor,)
-    proc = subprocess.Popen(
-        shell_argv(resolved),
-        cwd=str(root),
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-        pass_fds=pass_fds,
-    )
+    # A signal between `Popen` creating the gate and its group's registration would raise before
+    # the cleanup below exists and leave the gate running (row F6-3). The run's signals are held
+    # back from before the launch until the `try` whose `finally` ends the group, then delivered.
+    pending, release = _hold_launch_signals()
+    try:
+        proc = subprocess.Popen(
+            shell_argv(resolved),
+            cwd=str(root),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            pass_fds=pass_fds,
+        )
+    except BaseException:
+        release()
+        for signum in pending:
+            signal.raise_signal(signum)
+        raise
+    _LIVE_GROUPS.add(proc.pid)
 
     complaints = sys.stderr if err is None else err
     closed = threading.Event()
@@ -442,17 +476,24 @@ def gate_process(
         threading.Thread(target=relay, args=(proc.stdout, sys.stdout if out is None else out), daemon=True),
         threading.Thread(target=relay, args=(proc.stderr, complaints), daemon=True),
     ]
-    _LIVE_GROUPS.add(proc.pid)
-    for reader in readers:
-        reader.start()
     try:
+        release()
+        for signum in pending:
+            signal.raise_signal(signum)
+        for reader in readers:
+            reader.start()
         # Wait for the gate leader, not EOF: descendants may still own its pipes.
         proc.wait()
     finally:
         verify_lock.end_lingering_group(proc.pid)
         proc.wait()
         drained = time.monotonic() + OUTPUT_DRAIN_SECONDS
-        for reader in readers:
+        for reader, pipe in zip(readers, (proc.stdout, proc.stderr), strict=True):
+            if reader.ident is None:
+                # A signal delivered before the readers started: nothing relays this pipe.
+                with contextlib.suppress(OSError):
+                    pipe.close()
+                continue
             reader.join(timeout=max(0.0, drained - time.monotonic()))
         with writing:
             closed.set()

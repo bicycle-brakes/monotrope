@@ -1252,3 +1252,41 @@ def test_refreshed_selection_is_bound_to_the_measured_configuration(
     result, out, err = run_scheduler(checkout.root)
     assert result.exit_code != 0, (result, out, err)
     assert "VERIFY GREEN" not in out, out
+
+
+def test_a_signal_at_the_launch_boundary_still_ends_the_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A SIGTERM between `Popen` and the group's registration is deferred, then ends the gate (row F6-3).
+
+    Planted fault: the signal's interrupt is raised inside the launch, before the group is
+    registered and before the cleanup is established, so the child keeps running.
+    """
+    started: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def popen(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        started.append(proc)
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc
+
+    monkeypatch.setattr(verify_run.subprocess, "Popen", popen)
+    previous = verify_run._install_run_handlers()
+    try:
+        with pytest.raises(verify_run.GateInterrupted):
+            verify_run.gate_process(
+                tmp_path, sys.executable, {"fd": None}, {}, "sleep 30", dict(os.environ), io.StringIO(), io.StringIO()
+            )
+    finally:
+        verify_run._restore_run_handlers(previous)
+        monkeypatch.setattr(verify_run.subprocess, "Popen", real_popen)
+        for proc in started:
+            if proc.poll() is None:
+                still_running = True
+                with contextlib.suppress(OSError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=10)
+            else:
+                still_running = False
+    assert len(started) == 1
+    assert not still_running, "the gate kept running after the interrupt"
+    assert started[0].pid not in verify_run._LIVE_GROUPS, "the interrupted gate stayed registered"
