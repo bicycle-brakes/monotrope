@@ -543,3 +543,14 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-15: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1081 files, 4339 commits, 12 rules.
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1083 files, 4362 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MAJOR | SPEC | base | tests/test_stage2.py:7021; tests/test_stage2.py:22973 | Both rewritten cleanup tests treat PID-file existence as readiness. If the child is descheduled after creating the file but before writing its PID, the test injects the timeout and kills the writer. Parsing the empty file then raises `ValueError`, failing a correct implementation because of scheduling. In the escaped-descendant test, cleanup also skips killing the escapee because its PID remains unset. The handshake must establish a complete PID before injecting expiry. [Acceptance criteria 4 and 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1dfb4-cf93-7060-948e-34c6b3818797, 2026-11-15
+Reviewer session: codex 01a1dfb4-cf93-7060-948e-34c6b3818797 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
