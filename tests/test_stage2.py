@@ -27251,7 +27251,7 @@ def test_implement_preserves_full_fallback_boundaries(
     assert world.run("implement") == 0
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert 0 < make["timeout"] <= stage2.VERIFY_SECONDS, "the full fallback ignored the remaining limit"
     assert commands.of("gate") == [], "the full fallback also ran targeted gates"
     # A passing attempt's scope stands in its time line in plan.md, not in findings.md (Q-6).
     scope = world.plan.read_text(encoding="utf-8")
