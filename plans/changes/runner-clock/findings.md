@@ -453,8 +453,8 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | implementation | tests/test_stage2.py:12170 | Adding `return time.monotonic.__call__()` outside `clock_now` leaves the complete source test green, reproduced against the current runner source in memory. The guard skips the inner `time.monotonic` reference and checks only the unbanned outer `__call__` attribute, allowing a real clock read to bypass injection. [Acceptance criterion 2] | Codex | open | — |
-| F6-2 | MAJOR | SPEC | implementation | tests/test_stage2.py:12105 | Changing the signature to `def clock_now(cached=time.monotonic())` leaves the complete source test green, reproduced in memory. The default reads the machine clock at module import, outside the function body, but exempting the entire function syntax tree also exempts its defaults. [Acceptance criterion 2] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | tests/test_stage2.py:12170 | Adding `return time.monotonic.__call__()` outside `clock_now` leaves the complete source test green, reproduced against the current runner source in memory. The guard skips the inner `time.monotonic` reference and checks only the unbanned outer `__call__` attribute, allowing a real clock read to bypass injection. [Acceptance criterion 2] | Codex | fixed — orchestrator hand edit d4be125a | no |
+| F6-2 | MAJOR | SPEC | base | tests/test_stage2.py:12105 | Changing the signature to `def clock_now(cached=time.monotonic())` leaves the complete source test green, reproduced in memory. The default reads the machine clock at module import, outside the function body, but exempting the entire function syntax tree also exempts its defaults. [Acceptance criterion 2] | Codex | fixed — orchestrator hand edit d4be125a | no |
 
 Phase 6 verdict: codex 01a1df11-8aaa-7c22-a2a6-a2a0aa31cfe9, 2026-11-15
 Reviewer session: codex 01a1df11-8aaa-7c22-a2a6-a2a0aa31cfe9 — a fresh session reviewed: no phase-2a session was recorded
