@@ -588,6 +588,58 @@ def test_install_routes_refuse_unverified_archive(tmp_path: Path, route: str, fa
     assert sentinel.read_text(encoding="utf-8").startswith("sentinel:"), "the unversioned bd path was overwritten"
 
 
+@pytest.mark.parametrize("route", ["installer", "cloud"])
+@pytest.mark.parametrize("present", ["exact-pin", "longer-patch", "longer-major", "release-candidate"])
+def test_install_routes_skip_only_an_exact_pinned_binary(tmp_path: Path, route: str, present: str) -> None:
+    """Criterion 3, already-installed side (loop row L2-4): a route skips the
+    download only when the binary already at the versioned destination reports
+    exactly `bd version <pin>` on its first line. A binary whose version output
+    merely contains the pin (1.3.40, 11.3.4, a release candidate) is not the
+    pinned release: the route downloads, verifies and installs over it. The
+    spec's Boundary names what the skip still trusts."""
+    pin = _pin()
+    reported = {
+        "exact-pin": pin,
+        "longer-patch": f"{pin}0",
+        "longer-major": f"1{pin}",
+        "release-candidate": f"{pin}-rc.1",
+    }[present]
+    tarball = f"beads_{pin}_linux_amd64.tar.gz"
+    expected = f"https://github.com/gastownhall/beads/releases/download/v{pin}/{tarball}"
+    archive, digest = _bd_tarball(tmp_path, name=f"present-{route}-{present}", version=pin)
+    curl_log = tmp_path / "curl.log"
+    neutral_log = tmp_path / "neutral.log"
+    env = {"CURL_LOG": str(curl_log), "CURL_SERVE": str(archive), "NEUTRAL_LOG": str(neutral_log)}
+    if route == "installer":
+        ns = _sandbox(tmp_path, name=f"repo-{present}")
+        home = ns.home
+        _checksum_file(ns, tarball, digest)
+        script = ns.repo / "tools" / "beads" / "install.sh"
+        env.update({"UNAME_S": "Linux", "UNAME_M": "amd64"})
+    else:
+        home = tmp_path / "cloud-home"
+        home.mkdir()
+        script = _cloud_copy(tmp_path, root=tmp_path / "cloud-root", digest=digest)
+    sentinel = _sentinel(home)
+    dest = home / ".local" / "bin" / f"bd-{pin}"
+    present_log = tmp_path / "present-bd.log"
+    _fake_bd(dest, version=reported, log=present_log)
+    before = dest.read_bytes()
+    result = _run(script, home=home, path=_path(_path_bin(tmp_path)), env_extra=env)
+    assert result.returncode == 0, result.stderr
+    if present == "exact-pin":
+        assert _log_lines(curl_log) == [], "the route downloaded although the exact pinned binary is installed"
+        assert _extractions(home) == [], "the route extracted although the exact pinned binary is installed"
+        assert dest.read_bytes() == before, "the route replaced the exact pinned binary"
+    else:
+        assert _log_lines(curl_log) == [expected], (
+            f"a binary reporting {reported!r} was taken as the pinned {pin}: the route did not download"
+        )
+        assert len(_extractions(home)) == 1, "the verified archive was not extracted exactly once"
+        assert dest.read_bytes() != before, f"the binary reporting {reported!r} was left in place"
+        _assert_installed(home, pin, sentinel)
+
+
 def test_cloud_pin_and_checksum_match_repository() -> None:
     """Criterion 4: the standalone cloud setup carries the repository's pin and
     the very digest its referenced checksum file commits — so the two
