@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-pph3
@@ -13,6 +13,12 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-11-14", model: "glm-5.3-flash"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+neighbours:
+  - plans/changes/archive/2026-11-06-verify-machine-lock/spec.md
+  - plans/changes/verify-step-limit/spec.md
+  - plans/changes/midnight-stamp-test/spec.md
+  - plans/changes/time-records-data/spec.md
+  - plans/specs/implementation-verification/spec.md
 ---
 
 # runner clock — Research
@@ -63,3 +69,25 @@ Runner clock reads: `scripts/stage2.py` (six sites above). Runner satellite seam
 - `tests/test_stage2.py` — the timing tests at `:2402` and `:2436`, the other real-wait tests per unclear-point 6, a new source guard test beside the precedent at `:1798`, and `FakeClock` (`:11765`) as the injection mechanism.
 - No change required in `scripts/time_records.py` (clock-free today). Changes in `scripts/verify_lock.py` or the other scripts depend on unclear-point 3.
 - Nothing in `plans/INDEX.md` — the folder rows already stand (`plans/INDEX.md:566-567`).
+
+## Corrections — 2026-11-15
+
+Orchestrator hand edit after review-loop round 1 (loop rows L1-12 and L1-14).
+The exploration above stays as published; these notes correct what the
+change's own diff and a measurement at the merge base show.
+
+- **Header (open item 7).** The `neighbours:` key is now in the header, with
+  the five paths the exploration proposed under "Neighbours for the header";
+  each path was checked to exist as a tracked file on 2026-11-15.
+- **Site count (open item 1).** Measured on 2026-11-15 at the merge base with
+  `origin/main` (commit 1d4419d1): `scripts/stage2.py` has the same six
+  `time.monotonic()` code sites listed above plus the one docstring mention in
+  `run_reviewer`, seven matching lines in all. The decision's "7 call sites"
+  counts that docstring line; the census and the decision describe the same
+  source, and no seventh code site exists.
+- **Plans index.** "The change folder rows already stand" and "Nothing in
+  `plans/INDEX.md`" held only on the exploration's branch, where the change's
+  own earlier commits had added the `decisions.md` and `research.md` rows.
+  The merge base has no runner-clock row; the change's diff adds five rows
+  (`decisions.md`, `findings.md`, `plan.md`, `research.md`, `spec.md`), as the
+  runner's index regeneration requires.

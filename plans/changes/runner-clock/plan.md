@@ -190,6 +190,9 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 ## Time used
 
 2026-11-14 18:40:12–18:45:22 UTC, 310 s — draft · attempt 1 · route codex · model gpt-6.1-sol · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-14 18:48:57–19:34:09 UTC, 2712 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 19:34:18–19:46:43 UTC, 745 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14, after 19:46:54 UTC — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · not measured: no runner time entry for this attempt survives; the two entries above are restored on 2026-11-15 from the runner's saved attempt (ref `refs/stage2/attempts/runner-clock/implement-attempt-3-20261114T194654168379Z`, commit 4b707804), whose call records stand in findings.md
 2026-11-14 21:32:03–22:16:27 UTC, 2664 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-14 22:16:35–22:29:59 UTC, 805 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-14 22:30:13–22:56:04 UTC, 1552 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
