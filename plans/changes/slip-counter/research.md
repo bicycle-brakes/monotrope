@@ -4,37 +4,26 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, 2026-11-13"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # slip counter — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
 
 Stage-2 call, 2026-11-13: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1044 files, 4116 commits, 12 rules.
 
 ## Runner exploration — 2026-11-13
 
-All facts are gathered and verified in this worktree. Here is the research, ready to append below the stage-2 call line in `plans/changes/slip-counter/research.md`.
-
----
-
-## Runner exploration — 2026-11-13
-
-The fact base is complete. Ready to append below the stage-2 call line in `plans/changes/slip-counter/research.md` (the frontmatter note applies: filling this file by a language model makes it `provenance: ai-drafted-reviewed` with `produced_by:` and `review:` per `provenance.yaml`). All paths and symbols verified in this worktree at branch `feat/slip-counter`, head `efb2ad96`; line anchors are from today and age.
+All paths and symbols verified in this worktree at branch `feat/slip-counter`, head `efb2ad96`; line anchors are from today and age.
 
 ### What exists today
 

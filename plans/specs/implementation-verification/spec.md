@@ -57,19 +57,19 @@ No design phase: the existing stamp and registry provide the design.
 ## Local verification measurement
 
 The runner's local checks also leave the evidence one slip count is derived
-from (bead coding-harness-bxxt.7, integrated 2026-11-14): a targeted check
+from (bead coding-harness-bxxt.7, integrated 2026-11-15): a targeted check
 records ordinary start and completion rows through
 `scripts/verify_duration.py` around its execution, with the checked tree's
 content identity — without the change's own `plan.md` and `findings.md`,
 where the runner's bookkeeping lands between the checks — captured on both
-sides, and a full check's launch carries
+sides, and the runner's admitted full check (`full_verify`) carries
 its comparison context in runner-owned environment variables that the
 shell's start record captures. Nothing about a slip is stored — no slip
 event, tally, receipt or consumed marker; `python3 -m scripts.verify_duration
 slips` derives the count from the one local history and reports it beside
 the number of incomplete or not countable runs. Interrupted work,
-conflicting records, moved trees, missing comparison identity and legacy
-rows are reported as gaps beside the count, never as evidence of zero, and
+conflicting records, moved trees, and red full runs without comparison
+identity (legacy rows included) are reported as gaps beside the count, never as evidence of zero, and
 missing history is unavailable. Reading never appends, repairs or creates
 history, and a failed measurement write never changes a verification
 verdict. Admission, gate selection and the full check's semantics stay

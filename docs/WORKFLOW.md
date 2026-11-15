@@ -603,12 +603,14 @@ completed green targeted check of the same repository, change, checked tree
 and gate configuration failed to catch (bead coding-harness-bxxt.7). The
 count is derived, never stored: the runner's targeted check records ordinary
 run evidence through `scripts/verify_duration.py` around its execution, the
-full check carries its comparison context in runner-owned environment
+runner's admitted full check (`full_verify`) carries its comparison context in runner-owned environment
 variables that the shell's start record captures, and `python3 -m
 scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]`
 pairs the records afterwards from the one history. The count stands beside
 the number of incomplete or not countable runs — interrupted work,
-conflicting records, moved trees and legacy rows are gaps, not zeros — and
+conflicting records, moved trees and red full runs without comparison
+identity (legacy rows included) are gaps, not zeros; a green full run is a
+complete observation of zero slips — and
 missing history is unavailable, never a counted zero. Reading never appends
 to the history, and no slip event, counter or consumed marker exists; trees
 are compared by contents and modes, never by commit identity, which the
