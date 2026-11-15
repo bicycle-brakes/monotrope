@@ -651,7 +651,7 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-7 | MAJOR | SPEC | base | scripts/stage2.py:6130 | Stage 2 treats shell builtins as external executables. A selected gate with command `:` passes through the shell entry point but fails to start through Stage 2; `exit 1` becomes an uncaught `CallFailed` instead of an ordinary blocking failure available for repair. A source-extracted reproduction confirmed both commands raise `FileNotFoundError` through `_gate_argv`, while `sh -c` returns their expected statuses. Preserve shell command semantics across both entry points. [Acceptance criteria 6 and 10.] | Codex | open | — |
+| F6-7 | MAJOR | SPEC | base | scripts/stage2.py:6130 | Stage 2 treats shell builtins as external executables. A selected gate with command `:` passes through the shell entry point but fails to start through Stage 2; `exit 1` becomes an uncaught `CallFailed` instead of an ordinary blocking failure available for repair. A source-extracted reproduction confirmed both commands raise `FileNotFoundError` through `_gate_argv`, while `sh -c` returns their expected statuses. Preserve shell command semantics across both entry points. [Acceptance criteria 6 and 10.] | Codex | taken | — |
 
 Phase 6 verdict: codex 01a1e095-15b5-7392-b566-7209f80deb92, 2026-11-15
 Reviewer session: codex 01a1e095-15b5-7392-b566-7209f80deb92 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
