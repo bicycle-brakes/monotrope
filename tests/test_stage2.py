@@ -20,6 +20,7 @@ import contextlib
 import copy
 import datetime as dt
 import fcntl
+import importlib
 import inspect
 import json
 import multiprocessing
@@ -11952,9 +11953,8 @@ UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
 # The runner's one clock boundary (spec runner-clock, criteria 1, 2 and 5)
 # ---------------------------------------------------------------------------
 
-# The `time` attributes that read or wait on the machine's clocks. `ctime`,
-# `localtime` and `gmtime` count only when called without an argument: with one
-# they convert a given instant, and `strftime`/`strptime` never read a clock.
+# The complete declared set of `time` functions that read or wait on a machine
+# clock (Python 3.12+: wall, monotonic, performance, CPU and raw POSIX clocks).
 TIME_CLOCK_ATTRS = {
     "time",
     "time_ns",
@@ -11966,95 +11966,177 @@ TIME_CLOCK_ATTRS = {
     "process_time_ns",
     "thread_time",
     "thread_time_ns",
+    "clock_gettime",
+    "clock_gettime_ns",
     "sleep",
 }
-TIME_CONVERSION_ATTRS = {"ctime", "localtime", "gmtime"}
+# The `time` conversions that read the current time only when the instant is
+# left out: the value is the number of positional arguments that makes the call
+# a pure conversion. `strftime(format)` formats now; `strftime(format, tuple)` does not.
+TIME_CONVERSION_ATTRS = {"ctime": 1, "localtime": 1, "gmtime": 1, "asctime": 1, "strftime": 2}
 # The `datetime`/`date` class methods that answer the current wall time or date.
 DATETIME_CLOCK_ATTRS = {"now", "utcnow", "today"}
+CLOCK_MODULES = ("time", "datetime")
 
 
 def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
-    """The raw clock acquisitions `source` makes outside the boundary function's body.
+    """The raw clock acquisitions `source` makes outside the one boundary function.
 
-    The visitor resolves `import time`, `import datetime as dt`,
-    `from time import monotonic as tick` and assignments of such chains
-    (`clock = time`, `tick = time.monotonic`), so an alias reads exactly like
-    the call it hides. Pure construction, parsing and formatting
-    (`datetime.fromisoformat`, `strptime`, `strftime`, `timedelta`, the `UTC`
-    constant, an explicit `gmtime(0)`) are not acquisitions. No caller or line
-    may be exempted: the only tolerated site is the module-level boundary
-    function's own body, nested functions included.
+    The guard is structural rather than a list of spellings:
+
+    - *Bindings.* Every name a module-level or nested binding gives the `time`
+      or `datetime` module, or a chain rooted in it, is resolved: `import`,
+      `import … as`, `from … import` (a star import binds every public name the
+      module has), plain, multiple-target and positional tuple assignment,
+      annotated assignment and the walrus. Bindings join, so a later rebinding
+      never launders an earlier alias, and chains resolve to a fixpoint.
+    - *References, not only calls.* A clock function is banned wherever it is
+      named - called, handed on, stored or imported - because a bare reference
+      passes the accessor to a call the guard cannot see. A star import from a
+      clock module is banned for the same reason. The conversions in
+      `TIME_CONVERSION_ATTRS` count when called without their instant, or when
+      handed on bare.
+    - *Module escape.* The modules themselves may be used only by direct
+      attribute access: a clock module named on its own (`clock = time`,
+      `f(time)`, `getattr(time, name)`, a default value) is a violation.
+    - *One exempt function object.* Only the body of the single module-level
+      `def <boundary>` is exempt, nested functions included. A second
+      module-level definition or binding of that name is itself a violation and
+      gets no exemption; the exemption is tied to one definition, not to a name.
+
+    What no static reading of one module can see - a clock reached through
+    `importlib`, `__import__` or `sys.modules`, a `datetime` class handed in as
+    an argument, or a clock read inside another module - is the spec's named
+    boundary of this guard. Pure construction, parsing and formatting
+    (`datetime.fromisoformat`, `strptime`, `timedelta`, the `UTC` constant, an
+    explicit `gmtime(0)`) are not acquisitions.
     """
     tree = ast.parse(source)
-    roots: dict[str, str] = {}
-    exempt: set[int] = set()
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == boundary:
-            exempt.update(id(inner) for inner in ast.walk(node))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import | ast.ImportFrom | ast.Assign | ast.AnnAssign):
-            _bind_clock_roots(node, roots)
-    call_funcs = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
     violations: list[str] = []
+    exempt: set[int] = set()
+    boundary_defs = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == boundary and boundary
+    ]
+    if boundary_defs:
+        exempt.update(id(inner) for inner in ast.walk(boundary_defs[0]))
+    for extra in boundary_defs[1:]:
+        violations.append(f"a second definition of {boundary} at line {extra.lineno}")
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+        for target in targets:
+            if boundary and isinstance(target, ast.Name) and target.id == boundary:
+                violations.append(f"a rebinding of {boundary} at line {node.lineno}")
 
-    def chain_of(node: ast.AST) -> str | None:
-        """The dotted chain a name or attribute resolves to, when rooted in a tracked name."""
+    roots = _clock_roots(tree)
+    attribute_values = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    call_funcs = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+
+    def chains_of(node: ast.AST) -> set[str]:
+        """Every dotted chain a name or attribute can stand for, when rooted in a tracked name."""
         parts: list[str] = []
         while isinstance(node, ast.Attribute):
             parts.append(node.attr)
             node = node.value
+        if isinstance(node, ast.NamedExpr):
+            node = node.value  # `(d := dt.date).today()` reads through the walrus
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
         if not isinstance(node, ast.Name):
-            return None
-        root = roots.get(node.id)
-        return None if root is None else ".".join([root, *reversed(parts)])
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(node.id, set())}
 
-    def banned_tail(chain: str, node: ast.AST) -> bool:
-        head, tail = chain.split(".", 1)[0], chain.rsplit(".", 1)[-1]
+    def banned(chain: str, call: ast.Call | None) -> bool:
+        pieces = chain.split(".")
+        if len(pieces) < 2:
+            return False  # the module itself; its escape is judged separately
+        head, tail = pieces[0], pieces[-1]
         if head == "time" and tail in TIME_CLOCK_ATTRS:
             return True
         if head == "time" and tail in TIME_CONVERSION_ATTRS:
-            # A conversion reads no clock; only the argument-free call answers now.
-            return isinstance(node, ast.Call) and not node.args and not node.keywords
-        return (head == "datetime") and tail in DATETIME_CLOCK_ATTRS
+            # Handed on bare, the call it feeds is unseen; called, only a missing instant reads now.
+            return call is None or (len(call.args) < TIME_CONVERSION_ATTRS[tail] and not call.keywords)
+        return head == "datetime" and tail in DATETIME_CLOCK_ATTRS
 
     for node in ast.walk(tree):
         if id(node) in exempt:
             continue
-        chain: str | None = None
-        if isinstance(node, ast.Call):
-            chain = chain_of(node.func)
-        elif isinstance(node, ast.Attribute) and id(node) not in call_funcs:
-            # A bare reference hands the accessor on; the call it would feed is judged on its own.
-            chain = chain_of(node)
-        if chain is not None and banned_tail(chain, node):
-            violations.append(f"{chain} at line {getattr(node, 'lineno', '?')}")
+        line = getattr(node, "lineno", "?")
+        if isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    violations.append(f"from {node.module} import * at line {line}")
+                elif banned(f"{node.module}.{alias.name}", None):
+                    violations.append(f"{node.module}.{alias.name} imported at line {line}")
+            continue
+        if not isinstance(node, ast.Name | ast.Attribute) or id(node) in attribute_values:
+            continue  # an inner link of a longer chain is judged as part of the whole chain
+        if isinstance(node.ctx, ast.Store | ast.Del):
+            continue
+        chains = chains_of(node)
+        if isinstance(node, ast.Name) and chains & set(CLOCK_MODULES):
+            violations.append(f"the {node.id} module escapes at line {line}")
+        call = call_funcs.get(id(node))
+        violations.extend(f"{chain} at line {line}" for chain in sorted(chains) if banned(chain, call))
     return violations
 
 
-def _bind_clock_roots(node: ast.AST, roots: dict[str, str]) -> None:
-    """Track the local names that stand for `time`, `datetime` or a chain rooted in them."""
-    if isinstance(node, ast.Import):
-        for alias in node.names:
-            if alias.name in ("time", "datetime"):
-                roots[alias.asname or alias.name] = alias.name
-    elif isinstance(node, ast.ImportFrom) and node.module in ("time", "datetime"):
-        for alias in node.names:
-            roots[alias.asname or alias.name] = f"{node.module}.{alias.name}"
-    elif isinstance(node, ast.Assign):
-        resolved = None
-        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            value = node.value
-            parts: list[str] = []
-            while isinstance(value, ast.Attribute):
-                parts.append(value.attr)
-                value = value.value
-            if isinstance(value, ast.Name):
-                resolved = ".".join([roots[value.id], *reversed(parts)]) if value.id in roots else None
-            name = node.targets[0].id
-            if resolved is not None:
-                roots[name] = resolved
-            else:
-                roots.pop(name, None)  # a rebinding must not keep laundering through the old chain
+def _clock_roots(tree: ast.AST) -> dict[str, set[str]]:
+    """Every chain each local name can stand for: the clock modules and anything bound from them."""
+    roots: dict[str, set[str]] = {}
+
+    def add(name: str, chains: set[str]) -> bool:
+        known = roots.setdefault(name, set())
+        grown = not chains <= known
+        known.update(chains)
+        return grown
+
+    def resolve(value: ast.AST) -> set[str]:
+        parts: list[str] = []
+        while isinstance(value, ast.Attribute):
+            parts.append(value.attr)
+            value = value.value
+        if not isinstance(value, ast.Name):
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(value.id, set())}
+
+    def bind(target: ast.AST, value: ast.AST) -> bool:
+        if isinstance(target, ast.Name):
+            chains = resolve(value)
+            return add(target.id, chains) if chains else False
+        if not (isinstance(target, ast.Tuple | ast.List) and isinstance(value, ast.Tuple | ast.List)):
+            return False
+        if len(target.elts) != len(value.elts):
+            return False
+        # Every position binds; a short-circuit would drop the bindings after the first.
+        results = [bind(inner, item) for inner, item in zip(target.elts, value.elts, strict=True)]
+        return True in results
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in CLOCK_MODULES:
+                    add(alias.asname or alias.name, {alias.name})
+        elif isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    public = [name for name in dir(importlib.import_module(node.module)) if not name.startswith("_")]
+                    for name in public:
+                        add(name, {f"{node.module}.{name}"})
+                else:
+                    add(alias.asname or alias.name, {f"{node.module}.{alias.name}"})
+    grown = True
+    while grown:  # chains of chains: `clock = time` then `tick = clock.monotonic`
+        grown = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                results = [bind(target, node.value) for target in node.targets]
+                grown = True in results or grown
+            elif isinstance(node, ast.AnnAssign | ast.NamedExpr) and node.value is not None:
+                grown = bind(node.target, node.value) or grown
+    return roots
 
 
 def test_runner_clock_is_the_only_time_source() -> None:
@@ -12067,9 +12149,15 @@ def test_runner_clock_is_the_only_time_source() -> None:
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
     assert re.search(r"(?m)^def clock_now\(", source), "the module defines no clock boundary"
     assert clock_guard_violations(source) == [], "a raw clock read bypasses stage2.clock_now"
+    boundary = [
+        node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "clock_now"
+    ]
+    assert len(boundary) == 1, "the module must define exactly one clock boundary"
+    body_lines = range(boundary[0].lineno, (boundary[0].end_lineno or boundary[0].lineno) + 1)
     without_boundary = clock_guard_violations(source, boundary="")
-    assert len(without_boundary) == 3, without_boundary
-    assert all("line" in finding for finding in without_boundary), without_boundary
+    assert without_boundary, "the exemption is vacuous: the boundary body reads no clock"
+    lines = [int(re.search(r"at line (\d+)$", finding).group(1)) for finding in without_boundary]
+    assert all(line in body_lines for line in lines), without_boundary
 
 
 @pytest.mark.parametrize(
@@ -12102,6 +12190,34 @@ def test_runner_clock_is_the_only_time_source() -> None:
             "nested-boundary-redefinition",
             "def outer():\n    def clock_now():\n        return time.time()\n    return clock_now\n",
         ),
+        ("annotated-module-alias", "clock: object = time\ndef later():\n    return clock.monotonic()\n"),
+        ("annotated-class-alias", "import datetime as dt\nD: type = dt.datetime\ndef later():\n    return D.now()\n"),
+        ("walrus-class-alias", "import datetime as dt\ndef later():\n    return (d := dt.date).today()\n"),
+        ("tuple-class-alias", "import datetime as dt\nD, n = dt.date, 1\ndef later():\n    return D.today()\n"),
+        ("multi-target-class-alias", "import datetime as dt\nA = D = dt.date\ndef later():\n    return D.today()\n"),
+        (
+            "chained-class-alias",
+            "import datetime as dt\nmod = dt\ncls = mod.datetime\ndef later():\n    return cls.utcnow()\n",
+        ),
+        (
+            "rebinding-keeps-alias",
+            "import datetime as dt\ndef a():\n    D = 1\ndef b():\n    D = dt.date\n    return D.today()\n",
+        ),
+        ("module-escape-getattr", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n"),
+        ("module-escape-default", "def later(clock=time):\n    return clock\n"),
+        ("clock-gettime", "def later():\n    return time.clock_gettime(time.CLOCK_MONOTONIC)\n"),
+        ("clock-gettime-ns", "def later():\n    return time.clock_gettime_ns(time.CLOCK_REALTIME)\n"),
+        ("star-import-time", "from time import *\ndef later():\n    return monotonic()\n"),
+        ("star-import-datetime", "from datetime import *\ndef later():\n    return date.today()\n"),
+        ("imported-function-handed-on", "from time import monotonic\ndef later(run):\n    return run(monotonic)\n"),
+        ("bare-reference-handed-on", "def later(run):\n    return run(time.perf_counter)\n"),
+        ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n"),
+        ("asctime-no-argument", "def later():\n    return time.asctime()\n"),
+        (
+            "second-boundary-definition",
+            "def clock_now():\n    return 0\ndef clock_now():\n    return time.time()\n",
+        ),
+        ("boundary-rebinding", "def clock_now():\n    return time.time()\nclock_now = print\n"),
     ],
 )
 def test_runner_clock_guard_rejects_bypasses(planted: str, snippet: str) -> None:
@@ -12141,6 +12257,9 @@ def test_runner_clock_guard_rejects_bypasses(planted: str, snippet: str) -> None
         ),
         ("other-module", "def section(path):\n    return time_records.section_text(path)\n"),
         ("untracked-name", "def kept(today):\n    return today\n"),
+        ("strftime-with-instant", "def shown(struct):\n    return time.strftime('%H', struct)\n"),
+        ("class-alias-construction", "D = dt.datetime\ndef made():\n    return D(2026, 1, 1)\n"),
+        ("date-class-annotation", "def kept(value: dt.date) -> dt.date:\n    return value\n"),
     ],
 )
 def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -> None:

@@ -126,6 +126,32 @@ the policy clock and the outcome of the process wait where timing is simulated.
   `provenance.yaml`, `decisions/`, `model-endpoints.yaml`, `prompts/`,
   `templates/` and the harness dot-directories — no policy change is required.
 
+## Boundary
+
+Orchestrator, 2026-11-15, after the third finding of the source-guard
+completeness mechanism in review-loop round 1 (an annotated alias, the raw
+POSIX clocks and a star import passing the guard): the guard of criterion 2
+reads the runner module's syntax tree and is structural, not a list of
+spellings. It resolves every binding the module gives the `time` and
+`datetime` modules or a chain rooted in them (`import`, `from … import`
+including a star import, plain, multiple-target, positional tuple and
+annotated assignment, and the walrus), bans a declared complete set of
+clock-reading `time` functions and `datetime`/`date` methods wherever they
+are named, not only where they are called, forbids the two modules to be
+named on their own outside an attribute access, and exempts exactly one
+function object, the single module-level `clock_now` definition; a second
+definition or binding of that name is itself a violation.
+
+What a static reading of one module cannot see is outside this guard: a
+clock reached through `importlib`, `__import__` or `sys.modules`; a
+`datetime` or `date` class handed into a function as an argument and called
+there; clock reads inside another module the runner imports (those keep
+their own boundaries, see Protected areas); and waits measured inside the
+standard library, such as a subprocess timeout. On 2026-11-15 the runner's
+uses of `importlib` and `sys.modules` load a probe file and hand on the
+runner module itself, not a clock module. A reviewer reading a new such
+path reports it; the guard does not claim to catch it.
+
 ## Definition of Done
 
 - The runner's full `make verify` is green at the reviewed commit.
