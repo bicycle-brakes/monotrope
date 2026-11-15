@@ -621,7 +621,7 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MAJOR | SPEC | base | scripts/verify_run.py:861 | When the tree changes during the admission wait, refreshed cheap gates receive the pre-admission `gate_env`, although the scheduler now holds admission. If such a gate starts a nested admission, its child receives neither ownership markers nor the lock descriptor and queues behind its own parent. A source-extracted reproduction confirmed that the refreshed cheap execution lacks the marker while the protected execution receives it. Pass the held admission environment to refreshed gates so nested work can reuse ownership. [Acceptance criterion 7.] | Codex | open | — |
+| F6-5 | MAJOR | SPEC | base | scripts/verify_run.py:861 | When the tree changes during the admission wait, refreshed cheap gates receive the pre-admission `gate_env`, although the scheduler now holds admission. If such a gate starts a nested admission, its child receives neither ownership markers nor the lock descriptor and queues behind its own parent. A source-extracted reproduction confirmed that the refreshed cheap execution lacks the marker while the protected execution receives it. Pass the held admission environment to refreshed gates so nested work can reuse ownership. [Acceptance criterion 7.] | Codex | taken | — |
 
 Phase 6 verdict: codex 01a1dfa9-3125-7e91-bcb5-60933f70c0a6, 2026-11-15
 Reviewer session: codex 01a1dfa9-3125-7e91-bcb5-60933f70c0a6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
