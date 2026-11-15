@@ -629,3 +629,14 @@ Reviewer session: codex 01a1dfa9-3125-7e91-bcb5-60933f70c0a6 — a fresh session
 Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1084 files, 4360 commits, 12 rules.
 
 Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1084 files, 4367 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MINOR | SPEC | base | scripts/verify_run.py:701 | If a previously executed cheap gate becomes protected with a new command during the admission wait, and the refreshed cheap pass fails, the not-run summary omits that protected gate because `executed` retains its old ID. A source-extracted reproduction executed only `old-cheap-command` and the refreshed failing gate, but listed only the other protected gate as not run. The summary must also name the reclassified gate whose current command never executed. [Acceptance criterion 2.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1dff0-5968-7b41-9dd3-03107b90d498, 2026-11-15
+Reviewer session: codex 01a1dff0-5968-7b41-9dd3-03107b90d498 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
