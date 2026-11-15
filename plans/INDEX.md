@@ -575,6 +575,8 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/swarm-answer-reader/decisions.md`](changes/swarm-answer-reader/decisions.md) | draft | none | 2026-11-15 | coding-harness-xsta |
+| [`changes/swarm-answer-reader/research.md`](changes/swarm-answer-reader/research.md) | draft | none | 2026-11-15 | coding-harness-xsta |
 | [`changes/swarm-citation-feedback/decisions.md`](changes/swarm-citation-feedback/decisions.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-citation-feedback/findings.md`](changes/swarm-citation-feedback/findings.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-citation-feedback/plan.md`](changes/swarm-citation-feedback/plan.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
