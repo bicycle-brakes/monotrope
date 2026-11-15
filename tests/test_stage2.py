@@ -587,6 +587,13 @@ def pin_the_ladder(target: Path) -> None:
         "exclude": [],
         "input": "implementation-diff",
     }
+    # The Z.ai subscription's real end date (bead coding-harness-dcu3) must not age the
+    # explore and implement tests into a refusal: they run on a synthetic far-future record.
+    zai = next(e for e in data["endpunkte"] if e["name"] == "glm-coding-plan")
+    zai["modelle_terms"] = {
+        model: {"gelesen": "2026-11-15", "valid_until": "2099-01-01", "quelle": "test world"}
+        for model in zai["modelle"]
+    }
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
