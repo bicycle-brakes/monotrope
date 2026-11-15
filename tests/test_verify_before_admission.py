@@ -1272,6 +1272,47 @@ def test_refreshed_selection_is_bound_to_the_measured_configuration(
     assert "VERIFY GREEN" not in out, out
 
 
+def test_reclassified_gate_is_named_not_run_after_refreshed_cheap_failure(
+    checkout: SimpleNamespace, gate_script: Path
+) -> None:
+    """An old cheap execution does not execute the refreshed protected command (row F6-6)."""
+    write_gates(
+        checkout.root,
+        [
+            _gate("reclassified", f"python3 {gate_script} old-cheap-command 0"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    real_snapshot = verify_run.tree_snapshot
+    measurements = 0
+
+    def snapshot(root: Path | str) -> verify_run.TreeSnapshot:
+        nonlocal measurements
+        measurements += 1
+        if measurements == 3:
+            # Change the list at admission, after the original cheap pass completed.
+            write_gates(
+                checkout.root,
+                [
+                    _gate("reclassified", f"python3 {gate_script} new-protected-command 0", cost="minutes"),
+                    _gate("fresh-failure", f"python3 {gate_script} fresh-failure 1"),
+                    _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+                ],
+            )
+        return real_snapshot(root)
+
+    checkout.monkeypatch.setattr(verify_run, "tree_snapshot", snapshot)
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 1, (result, out, err)
+    assert [entry["gate"] for entry in _read_log()] == ["old-cheap-command", "fresh-failure"]
+    assert result.executed == ["reclassified", "fresh-failure"], result
+    assert result.not_run == ["reclassified", "heavy"], result
+    assert "──   [reclassified] not run" in out, out
+    assert "──   [heavy] not run" in out, out
+    assert "──   [fresh-failure] not run" not in out, out
+    assert "new-protected-command" not in out, out
+
+
 def test_a_signal_at_the_launch_boundary_still_ends_the_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A SIGTERM between `Popen` and the group's registration is deferred, then ends the gate (row F6-3).
 

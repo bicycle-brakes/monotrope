@@ -631,6 +631,9 @@ def run_verification(
             return gate_process(wurzel, pinned, slot, gate, command, run_env, destination, complaints)
 
     executed: dict[str, GateOutcome] = {}
+    # Keep the invocation's execution account, but summarize omissions against
+    # the current selection: an old cheap execution cannot cover a refreshed gate.
+    current_executed: set[str] = set()
     reds: list[str] = []
     segments: list[tuple[float, float]] = []
     admission_requested = False
@@ -670,6 +673,7 @@ def run_verification(
             gate["enforcement"],
         )
         executed[identifier] = GateOutcome(gate=identifier, exit_code=done.returncode, seconds=measured)
+        current_executed.add(identifier)
         # The verdict closes the gate's frame for the repair-evidence parser, so the
         # measured seconds follow it: a timing line in between would end the section
         # before its RED line (`stage2.GATE_END` counts any non-start frame line).
@@ -698,7 +702,7 @@ def run_verification(
         """
         red = bool(reds) or refused
         final = selection_holder["selection"]
-        not_run = [str(g["id"]) for g in final if str(g["id"]) not in executed]
+        not_run = [str(g["id"]) for g in final if str(g["id"]) not in current_executed]
         if not_run and (refused or (red and not ci)):
             emit("")
             if refused:
@@ -855,6 +859,7 @@ def run_verification(
                         "the gate list cannot be reloaded after the tree changed; protected work stops"
                     )
                     selection_holder["selection"] = refreshed
+                    current_executed.clear()
                     cheap = [g for g in refreshed if not g["admission"]]
                     protected = [g for g in refreshed if g["admission"]]
                     for gate in cheap:
