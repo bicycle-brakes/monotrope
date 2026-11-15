@@ -24,7 +24,7 @@ Class: architectural (2026-11-15: the answers amend ADR 0020, so the class
 moved from feature, under which it was first recorded; it was opened as
 bounded in error). The change is explored through the research swarm once
 that swarm works again. The minimum is five counted answers because the
-change edits an ADR; six stand below, and Q-3 was revised by the maintainer
+change edits an ADR; seven stand below, and Q-3 was revised by the maintainer
 the same day (addendum at the end).
 
 ## Where these answers come from
@@ -189,5 +189,28 @@ first answered; this addendum supersedes its answer.
   lay deep in long answers (char 9979 and char 13598), which a tiny probe
   cannot see; the haiku case is covered by Q-6; a probe would only add one
   more point at which a run can stop.
-- Still open for the ADR 0020 amendment: what the merge and the judge, each a
-  single call, do when their one repair retry (Q-2) also fails.
+- The question this left open, what the merge and the judge do when their
+  one repair retry also fails, is answered in Q-7 below.
+
+## Q-7 · A single-call stage hands its call to another model once
+
+asked: 2026-11-15
+answer: Yes: when the merge or the judge also fails its one repair retry, another model takes that call once; if that fails too, the run ends and keeps what it has for resume.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the research swarm's single-call stages, the merge of the source map and the judge (the Opus reconcile).
+  Intention: Q-5 lets the finder stage survive one failed finder, but the merge and the judge are each one call, so one bad model can still end the run after Q-2's one retry.
+  Today: ADR 0020 point 9 ends the run when a stage fails; an aborted run resumes from what it stored.
+  Repository change: after the stage's one repair retry fails, the same call goes once to another admitted model of the stage's role; the answer is read with the same strict reader; if it also fails, the run ends as today and keeps its stored results for resume.
+  Architecture change: yes, an amendment of ADR 0020 point 9 by the maintainer before it is built.
+
+In the context of single-call swarm stages that end the run when their
+answer fails,
+facing failures that belong to one model rather than to the task,
+we decided that after the stage's one repair retry another model takes the
+call once, and only then does the run end, keeping its results for resume,
+to achieve that one model alone no longer ends a run,
+accepting one more call per failed stage and an amendment of ADR 0020 —
+2026-11-15
+
