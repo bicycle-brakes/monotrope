@@ -10,7 +10,9 @@ superseded_by: null
 bead: coding-harness-bxxt.7
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, 2026-11-13"}
+produced_by:
+  - {kind: llm-session, name: claude-code, model: glm-5.3-flash, version: "2026-11-13"}
+  - {kind: llm-session, name: claude-code, model: claude-opus-5-5, version: "2026-11-15"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
