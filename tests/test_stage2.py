@@ -7002,11 +7002,55 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
+def _complete_pid(pidfile: Path) -> int | None:
+    """The PID a child recorded, or None while the record is missing or incomplete.
+
+    Readiness is a newline-terminated integer, never the file's existence: a child descheduled
+    between creating the file and writing its PID leaves an empty or partial record.
+    """
+    try:
+        record = pidfile.read_text()
+    except FileNotFoundError:
+        return None
+    if not record.endswith("\n") or not record[:-1].isdecimal():
+        return None
+    return int(record)
+
+
+def _await_complete_pid(pidfile: Path, rounds: int) -> int | None:
+    for _ in range(rounds):  # watchdog only: bounds a wedged start, never a verdict
+        pid = _complete_pid(pidfile)
+        if pid is not None:
+            return pid
+        time.sleep(0.02)
+    return None
+
+
+def _kill_known(pid: int | None) -> None:
+    if pid is not None:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [("", None), ("12", None), ("12\n", 12), ("1x\n", None), ("\n", None)],
+    ids=["created-empty", "partial-no-newline", "complete", "garbled", "newline-only"],
+)
+def test_a_pid_record_is_ready_only_when_complete(tmp_path: Path, record: str, expected: int | None) -> None:
+    """F6-3: a created but empty or partial PID file is not readiness."""
+    pidfile = tmp_path / "child.pid"
+    assert _complete_pid(pidfile) is None, "a missing record read as ready"
+    pidfile.write_text(record)
+    assert _complete_pid(pidfile) == expected
+
+
 def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """O188-4: a grandchild of the stopped step does not survive."""
     # Planted fault: a timed-out group's descendant survives, or the post-kill drain is unbounded.
     pidfile = tmp_path / "grandchild.pid"
     handed: list[float | None] = []  # every timeout a communicate was given, the drain's included
+    known: list[int] = []  # the grandchild's PID once complete, so cleanup can always reach it
     real_popen = subprocess.Popen
 
     def popen(command, *args, **kwargs):
@@ -7016,12 +7060,10 @@ def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: py
         def communicate(timeout=None):
             handed.append(timeout)
             if len(handed) == 1:
-                # Readiness, not a race: the grandchild is registered before the expiry is injected.
-                for _ in range(200):  # watchdog only: bounds a wedged start, never a verdict
-                    if pidfile.exists():
-                        break
-                    time.sleep(0.02)
-                assert pidfile.exists(), "the timed step never wrote its grandchild's pid"
+                # Readiness, not a race: the grandchild's complete PID is held before the expiry is injected.
+                pid = _await_complete_pid(pidfile, 200)
+                assert pid is not None, "the timed step never wrote its grandchild's complete pid"
+                known.append(pid)
                 raise subprocess.TimeoutExpired(command, timeout)
             return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
 
@@ -7029,25 +7071,28 @@ def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: py
         return process
 
     monkeypatch.setattr(subprocess, "Popen", popen)
-    with pytest.raises(stage2.CallFailed, match="stopped by"):
-        stage2.launch(
-            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
-            tmp_path,
-            {**os.environ},
-            timeout=1,
-            limit="the test limit",
-        )
-    assert handed[0] == 1, "the step was handed more than its allowance"
-    assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
-    pid = int(pidfile.read_text())
-    for _ in range(100):  # watchdog only: the kill is delivered at once, the exit is reaped a moment later
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.02)
-    os.kill(pid, 9)
-    pytest.fail("the grandchild of the timed-out step is still running")
+    # The record is written to a temporary file and renamed into place: the name appears only complete.
+    staged = f"{pidfile}.tmp"
+    try:
+        with pytest.raises(stage2.CallFailed, match="stopped by"):
+            stage2.launch(
+                ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {staged} && mv {staged} {pidfile}; wait"],
+                tmp_path,
+                {**os.environ},
+                timeout=1,
+                limit="the test limit",
+            )
+        assert handed[0] == 1, "the step was handed more than its allowance"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
+        (pid,) = known
+        for _ in range(100):  # watchdog only: the kill is delivered at once, the exit is reaped a moment later
+            if not _child_alive(pid):
+                return
+            time.sleep(0.02)
+        pytest.fail("the grandchild of the timed-out step is still running")
+    finally:
+        # cleanup: every known PID is killed; a missing or already dead one is tolerated
+        _kill_known(known[0] if known else _complete_pid(pidfile))
 
 
 def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
@@ -22956,8 +23001,9 @@ def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path
     escape = (
         "import pathlib, subprocess, time; "
         "child = subprocess.Popen(['sleep', '30'], start_new_session=True); "
-        f"pathlib.Path({str(pidfile)!r}).write_text(str(child.pid)); time.sleep(100)"
-    )
+        f"staged = pathlib.Path({str(pidfile) + '.tmp'!r}); staged.write_text(str(child.pid) + chr(10)); "
+        f"staged.replace({str(pidfile)!r}); time.sleep(100)"
+    )  # written to a temporary file and renamed into place: the record appears only complete
     handed: list[float | None] = []
     real_popen = subprocess.Popen
 
@@ -22966,14 +23012,12 @@ def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path
         real_communicate = process.communicate
 
         def communicate(timeout=None):
+            nonlocal escapee
             handed.append(timeout)
             if len(handed) == 1:
-                # Readiness, not a race: the escapee is registered before the expiry is injected.
-                for _ in range(500):  # watchdog only: bounds a wedged start, never a verdict
-                    if pidfile.exists():
-                        break
-                    time.sleep(0.02)
-                assert pidfile.exists(), "the stopped step never registered its escapee"
+                # Readiness, not a race: the escapee's complete PID is held before the expiry is injected.
+                escapee = _await_complete_pid(pidfile, 500)
+                assert escapee is not None, "the stopped step never registered its escapee's complete pid"
                 raise subprocess.TimeoutExpired(command, timeout)
             return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
 
@@ -22985,14 +23029,13 @@ def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path
     try:
         with pytest.raises(stage2.StepTimedOut):
             stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
-        escapee = int(pidfile.read_text())
+        assert escapee is not None
         assert _child_alive(escapee), "the drain waited for the escaped descendant to die"
         assert handed[0] == 1, "the step was stopped before its allowance ran out"
         assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the drain after the kill is unbounded"
     finally:
-        if escapee is not None:  # cleanup: the escapee outlives its step by design
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(escapee, signal.SIGKILL)
+        # cleanup: the escapee outlives its step by design; a PID recorded after a failed wait is still killed
+        _kill_known(escapee if escapee is not None else _complete_pid(pidfile))
 
 
 def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
