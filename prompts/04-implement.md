@@ -7,7 +7,8 @@
 5.5 at effort `medium` (`claude-sonnet-5-5`) builds and the reason is recorded.
 A leak-check BLOCK stops; it never falls back.
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
-**Gate:** `make verify` green.
+**Gate:** `make verify` green on the final head before phase 6; each runner
+attempt passes the targeted check or, where that is unsafe, the full one.
 
 You follow the plan. You read the spec to know what you are building against.
 Under the Stage-2 runner an implement attempt has
@@ -15,9 +16,12 @@ file tools but no command tool (a Codex repair attempt may run tests and
 `make verify`, never commit): write no entry under `## Time used`, because the
 runner measures each completed attempt itself and writes a line marked
 "measured by the runner" (a rejected attempt gets one too); the runner
-runs `make verify` after an implement attempt and, after a repair attempt, the
-repair's targeted check (the touched and linked test files and gates; the full
-`make verify` when the repair touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), and makes the local checkpoint commit; one full
+runs the targeted check after an implement or a repair attempt (the whole
+touched and import-linked test files and the gates the touched kinds of file
+feed; the full `make verify` when the attempt touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), and makes the local checkpoint commit. A
+targeted red fails the attempt; the full check never overrides it. An
+implement attempt that adds production code (a Python or shell file) no test
+reaches is refused before any test runs: add the test that reaches it. One full
 `make verify` runs on the final head before phase 6. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you, and the interactive session reads its own
 clock and logs its own spans, as the appetite rule below says.
@@ -27,7 +31,7 @@ clock and logs its own spans, as the appetite rule below says.
 `## Criterion ledger` names. With a command tool, run them and hand back only
 when they are green. On a file-only route (any model that can edit files but
 cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
-its verification (`make verify`, or a repair's targeted check). It runs ruff, then pytest over the changed or new test functions,
+its verification (the targeted check, or the full `make verify` on fallback). It runs ruff, then pytest over the changed or new test functions,
 the ledger's test ids and, on a retry, the tests the attempt before failed. The
 first red check ends the attempt with exactly that output (bead
 coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is

@@ -495,6 +495,111 @@ def test_binding_with_the_append_not_yet_written_still_matches(repo):
         assert changed(same, stored) == []
 
 
+def test_binding_accepts_only_exact_research_provenance_publication(store, repo):
+    # Criterion 8 (bead coding-harness-g19n). Planted fault: a binding that records the runner-prepared
+    # corrected bytes accepts any research whose tail matches — a foreign header or body edit passes, or the
+    # exact published bytes themselves stop matching, so the corrected publication is never reusable.
+    snap = snapshot()
+    prepared = (
+        b"---\nupdated: 2000-01-01\n"
+        b"provenance: ai-drafted-reviewed\n"
+        b'produced_by: {kind: llm-session, name: stage2-research-swarm, version: "2026-11-04"}\n'
+        b"review: {status: pending, approved_by: null, approved_at: null}\n"
+        b"---\nOriginal research\n"
+    )
+    tail = b"\n<!-- research-swarm/v2 run 1 -->\n"
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-04"
+        )
+    # before the publication was written, the frozen bytes alone still match (the pre-publication crash)
+    (repo / RESEARCH).write_bytes(frozen)
+    with freeze(repo) as same:
+        assert changed(same, stored) == []
+    # exactly the prepared bytes under the recorded tail match (the restamp is the runner's own)
+    published = prepared.replace(b"updated: 2000-01-01", b"updated: 2026-10-18") + tail
+    (repo / RESEARCH).write_bytes(published)
+    with freeze(repo) as after:
+        assert changed(after, stored) == []
+    # the original bytes under the recorded tail no longer match once a publication is recorded
+    (repo / RESEARCH).write_bytes(frozen + tail)
+    with freeze(repo) as stale:
+        assert changed(stale, stored) == [RESEARCH]
+    # a foreign header edit inside the corrected prefix, tail intact, is a change
+    (repo / RESEARCH).write_bytes(published.replace(b"ai-drafted-reviewed", b"human-written"))
+    with freeze(repo) as header_edited:
+        assert changed(header_edited, stored) == [RESEARCH]
+    # a foreign body edit between the corrected prefix and the tail is a change too
+    (repo / RESEARCH).write_bytes(published.replace(b"Original research", b"Rewritten research"))
+    with freeze(repo) as body_edited:
+        assert changed(body_edited, stored) == [RESEARCH]
+    # the recorded tail with one byte altered is a change
+    (repo / RESEARCH).write_bytes(published.replace(b"run 1", b"run 2"))
+    with freeze(repo) as tail_edited:
+        assert changed(tail_edited, stored) == [RESEARCH]
+    # the corrected prefix without the recorded tail never matches
+    (repo / RESEARCH).write_bytes(published[: -len(tail)])
+    with freeze(repo) as bare:
+        assert changed(bare, stored) == [RESEARCH]
+    # a binding of the old shape (no recorded publication) keeps its old acceptance
+    (repo / RESEARCH).write_bytes(frozen)  # the binding's bytes must be the frozen ones
+    with freeze(repo) as again:
+        old = snap.stored_binding(again.manifest(), RESEARCH, frozen, append=tail)
+    (repo / RESEARCH).write_bytes(frozen + tail)
+    with freeze(repo) as old_published:
+        assert changed(old_published, old) == []
+    # the store-level resume accepts exactly the published bytes and reuses the stored seat
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding=stored)
+    (repo / RESEARCH).write_bytes(published)
+    source, plan = resume(store, repo, [k])
+    assert source.usable and set(plan.reused) == {"s1"}
+    (repo / RESEARCH).write_bytes(published.replace(b"ai-drafted-reviewed", b"human-written"))
+    source, plan = resume(store, repo, [k])
+    assert not source.usable and plan.reused == {}
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {},
+        [],
+        {"base64": "!", "day": "2026-11-05"},
+        {"base64": "", "day": "invalid"},
+        {"base64": "", "day": "2026-11-05"},
+    ],
+    ids=["missing-fields", "wrong-type", "invalid-base64", "invalid-day", "digest-mismatch"],
+)
+@pytest.mark.parametrize("published", [False, True], ids=["before-publication", "after-publication"])
+def test_malformed_publication_reports_binding_drift_without_reuse(store, repo, record, published):
+    snap = snapshot()
+    tail = b"\nRunner research\n"
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        prepared = frozen + b"Corrected prefix\n"
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-05"
+        )
+    stored["research_publication"] = record
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding=stored)
+    if published:
+        (repo / RESEARCH).write_bytes(prepared + tail)
+    with freeze(repo) as current:
+        try:
+            drift = changed(current, stored)
+        except snap.ResearchSnapshotError as error:
+            pytest.fail(f"Malformed publication must report research binding drift instead of aborting: {error}")
+    assert drift == [RESEARCH]
+    source, plan = resume(store, repo, [k])
+    assert not source.usable
+    assert source.reasons == ["binding changed: " + RESEARCH]
+    assert plan.reused == {}
+    assert plan.not_reused == [("s1", "source run unusable")]
+    assert plan.to_launch == [k]
+
+
 def make_source(store, repo, *, results, binding=None):
     """A stored run with finished results; returns (run id, freeze for the next run)."""
     with freeze(repo) as first:
@@ -785,3 +890,44 @@ def test_a_reused_result_keeps_the_run_that_launched_it(store, repo):
     assert record["launched_in"] == first
     assert record["reused_from"] == {"run_id": source.run_id} and source.run_id != first
     assert record["started"] == "2026-10-18T10:00:00Z"
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_digest_only_publication_reports_binding_drift_without_reuse(store, repo, published):
+    snap = snapshot()
+    tail = b"\nRunner research\n"
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        prepared = frozen + b"Corrected prefix\n"
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, append=tail, publication=prepared, publication_day="2026-11-06"
+        )
+    # Model a digest-only record written by an older version; the writer now refuses this shape.
+    del stored["research_publication"]
+    k = key("s1")
+    make_source(store, repo, results=[(k, terminal(k))], binding=stored)
+    if published:
+        (repo / RESEARCH).write_bytes(prepared + tail)
+    with freeze(repo) as current:
+        assert changed(current, stored) == [RESEARCH], "A publication without its day must invalidate reuse"
+    source, plan = resume(store, repo, [k])
+    assert not source.usable
+    assert source.reasons == ["binding changed: " + RESEARCH]
+    assert plan.reused == {}
+    assert plan.to_launch == [k]
+
+
+def test_storing_publication_requires_its_day(repo):
+    snap = snapshot()
+    with freeze(repo) as first:
+        frozen = first.sources()[RESEARCH]
+        try:
+            snap.stored_binding(first.manifest(), RESEARCH, frozen, publication=frozen)
+        except snap.ResearchSnapshotError as error:
+            assert "publication day" in str(error)
+        else:
+            pytest.fail("A stored publication must require its day before an unusable binding is saved")
+        stored = snap.stored_binding(
+            first.manifest(), RESEARCH, frozen, publication=frozen, publication_day="2026-11-06"
+        )
+        assert snap.stored_publication(stored) == (frozen, "2026-11-06")

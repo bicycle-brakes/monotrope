@@ -45,7 +45,7 @@ stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
 then:
 
 1. **One verify-bearing step at a time, across all lanes.** Such a step runs
-   `make verify`: an implement attempt, a repair whose targeted check falls
+   `make verify`: an implement or repair attempt whose targeted check falls
    back to the full run, the final review's own check, or the orchestrator's
    own full run, which runs at lower priority (`nice -n 10`). The number of test
    workers is sized from the machine: half the logical cores, at most one per
