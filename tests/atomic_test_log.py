@@ -13,8 +13,11 @@ processes, however a caller spells its path.
 This module is the one place a stand-in log is declared: `STAND_IN_LOGS`
 names every log file, the JSON functions refuse any other name, and
 `text_append` refuses these declared names so JSON logs must use
-`append_record`. The guard in `tests/test_atomic_test_log.py` fails on any
-read or append of a declared log that does not go through these functions.
+`append_record`. In the pytest process any read or append of a declared log
+that does not go through these functions fails its test at run time
+(`tests/stand_in_log_guard.py`, wired by `tests/conftest.py`); the static
+guard in `tests/test_atomic_test_log.py` is a cheap advisory that also reads
+the stand-in sources.
 
 Standard library only: the stand-in templates embed this module's source
 verbatim at their `@ATOMIC_LOG@` render marker, because the sandboxed children

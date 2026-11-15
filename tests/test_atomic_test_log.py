@@ -6,9 +6,11 @@ lock, the altered scenario text and the planted guard bypasses are each shown
 red on the unsafe variant and green on the shared helper of
 `tests/atomic_test_log.py` (bead coding-harness-yb1l).
 
-The guard works by declaration: `atomic_test_log.STAND_IN_LOGS` names every
-stand-in log, and any read, write or open of a declared log outside the helper
-is a finding - in a test module and in every Python source string it carries.
+Both checks work by declaration: `atomic_test_log.STAND_IN_LOGS` names every
+stand-in log. At run time any read, write or open of a declared log outside
+the helper fails its test (`tests/stand_in_log_guard.py`, decisions.md#Q-5);
+the static guard is a cheap advisory that also reads every Python source
+string a test module carries, so it reaches the stand-in templates.
 The planted samples below spell the declared name only through the `@LOG@`
 placeholder, filled in at use time, so this module's own source names no log
 in a raw access and the guard needs no exemption for it.
@@ -17,7 +19,9 @@ in a raw access and the guard needs no exemption for it.
 from __future__ import annotations
 
 import ast
+import io
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -27,6 +31,7 @@ from types import SimpleNamespace
 
 import atomic_test_log
 import pytest
+import stand_in_log_guard
 from atomic_test_log import append_record, read_records, text_append
 from test_stage2_swarm import SwarmWorld
 
@@ -575,6 +580,7 @@ def test_concurrent_log_snapshots_are_complete(tmp_path: Path, monkeypatch: pyte
     ]
 
 
+@pytest.mark.raw_stand_in_log_access(reason="plants the unlocked observer the race test must reject")
 def test_race_rejects_a_delayed_unlocked_observer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The race must expose an unlocked observer even when its thread starts late.
 
@@ -865,3 +871,154 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
         assert len(found) == len(expected), (name, found)
         for line, wanted in zip(found, expected, strict=True):
             assert f"planted_{name}.py" in line and wanted in line, (name, found)
+
+
+# ---------------------------------------------------------------------------
+# The runtime check: the choke point behind the static guard (decisions.md#Q-5)
+# ---------------------------------------------------------------------------
+
+# A test the runtime check must fail although its own code swallows the refusal,
+# directly and in a thread; `@LOG@` becomes a declared log name at use time.
+SWALLOWED = """
+import threading
+
+from atomic_test_log import append_record
+
+
+def test_swallowed_in_the_test(tmp_path):
+    log = tmp_path / "@LOG@"
+    append_record(log, {"seq": 1})
+    try:
+        log.read_text()
+    except Exception:
+        pass
+
+
+def test_swallowed_in_a_thread(tmp_path):
+    log = tmp_path / "@LOG@"
+    append_record(log, {"seq": 1})
+
+    def observe():
+        try:
+            open(log).read()
+        except Exception:
+            pass
+
+    reader = threading.Thread(target=observe)
+    reader.start()
+    reader.join()
+
+
+def test_helper_only(tmp_path):
+    log = tmp_path / "@LOG@"
+    append_record(log, {"seq": 1})
+    assert [record["seq"] for record in __import__("atomic_test_log").read_records(log)] == [1]
+"""
+
+
+def _declared_log(folder: Path) -> Path:
+    """A declared log's path, returned from a call so the static advisory does not follow it (its stated boundary)."""
+    return folder / atomic_test_log.STAND_IN_LOGS[0]
+
+
+def test_runtime_check_refuses_raw_access_to_declared_logs(tmp_path: Path) -> None:
+    """Criterion 5 (flaky-swarm-leak-test, decisions.md#Q-5, finding F6-8). Planted fault: a raw access of a declared log runs.
+
+    Each raw spelling, including both forms of phase-6 row F6-8 that the
+    static advisory cannot follow (a comprehension's first iterable and a
+    parameter default), must fail at run time before touching the file.
+    """
+    log = _declared_log(tmp_path)
+    append_record(log, {"seq": 1})
+    stand_in_log_guard.take_violations()
+
+    def reader(log=log):
+        return log.read_text()
+
+    forms = {
+        "open_read": lambda: open(log).read(),  # noqa: SIM115, PTH123 - the planted raw access
+        "open_append": lambda: open(str(log), "a").write("leak\n"),  # noqa: SIM115, PTH123 - the planted raw access
+        "open_keyword": lambda: open(file=log, mode="a"),  # noqa: SIM115, PTH123 - the planted raw access
+        "io_open": lambda: io.open(log, "rb"),  # noqa: SIM115, UP020 - the planted raw access
+        "os_open": lambda: os.open(log, os.O_RDONLY),
+        "path_open": lambda: log.open("a"),
+        "read_text": lambda: log.read_text(),
+        "read_bytes": lambda: log.read_bytes(),
+        "write_text": lambda: log.write_text("leak\n"),
+        "write_bytes": lambda: log.write_bytes(b"leak\n"),
+        "class_read_text": lambda: Path.read_text(log),
+        "f6_8_comprehension": lambda: [log.read_text() for log in [log]],
+        "f6_8_default": reader,
+    }
+    for name, form in forms.items():
+        with pytest.raises(stand_in_log_guard.RawStandInLogAccess, match="read_records / append_record"):
+            form()
+        recorded = stand_in_log_guard.take_violations()
+        assert len(recorded) == 1 and log.name in recorded[0], (name, recorded)
+        assert "test_atomic_test_log.py" in recorded[0], (name, recorded)
+    assert read_records(log) == [{"seq": 1}], "a refused raw access changed the log"
+
+
+def test_runtime_check_lets_the_helper_through(tmp_path: Path) -> None:
+    """Criterion 5 (flaky-swarm-leak-test, decisions.md#Q-5). Planted fault: the runtime check refuses a locked helper access or an unrelated file.
+
+    The helper's append and read pass on the main thread and in the observer
+    threads the suites use; a document, a name that merely ends in a declared
+    one, removal and existence checks stay untouched.
+    """
+    stand_in_log_guard.take_violations()
+    log = _declared_log(tmp_path)
+    append_record(log, {"seq": 1})
+    outcome: dict = {}
+
+    def observe() -> None:
+        try:
+            append_record(log, {"seq": 2})
+            outcome["records"] = read_records(log)
+        except Exception as error:
+            outcome["error"] = error
+
+    reader = threading.Thread(target=observe)
+    reader.start()
+    reader.join(timeout=60)
+    assert "error" not in outcome, outcome
+    assert outcome["records"] == [{"seq": 1}, {"seq": 2}]
+    document = tmp_path / "notes.md"
+    text_append(document, "first\n")
+    assert document.read_text(encoding="utf-8") == "first\n"
+    near_miss = tmp_path / ("old-" + log.name)
+    near_miss.write_text("{}\n", encoding="utf-8")
+    with near_miss.open(encoding="utf-8") as handle:
+        assert handle.read() == "{}\n"
+    assert log.exists()
+    log.unlink()
+    assert read_records(log) == []
+    assert stand_in_log_guard.take_violations() == []
+
+
+def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) -> None:
+    """Criterion 5 (flaky-swarm-leak-test, decisions.md#Q-5). Planted fault: code under test swallows the refusal and the test passes.
+
+    The swarm gates turn an exception into a refusal by design, so a raised
+    error alone can vanish. A separate pytest run over the repository's own
+    conftest, guard and helper must fail both swallowing tests - in the test
+    body and in a thread - and pass the helper-only one.
+    """
+    project = tmp_path / "project"
+    project.mkdir()
+    for name in ("conftest.py", "stand_in_log_guard.py", "atomic_test_log.py"):
+        (project / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8")
+    (project / "test_swallowed.py").write_text(_render(SWALLOWED), encoding="utf-8")
+    (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    run = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", str(project)],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    output = run.stdout + run.stderr
+    assert run.returncode == 1, output
+    assert "2 failed, 1 passed" in output, output
+    assert output.count("raw read_text of the declared stand-in log") >= 1, output
+    assert output.count("raw open of the declared stand-in log") >= 1, output
