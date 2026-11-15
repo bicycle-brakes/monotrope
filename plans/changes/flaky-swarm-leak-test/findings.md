@@ -711,3 +711,14 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1deb3-0577-7a11-8de0-4f8d90138dc8, 2026-11-15
 Reviewer session: codex 01a1deb3-0577-7a11-8de0-4f8d90138dc8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1065 files, 4339 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-8 | MAJOR | SPEC | base | tests/test_atomic_test_log.py:444–450 | After `log = Path("calls.jsonl")`, both `[log.read_text() for log in [log]]` and `def reader(log=log): return log.read_text()` followed by `reader()` produce zero guard findings, reproduced in memory. The analyzer removes the inherited binding before resolving the comprehension’s first iterable or the parameter default, although Python evaluates these in the enclosing scope. These ordinary unlocked reads therefore bypass the guard and can observe partial records. [Acceptance criterion 5; promised comprehension and parameter-default tracking] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1df37-d682-7e12-a4b9-7724c62aea3d, 2026-11-15
+Reviewer session: codex 01a1df37-d682-7e12-a4b9-7724c62aea3d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
