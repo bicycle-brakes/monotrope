@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -48,9 +48,10 @@ recorded interview, not a reconstruction of its code.
   completed green targeted check of the same repository, change, checked tree
   and gate configuration; an observation, not a count of distinct defects.
 - **Checked tree:** the Git-visible contents and file modes actually checked,
-  including uncommitted and non-ignored untracked inputs; commit identity or
-  a dirty flag alone is insufficient. A changed or unreadable tree during a
-  check supplies no stable identity.
+  including uncommitted and non-ignored untracked inputs, minus the change's
+  own `plan.md` and `findings.md` (decisions Q-3); commit identity or a dirty
+  flag alone is insufficient. A changed or unreadable tree during a check, or
+  a check without a change name, supplies no stable identity.
 - **Incomplete run:** an identifiable in-scope run lacking valid, unambiguous
   start/end or comparison evidence; counted once as not countable.
 - **Interval:** optional UTC bounds on run start, inclusive lower bound and
@@ -74,7 +75,7 @@ recorded interview, not a reconstruction of its code.
    *Refuted by:* no identifiable start, green completion before successful
    completion, missing check kind or comparison identity without an explicit
    unknown, or any persisted slip event, counter or consumed marker.
-   *Basis:* decisions.md#Q-1, including its accepted downside.
+   *Basis:* decisions.md#Q-1, including its accepted downside; decisions.md#Q-3.
 4. When the reader reports an interval, it shows the slip count and the
    number of incomplete runs excluded from counting beside each other.
    *Refuted by:* an identifiable interrupted or conflicting run disappears,
@@ -110,7 +111,18 @@ diagnosed separately and make the report partial; do not invent run identities
 or counts from them. A wholly lost run leaves no evidence and cannot be
 reconstructed from this history. Missing history is unavailable, not zero.
 Legacy records without comparison evidence remain readable as durations and
-are not countable as slips. No equivalence between different trees is inferred.
+are not countable as slips. No equivalence between different trees is inferred
+beyond the one named below.
+
+**Boundary — the change's bookkeeping is unseen (decisions Q-3).** The runner's
+time line, its call records and phase 6's committed rows and audit lines land
+in `plans/changes/<change>/plan.md` and `findings.md` between a targeted check
+and the later full one, so the comparison tree leaves exactly these two files
+of the change out; every other path, another change's files included, still
+counts. An edit to those two files between the checks therefore goes unseen:
+a red full run caused by it — for example from a gate that reads them, such as
+the criterion ledger — can count as one slip too many. The count is an
+observation, not a cause, and this overcount stays possible.
 
 ## Non-goals
 
@@ -143,7 +155,8 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The two maintainer answers remain unchanged.
+None open. The three maintainer answers remain unchanged; Q-3 (2026-11-15)
+names the comparison tree's one exclusion.
 
 [DETAIL] Count distinct red full-run identities, not distinct defects; this
 matches what the history can prove without interpreting test output. Conflicting

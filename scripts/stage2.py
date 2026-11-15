@@ -202,6 +202,7 @@ import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
 import time_records  # noqa: E402
 import touch_map  # noqa: E402
+import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -3345,7 +3346,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             f"phase 6 reviews a committed tree for `{change}`, and these paths differ from HEAD: {listing}; commit or put "
             "them back, then run review again. No reviewer was called."
         )
-    problems = full_verify(root, env, None)
+    problems = full_verify(root, env, None, change)
     try:
         after = standing()
     except (Refused, OSError) as error:
@@ -6562,8 +6563,65 @@ def run_gates(root: Path, env: dict[str, str], key: str | None, gates: Sequence[
     return [], notes
 
 
-def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
-    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+def _checked_tree(root: Path, change: str | None) -> str | None:
+    """The slip comparison identity of the checked tree, or the explicit unknown.
+
+    Contents and modes, never a commit: the checkpoint commit, stamping and audit
+    finalization move the commit between a targeted check and the later full one.
+    The change's own `plan.md` and `findings.md` are left out (decisions Q-3,
+    bead coding-harness-bxxt.7): the runner's time line and call records, and
+    phase 6's committed rows and audit lines, land there between the two checks,
+    so a whole-tree identity could never pair them. Every other path counts.
+    Without a change name, or when git cannot answer, the identity is unknown.
+    """
+    if not change:
+        return None
+    try:
+        tree = worktree_tree(root)
+        with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+            _git_output(root, "read-tree", tree, env=env)
+            folder = f"plans/changes/{change}"
+            _git_output(
+                root,
+                "update-index",
+                "--force-remove",
+                "--",
+                f"{folder}/plan.md",
+                f"{folder}/findings.md",
+                env=env,
+            )
+            return _git_output(root, "write-tree", env=env).strip()
+    except (Refused, OSError):
+        return None
+
+
+def run_targeted(
+    root: Path, env: dict[str, str], key: str | None, chosen: Targeted, change: str | None = None
+) -> tuple[list[str], list[str]]:
+    """Run the selected targeted check outside the verify admission, with its run evidence.
+
+    (blocking problems, reported notes), as before. The targeted start precedes
+    the checks and the end follows their completion (`verify_duration`
+    bead coding-harness-bxxt.7); the checked tree is captured on both sides of
+    execution, so a tree that moved during the check invalidates its own
+    comparison evidence. A check that never completes records no end — no green
+    evidence exists for work that did not finish. A refused history append
+    becomes a reported note and never changes the verdict. Order: ruff over the
+    touched files, pytest over the whole test files, then the selected gates
+    through `run_gates`. The first blocking red, launch error or timeout ends
+    the run with one bounded, protected diagnostic; a missing tool is red.
+    """
+    receipt = verify_duration.begin_targeted_run(root, change, _checked_tree(root, change))
+    problems, notes = _targeted_commands(root, env, key, chosen)
+    outcome = "red" if problems else "green"
+    return problems, [*notes, *verify_duration.finish_targeted_run(receipt, _checked_tree(root, change), outcome)]
+
+
+def _targeted_commands(
+    root: Path, env: dict[str, str], key: str | None, chosen: Targeted
+) -> tuple[list[str], list[str]]:
+    """The selected targeted commands themselves: (blocking problems, reported notes).
 
     Order: ruff over the touched files, pytest over the whole test files, then the selected gates
     through `run_gates`. The first blocking red, launch error or timeout ends the run with one
@@ -6596,12 +6654,15 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     return run_gates(root, env, key, chosen.gates)
 
 
-def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
+def full_verify(root: Path, env: dict[str, str], key: str | None, change: str | None = None) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
     The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
     files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
     a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
+    The launch carries the runner-owned comparison context (`verify_duration.full_run_context`),
+    so the shell's start record can later be paired with a targeted predecessor: the checked tree
+    is captured after the intent-to-add entries, exactly what the gates are handed.
     """
     problems: list[str] = []
     intended: list[bytes] = []
@@ -6612,6 +6673,7 @@ def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
             except (Refused, OSError) as error:
                 return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
             child_env = verify_lock.inherit_env(env)
+            child_env.update(verify_duration.full_run_context(_checked_tree(root, change), change))
             done = launch(
                 ["make", "verify"],
                 root,
@@ -6662,6 +6724,7 @@ def _targeted_body(
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
+    change = plan.parent.name  # the change the check verifies; it names the run evidence
 
     def ledger(error: BaseException) -> list[str]:
         return [
@@ -6700,7 +6763,7 @@ def _targeted_body(
         # Keep the selected scope even if the full check raises before returning its result.
         if scope is not None:
             scope.append(fallback_text(chosen.fallback, "not completed"))
-        problems = full_verify(root, env, key)
+        problems = full_verify(root, env, key, change)
         if scope is not None:
             scope[-1] = fallback_text(chosen.fallback, "red" if problems else "green")
         return problems
@@ -6714,7 +6777,7 @@ def _targeted_body(
             problems.append(f"the attempt's new files could not be added intent-to-add before the checks: {error}")
         else:
             try:
-                problems, notes = run_targeted(root, env, key, chosen)
+                problems, notes = run_targeted(root, env, key, chosen, change)
             except StepTimedOut as error:
                 problems.append(
                     protect_diagnostics(f"{TARGETED_LABEL}: targeted check exceeded its time bound: {error}", key)

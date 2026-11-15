@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -50,6 +50,23 @@ context: |
   Architecture change: none.
 
 In the context of runs that end without an end record, facing a choice between no number at all and a count with the gaps named, we decided for the count with the number of incomplete runs beside it, to achieve a figure that stays usable after one crash, accepting that the reader of the handover must look at two numbers. — 2026-11-13
+
+## Q-3 · The comparison tree leaves out the change's own bookkeeping
+
+asked: 2026-11-15
+answer: "yes, variant A" — the slip comparison leaves out the change's own plan.md and findings.md.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the slip counter counts a red full check that ran after a green targeted check on the same tree.
+  Intention: the plan's prerequisite proof failed; with a whole-tree identity the counter reads zero on the real runner path.
+  Today: between the two checks the runner's and phase 6's bookkeeping change two files of the change, `plans/changes/<change>/plan.md` (the time line) and `findings.md` (call records, committed rows, audit lines), so the tree ids never match.
+  Repository change: for the comparison the runner forms a tree identity without exactly these two files of the change; the spec changes in its term "Checked tree", a named Boundary and one new test case.
+  Architecture change: none; a reader without a writer, the run log stays the one local history.
+  Question: May the spec state that the change's `plan.md` and `findings.md` are not part of the comparison tree for slips (variant A)?
+  Recommendation: variant A; consequence: a change to those two files between the checks goes unseen, and a gate that reads them (for example the criterion ledger) could count one slip too many — a risk named in the spec.
+
+In the context of a prerequisite proof that showed the runner's own bookkeeping moving the tree between a targeted check and the later full one, facing a choice between stopping the change and leaving the change's two bookkeeping files out of the comparison, we decided to leave them out, to achieve a counter that can pair real runs, accepting that an edit to those two files between the checks goes unseen. — 2026-11-15
 
 ## Decided by the agent
 

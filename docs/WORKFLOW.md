@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-13
+updated: 2026-11-15
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -597,6 +597,26 @@ with `python3 -m scripts.verify_duration report`, or inspect one run with
 remain incomplete, and malformed rows are diagnosed. Unusable measurement
 storage warns without changing gate execution or verdicts; raw history stays
 outside Git.
+
+A slip is a completed red local full verification run that an earlier
+completed green targeted check of the same repository, change, checked tree
+and gate configuration failed to catch (bead coding-harness-bxxt.7). The
+count is derived, never stored: the runner's targeted check records ordinary
+run evidence through `scripts/verify_duration.py` around its execution, the
+full check carries its comparison context in runner-owned environment
+variables that the shell's start record captures, and `python3 -m
+scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]`
+pairs the records afterwards from the one history. The count stands beside
+the number of incomplete or not countable runs — interrupted work,
+conflicting records, moved trees and legacy rows are gaps, not zeros — and
+missing history is unavailable, never a counted zero. Reading never appends
+to the history, and no slip event, counter or consumed marker exists; trees
+are compared by contents and modes, never by commit identity, which the
+checkpoint commit, stamping and audit finalization move between the two
+checks. The comparison tree leaves out the change's own `plan.md` and
+`findings.md`, where the runner's and phase 6's bookkeeping lands between the
+checks; an edit to those two files in between goes unseen and can count one
+slip too many.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -38,6 +38,7 @@ Starts unless you say stop.
 
 - Keep `verify-duration.jsonl` as the one local history. Use its existing `run_start`/`run_end` records with additive optional comparison fields, preserving version-1 duration readability. Each start has an independent run id, repository/worktree attribution, change, check kind (`targeted`, `full`, or `full-fallback`), checked-tree identity and configuration digest; unknowns are explicit. Existing legacy starts remain valid duration records. End records retain the actual green/red verdict and time. No counter, pairing receipt or consumed flag is stored.
 - Supply full-run context through an explicitly runner-owned environment passed to `full_verify`; let `verify_duration.cmd_start` capture it at the shell's existing start call. No `verify_all.sh` edit is needed. Targeted starts precede execution after preparation; ends follow completion. Capture identity on both sides of execution, invalidating comparison evidence if inputs move. Red, interrupted, timed-out and failed-to-start targeted work must never emit targeted green. Fallback remains full, never a green targeted predecessor. Diagnostics from failed appends are visible and leave existing verification results unchanged.
+- Prerequisite proof result (2026-11-15): the runner's time line and call records, and phase 6's rows and audit lines, move the change's `plan.md` and `findings.md` between the two checks; the maintainer decided (decisions Q-3) that the comparison tree leaves exactly these two files of the change out — the spec's named Boundary.
 - Use the dependency's verified checked-tree capture, or the existing `worktree_tree` content-tree capture where sufficient; compare contents and modes, not commit ids. Keep repository, change and configuration in the match key. A missing field never matches another missing field. Do not broaden the checked tree's equivalence to make the counter useful: a failure of the prerequisite stops implementation.
 - `python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]` defaults to the current resolved repository/worktree and all recorded time. Require timezone-aware bounds, normalize to UTC, reject reversed intervals with exit 2. Select full-run counts and incomplete-run counts by start time in `[since, until)`; search the whole available history for an earlier matching targeted completion, including before `since`. Completion must precede full-run start; overlapping checks do not pair. Show the selected repository, change scope and bounds with the result.
 - Validate/group records before pairing. Identical duplicate events collapse; contradictory starts/ends or a malformed attributable record invalidate that run once. Count each qualifying red full-run id once regardless of predecessor multiplicity. Known nonmatching trees/configurations are non-slips; missing comparison evidence makes an otherwise in-scope run not countable. Legacy full runs therefore contribute to incomplete/not-countable runs, never inferred slips. Ignore complete unrelated jobs and placements. Diagnose unknown kinds/versions instead of treating them as clean evidence.
@@ -79,16 +80,25 @@ the fix; no real machine history or deliberately failing full suite is needed.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_duration.py::test_slips_count_each_matching_red_full_run_once — a qualifying run disappears or duplicate predecessors/events multiply it
-- 2: not yet written tests/test_verify_duration.py::test_slips_require_complete_matching_predecessor — mismatched identity, order, kind or verdict produces a slip
-- 3: not yet written tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — the real runner path fails to yield comparable evidence or writes a slip record
-- 3: not yet written tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green — interruption, launch failure, timeout or changing inputs leaves green comparable evidence
-- 4: not yet written tests/test_verify_duration.py::test_slips_show_incomplete_runs_beside_count — a lost end, conflicting duplicate or missing comparison field vanishes instead of appearing once as not countable
-- 5: not yet written tests/test_verify_duration.py::test_slips_select_interval_repository_and_change — interval endpoints or scope leak, or a pre-interval predecessor is lost
-- 6: not yet written tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — incomplete, corrupt, unsupported or missing history exits as complete or discards valid observations
-- 7: not yet written tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — repeated reads mutate history or legacy duration reporting breaks
-- 7: not yet written tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — failed history writes change gate verdicts or disappear without a diagnostic
+- 1: tests/test_verify_duration.py::test_slips_count_each_matching_red_full_run_once — a qualifying run disappears or duplicate predecessors/events multiply it
+- 2: tests/test_verify_duration.py::test_slips_require_complete_matching_predecessor — mismatched identity, order, kind or verdict produces a slip
+- 3: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — the real runner path fails to yield comparable evidence or writes a slip record
+- 3: tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green — interruption, launch failure, timeout or changing inputs leaves green comparable evidence
+- 3: tests/test_stage2.py::test_slip_comparison_tree_leaves_out_only_the_changes_bookkeeping — the comparison identity follows the change's own plan.md or findings.md, or hides any other path (decisions Q-3)
+- 4: tests/test_verify_duration.py::test_slips_show_incomplete_runs_beside_count — a lost end, conflicting duplicate or missing comparison field vanishes instead of appearing once as not countable
+- 5: tests/test_verify_duration.py::test_slips_select_interval_repository_and_change — interval endpoints or scope leak, or a pre-interval predecessor is lost
+- 6: tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — incomplete, corrupt, unsupported or missing history exits as complete or discards valid observations
+- 7: tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — repeated reads mutate history or legacy duration reporting breaks
+- 7: tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — failed history writes change gate verdicts or disappear without a diagnostic
 - 7: tests/test_verify_duration.py::test_reader_refuses_substituted_history — a symlink or nonregular history is followed
 - 7: tests/test_verify_duration.py::test_writer_refuses_hard_linked_history — measurement writes through an aliased history
 
+## Runner route — 2026-11-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-11-14 17:00:12–17:56:17 UTC, 3365 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 17:56:26–18:24:20 UTC, 1674 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-14 18:24:27–18:25:36 UTC, 69 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

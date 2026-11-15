@@ -426,7 +426,7 @@ def test_reader_rejects_malformed_completion(
     path.write_text(original, encoding="utf-8")
 
     events, parsing = verify_duration._read_events()
-    runs, grouping = verify_duration._runs(events)
+    runs, grouping, _damaged, _unassigned = verify_duration._runs(events)
     assert runs["broken-end"]["end"] is None
     assert parsing or grouping
     for selection in ((), ("--run", "broken-end")):
@@ -683,14 +683,525 @@ def test_writer_refuses_hard_linked_history(tmp_path, capsys):
     assert victim.read_text() == "unchanged\n"
 
 
-def test_slip_counter_is_deferred(capsys) -> None:
-    """Q-9: the duration CLI retains its original operations without the deferred counter."""
+def test_slip_evidence_is_derived_never_persisted(capsys) -> None:
+    """Q-1 and Q-2 supersede the Q-9 deferral: slips are derived, never written.
+
+    The reader exists (`slips`), and the targeted check records ordinary run
+    evidence, but the history gains no slip event of its own: the event kinds
+    stay the three duration ones, no slip writer appears, and the CLI exposes
+    no targeted operation — the targeted evidence is recorded by the runner
+    through the module, not through a command of its own.
+    """
     with pytest.raises(SystemExit) as stopped:
         verify_duration.main(["--help"])
     assert stopped.value.code == 0
     help_text = capsys.readouterr().out
-    for operation in ("targeted", "slip", "slips"):
-        assert not re.search(rf"\b{operation}\b", help_text), f"deferred operation {operation} is still exposed"
-    assert verify_duration.EVENTS == ("run_start", "gate", "run_end")
-    for writer in ("append_targeted", "append_slip", "record_local_slip"):
-        assert not hasattr(verify_duration, writer), f"deferred writer {writer} is still callable"
+    assert re.search(r"\bslips\b", help_text), "the derived reader is not exposed"
+    assert not re.search(r"\btargeted\b", help_text), "a targeted CLI operation appeared"
+    assert verify_duration.EVENTS == ("run_start", "gate", "run_end"), "a slip event kind appeared"
+    for writer in ("append_slip", "record_slip", "record_local_slip"):
+        assert not hasattr(verify_duration, writer), f"slip writer {writer} is callable"
+
+
+# ---------------------------------------------------------------------------
+# Slips — the derived count beside the runs that could not be counted
+# ---------------------------------------------------------------------------
+
+TREE = "t" * 40
+CONFIG = "d" * 64
+
+
+def _run_start(
+    run_id: str,
+    *,
+    utc: str,
+    repository: str,
+    kind: str | None = None,
+    change: str | None = None,
+    tree: str | None = None,
+    config: str | None = CONFIG,
+) -> dict:
+    """A version-1 start record; `kind None` gives the legacy shape without comparison fields."""
+    record = {
+        "v": 1,
+        "event": "run_start",
+        "run_id": run_id,
+        "utc": utc,
+        "repository": repository,
+        "commit": "c" * 40,
+        "dirty": False,
+        "config_sha256": config,
+        "job": "verify",
+        "placement": "local",
+        "memory_pct": None,
+        "workers": None,
+        "admission_id": None,
+        "admission_wait_seconds": None,
+        "admission_reused": None,
+    }
+    if kind is not None:
+        record.update({"check_kind": kind, "change": change, "tree_id": tree})
+    return record
+
+
+def _run_end(run_id: str, *, utc: str, verdict: str = "green", seconds: float = 1.0, tree: str | None = None) -> dict:
+    """A version-1 end record; `tree` is the post-execution identity of a targeted completion."""
+    end = {"v": 1, "event": "run_end", "run_id": run_id, "utc": utc, "seconds": seconds, "verdict": verdict}
+    if tree is not None:
+        end["tree_id"] = tree
+    return end
+
+
+def _write_history(state: Path, events: list[dict]) -> Path:
+    """The given records as the one history file, without going through any writer."""
+    root = state / "coding-harness"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / verify_duration.HISTORY_NAME
+    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    return path
+
+
+def _measured_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """A repository directory the reader runs in, so records of it are in scope by default."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    return str(repo)
+
+
+def _slip_events(
+    repository: str,
+    *,
+    change: str = "demo",
+    tree: str | None = TREE,
+    config: str | None = CONFIG,
+    targeted_end: str = "2026-11-13T09:05:00+00:00",
+    full_utc: str = "2026-11-13T11:00:00+00:00",
+    targeted_id: str = "t-1",
+    full_id: str = "f-1",
+    targeted_kind: str | None = "targeted",
+    targeted_verdict: str = "green",
+    full_kind: str | None = "full",
+    full_verdict: str = "red",
+    full_change: str | None = None,
+    full_tree: str | None = None,
+    full_config: str | None = None,
+) -> list[dict]:
+    """One targeted check and a later full run of the same identity; the fields shape the case."""
+    return [
+        _run_start(
+            targeted_id,
+            utc="2026-11-13T09:00:00+00:00",
+            repository=repository,
+            kind=targeted_kind,
+            change=change,
+            tree=tree,
+            config=config,
+        ),
+        _run_end(targeted_id, utc=targeted_end, verdict=targeted_verdict, tree=tree if targeted_kind else None),
+        _run_start(
+            full_id,
+            utc=full_utc,
+            repository=repository,
+            kind=full_kind,
+            change=change if full_change is None else full_change,
+            tree=tree if full_tree is None else full_tree,
+            config=config if full_config is None else full_config,
+        ),
+        _run_end(full_id, utc="2026-11-13T11:30:00+00:00", verdict=full_verdict),
+    ]
+
+
+def _slips(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str, str]:
+    """One slips operation in process: exit code, stdout, stderr."""
+    return _run(capsys, "slips", *argv)
+
+
+def test_slips_count_each_matching_red_full_run_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A qualifying red full run counts once, whatever the predecessor multiplicity.
+
+    Fault this pins: a qualifying run counting zero, several green predecessors
+    multiplying it, or repeated identical records multiplying it.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = [
+        # Two distinct green targeted predecessors of the same identity, then the
+        # red full run that missed both — plus its start row written twice, as a
+        # retried append leaves it.
+        *_slip_events(repository, targeted_id="t-1", targeted_end="2026-11-13T09:05:00+00:00"),
+        *_slip_events(repository, targeted_id="t-2", full_id="f-1"),
+        # A second, distinct red full run of the same identity counts once more.
+        *_slip_events(repository, targeted_id="t-3", full_id="f-2", full_utc="2026-11-13T12:00:00+00:00"),
+    ]
+    duplicate = dict(events[2])  # f-1's start row again, dict-equal — a retried append, not a conflict
+    events.append(duplicate)
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert code == 0, out
+    assert "slips: 2; incomplete/not countable runs: 0" in out, out
+    assert f"repository {os.path.realpath(repository)}" in out and "change all" in out, out
+    # Reading twice reports the same count from the same bytes.
+    code_again, out_again, _ = _slips(capsys)
+    assert code_again == 0 and out_again == out, out_again
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "targeted-red",
+        "full-green",
+        "fallback-masquerade",
+        "reversed-order",
+        "same-instant",
+        "other-tree",
+        "other-change",
+        "other-config",
+        "other-repository",
+        "unknown-tree",
+        "legacy-predecessor",
+    ],
+)
+def test_slips_require_complete_matching_predecessor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    """Mismatched identity, order, kind or verdict never establishes a slip.
+
+    Fault this pins: a targeted red, a full green, a full fallback masquerading
+    as targeted, a reversed or overlapping completion order, another repository,
+    change, tree or configuration, or an unknown identity counting as a slip.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    if case == "targeted-red":
+        events = _slip_events(repository, targeted_verdict="red")
+    elif case == "full-green":
+        events = _slip_events(repository, full_verdict="green")
+    elif case == "fallback-masquerade":
+        # The only run in the history is the red one, recorded as targeted: a
+        # fallback must never masquerade as a green targeted predecessor.
+        events = [
+            _run_start(
+                "f-1",
+                utc="2026-11-13T11:00:00+00:00",
+                repository=repository,
+                kind="targeted",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+        ]
+    elif case == "reversed-order":
+        events = _slip_events(repository, full_utc="2026-11-13T08:00:00+00:00")
+    elif case == "same-instant":
+        events = _slip_events(repository, full_utc="2026-11-13T09:05:00+00:00")
+    elif case == "other-tree":
+        events = _slip_events(repository, tree="t2" * 20, full_tree=TREE)
+    elif case == "other-change":
+        events = _slip_events(repository, change="other", full_change="demo")
+    elif case == "other-config":
+        events = _slip_events(repository, config="d2" * 32, full_config=CONFIG)
+    elif case == "other-repository":
+        events = _slip_events(repository + "-elsewhere")
+    elif case == "unknown-tree":
+        events = _slip_events(repository, tree=None)
+    else:  # legacy-predecessor
+        events = _slip_events(repository, targeted_kind=None)
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert "slips: 0;" in out, (case, out)
+    if case == "unknown-tree":
+        # Both runs name their comparison tree as the explicit unknown: the green
+        # predecessor counts nowhere, and the red full run cannot count against it.
+        assert "incomplete/not countable runs: 2" in out and code == 1, (case, out)
+    else:
+        assert "incomplete/not countable runs: 0" in out and code == 0, (case, out)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "lost-end",
+        "conflicting-ends",
+        "conflicting-starts",
+        "missing-comparison",
+        "legacy-red",
+    ],
+)
+def test_slips_show_incomplete_runs_beside_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    """A lost end, a conflicting duplicate or a missing comparison field appears once as not countable.
+
+    Fault this pins: an identifiable interrupted or conflicting run vanishing,
+    being counted twice, or being represented by a bare zero.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    if case == "lost-end":
+        events = [
+            # The green completion never arrived: the targeted run stays a start,
+            # and the red full run beside it has no countable predecessor.
+            _run_start(
+                "t-1",
+                utc="2026-11-13T09:00:00+00:00",
+                repository=repository,
+                kind="targeted",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            _run_start(
+                "f-1",
+                utc="2026-11-13T11:00:00+00:00",
+                repository=repository,
+                kind="full",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+        ]
+    elif case == "conflicting-ends":
+        events = _slip_events(repository) + [
+            _run_end("f-1", utc="2026-11-13T11:45:00+00:00", verdict="green"),
+        ]
+    elif case == "conflicting-starts":
+        events = [
+            _run_start(
+                "f-1",
+                utc="2026-11-13T11:00:00+00:00",
+                repository=repository,
+                kind="full",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            _run_start(
+                "f-1",
+                utc="2026-11-13T11:10:00+00:00",
+                repository=repository,
+                kind="full",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            *_slip_events(repository)[:2],  # the targeted green predecessor
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+        ]
+    elif case == "missing-comparison":
+        events = _slip_events(repository)[:2] + [
+            _run_start(
+                "f-1",
+                utc="2026-11-13T11:00:00+00:00",
+                repository=repository,
+                kind="full",
+                change=None,
+                tree=None,
+                config=None,
+            ),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+        ]
+    else:  # legacy-red
+        events = [
+            _run_start(
+                "t-1",
+                utc="2026-11-13T09:00:00+00:00",
+                repository=repository,
+                kind="targeted",
+                change="demo",
+                tree=TREE,
+                config=CONFIG,
+            ),
+            _run_end("t-1", utc="2026-11-13T09:05:00+00:00", verdict="green", tree=TREE),
+            # A legacy full red run: no comparison fields, so no countable slip.
+            _run_start("f-1", utc="2026-11-13T11:00:00+00:00", repository=repository),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+        ]
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert code == 1, (case, out)
+    assert "slips: 0; incomplete/not countable runs: 1" in out, (case, out)
+    assert "evidence partial" in out, (case, out)
+    # The damaged runs keep their diagnosis, named and visible.
+    if case in ("conflicting-ends", "conflicting-starts"):
+        assert "history note:" in out, (case, out)
+
+
+def test_slips_select_interval_repository_and_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only selected runs enter the counts; a pre-interval predecessor still pairs.
+
+    Fault this pins: another repository, an out-of-interval full run or an
+    out-of-interval incomplete run changing either count, or a matching
+    predecessor before the interval being lost for a selected full run.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    elsewhere = repository + "-elsewhere"
+    events = [
+        # The alpha predecessor lies before `since`; the alpha full run inside
+        # the interval must still pair with it.
+        *_slip_events(repository, targeted_id="t-alpha", full_id="f-alpha", change="alpha"),
+        # A beta full run of another checked tree: a known nonmatch, never a slip.
+        *_slip_events(
+            repository,
+            targeted_id="t-beta",
+            full_id="f-beta",
+            change="beta",
+            tree="b" * 40,
+            full_tree="c" * 40,
+            full_utc="2026-11-13T12:30:00+00:00",
+        ),
+        # Another repository's identical red run never enters this reader's counts.
+        *_slip_events(elsewhere, targeted_id="t-far", full_id="f-far", full_utc="2026-11-13T12:00:00+00:00"),
+        # An incomplete run outside the interval, and one inside it.
+        _run_start(
+            "f-late",
+            utc="2026-11-13T15:00:00+00:00",
+            repository=repository,
+            kind="full",
+            change="alpha",
+            tree=TREE,
+            config=CONFIG,
+        ),
+        _run_start(
+            "t-early-broken",
+            utc="2026-11-13T08:00:00+00:00",
+            repository=repository,
+            kind="targeted",
+            change="alpha",
+            tree=TREE,
+            config=CONFIG,
+        ),
+    ]
+    _write_history(tmp_path / "state", events)
+
+    window = ("--since", "2026-11-13T10:00:00+00:00", "--until", "2026-11-13T14:00:00+00:00")
+    code, out, _ = _slips(capsys, *window)
+    assert code == 0, out
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert f"repository {os.path.realpath(repository)}" in out, out
+
+    code, out, _ = _slips(capsys, *window, "--change", "beta")
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+
+    code, out, _ = _slips(capsys, "--change", "alpha")
+    assert code == 1 and "slips: 1; incomplete/not countable runs: 2" in out, out
+
+    # A reversed interval refuses with exit 2; a naive bound is not an instant.
+    code, _, err = _slips(capsys, "--since", "2026-11-13T14:00:00+00:00", "--until", "2026-11-13T10:00:00+00:00")
+    assert code == 2 and "reversed" in err, err
+    with pytest.raises(SystemExit) as stopped:
+        _slips(capsys, "--since", "2026-11-13T10:00:00")
+    assert stopped.value.code == 2
+
+
+def test_slips_distinguish_complete_partial_and_unavailable_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Incomplete, corrupt, unsupported or missing history never exits as a complete zero.
+
+    Fault this pins: an incomplete run, a malformed or unassignable row,
+    unsupported evidence or missing history producing a complete-success exit or
+    a purported complete zero, or valid observations beside a diagnosed gap
+    vanishing.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    targeted_pair = [
+        _run_start(
+            "t-1",
+            utc="2026-11-13T09:00:00+00:00",
+            repository=repository,
+            kind="targeted",
+            change="demo",
+            tree=TREE,
+            config=CONFIG,
+        ),
+        _run_end("t-1", utc="2026-11-13T09:05:00+00:00", verdict="green", tree=TREE),
+    ]
+
+    # Missing history: unavailable, never a zero, and never a complete success.
+    code, out, err = _slips(capsys)
+    assert code == 1, (out, err)
+    assert "slips: unavailable; incomplete/not countable runs: unavailable" in out, out
+    assert "slips: 0" not in out and "no history" in err, (out, err)
+
+    # A malformed unassignable row keeps the valid counts and makes them partial.
+    _write_history(state, targeted_pair)
+    path = state / "coding-harness" / verify_duration.HISTORY_NAME
+    path.write_text(path.read_text(encoding="utf-8") + "garbage{{ not json\n", encoding="utf-8")
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "history note: line 3" in out, out
+
+    # An unsupported version is diagnosed, not read as clean evidence.
+    future_end = {
+        "v": 2,
+        "event": "run_end",
+        "run_id": "t-1",
+        "utc": "2026-11-13T09:06:00+00:00",
+        "seconds": 1,
+        "verdict": "green",
+    }
+    _write_history(state, targeted_pair + [future_end])
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "unsupported event version" in out, out
+
+    # A damaged run of another repository keeps its diagnosis; the report says partial.
+    far_starts = [
+        _run_start("far", utc="2026-11-13T09:00:00+00:00", repository=repository + "-elsewhere"),
+        _run_start("far", utc="2026-11-13T09:30:00+00:00", repository=repository + "-elsewhere"),
+    ]
+    _write_history(state, targeted_pair + far_starts)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "history note: a second start for run far" in out, out
+
+    # Complete readable evidence with zero slips: the observed absence counts.
+    # A red targeted check is a complete observation, so the red full run of the
+    # same identity has no green predecessor — and zero is the complete finding.
+    _write_history(state, _slip_events(repository, targeted_verdict="red"))
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "evidence partial" not in out, out
+
+
+def test_slips_are_read_only_and_preserve_duration_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repeated reads never mutate the history, and legacy records stay readable as durations.
+
+    Fault this pins: reporting writing history, repeated reporting differing on
+    unchanged input, or legacy duration reporting breaking.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = [
+        # A legacy green full run: still a duration record, never an inferred slip.
+        _run_start("old", utc="2026-11-13T07:00:00+00:00", repository=repository),
+        _run_end("old", utc="2026-11-13T07:30:00+00:00", verdict="green", seconds=42.0),
+        # One qualifying pair.
+        *_slip_events(repository),
+    ]
+    path = _write_history(tmp_path / "state", events)
+    original = path.read_text(encoding="utf-8")
+
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert path.read_text(encoding="utf-8") == original, "reporting wrote to the history"
+
+    code_again, out_again, _ = _slips(capsys)
+    assert code_again == code and out_again == out, "repeated reporting differed on unchanged input"
+    assert path.read_text(encoding="utf-8") == original
+
+    # The duration reader keeps its behavior over the same, unchanged history.
+    code, listed, _ = _run(capsys, "report")
+    assert code == 0, listed
+    assert "run old" in listed and "42.000s" in listed and "green" in listed, listed
+    assert "run f-1" in listed and "red" in listed, listed
+    assert path.read_text(encoding="utf-8") == original

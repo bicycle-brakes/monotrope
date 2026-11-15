@@ -121,7 +121,11 @@ queue active (rule RB-G7), that word admits them to the queue, and each counts
 as merged only once GitHub shows it merged; a failing group leaves its pull
 request open. Every step is committed and pushed at once, tracker first, so an
 interrupted session loses nothing. A lane ledger with UTC times backs the
-handover.
+handover. A lane that ran verification also reports its missed-verification
+observations: the slip count and the incomplete or not countable runs beside
+it, read from the local history with `python3 -m scripts.verify_duration
+slips`, together with the reader's partial status — a diagnosed gap travels
+with the numbers, never as a bare zero (bead coding-harness-bxxt.7).
 
 ## Stated, enforced, planned
 
