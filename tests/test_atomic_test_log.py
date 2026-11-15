@@ -67,6 +67,25 @@ ENV_ROUTED = (
 )
 # A file whose name only ends in a declared one is not a declared log: the helper refuses it, so the guard ignores it.
 NEAR_MISS = 'from pathlib import Path\nrecords = Path("bin/old-@LOG@").read_text()\nother = Path("bin") / "my@LOG@"\nother.write_text("")\n'
+# A nested reader inherits its enclosing function's log binding (finding F6-4).
+CLOSURE_READ = (
+    "from pathlib import Path\n"
+    "def outer():\n"
+    '    log = Path("@LOG@")\n'
+    "    def reader():\n"
+    "        return (\n"
+    "            log.read_text())\n"
+    "    return reader\n"
+)
+# A parameter shadows a module-level log binding of the same name (finding F6-5).
+PARAMETER_SHADOW = (
+    "from pathlib import Path\n"
+    'log = Path("@LOG@")\n'
+    "def read_doc(log):\n"
+    "    return log.read_text()\n"
+    'read_doc(Path("notes.md"))\n'
+    "shadow = lambda log: log.read_text()\n"
+)
 SAFE_OPERATIONS = (
     "from pathlib import Path\n"
     "from atomic_test_log import append_record, read_records\n"
@@ -244,10 +263,16 @@ def _targets(node: ast.Assign | ast.AnnAssign) -> list[ast.expr]:
 def _scope_names(scope: ast.AST, inherited: set[str], keys: set[str]) -> set[str]:
     """Variables of one scope bound to a declared log's path, followed to a fixed point.
 
-    A function sees the module's bound names unless it assigns the name itself.
+    Lexical scoping: a function sees the bound names of every enclosing scope
+    unless it binds the name itself - by assignment or as a parameter.
     """
     nodes = [node for node in _own_nodes(scope) if isinstance(node, ast.Assign | ast.AnnAssign) and node.value]
     assigned = {target.id for node in nodes for target in _targets(node) if isinstance(target, ast.Name)}
+    if isinstance(scope, _SCOPES):
+        arguments = scope.args
+        parameters = arguments.posonlyargs + arguments.args + arguments.kwonlyargs
+        parameters += [extra for extra in (arguments.vararg, arguments.kwarg) if extra is not None]
+        assigned |= {parameter.arg for parameter in parameters}
     names = set(inherited) - assigned
     while True:
         before = len(names)
@@ -265,12 +290,15 @@ def _analyse(sources: list[tuple[int, ast.Module]]) -> list[tuple[int, ast.AST, 
         before = len(keys)
         scoped: list[tuple[int, ast.AST, set[str], set[str]]] = []
         for offset, tree in sources:
-            module_names = _scope_names(tree, set(), keys)
-            scopes = [tree] + [node for node in ast.walk(tree) if isinstance(node, _SCOPES)]
-            for scope in scopes:
-                names = module_names if scope is tree else _scope_names(scope, module_names, keys)
+            # Each scope inherits from its lexically enclosing scope, not only the module.
+            pending: list[tuple[ast.AST, set[str]]] = [(tree, set())]
+            while pending:
+                scope, enclosing = pending.pop()
+                names = _scope_names(scope, enclosing, keys)
                 scoped.append((offset, scope, names, keys))
                 for node in _own_nodes(scope):
+                    if isinstance(node, _SCOPES):
+                        pending.append((node, names))
                     if isinstance(node, ast.Assign) and _names_a_log(node.value, names, keys):
                         for target in node.targets:
                             if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant):
@@ -606,11 +634,13 @@ def test_stand_ins_stay_visible_and_contact_free() -> None:
 def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
     """Criterion 5 (flaky-swarm-leak-test, loop rows L1-2/L1-8). Planted fault: a raw read or append of a stand-in log passes.
 
-    A direct read, an append through a variable, an embedded stand-in append
+    A direct read, an append through a variable, a nested reader closing over
+    its enclosing function's log (finding F6-4), an embedded stand-in append
     and an append through an environment key that carries a log path are
     each detected with their source location; helper calls, a log's removal,
     a document append, a lock probe and a file whose name merely ends in a
-    declared one (loop row L2-3) stay unflagged without any exemption.
+    declared one (loop row L2-3) and a parameter that shadows a module-level log
+    binding (finding F6-5) stay unflagged without any exemption.
     """
     cases = {
         "top_read": (TOP_READ, [":2: raw read_text"]),
@@ -625,6 +655,8 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
         "keyword_read": ('open(file="@LOG@")\n', [":1: raw open"]),
         "mixed_append": ('open("@LOG@", mode="a")\n', [":1: raw open"]),
         "keyword_document": ('open(file="notes.md", mode="a")\n', []),
+        "closure_read": (CLOSURE_READ, [":6: raw read_text"]),
+        "parameter_shadow": (PARAMETER_SHADOW, []),
     }
     for name, (sample, expected) in cases.items():
         folder = tmp_path / name
