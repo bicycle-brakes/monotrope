@@ -442,3 +442,5 @@ Stage-2 call, 2026-11-15: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-15: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1076 files, 4271 commits, 12 rules.
 
 Stage-2 call, 2026-11-15: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1076 files, 4271 commits, 12 rules.
+
+Stage-2 call, 2026-11-15: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1076 files, 4297 commits, 12 rules.
