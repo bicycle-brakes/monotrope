@@ -130,6 +130,34 @@ it from the guard just as obfuscation does, and a raw `open`, `read_text` or
 `write_text` on its result passes (2026-11-14, loop row L3-2). The same
 contract (bead coding-harness-6zpj) closes this gap.
 
+The guard follows a log's path through every way Python binds a name -
+assignment with one or several targets, tuple and list unpacking paired
+element by element, starred, annotated and augmented assignment, the walrus,
+`for` and comprehension targets, `with … as`, and parameter defaults - and
+every such binding shadows an enclosing one, with lexical scoping for
+functions and comprehensions (2026-11-15, findings F6-4, F6-5, F6-6). What a
+static reading cannot follow stays outside it, and the guard errs in a known
+direction for each (2026-11-15):
+
+- Containers and unpacking that cannot be paired: unpacking a variable or a
+  call result (`a, b = pair`) and looping over anything but a literal give
+  the whole value to every target, so a document that shares a container
+  with a log is flagged as a log - the guard errs towards a finding.
+- Attributes: a path stored as `self.log = …` or on any object is not
+  followed, so a raw read through the attribute passes.
+- Calls: a log passed as an argument is unseen inside the callee, whose
+  parameter shadows any enclosing binding (finding F6-5), and a function's
+  return value is not a path (loop row L3-2) - both pass.
+- Order: a name bound to a log anywhere in a scope is a log in the whole
+  scope, so a name rebound from a log to a document is still flagged.
+- `global` and `nonlocal` keep the enclosing binding, but what a function
+  binds through them does not reach the enclosing scope; a class body's
+  bindings count as its enclosing scope's.
+- The destination of `read_text`, `read_bytes`, `write_text` and
+  `write_bytes` is their receiver, or their first argument when called on a
+  path class (`Path.read_text(path)`) or as a bare function; any `open` is
+  judged by its receiver, first argument and `file=` (finding F6-7).
+
 Platform: the helper takes its lock with `fcntl.flock` and imports `fcntl`
 unconditionally, so it runs on POSIX systems only — macOS locally and Linux
 on CI. Windows is not supported: there every test module that imports the

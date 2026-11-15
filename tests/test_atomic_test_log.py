@@ -86,6 +86,67 @@ PARAMETER_SHADOW = (
     'read_doc(Path("notes.md"))\n'
     "shadow = lambda log: log.read_text()\n"
 )
+# Every way a name gets bound carries a log's identity, element-wise where unpacking pairs (finding F6-6).
+BINDING_FORMS = (
+    "from pathlib import Path\n"
+    'log, document = Path("@LOG@"), Path("notes.md")\n'
+    "log.read_text()\n"
+    "document.read_text()\n"
+    '[head, *tail] = [Path("notes.md"), Path("@LOG@")]\n'
+    "head.read_text()\n"
+    "tail[0].read_text()\n"
+    'base = Path("bin")\n'
+    'annotated: Path = base / "@LOG@"\n'
+    "annotated.read_bytes()\n"
+    "grown = base\n"
+    'grown /= "@LOG@"\n'
+    'grown.write_bytes(b"")\n'
+    'if (caught := base / "@LOG@").exists():\n'
+    "    caught.read_text()\n"
+    'for looped in [Path("notes.md"), base / "@LOG@"]:\n'
+    "    looped.read_text()\n"
+    'with Path("@LOG@") as held:\n'
+    "    held.read_text()\n"
+    '[item.read_text() for item in (base / "@LOG@",)]\n'
+    'def reader(path=base / "@LOG@"):\n'
+    "    return path.read_text()\n"
+    'outer, (inner, other) = Path("notes.md"), (Path("@LOG@"), Path("other.md"))\n'
+    "inner.read_text()\n"
+    "other.read_text()\n"
+    'first = second = Path("@LOG@")\n'
+    "second.read_text()\n"
+)
+# A module-level log binding is shadowed by every local binding form, not only assignment and parameters.
+BINDING_SHADOWS = (
+    "from pathlib import Path\n"
+    'log = Path("@LOG@")\n'
+    "def unpacked():\n"
+    '    log, doc = Path("notes.md"), Path("other.md")\n'
+    "    return log.read_text()\n"
+    "def looped(docs):\n"
+    "    for log in docs:\n"
+    "        log.read_text()\n"
+    "def held():\n"
+    '    with open("notes.md") as log:\n'
+    "        return log.read()\n"
+    "def imported():\n"
+    "    from notes import doc as log\n"
+    "    return log.read_text()\n"
+    "def caught():\n"
+    "    try:\n"
+    "        pass\n"
+    "    except OSError as log:\n"
+    "        return log.filename.read_text()\n"
+    'docs = [path.read_text() for path in [Path("notes.md")]]\n'
+    'logs = [path for path in [Path("@LOG@")]]\n'
+)
+# The destination of a pathlib read or write is its receiver; write_text's argument is content (finding F6-7).
+RECEIVER_DESTINATION = (
+    "from pathlib import Path\n"
+    'Path("notes.md").write_text("@LOG@")\n'
+    'Path("notes.md").write_bytes(b"@LOG@")\n'
+    'Path.read_text(Path("@LOG@"))\n'
+)
 SAFE_OPERATIONS = (
     "from pathlib import Path\n"
     "from atomic_test_log import append_record, read_records\n"
@@ -241,11 +302,17 @@ def _names_a_log(node: ast.AST, names: set[str], keys: set[str]) -> bool:
     return False
 
 
-_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+_FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+_COMPREHENSIONS = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+_SCOPES = _FUNCTIONS + _COMPREHENSIONS
+# A pathlib method called on the class itself takes its path as the first argument.
+_PATH_CLASSES = frozenset({"Path", "PurePath", "PosixPath", "PurePosixPath"})
+# A binding: the bound name and the expression it receives, None when nothing the guard can follow.
+Binding = tuple[str, ast.expr | None]
 
 
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
-    """The nodes of one scope, without the bodies of the functions nested in it."""
+    """The nodes of one scope, without the bodies of the functions and comprehensions nested in it."""
     nodes: list[ast.AST] = []
     pending = list(ast.iter_child_nodes(scope))
     while pending:
@@ -256,29 +323,132 @@ def _own_nodes(scope: ast.AST) -> list[ast.AST]:
     return nodes
 
 
-def _targets(node: ast.Assign | ast.AnnAssign) -> list[ast.expr]:
-    return list(node.targets) if isinstance(node, ast.Assign) else [node.target]
+def _unstarred(elements: list[ast.expr]) -> bool:
+    return not any(isinstance(element, ast.Starred) for element in elements)
+
+
+def _pair(target: ast.expr, value: ast.expr | None) -> list[Binding]:
+    """Each name a binding target binds, with the expression it receives.
+
+    Unpacking pairs element-wise when the value is a literal tuple or list of
+    matching shape; a starred target receives the leftover elements as a list.
+    Any other value - a variable, a call, a mismatched shape - goes whole to
+    every name of the target, so a log anywhere in it marks them all.
+    """
+    if isinstance(target, ast.Name):
+        return [(target.id, value)]
+    if isinstance(target, ast.Starred):
+        return _pair(target.value, value)
+    if not isinstance(target, ast.Tuple | ast.List):
+        return []  # an attribute or subscript target binds no name
+    targets = target.elts
+    if isinstance(value, ast.Tuple | ast.List) and _unstarred(value.elts):
+        values = list(value.elts)
+        stars = [index for index, element in enumerate(targets) if isinstance(element, ast.Starred)]
+        if not stars and len(values) == len(targets):
+            return [binding for sub, element in zip(targets, values, strict=True) for binding in _pair(sub, element)]
+        if len(stars) == 1 and len(values) >= len(targets) - 1:
+            star, after = stars[0], len(targets) - stars[0] - 1
+            middle = ast.List(elts=values[star : len(values) - after], ctx=ast.Load())
+            paired = [*values[:star], middle, *values[len(values) - after :]]
+            return [binding for sub, element in zip(targets, paired, strict=True) for binding in _pair(sub, element)]
+    return [binding for sub in targets for binding in _pair(sub, value)]
+
+
+def _iterated(target: ast.expr, iterable: ast.expr) -> list[Binding]:
+    """A loop target receives one element at a time: each element of a literal, else the whole iterable."""
+    if isinstance(iterable, ast.Tuple | ast.List | ast.Set) and _unstarred(iterable.elts):
+        return [binding for element in iterable.elts for binding in _pair(target, element)]
+    return _pair(target, iterable)
+
+
+def _binding_nodes(scope: ast.AST) -> list[ast.AST]:
+    """The nodes that can bind a name in this scope.
+
+    A walrus binds in the nearest enclosing function or module, through any
+    comprehensions around it, never in the comprehension itself.
+    """
+    own = _own_nodes(scope)
+    if isinstance(scope, _COMPREHENSIONS):
+        return [node for node in own if not isinstance(node, ast.NamedExpr)]
+    nodes = list(own)
+    pending = [node for node in own if isinstance(node, _COMPREHENSIONS)]
+    while pending:
+        for node in _own_nodes(pending.pop()):
+            if isinstance(node, ast.NamedExpr):
+                nodes.append(node)
+            elif isinstance(node, _COMPREHENSIONS):
+                pending.append(node)
+    return nodes
+
+
+def _bindings(scope: ast.AST) -> list[Binding]:
+    """Every name this scope binds, by every binding form Python has, with what each receives."""
+    found: list[Binding] = []
+    if isinstance(scope, _FUNCTIONS):
+        arguments = scope.args
+        positional = arguments.posonlyargs + arguments.args
+        defaults: list[ast.expr | None] = [None] * (len(positional) - len(arguments.defaults))
+        defaults += arguments.defaults
+        found += [(parameter.arg, default) for parameter, default in zip(positional, defaults, strict=True)]
+        found += [
+            (parameter.arg, default)
+            for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True)
+        ]
+        found += [(extra.arg, None) for extra in (arguments.vararg, arguments.kwarg) if extra is not None]
+    if isinstance(scope, _COMPREHENSIONS):
+        for generator in scope.generators:
+            found += _iterated(generator.target, generator.iter)
+    for node in _binding_nodes(scope):
+        if isinstance(node, ast.Assign):
+            found += [binding for target in node.targets for binding in _pair(target, node.value)]
+        elif isinstance(node, ast.AnnAssign):
+            found += _pair(node.target, node.value)
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            # `log /= name` binds log to the old value combined with the new part.
+            combined = ast.BinOp(left=ast.Name(id=node.target.id, ctx=ast.Load()), op=node.op, right=node.value)
+            found.append((node.target.id, combined))
+        elif isinstance(node, ast.NamedExpr):
+            found += _pair(node.target, node.value)
+        elif isinstance(node, ast.For | ast.AsyncFor):
+            found += _iterated(node.target, node.iter)
+        elif isinstance(node, ast.With | ast.AsyncWith):
+            found += [
+                binding
+                for item in node.items
+                if item.optional_vars is not None
+                for binding in _pair(item.optional_vars, item.context_expr)
+            ]
+        elif isinstance(node, ast.Import | ast.ImportFrom):
+            found += [((alias.asname or alias.name).split(".")[0], None) for alias in node.names if alias.name != "*"]
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.ExceptHandler):
+            # A definition or an except-as binds a name to no path; so does a match capture below.
+            found += [(node.name, None)] if node.name else []
+        elif isinstance(node, ast.MatchAs | ast.MatchStar) and node.name:
+            found.append((node.name, None))
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            found.append((node.rest, None))
+        elif isinstance(node, ast.Delete):
+            found += [binding for target in node.targets for binding in _pair(target, None)]
+    return found
 
 
 def _scope_names(scope: ast.AST, inherited: set[str], keys: set[str]) -> set[str]:
     """Variables of one scope bound to a declared log's path, followed to a fixed point.
 
-    Lexical scoping: a function sees the bound names of every enclosing scope
-    unless it binds the name itself - by assignment or as a parameter.
+    Lexical scoping: a function or comprehension sees the bound names of every
+    enclosing scope unless it binds the name itself, by any binding form
+    (`_bindings`); a `global` or `nonlocal` name stays the enclosing one. A
+    name is a log for the whole scope once any of its bindings receives one.
     """
-    nodes = [node for node in _own_nodes(scope) if isinstance(node, ast.Assign | ast.AnnAssign) and node.value]
-    assigned = {target.id for node in nodes for target in _targets(node) if isinstance(target, ast.Name)}
-    if isinstance(scope, _SCOPES):
-        arguments = scope.args
-        parameters = arguments.posonlyargs + arguments.args + arguments.kwonlyargs
-        parameters += [extra for extra in (arguments.vararg, arguments.kwarg) if extra is not None]
-        assigned |= {parameter.arg for parameter in parameters}
-    names = set(inherited) - assigned
+    bindings = _bindings(scope)
+    outer = {name for node in _own_nodes(scope) if isinstance(node, ast.Global | ast.Nonlocal) for name in node.names}
+    names = set(inherited) - ({name for name, _value in bindings} - outer)
     while True:
         before = len(names)
-        for node in nodes:
-            if _names_a_log(node.value, names, keys):
-                names |= {target.id for target in _targets(node) if isinstance(target, ast.Name)}
+        for name, value in bindings:
+            if value is not None and name not in names and _names_a_log(value, names, keys):
+                names.add(name)
         if len(names) == before:
             return names
 
@@ -330,11 +500,19 @@ def find_raw_log_access(root: Path) -> list[str]:
                     continue
                 receiver = func.value if isinstance(func, ast.Attribute) else None
                 first = node.args[0] if node.args else None
-                # open()'s file comes positionally or as file=; every open of a
-                # declared log is access whatever its mode (positional, mode=,
-                # or the implicit read default), so no mode grants an exemption.
-                file_arg = next((keyword.value for keyword in node.keywords if keyword.arg == "file"), None)
-                if any(part is not None and _names_a_log(part, names, keys) for part in (receiver, first, file_arg)):
+                if method == "open":
+                    # open()'s file comes positionally or as file=, Path.open's is
+                    # its receiver; every open of a declared log is access whatever
+                    # its mode (positional, mode=, or the implicit read default).
+                    file_arg = next((keyword.value for keyword in node.keywords if keyword.arg == "file"), None)
+                    destinations = (receiver, first, file_arg)
+                elif receiver is None or getattr(receiver, "id", getattr(receiver, "attr", None)) in _PATH_CLASSES:
+                    # A bare function or `Path.read_text(path)`: the path is the first argument.
+                    destinations = (first,)
+                else:
+                    # A pathlib read or write acts on its receiver; write_text's argument is content.
+                    destinations = (receiver,)
+                if any(part is not None and _names_a_log(part, names, keys) for part in destinations):
                     number = offset + node.lineno - 1
                     source_line = lines[number - 1].strip() if number <= len(lines) else ""
                     found.append(f"{path}:{number}: raw {method} of a stand-in log: {source_line}")
@@ -640,7 +818,10 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
     each detected with their source location; helper calls, a log's removal,
     a document append, a lock probe and a file whose name merely ends in a
     declared one (loop row L2-3) and a parameter that shadows a module-level log
-    binding (finding F6-5) stay unflagged without any exemption.
+    binding (finding F6-5) stay unflagged without any exemption. Every binding
+    form carries a log's identity, unpacking element-wise (finding F6-6), and
+    shadows an enclosing log binding; a pathlib read or write is judged by its
+    receiver, never by the content it writes (finding F6-7).
     """
     cases = {
         "top_read": (TOP_READ, [":2: raw read_text"]),
@@ -657,6 +838,24 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
         "keyword_document": ('open(file="notes.md", mode="a")\n', []),
         "closure_read": (CLOSURE_READ, [":6: raw read_text"]),
         "parameter_shadow": (PARAMETER_SHADOW, []),
+        "binding_forms": (
+            BINDING_FORMS,
+            [
+                ":3: raw read_text",
+                ":7: raw read_text",
+                ":10: raw read_bytes",
+                ":13: raw write_bytes",
+                ":15: raw read_text",
+                ":17: raw read_text",
+                ":19: raw read_text",
+                ":20: raw read_text",
+                ":22: raw read_text",
+                ":24: raw read_text",
+                ":27: raw read_text",
+            ],
+        ),
+        "binding_shadows": (BINDING_SHADOWS, []),
+        "receiver_destination": (RECEIVER_DESTINATION, [":4: raw read_text"]),
     }
     for name, (sample, expected) in cases.items():
         folder = tmp_path / name
