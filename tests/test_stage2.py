@@ -27543,6 +27543,60 @@ def test_scheduled_gate_timeout_is_remaining_allowance(world: World, monkeypatch
     assert timeouts == [43, 32], "the callback must clamp without relying on launch's private implementation"
 
 
+def test_allowance_expiring_between_gates_is_a_verification_timeout(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared allowance running out between two gates keeps the timeout's diagnostic (row F6-4).
+
+    The first gate ends after the allowance is spent; the second must fail as a verification that
+    did not finish — a repairable `StepTimedOut` — not as a reviewer round that could not start.
+    Planted fault: `launch`'s `remaining(deadline)` raises its `NotStarted`, which escapes the
+    verification handlers, and the runner classifies the check as unable to start.
+    """
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 60)
+    real_monotonic = time.monotonic
+    offset = [0.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: real_monotonic() + offset[0])
+
+    def schedule(_root, **kwargs):
+        kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        offset[0] += 61  # the first gate used the whole allowance
+        kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        with pytest.raises(stage2.StepTimedOut) as stopped:
+            stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+        assert "step limit after 1 minutes" in str(stopped.value), stopped.value
+        assert "reviewer" not in str(stopped.value) and "round" not in str(stopped.value), stopped.value
+        offset[0] = 0.0
+        problems = stage2.full_verify(world.root, dict(os.environ), None)
+    finally:
+        monkeypatch.setattr(stage2.time, "monotonic", real_monotonic)
+    text = "\n".join(problems)
+    assert "`make verify` did not finish" in text, text
+    assert "reviewer" not in text and "no further reviewer starts" not in text, text
+
+
+def test_an_interrupted_runner_between_gates_stays_not_started(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a spent allowance becomes a timeout: an interrupted runner's refusal stays `NotStarted` (row F6-4)."""
+
+    def schedule(_root, **kwargs):
+        stage2._LAUNCH_STOPPED.set()
+        try:
+            kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        finally:
+            stage2._LAUNCH_STOPPED.clear()
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    with pytest.raises(stage2.NotStarted) as stopped:
+        stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+    assert not isinstance(stopped.value, stage2.StepTimedOut)
+    assert "interrupted" in str(stopped.value)
+
+
 def test_malformed_gate_list_fails_the_runner_check_with_a_diagnostic(world: World) -> None:
     """A malformed gate list in the measured checkout is a failed check, not a crashed verb (row L1-12).
 

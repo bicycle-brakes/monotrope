@@ -6181,16 +6181,24 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
             if safe is None:
                 raise CallFailed(f"{argv[0]} could not be started: found only inside the worktree")
             argv = [safe, *argv[1:]]
-        done = launch(
-            argv,
-            root,
-            gate_env,
-            # The step limit, cut to what is left of the shared allowance when the gate starts.
-            timeout=max(0.0, min(VERIFY_SECONDS, budget["deadline"] - time.monotonic())),
-            limit=limit,
-            deadline=budget["deadline"],
-            pass_fds=pass_fds,
-        )
+        try:
+            done = launch(
+                argv,
+                root,
+                gate_env,
+                # The step limit, cut to what is left of the shared allowance when the gate starts.
+                timeout=max(0.0, min(VERIFY_SECONDS, budget["deadline"] - time.monotonic())),
+                limit=limit,
+                deadline=budget["deadline"],
+                pass_fds=pass_fds,
+            )
+        except NotStarted as error:
+            # An allowance spent before this gate is the verification's own timeout, repairable by
+            # the next attempt - never the reviewer round's "could not start" (row F6-4). Any other
+            # refusal (an interrupted runner) stays what it is.
+            if _LAUNCH_STOPPED.is_set() or time.monotonic() < budget["deadline"]:
+                raise
+            raise StepTimedOut(f"{argv[0]} was stopped by {limit}") from error
         return verify_run.GateProcess(done.returncode, done.stdout or "", done.stderr or "")
 
     captured_out = io.StringIO()
