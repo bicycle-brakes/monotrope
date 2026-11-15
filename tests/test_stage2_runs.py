@@ -32,6 +32,9 @@ endpunkte:
     residenz: anbieter-erklaert
     darf_sehen: [framework]
     modelle: [glm-5.3, glm-5.3-flash]
+    modelle_terms:
+      glm-5.3: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
+      glm-5.3-flash: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
 """
 
 
