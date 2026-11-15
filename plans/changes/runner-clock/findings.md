@@ -550,7 +550,44 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-3 | MAJOR | SPEC | base | tests/test_stage2.py:7021; tests/test_stage2.py:22973 | Both rewritten cleanup tests treat PID-file existence as readiness. If the child is descheduled after creating the file but before writing its PID, the test injects the timeout and kills the writer. Parsing the empty file then raises `ValueError`, failing a correct implementation because of scheduling. In the escaped-descendant test, cleanup also skips killing the escapee because its PID remains unset. The handshake must establish a complete PID before injecting expiry. [Acceptance criteria 4 and 6] | Codex | taken | — |
+| F6-3 | MAJOR | SPEC | base | tests/test_stage2.py:7021; tests/test_stage2.py:22973 | Both rewritten cleanup tests treat PID-file existence as readiness. If the child is descheduled after creating the file but before writing its PID, the test injects the timeout and kills the writer. Parsing the empty file then raises `ValueError`, failing a correct implementation because of scheduling. In the escaped-descendant test, cleanup also skips killing the escapee because its PID remains unset. The handshake must establish a complete PID before injecting expiry. [Acceptance criteria 4 and 6] | Codex | fixed — orchestrator hand edit b5e19db9 | no |
 
 Phase 6 verdict: codex 01a1dfb4-cf93-7060-948e-34c6b3818797, 2026-11-15
 Reviewer session: codex 01a1dfb4-cf93-7060-948e-34c6b3818797 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1083 files, 4364 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +53 -9
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-clock/plan.md, plans/changes/runner-clock/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
+> - F6-3: tests/test_stage2.py::test_cleanup_waits_for_a_complete_pid: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-clock/stage2/attempts/runner-clock/attempt-1-20261115T150103088498Z-7b2bffdc.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1083 files, 4364 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-clock/plan.md, plans/changes/runner-clock/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-clock/stage2/attempts/runner-clock/attempt-2-20261115T150103088498Z-7b2bffdc.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1083 files, 4370 commits, 12 rules.
+
+Runner restoration, 2026-11-15: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/runner-clock/plan.md, plans/changes/runner-clock/spec.md — unchanged
+
+Orchestrator hand repair, 2026-11-15: row F6-3 fixed by hand edit b5e19db9 (Opus subagent, maintainer's approval for the night run) after the Sonnet fallback ended on the weekly Claude plan limit; built on the saved attempt `refs/stage2/attempts/runner-clock/repair-attempt-3-20261115T162728105006Z` (bac97c97) without its meta-test. Targeted check: 167 selected tests in `tests/test_stage2.py` and `tests/test_stage2_fail_fast.py` green; the two cleanup tests and the new record test green ten runs out of ten; ruff clean. The full `make verify` is still required before the phase-6 re-check.
