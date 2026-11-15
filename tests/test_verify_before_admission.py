@@ -1152,3 +1152,103 @@ def test_staging_over_an_identical_working_file_moves_the_tree(checkout: SimpleN
     after = verify_run.tree_snapshot(root)
     assert before.fingerprint != after.fingerprint, "staging B over a working B changed no fingerprint"
     assert before.moved(after) == ["staged.txt"], before.moved(after)
+
+
+def _config_edit_before_measure(checkout: SimpleNamespace, gate_script: Path, call: int) -> list[int]:
+    """Make the `call`-th tree measurement add a blocking gate to `gates.yaml` just before it reads.
+
+    Returns the counter, so a test can see how many measurements the run took.
+    """
+    real = verify_run.tree_snapshot
+    count = [0]
+
+    def snapshot(root: Path | str) -> verify_run.TreeSnapshot:
+        count[0] += 1
+        if count[0] == call:
+            write_gates(
+                checkout.root,
+                [
+                    _gate("cheap", f"python3 {gate_script} cheap 0"),
+                    _gate("late", f"python3 {gate_script} late 1"),
+                    _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+                ],
+            )
+        return real(root)
+
+    checkout.monkeypatch.setattr(verify_run, "tree_snapshot", snapshot)
+    return count
+
+
+def test_selection_is_bound_to_the_measured_configuration(checkout: SimpleNamespace, gate_script: Path) -> None:
+    """A gate list that changes between selection and its baseline is never run as the old one (row F6-2).
+
+    The first measurement — the baseline before the cheap pass — sees a gate list that gained a
+    blocking gate after the scheduler selected. Planted fault: the run executes the old selection,
+    every later snapshot matches the edited list, and the run ends green without the new gate.
+    """
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 0"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    _git(checkout.root, "add", ".")
+    _git(checkout.root, "commit", "--quiet", "-m", "gates")
+    _config_edit_before_measure(checkout, gate_script, call=1)
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code != 0, (result, out, err)
+    assert "late" in result.executed or result.exit_code == 2, ("the old selection ran green", result, out, err)
+    assert "VERIFY GREEN" not in out, out
+
+
+def test_refreshed_selection_is_bound_to_the_measured_configuration(
+    checkout: SimpleNamespace, gate_script: Path
+) -> None:
+    """The refresh inside the admission binds its reloaded selection to its own baseline (row F6-2).
+
+    The tree moves before the admission, so the scheduler reloads; the gate list gains a blocking
+    gate between that reload and the refreshed baseline. Planted fault: the refreshed cheap pass
+    and protected set run the reload's old view while both refreshed snapshots match the edit.
+    """
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 0"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    _git(checkout.root, "add", ".")
+    _git(checkout.root, "commit", "--quiet", "-m", "gates")
+    real = verify_run.tree_snapshot
+    count = [0]
+    edited: list[bool] = []
+    real_select = verify_run.ci_gates.selection_at
+
+    def select(root, job, ci=False):
+        chosen = real_select(root, job, ci=ci)
+        if count[0] >= 3 and not edited:
+            # The reload after the moved boundary has read the list; now the list changes.
+            edited.append(True)
+            write_gates(
+                checkout.root,
+                [
+                    _gate("cheap", f"python3 {gate_script} cheap 0"),
+                    _gate("late", f"python3 {gate_script} late 1"),
+                    _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+                ],
+            )
+        return chosen
+
+    def snapshot(root: Path | str) -> verify_run.TreeSnapshot:
+        count[0] += 1
+        if count[0] == 3:
+            # The admission boundary sees a moved tree, so the run refreshes.
+            (checkout.root / "moved.txt").write_text("moved\n", encoding="utf-8")
+        return real(root)
+
+    checkout.monkeypatch.setattr(verify_run, "tree_snapshot", snapshot)
+    checkout.monkeypatch.setattr(verify_run.ci_gates, "selection_at", select)
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code != 0, (result, out, err)
+    assert "VERIFY GREEN" not in out, out

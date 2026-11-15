@@ -739,6 +739,19 @@ def run_verification(
                 complain("rerun the check — unmeasured cheap results are never trusted as a baseline")
                 raise VerifyRunRefused(str(exc)) from exc
 
+        def reselect(failure: str) -> list[dict[str, Any]]:
+            """The selection read again from the list as it stands now; a failure or an empty one refuses."""
+            try:
+                chosen = ci_gates.selection_at(wurzel, job, ci=ci)
+            except Exception as exc:  # noqa: BLE001 - the reader's process boundary
+                complain(f"FEHLER: {exc}")
+                raise VerifyRunRefused(failure) from exc
+            if not chosen:
+                raise VerifyRunRefused(
+                    "the reloaded gate list selects nothing — a job without measurable gates is a configuration error"
+                )
+            return chosen
+
         def unstable(before: TreeSnapshot, after: TreeSnapshot, reason: str) -> None:
             """Refuse a baseline that moved, naming what moved (at most ten paths)."""
             if before.fingerprint == after.fingerprint:
@@ -757,6 +770,14 @@ def run_verification(
         # with protected work reuses the cheap results, so only such a run
         # measures the tree: nothing relies on a baseline otherwise (L2-3).
         before = measure("before the cheap pass") if protected else None
+        if before is not None:
+            # The selection is bound to the configuration the baseline measured (row F6-2): a gate
+            # list that changed between the first selection and this snapshot is selected again,
+            # and any later change moves the tree and is refused or refreshed below.
+            selection = reselect("the gate list cannot be reloaded after the baseline was measured")
+            selection_holder["selection"] = selection
+            cheap = [g for g in selection if not g["admission"]]
+            protected = [g for g in selection if g["admission"]]
         for gate in cheap:
             if run_gate(gate, gate_env):
                 note_blocking(gate)
@@ -786,22 +807,15 @@ def run_verification(
                 # unprotected set reruns inside the held admission.
                 current = measure("at the admission boundary")
                 if current.fingerprint != after.fingerprint:
-                    try:
-                        refreshed = ci_gates.selection_at(wurzel, job, ci=ci)
-                    except Exception as exc:  # noqa: BLE001 - the reader's process boundary
-                        complain(f"FEHLER: {exc}")
-                        raise VerifyRunRefused(
-                            "the gate list cannot be reloaded after the tree changed; protected work stops"
-                        ) from exc
-                    if not refreshed:
-                        raise VerifyRunRefused(
-                            "the reloaded gate list selects nothing — a job without measurable gates "
-                            "is a configuration error"
-                        )
+                    # The refreshed baseline is measured before the reload, so the reloaded
+                    # selection is the measured configuration's (row F6-2).
+                    recheck_before = measure("before the refreshed cheap pass")
+                    refreshed = reselect(
+                        "the gate list cannot be reloaded after the tree changed; protected work stops"
+                    )
                     selection_holder["selection"] = refreshed
                     cheap = [g for g in refreshed if not g["admission"]]
                     protected = [g for g in refreshed if g["admission"]]
-                    recheck_before = measure("before the refreshed cheap pass")
                     for gate in cheap:
                         if run_gate(gate, gate_env):
                             note_blocking(gate)
