@@ -89,9 +89,9 @@ that read it while a stand-in may still write would reopen the gap.
 4. When any inventoried stand-in data append or corresponding concurrent log read executes, it uses the shared helper while preserving the existing record contents and missing-log-as-empty behavior: only `FileNotFoundError` for a missing file or directory yields an empty snapshot. Other I/O errors propagate, including `NotADirectoryError` when a parent component is a regular file.
    *Refuted by:* any of the 15 data appends of the five-file stand-in inventory bypasses the helper, a reader can race an append, a missing log or its missing directory fails, or a scenario text append gains or loses bytes.
    *Basis:* decisions.md#Q-1.
-5. When a test reads, writes or opens a declared stand-in log without the shared helper anywhere under `tests/`, including executable stand-in source strings, the guard test fails and identifies its source location.
-   *Refuted by:* a planted raw read or append of a declared log passes the guard, the guard flags a helper call or an operation on a file that is not a declared log, or it needs an exemption list to pass the repository.
-   *Basis:* decisions.md#Q-2; decisions.md#Q-3; decisions.md, "Guard design after the review loop".
+5. When a test reads, writes or opens a declared stand-in log without the shared helper, the test fails with a clear error: in the pytest process the runtime check refuses every `open`, `io.open`, `os.open` and `pathlib.Path` `open`, `read_text`, `read_bytes`, `write_text` or `write_bytes` of a declared log outside the helper's locked read and append, however the path was bound, and fails the test even when the code under test swallows the refusal or makes the access in another thread. The static guard additionally reads every module under `tests/`, including executable stand-in source strings, as a cheap advisory and identifies the source location of what it can follow.
+   *Refuted by:* a planted raw read or append of a declared log in the pytest process completes or leaves its test green - including both forms of phase-6 row F6-8 (a log reached through a comprehension's first iterable or a parameter default) and a refusal swallowed in the test body or in a thread -, the helper's locked read or append is refused on the main thread or in an observer thread, an operation on a file that is not a declared log is refused or flagged, or either check needs an exemption list to pass the repository (the one marked planted-fault test is not such a list; [DETAIL] under Open decisions).
+   *Basis:* decisions.md#Q-2; decisions.md#Q-3; decisions.md#Q-5; decisions.md, "Guard design after the review loop".
 6. When a leak refuses a swarm run and its inputs are then restored, the refused run is announced before any model call in the next successful run.
    *Refuted by:* the leaking run starts a model call or returns success, the clean run returns 2, or its first refused-run notice is absent or observes a nonzero call count.
    *Basis:* decisions.md#Q-1.
@@ -121,23 +121,28 @@ helper refuses an undeclared name in its JSON functions, so a log that uses
 the helper is always one the guard watches; the gap is the log that never
 uses it. The maintainer chose to ship with this boundary stated; the
 contract that closes it is tracked separately (bead coding-harness-6zpj).
-Paths that never carry a declared name, arbitrary obfuscation and raw OS
-calls stay outside the guard as well ([DETAIL] under Open decisions). So does
-a path produced by a call outside the guard's known path-building set
-(`Path`, `PurePath`, `str`, `join`, `joinpath`, `resolve` and the like): an
-ordinary helper function or string method that returns a declared name hides
-it from the guard just as obfuscation does, and a raw `open`, `read_text` or
-`write_text` on its result passes (2026-11-14, loop row L3-2). The same
-contract (bead coding-harness-6zpj) closes this gap.
+Paths that never carry a declared name stay outside both checks. Arbitrary
+obfuscation and raw OS calls stay outside the static guard ([DETAIL] under
+Open decisions). So does a path produced by a call outside the static
+guard's known path-building set (`Path`, `PurePath`, `str`, `join`,
+`joinpath`, `resolve` and the like): an ordinary helper function or string
+method that returns a declared name hides it from the static guard just as
+obfuscation does, and a raw `open`, `read_text` or `write_text` on its result
+passes it (2026-11-14, loop row L3-2). In the pytest process the runtime
+check below refuses both.
 
-The guard follows a log's path through every way Python binds a name -
+The static guard follows a log's path through every way Python binds a name -
 assignment with one or several targets, tuple and list unpacking paired
 element by element, starred, annotated and augmented assignment, the walrus,
 `for` and comprehension targets, `with … as`, and parameter defaults - and
 every such binding shadows an enclosing one, with lexical scoping for
-functions and comprehensions (2026-11-15, findings F6-4, F6-5, F6-6). What a
-static reading cannot follow stays outside it, and the guard errs in a known
-direction for each (2026-11-15):
+functions and comprehensions (2026-11-15, findings F6-4, F6-5, F6-6) - with one
+known miss: it resolves a comprehension's first iterable and a parameter
+default in the inner scope, where Python evaluates them in the enclosing one,
+so `[log.read_text() for log in [log]]` and `def reader(log=log)` lose the
+log (phase-6 row F6-8). The static guard is not extended for that: the
+runtime check closes it. What a static reading cannot follow stays outside
+it, and the static guard errs in a known direction for each (2026-11-15):
 
 - Containers and unpacking that cannot be paired: unpacking a variable or a
   call result (`a, b = pair`) and looping over anything but a literal give
@@ -158,6 +163,29 @@ direction for each (2026-11-15):
   path class (`Path.read_text(path)`) or as a bare function; any `open` is
   judged by its receiver, first argument and `file=` (finding F6-7).
 
+**The runtime check closes what the static reading cannot follow**
+(decisions.md#Q-5, 2026-11-15; phase-6 row F6-8). It judges the file name at
+the moment of access, not the source text, so every miss listed above for the
+static guard - attributes, call arguments and results, obfuscation, row
+F6-8's two forms - is refused when it runs in the pytest process. The static
+guard stays as a cheap advisory and is no longer extended case by case. The
+runtime check (`tests/stand_in_log_guard.py`, installed by `tests/conftest.py`)
+has its own limits:
+
+- Process: it covers the pytest process, each xdist worker, from the import
+  of `tests/conftest.py` on. The stand-in child processes and the
+  forced-split writer run outside it; their sources stay under the static
+  advisory, and the stand-ins use the embedded helper.
+- Entry points: `builtins.open`, `io.open`, `os.open` and the five
+  `pathlib.Path` methods. Lower layers - `io.FileIO`, `_io.open`, a shell
+  command such as `cat` in a subprocess - pass.
+- Names: declared names only, as above (bead coding-harness-6zpj). An integer
+  file descriptor carries no name and passes. Removal and existence checks
+  are not access: removal is the suites' clear.
+- Helper: an access passes when the helper's `read_records` or its locked
+  append (`_append_text`) is on the call stack; a test that calls the private
+  `_append_text` directly passes as well.
+
 Platform: the helper takes its lock with `fcntl.flock` and imports `fcntl`
 unconditionally, so it runs on POSIX systems only — macOS locally and Linux
 on CI. Windows is not supported: there every test module that imports the
@@ -173,7 +201,8 @@ swarm-test-speed change's protected production call and scan paths stay intact.
 ## Definition of Done
 
 - Targeted checks and runner-owned `make verify` are green.
-- The shared helper, its tests, the five migrated test files and this change's
+- The shared helper, its tests, the runtime check (`tests/stand_in_log_guard.py`,
+  `tests/conftest.py`), the five migrated test files and this change's
   research/spec/plan move together; no model, ADR or external document changes.
 - The pull request's file list demonstrates the protected areas and non-goals.
 - The final implementation commit carries `Closes-Bead: coding-harness-yb1l`;
@@ -188,8 +217,10 @@ swarm-test-speed change's protected production call and scan paths stay intact.
 
 None open. The two answers of 2026-11-13 remain unchanged; the maintainer's
 third answer (decisions.md#Q-3, 2026-11-14) states the guard's name boundary,
-and the fourth (decisions.md#Q-4, 2026-11-14) restates criterion 7 and adds
-the after-merge measurement.
+the fourth (decisions.md#Q-4, 2026-11-14) restates criterion 7 and adds
+the after-merge measurement, and the fifth (decisions.md#Q-5, 2026-11-15)
+makes the runtime check the choke point and keeps the static guard as an
+advisory.
 
 - [DETAIL] The appetite is three hours of phase 4 including repairs, a stop
   chosen because neither answer states a budget and this is a bounded repair.
@@ -223,5 +254,17 @@ the after-merge measurement.
   removal stays the clear, and the guard does not count it as raw access
   (`test_a_cleared_log_starts_fresh_under_a_late_writer`, red on an in-place
   clear with a `TimeoutError`, green on removal).
+- [DETAIL] (2026-11-15, decisions.md#Q-5.) A test that must perform the
+  unlocked access itself to prove the race test rejects it carries the
+  marker `raw_stand_in_log_access(reason=...)`, which suspends the runtime
+  check for that one test; a marker without a reason is a usage error. Today
+  one test carries it (`test_race_rejects_a_delayed_unlocked_observer`).
+  Reason: the planted fault must run for real, and a visible per-test marker
+  with its reason is the honest form; reaching the file through an unwrapped
+  lower layer instead would hide the bypass.
+- [DETAIL] (2026-11-15.) The runtime check raises at the access and also
+  records it; a test that passed with a recorded access fails at the end of
+  its call phase. Reason: the swarm gates turn an exception into a refusal by
+  design, so a raised error alone could vanish, as the original flake did.
 - [DETAIL] Deterministic handshakes plus repeated concurrent runs establish
   the regression evidence; sleep-only timing would recreate the same flake.

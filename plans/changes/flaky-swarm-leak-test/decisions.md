@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
@@ -97,6 +97,21 @@ context: |
   Architecture change: none.
 
 In the context of a test-only repair whose natural CI failure could not be reproduced locally, facing a choice between restating its evidence criterion truthfully and holding the change until the natural failure is reproduced, we decided to restate criterion 7 around the forced race and to measure main's CI for two weeks after the merge, to achieve that the change claims only what it proves and the real flake is still watched, accepting that the CI failures stay an inferred cause until that measurement says otherwise. — 2026-11-14
+
+## Q-5 · The runtime as the guard's choke point
+
+asked: 2026-11-15
+answer: "stop case-by-case repair of the static guard; the runtime becomes the choke point" — stated by the maintainer in the conversation on 2026-11-15: during the test session a declared stand-in log can be read or appended only through the one helper that takes the lock; a raw open, read_text, write_text or similar on a declared log path fails the test with a clear error, through an autouse fixture or conftest hook that wraps builtins.open, io.open and the pathlib.Path methods and checks the path against the declared logs (declared as the spec defines it); the static guard stays as a cheap advisory, its Boundary stays and names the runtime check as the closing mechanism; phase-6 row F6-8 is closed by the runtime check, not by more static cases.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-6 row F6-8 (MAJOR) found that the static guard of Q-2 loses a declared log's identity in a comprehension's first iterable and in a parameter default, after rows F6-4 to F6-7 had each needed another static case (bead coding-harness-yb1l).
+  Intention: every review round found one more binding form the static reading misses; a second finding of one mechanism ends case repair, so the mechanism needs a choke point instead of a fifth static case.
+  Today: the static guard in tests/test_atomic_test_log.py parses tests/ and follows bindings case by case; anything it cannot follow - F6-8's two forms, attributes, call results - runs a raw read of a declared log unseen.
+  Repository change: a runtime check in the pytest process (tests/stand_in_log_guard.py, installed by a new tests/conftest.py) that refuses and records any raw open or pathlib read or write of a declared log outside the helper and fails the test; the static guard stays as an advisory; spec criterion 5 and its Boundary are amended.
+  Architecture change: none; test-only, production code untouched.
+
+In the context of a static guard that missed one more binding form in every review round, facing a choice between repairing it case by case and checking every file access at run time, we decided to make the runtime the choke point - only the locked helper reaches a declared stand-in log in the pytest process, and any other access fails the test - and to keep the static guard as a cheap advisory, to achieve that the guarantee no longer depends on how a test binds a path, accepting that the stand-in child processes stay outside the runtime check and under the static advisory only. — 2026-11-15
 
 ## Guard design after the review loop
 

@@ -233,6 +233,18 @@ this pairing is the forced race above, red 10 of 10 at `079e0aac`; the
 refused-run test alone was not reproduced red before the fix (the natural
 failure stays unreproduced, as stated above).
 
+## Runtime check — 2026-11-15
+
+The maintainer made the runtime the guard's choke point (decisions.md#Q-5;
+phase-6 row F6-8). `tests/stand_in_log_guard.py` wraps `builtins.open`,
+`io.open`, `os.open` and five `pathlib.Path` methods; `tests/conftest.py`
+installs it at import and fails a test whose refused access was swallowed.
+Red first, on `f03d453a` with the new tests and the unwired module:
+`.venv/bin/python -m pytest tests/test_atomic_test_log.py -q -p no:cacheprovider`
+ended `2 failed, 14 passed` - the raw forms `DID NOT RAISE`, and with an empty
+`tests/conftest.py` the swallowing run passed `3 passed` (expected exit 1).
+Green on `4209819c`: `16 passed`. The static guard is unchanged.
+
 ## Criterion ledger
 
 - 1: tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete — a reader observes a forced partial append
@@ -242,6 +254,9 @@ failure stays unreproduced, as stated above).
 - 4: tests/test_atomic_test_log.py::test_missing_log_is_empty — an absent log or directory raises instead of yielding no records
 - 4: tests/test_atomic_test_log.py::test_text_appends_preserve_bytes — helper adds a newline or alters scenario text
 - 4: not a test — review the 17-site inventory and all corresponding readers/renderings; the five migrated suites verify existing fixture behavior
+- 5: tests/test_atomic_test_log.py::test_runtime_check_refuses_raw_access_to_declared_logs — a raw access of a declared log runs in the pytest process, including both forms of phase-6 row F6-8
+- 5: tests/test_atomic_test_log.py::test_runtime_check_lets_the_helper_through — the runtime check refuses the helper's locked access, on the main thread or in an observer thread, or an unrelated file
+- 5: tests/test_atomic_test_log.py::test_runtime_check_fails_a_test_that_swallows_the_refusal — a refusal swallowed in the test body or in a thread leaves the test green
 - 5: tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a raw read or append of a stand-in log remains under tests/
 - 5: tests/test_atomic_test_log.py::test_guard_detects_raw_log_access — planted raw reads or appends pass, or helper calls and non-log operations are flagged
 - 5: tests/test_atomic_test_log.py::test_only_declared_logs_take_records — the helper serves a JSON log the guard does not know about
