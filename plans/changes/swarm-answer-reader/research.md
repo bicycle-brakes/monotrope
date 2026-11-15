@@ -8,8 +8,9 @@ updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-xsta
-class: feature
+class: architectural
 owner: Data Architect
+neighbours: []
 provenance: human-written
 tags: [research]
 ---
