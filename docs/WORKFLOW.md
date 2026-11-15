@@ -611,7 +611,10 @@ the number of incomplete or not countable runs — interrupted work,
 conflicting records, moved trees and red full runs without comparison
 identity (legacy rows included) are gaps, not zeros; a green full run is a
 complete observation of zero slips — and
-missing history is unavailable, never a counted zero. Reading never appends
+missing history is unavailable, never a counted zero. Red full runs recorded
+before the counter existed therefore keep an unbounded read partial for as
+long as they stay in the history; `--since` bounds the read to the runs that
+carry comparison context. Reading never appends
 to the history, and no slip event, counter or consumed marker exists; trees
 are compared by contents and modes, never by commit identity, which the
 checkpoint commit, stamping and audit finalization move between the two
