@@ -1,7 +1,7 @@
 ---
 title: "Spec — runner-clock"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-14
 last_reviewed: 2026-11-14
 updated: 2026-11-15
@@ -149,6 +149,15 @@ installed `time` module and every public class method of the `datetime`
 classes as a clock read, a no-argument conversion or a non-reading callable,
 so a clock function a new interpreter adds fails the suite until it is
 classified.
+
+Orchestrator, 2026-11-15, after a fifth finding of the same mechanism in
+review-loop round 3 (a conversion's instant judged by argument count alone):
+a no-argument conversion counts as given its instant only when that instant
+is passed as plain positional arguments. A starred or double-starred argument
+can expand to nothing and a literal `None` asks for the current time, so the
+guard reports both; a keyword is never the instant, since the conversions take
+none. A variable that holds `None` only at run time is not visible to a static
+reading and stays outside this guard.
 
 What a static reading of one module cannot see is outside this guard: a
 clock reached through `importlib`, `__import__` or `sys.modules`; a

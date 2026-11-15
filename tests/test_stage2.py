@@ -12075,8 +12075,9 @@ def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str
       named - called, handed on, stored or imported - because a bare reference
       passes the accessor to a call the guard cannot see. A star import from a
       clock module is banned for the same reason. The conversions in
-      `TIME_CONVERSION_ATTRS` count when called without their instant, or when
-      handed on bare.
+      `TIME_CONVERSION_ATTRS` count when called without their instant as plain
+      positional arguments (a starred, double-starred or keyword argument, or a
+      literal `None`, does not count as the instant), or when handed on bare.
     - *Module escape.* The modules themselves may be used only by direct
       attribute access: a clock module named on its own (`clock = time`,
       `f(time)`, `getattr(time, name)`, a default value) is a violation.
@@ -12138,7 +12139,21 @@ def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str
             return True
         if head == "time" and tail in TIME_CONVERSION_ATTRS:
             # Handed on bare, the call it feeds is unseen; called, only a missing instant reads now.
-            return call is None or (len(call.args) < TIME_CONVERSION_ATTRS[tail] and not call.keywords)
+            # The instant counts as given only as plain positional arguments: a starred or
+            # double-starred argument can expand to nothing (`localtime(**{})` reads now),
+            # the conversions take no keywords, so a keyword is never the instant, and a
+            # literal `None` is the documented request for the current time.
+            plain = [
+                arg
+                for arg in (call.args if call else [])
+                if not isinstance(arg, ast.Starred) and not (isinstance(arg, ast.Constant) and arg.value is None)
+            ]
+            return (
+                call is None
+                or len(plain) != len(call.args)
+                or bool(call.keywords)
+                or len(plain) < TIME_CONVERSION_ATTRS[tail]
+            )
         return head == "datetime" and tail in DATETIME_CLOCK_ATTRS
 
     for node in ast.walk(tree):
@@ -12323,6 +12338,12 @@ def test_runner_clock_guard_sets_classify_the_installed_modules() -> None:
         ("bare-reference-handed-on", "def later(run):\n    return run(time.perf_counter)\n"),
         ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n"),
         ("asctime-no-argument", "def later():\n    return time.asctime()\n"),
+        ("localtime-double-starred", "def later():\n    return time.localtime(**{})\n"),
+        ("localtime-starred", "def later():\n    return time.localtime(*())\n"),
+        ("strftime-starred-instant", "def later(rest):\n    return time.strftime('%H', *rest)\n"),
+        ("gmtime-keyword", "def later():\n    return time.gmtime(seconds=0)\n"),
+        ("localtime-none-instant", "def later():\n    return time.localtime(None)\n"),
+        ("ctime-none-instant", "def later():\n    return time.ctime(None)\n"),
         (
             "second-boundary-definition",
             "def clock_now():\n    return 0\ndef clock_now():\n    return time.time()\n",
