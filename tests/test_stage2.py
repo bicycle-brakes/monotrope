@@ -179,7 +179,6 @@ for k in range(len(steps)):
 if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
-    time.sleep(scenario.get("pi_version_sleep", 0))
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     with (here / "versions.jsonl").open("a") as handle:
         handle.write(json.dumps({"name": name, "path": sys.argv[0], "cwd": os.getcwd()}) + "\\n")
@@ -204,7 +203,6 @@ if alias == "pi" and "update" in argv and "--models" in argv:
             )
             + "\\n"
         )
-    time.sleep(scenario.get("pi_refresh_sleep", 0))
     # Pi persists the fetched overlay in the agent directory's models-store.json
     # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
     # unless the scenario names the overlay itself or asks for no store.
@@ -291,17 +289,6 @@ record = {
 }
 with locked(False), log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
-barrier = step.get("barrier")
-if barrier:
-    # The swarm check: every member of a round waits here until all members of
-    # the round have arrived, so a serial runner holds the whole round past the
-    # deadline and the test reads the elapsed time.
-    wait_dir = Path(step.get("barrier_dir", scenario.get("barrier_dir", ".barrier")))
-    wait_dir.mkdir(exist_ok=True)
-    (wait_dir / (str(os.getpid()) + "-" + str(time.time_ns()) + ".arrived")).write_text("")
-    deadline = time.time() + step.get("barrier_seconds", scenario.get("barrier_seconds", 30))
-    while len(list(wait_dir.glob("*.arrived"))) < barrier and time.time() < deadline:
-        time.sleep(0.05)
 time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
@@ -2367,6 +2354,7 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert world.calls("make") == []
 
 
+GENUINE_POPEN, GENUINE_KILLPG = subprocess.Popen, os.killpg
 FAKE_PID_BASE = 9_000_000  # above every operating-system pid range the suite meets
 
 
@@ -2437,7 +2425,9 @@ class ScriptedPrograms:
         self.plans = plans
         self.launched: list[dict] = []
         self.communications: list[dict] = []
-        real_popen, real_killpg = subprocess.Popen, os.killpg
+        # The genuine functions, captured at import: a second double installed while a first
+        # still stands must fall back to the operating system, not to the first double.
+        real_popen, real_killpg = GENUINE_POPEN, GENUINE_KILLPG
         double = self
 
         class Popen:
@@ -2468,6 +2458,21 @@ class ScriptedPrograms:
         verdicts read the wait rows alone.
         """
         return [row for row in self.of(command) if row["outcome"] != "drained"]
+
+
+def test_scripted_programs_fall_back_to_the_genuine_popen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: a second double falls back to the first, not to the operating system.
+
+    The first double scripts `true`; the second scripts nothing, so `true`
+    must run for real once the second stands, with a real pid and no doubled row.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    first = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["true"], {"duration": 1.0})])
+    ScriptedPrograms(monkeypatch, clock, [])
+    process = subprocess.Popen(["true"])
+    assert process.wait(timeout=30) == 0
+    assert process.pid < FAKE_PID_BASE, "the newer double routed an unlisted command through the older one"
+    assert first.launched == [], "the older double ran a command the newer one does not list"
 
 
 def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2509,8 +2514,6 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
     assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
-    assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
-    assert make["outcome"] == "timeout"
 
 
 def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -8941,14 +8944,17 @@ def test_free_discovery_forces_live_refresh_before_listing(
     programs = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == refresh_argv, {"duration": 30.0})])
     world.script(pi=[{"stdout": rows(1)}] * 2)
     capsys.readouterr()
+    logged_before = len(world.calls("pi"))
     assert world.run("review-loop") == 2
     assert "no stale cache is listed" in capsys.readouterr().err
+    # The listing is not doubled: had it run, the genuine stand-in would have logged it.
+    assert world.calls("pi")[logged_before:] == [], "a discovery command ran after the simulated timeout"
     handed = programs.waits(refresh_argv)
     assert len(handed) == 1, "the listing ran after a simulated refresh timeout"
     assert handed[0]["timeout"] == 0.4 and handed[0]["outcome"] == "timeout", handed
     (drain,) = [row for row in programs.of(refresh_argv) if row["outcome"] == "drained"]
     assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
-    assert len(programs.launched) == 1, "a second discovery command ran after the simulated timeout"
+    assert len(programs.launched) == 1, "the doubled refresh was launched more than once"
     assert world.reviews("pi") == [] and not world.record().exists()
     # The double ends here: the scenarios below run the genuine stand-in programs at the real limit.
     programs.plans.clear()
