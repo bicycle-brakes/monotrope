@@ -9,6 +9,7 @@ this test red.
 
 from __future__ import annotations
 
+import datetime
 import errno
 import hashlib
 import json
@@ -808,7 +809,11 @@ def _slip_events(
             tree=tree if full_tree is None else full_tree,
             config=config if full_config is None else full_config,
         ),
-        _run_end(full_id, utc="2026-11-13T11:30:00+00:00", verdict=full_verdict),
+        _run_end(
+            full_id,
+            utc=(datetime.datetime.fromisoformat(full_utc) + datetime.timedelta(minutes=30)).isoformat(),
+            verdict=full_verdict,
+        ),
     ]
 
 
@@ -1031,6 +1036,48 @@ def test_slips_show_incomplete_runs_beside_count(
     # The damaged runs keep their diagnosis, named and visible.
     if case in ("conflicting-ends", "conflicting-starts"):
         assert "history note:" in out, (case, out)
+
+
+@pytest.mark.parametrize("run_index", [0, 2], ids=["targeted", "full"])
+@pytest.mark.parametrize("verdict", ["green", "red"])
+def test_slips_reject_completion_before_own_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], run_index: int, verdict: str
+) -> None:
+    """Plant an end before its own start: neither verdict may hide the incomplete run or pair it."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    events[run_index + 1]["utc"] = "2026-11-13T08:00:00+00:00"
+    events[run_index + 1]["verdict"] = verdict
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert code == 1, out
+    assert "slips: 0; incomplete/not countable runs: 1" in out, out
+
+
+@pytest.mark.parametrize("field", ["tree_id", "change", "config_sha256"])
+@pytest.mark.parametrize("value", [None, "", "   "])
+@pytest.mark.parametrize("run_indices", [(0,), (2,), (0, 2)], ids=["targeted", "full", "both"])
+def test_slips_reject_unknown_comparison_identities(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+    value: str | None,
+    run_indices: tuple[int, ...],
+) -> None:
+    """Plant absent or blank identities: they stay visibly uncountable, even when equal."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    for index in run_indices:
+        events[index][field] = value
+        if index == 0 and field == "tree_id":
+            events[1][field] = value
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert code == 1, out
+    assert f"slips: 0; incomplete/not countable runs: {len(run_indices)}" in out, out
 
 
 def test_slips_select_interval_repository_and_change(

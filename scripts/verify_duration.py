@@ -783,20 +783,24 @@ def cmd_slips(args: argparse.Namespace) -> int:
             if in_selection:
                 uncountable += 1  # an interrupted or conflicting run is a gap, not a zero
             continue
+        completion = _instant(end.get("utc"))
+        if completion is None or completion < moment:
+            if in_selection:
+                uncountable += 1  # a completion before its own start is contradictory evidence
+            continue
         verdict = end.get("verdict")
         kind = start.get("check_kind")  # absent: a legacy duration record
         if kind is not None and kind not in CHECK_KINDS:
             if in_selection:
                 uncountable += 1  # an unknown kind is unsupported evidence, never a clean run
             continue
+        identities_known = all(
+            isinstance(value, str) and bool(value.strip())
+            for value in (start.get("tree_id"), change, start.get("config_sha256"))
+        )
         if kind == "targeted":
-            stable = (
-                isinstance(start.get("tree_id"), str)
-                and isinstance(start.get("config_sha256"), str)
-                and end.get("tree_id") == start.get("tree_id")
-            )
-            completion = _instant(end.get("utc"))
-            if verdict == "green" and stable and completion is not None:
+            stable = identities_known and end.get("tree_id") == start.get("tree_id")
+            if verdict == "green" and stable:
                 predecessors.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
             elif verdict == "green" and in_selection:
                 uncountable += 1  # green work whose comparison evidence cannot be trusted
@@ -806,12 +810,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
             continue
         # A full verification run: kind full, and every legacy record, which
         # predates comparison evidence.
-        comparable = (
-            kind == "full"
-            and isinstance(start.get("tree_id"), str)
-            and isinstance(change, str)
-            and isinstance(start.get("config_sha256"), str)
-        )
+        comparable = kind == "full" and identities_known
         if verdict != "red":
             continue  # a green full run is a complete observation of zero slips
         if not comparable:

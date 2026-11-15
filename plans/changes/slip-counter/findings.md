@@ -274,8 +274,8 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:798 | A targeted start at 09:00 with a green end at 08:00 still qualifies for a red full run at 11:00. Reproduced at `7fe49442`: one slip, zero incomplete runs, exit 0. Neither targeted nor full completion is checked against its own start. Contradictory timestamps must make the affected run incomplete and exclude it from pairing. [AC 2, 4, 6] | Codex | taken | — |
-| P6-2 | MAJOR | SPEC | base | scripts/verify_duration.py:793 | Empty comparison identities pass the string checks: setting both runs’ `tree_id` and the targeted completion’s `tree_id` to `""` produces one slip, zero incomplete runs and exit 0. Separately, a green targeted run with `change=None` reports complete zero instead of incomplete evidence. Both cases were reproduced at `7fe49442`. Validate nonempty tree and change identities before accepting comparison evidence; unknown identities must remain visibly not countable. [AC 2, 4, 6] | Codex | taken | — |
+| P6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:798 | A targeted start at 09:00 with a green end at 08:00 still qualifies for a red full run at 11:00. Reproduced at `7fe49442`: one slip, zero incomplete runs, exit 0. Neither targeted nor full completion is checked against its own start. Contradictory timestamps must make the affected run incomplete and exclude it from pairing. [AC 2, 4, 6] | Codex | fixed — tests/test_verify_duration.py::test_slips_reject_completion_before_own_start | — |
+| P6-2 | MAJOR | SPEC | base | scripts/verify_duration.py:793 | Empty comparison identities pass the string checks: setting both runs’ `tree_id` and the targeted completion’s `tree_id` to `""` produces one slip, zero incomplete runs and exit 0. Separately, a green targeted run with `change=None` reports complete zero instead of incomplete evidence. Both cases were reproduced at `7fe49442`. Validate nonempty tree and change identities before accepting comparison evidence; unknown identities must remain visibly not countable. [AC 2, 4, 6] | Codex | fixed — tests/test_verify_duration.py::test_slips_reject_unknown_comparison_identities | — |
 
 Phase 6 verdict: codex 01a1df92-d8cd-7402-97bb-e9322282b8b5, 2026-11-15
 Reviewer session: codex 01a1df92-d8cd-7402-97bb-e9322282b8b5 — a fresh session reviewed: no phase-2a session was recorded
@@ -384,3 +384,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-15: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1081 files, 4353 commits, 12 rules.
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1081 files, 4355 commits, 12 rules.
+
+Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
