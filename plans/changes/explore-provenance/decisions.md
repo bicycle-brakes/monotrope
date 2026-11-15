@@ -1,0 +1,153 @@
+---
+title: "Decisions — explore-provenance"
+category: decisions
+status: draft
+implementation_status: none
+date: 2026-11-04
+created: 2026-11-04
+last_reviewed: 2026-11-04
+updated: 2026-11-14
+supersedes: null
+superseded_by: null
+bead: coding-harness-g19n
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-04", model: "Opus 5.5"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [decisions, explore, provenance]
+---
+
+# explore-provenance — Decisions
+
+Class: bounded (bead coding-harness-g19n).
+
+## Q-1 · How far the change goes
+
+asked: 2026-11-04
+answer: "B: Runner plus Altbestand" — the runner sets research.md to `provenance: ai-drafted-reviewed` with `produced_by` and `review` and drops the skeleton note after every explore (Flash and research swarm), proved by a test; and every open research.md that still carries the skeleton's `human-written` provenance after a model filled it is corrected in the same change.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: every Flash explore leaves research.md with provenance human-written and the "empty until it has run" note (bead coding-harness-g19n); the earlier fix (bead coding-harness-er46, closed) does not hold on main d167b0e6.
+  Intention: on 2026-11-04 this cost a review-loop row and a repair in two changes (raising-fault-test, swarm-time-limits).
+  Today: the explore verb appends the model's answer under the skeleton and leaves the header as it was.
+  Repository change: the explore verb rewrites the header and drops the note; open research.md files are corrected once.
+  Architecture change: none.
+
+In the context of explores that leave research.md marked as human-written, facing a review-loop row and a repair per change for it, we decided to fix the explore verb and correct every open research.md at once, to achieve truthful provenance without later loop rows, accepting a diff that touches change folders other lanes own. — 2026-11-04
+
+## Q-2 · The whole metadata contract (loop rows L4-1, L5-2, L6-1, L6-4)
+
+asked: 2026-11-06
+answer: "Ganzen Kopf prüfen (Recommended)" — the census checks the whole research metadata contract (provenance, produced_by, pending review, dates) for every active model-written research file, and one script normalises every active research file once.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change corrects research files written by a model whose header claims human authorship; a census test is to prevent it.
+  Intention: the review loop found the same mechanism a third time (L4-1, L5-2, L6-1/L6-4); the rule ends case repair at the second finding of one mechanism.
+  Today: the census checks only "human-written" and the empty skeleton, not the rest of the header.
+  Repository change: one script normalises all active research files; the test checks the whole header.
+  Architecture change: none.
+
+In the context of a census that each round found one more gap in, facing a third finding of one mechanism, we decided to check the whole metadata contract and normalise every active research file once, to achieve a census that finds further gaps itself, accepting a change that touches research files of other changes. — 2026-11-06
+
+## Q-3 · Spec and plan follow Q-2; producer knowledge is kept (loop rows L7-1 to L7-4)
+
+asked: 2026-11-06
+answer: "Spec anpassen, Wissen erhalten (Recommended)" — spec and plan are redrafted to cover Q-2's scope (the normalisation script and every active research file, no longer protected areas for this purpose); research written by several models keeps them as a list instead of collapsing them into one entry; then repair and review.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: after Q-2 the repair built a script that normalises every active research file.
+  Intention: round 7 reported a BLOCKER — about 40 research files of other lanes, protected by the spec, were changed, and the script is not in the plan; it also collapses several models (for example "GLM 5.3 Flash and Claude Haiku 5.5") into one entry, losing who wrote what.
+  Today: spec and plan predate Q-2 and do not know the larger scope; the lane's appetite is already spent.
+  Repository change: spec and plan redrafted; the script stays.
+  Architecture change: none.
+
+In the context of a repair that followed the maintainer's wider answer while spec and plan did not, facing a BLOCKER for touching protected files and a loss of producer knowledge, we decided to redraft spec and plan to Q-2's scope and keep every producing model as a list, to achieve a change that does what was decided without losing provenance, accepting about one to two hours beyond the spent appetite. — 2026-11-06
+
+## Q-4 · Ship without the one-time normalisation
+
+asked: 2026-11-07
+answer: "Ohne Normalisierung liefern (Recommended)" — this change ships the explore fix and the census for future research files; the one-time normalisation of existing research files becomes its own bead with its own spec that reads producers from history.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: explore writes truthful provenance; Q-2/Q-3 also asked for a one-time normalisation of all active research files without losing producers.
+  Intention: the mechanism repair failed three times on the census tests; the appetite after Q-3 is spent; the lane is parked with the attempt saved.
+  Today: the explore fix and the census work; only normalising other changes' files is hard, because producers must be read from history.
+  Repository change: the normalisation moves to its own bead.
+  Architecture change: none.
+
+In the context of a mechanism repair that failed three times within its appetite, facing a hard history-reading problem, we decided to ship the explore fix and the census and move the normalisation to its own bead, to achieve a finished lane and a clean plan for the hard part, accepting that existing research files keep their current headers until then. — 2026-11-07
+
+## Q-5 · Research files merged before the census takes effect
+
+asked: 2026-11-10
+answer: Adoption day — the census holds from the day this change merges; research files merged before it are stock and exempt.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the census fails on research files of other changes that merged while this change was in review.
+  Intention: pull request #365 corrected three such files (merged 2026-11-10); after syncing with main two tests fail again on two more (go-wire-apis, origin-cell) — the same mechanism a second time, and open pull requests will add further cases.
+  Today: the census reads every active research file whatever its age, so each change merged before the census breaks it.
+  Repository change: an adoption day in the check, as the interview-minimums gate has; the spec gets a boundary for it.
+  Architecture change: none.
+
+In the context of the provenance census over active research files, facing
+files of other changes that merge before the census and turn it red again
+after every sync, we decided that the census holds from its adoption day and
+that research files merged before it are stock and exempt, to achieve a
+change that can merge without correcting every earlier file first, accepting
+that false producer records in the earlier files (on 2026-11-10 at least
+go-wire-apis and origin-cell) stay until someone corrects them on purpose
+— 2026-11-10
+
+## Q-6 · Two research files that the git-dated census finds
+
+asked: 2026-11-13
+answer: "A: Hier mitkorrigieren (Recommended)" — the headers of the two research files (decision-statement-skeleton, verify-step-limit) are corrected by hand in this change: provenance, producer and review fields, and the leftover skeleton notice; no content changes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change explore-provenance (bead coding-harness-g19n), option C (the stock date comes from git).
+  Intention: the repair was built; its checks failed only because the census now finds two research files merged after the adoption day with a wrong header.
+  Today: the plan forbids edits in other change folders; the census does what it should.
+  Repository change: two research headers, one plan note.
+  Architecture change: none.
+
+In the context of a census that now dates files by git,
+facing two research files merged after the adoption day with skeleton headers,
+we decided to correct their headers in this change,
+to achieve a clean main under the strict census,
+accepting a one-time edit outside this change's folder — 2026-11-13
+
+## Q-7 · Two more research files after the merge of main
+
+asked: 2026-11-13
+answer: "Hier mitkorrigieren (Empfohlen)" — the headers of two more research files are corrected by hand in this change, as in Q-6: provenance, producer and review fields and the leftover skeleton notice of omnigent-test-not-blocking and swarm-report-format; no content changes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: after the merge of origin/main the full check before the pull request was red: the git-dated census found two research files of other changes with a false or incomplete header.
+  Intention: phase 6 had no finding; the change cannot go out while its own census is red.
+  Today: omnigent-test-not-blocking/research.md was merged on 2026-11-13 with a model-written body under a "human-written" header; swarm-report-format/research.md still carries the skeleton notice and became subject to the census only through an `updated:` stamp the orchestrator set after the merge.
+  Repository change: header-only corrections of the two files; the spec's exception names four files.
+  Architecture change: none; from this change's merge the census catches such files itself.
+
+In the context of a census that is red on two files merged after its adoption day, facing a choice between correcting them here and a bead of their own, we decided to correct them here, to achieve a green check and a pull request today, accepting that the exception of Q-6 grows from two files to four. — 2026-11-13
+
+## Q-8 · The header-only correction as a rule until this change merges
+
+asked: 2026-11-14
+answer: As the maintainer stated it on 2026-11-14 — the header-only correction holds as a rule for every research file the census flags until this change merges, not as a list of files. Header-only means provenance, producer and review fields and the skeleton notice; never content.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: pull request 388 fell out of the merge queue twice; merged with main, the census flags a fifth research file, origin-check-across-blocks/research.md (opening skeleton notice over published research), which reached main through pull request 387.
+  Intention: every change that merges before this one can add another such file, and a list of files in the spec needs a new decision for each one.
+  Today: the spec's exception under Q-6 and Q-7 names four files.
+  Repository change: the spec's exception becomes the rule; the fifth file's header is corrected the same way as the four.
+  Architecture change: none; from this change's merge the census catches such files itself.
+
+In the context of a census that each merge of main can turn red on one more research file, facing a new decision per file under a list-shaped exception, we decided that the header-only correction holds as a rule for every file the census flags until this change merges, to achieve a pull request that can leave the merge queue green, accepting header-only edits in research files of other changes that are not named in advance. — 2026-11-14

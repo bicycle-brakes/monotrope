@@ -443,6 +443,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/docs-job-report-header/plan.md`](changes/docs-job-report-header/plan.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/research.md`](changes/docs-job-report-header/research.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
 | [`changes/docs-job-report-header/spec.md`](changes/docs-job-report-header/spec.md) | draft | partial | 2026-11-02 | coding-harness-ooj5 |
+| [`changes/explore-provenance/decisions.md`](changes/explore-provenance/decisions.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/findings.md`](changes/explore-provenance/findings.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/plan.md`](changes/explore-provenance/plan.md) | draft | partial | 2026-11-09 | coding-harness-g19n |
+| [`changes/explore-provenance/research.md`](changes/explore-provenance/research.md) | draft | none | 2026-11-04 | coding-harness-g19n |
+| [`changes/explore-provenance/spec.md`](changes/explore-provenance/spec.md) | draft | partial | 2026-11-09 | coding-harness-g19n |
 | [`changes/go-wire-apis/decisions.md`](changes/go-wire-apis/decisions.md) | draft | none | 2026-11-06 | coding-harness-36za |
 | [`changes/go-wire-apis/findings.md`](changes/go-wire-apis/findings.md) | draft | none | 2026-11-06 | coding-harness-36za |
 | [`changes/go-wire-apis/plan.md`](changes/go-wire-apis/plan.md) | draft | partial | 2026-11-06 | coding-harness-36za |

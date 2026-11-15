@@ -56,7 +56,15 @@ from stage2_research_judge import (
     research_judge_allowance,
 )
 from stage2_research_report import ResearchReportError, _keys, _load, research_seat_id, validate_research_report
-from stage2_research_snapshot import ResearchSnapshotError, _without_updated, freeze_research_state, stored_binding
+from stage2_research_snapshot import (
+    ResearchSnapshotError,
+    _sha256,
+    _without_updated,
+    freeze_research_state,
+    stored_binding,
+    stored_brief,
+    stored_publication,
+)
 from stage2_research_store import SLOT_ID, STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
@@ -71,6 +79,8 @@ def free_slot_id(stage: str, topic: int, model: str) -> str:
 
 
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
+SWARM_PUBLISHER = "stage2-research-swarm"  # produced_by.name of a publication the whole swarm wrote
+BRIEF_DAY = "0000-00-00"  # the fixed day the private brief's corrected header carries, so it never varies by run
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -446,6 +456,38 @@ class Run:
         self.binding = stored_binding(self.manifest, self.research_rel, self.research_bytes)
         try:
             self.source = self.store.resume_source(self.manifest, self.research_rel, self.research_bytes)
+            previous = self.source.run["binding"] if self.source.usable else None
+            publication = stored_publication(previous) if previous is not None else None
+            if publication is None:
+                self.publication_day = runner.today()
+                self.publication_bytes = runner.research_publication(
+                    self.research_bytes, producer=SWARM_PUBLISHER, day=self.publication_day
+                )
+            else:
+                # The source binding has already verified the frozen file against the original
+                # input or the exact published prefix plus its tail. Never prepare it anew.
+                prefix, self.publication_day = publication
+                length = (previous.get("append") or {}).get("length", 0)
+                already_published = (
+                    _sha256(_without_updated(self.research_bytes)) != previous["research_normalised_sha256"]
+                )
+                if already_published and 0 < length <= len(self.research_bytes):
+                    self.publication_bytes = prefix + self.research_bytes[-length:]
+                else:
+                    self.publication_bytes = prefix
+            self.brief_research = stored_brief(previous) if previous is not None else None
+            if self.brief_research is None:
+                research = BLOCK.sub("", self.research_bytes.decode("utf-8"))
+                corrected = runner.research_publication(research.encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY)
+                self.brief_research = _without_updated(corrected)
+            self.binding = stored_binding(
+                self.manifest,
+                self.research_rel,
+                self.research_bytes,
+                publication=self.publication_bytes,
+                publication_day=self.publication_day,
+                brief=self.brief_research,
+            )
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
@@ -470,9 +512,17 @@ class Run:
 
     def build_brief(self) -> str:
         """The private brief: frozen research (without earlier runner blocks), decisions and spec, bead id only."""
-        research = self.research_bytes.decode("utf-8", errors="replace")
-        research = _without_updated(BLOCK.sub("", research).encode()).decode().rstrip()
-        parts = [f"# Private brief for the change {self.change}", f"Bead: {self.ctx.bead}", "## research.md", research]
+        # Frozen alongside the prepared publication: adding a producer must never
+        # alter the prompts of otherwise reusable seats after publication.
+        research = self.brief_research.decode(errors="replace").rstrip()
+        parts = [
+            f"# Private brief for the change {self.change}",
+            f"Bead: {self.ctx.bead}",
+            "## research.md",
+            "The embedded header is the runner's planned publication header, not the file's current header. "
+            "0000-00-00 is a normalization sentinel, not a publication date.",
+            research,
+        ]
         for name in ("decisions.md", "spec.md"):
             text = self.text_of(name)
             if text is not None:
@@ -1646,26 +1696,36 @@ class Run:
         )
 
     def publish(self, status: str, *, clear: bool = False) -> str:
-        """Append the buffered record once, with the status, and return the status line.
+        """Publish the buffered record once, with the status, and return the status line.
 
-        A failed binding write (F-20, criterion 57) does not lose the record: it is appended once, with the
-        status rewritten to incomplete and the reason ``state-store-unwritable``; ``self.store_failure``
-        carries the status the run must end with.
+        The research bytes are first prepared as a model publication (truthful provenance, no skeleton
+        notices); the stored binding and the actual atomic replacement both use these same prepared bytes,
+        apart from the current updated stamp, which the binding normalizes on resume.
+        A failed binding write (F-20, criterion 57) does not lose the record: it is published once, with the status rewritten to incomplete and the
+        reason ``state-store-unwritable``; ``self.store_failure`` carries the status the run must end with.
 
-        With ``clear`` the stored runs are moved aside after the binding write and before the append (F-30): a
-        failure to do so ends the run incomplete with the same reason, in the record itself. They are deleted
-        once the append succeeded, and restored when it raised (F-28), so a failed publication keeps every
-        result reusable.
+        With ``clear`` the stored runs are moved aside after the binding write and before the publication
+        (F-30): a failure to do so ends the run incomplete with the same reason, in the record itself. They
+        are deleted once the publication succeeded, and restored when it raised (F-28), so a failed
+        publication keeps every result reusable.
         """
         assert self.store is not None and self.run_id is not None
-        existing = self.ctx.research.read_bytes()
+        prepared = self.publication_bytes
 
         def bind(text: str) -> None:
-            tail = (
-                (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
-            )
+            addition = text.rstrip().encode() + b"\n"
+            separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
             self.store.set_append(
-                self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
+                self.run_id,
+                stored_binding(
+                    self.manifest,
+                    self.research_rel,
+                    self.research_bytes,
+                    append=separator + addition,
+                    publication=prepared,
+                    publication_day=self.publication_day,
+                    brief=self.brief_research,
+                ),
             )
 
         text = self.compose(status)
@@ -1688,7 +1748,7 @@ class Run:
                 with contextlib.suppress(ResearchSnapshotError, StoreWriteError):
                     bind(text)
         try:
-            self.runner.append(self.ctx.research, text)
+            self.runner.publish_research(self.ctx.research, prepared, text)
         except BaseException:
             self.store.restore_clear(staging)
             raise
@@ -1699,7 +1759,9 @@ class Run:
     def compose(self, status: str) -> str:
         parts = [
             f"<!-- research-swarm/v2 run {self.run_id} -->",
-            f"## Research swarm — {self.runner.today()}",
+            # The prepared publication and its producer day survive a later-day resume.
+            # Date this envelope consistently; publish_research stamps the actual edit day.
+            f"## Research swarm — {self.publication_day}",
             f"run {self.run_id} · class {self.klass} · baseline HEAD {self.manifest['head'][:12]} · "
             f"input digest {self.manifest['digest'][:16]}",
             fence(
