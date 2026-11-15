@@ -713,7 +713,9 @@ def cmd_slips(args: argparse.Namespace) -> int:
     including before the interval's lower bound. Exit 0: complete readable
     evidence, even when the slip count is positive. Exit 1: partial or
     unavailable evidence — usable counts are kept when they can stand, and
-    missing history is unavailable, never a zero. Exit 2: an invalid interval.
+    missing history is unavailable, never a zero; a selection without any run
+    (a misspelled change, another checkout, an empty window) is no statement,
+    never a zero either. Exit 2: an invalid interval.
     Reading never appends, repairs or creates history.
     """
     since, until = args.since, args.until
@@ -732,6 +734,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
 
     slips = 0
     uncountable = 0
+    selected = 0  # the runs the scope selects; none at all leaves nothing observed
     # Valid targeted greens of the whole available history, in file order: a
     # qualifying predecessor may lie before the asked interval.
     predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]] = []
@@ -758,6 +761,8 @@ def cmd_slips(args: argparse.Namespace) -> int:
         started_in_bounds = (since is None or moment >= since) and (until is None or moment < until)
         named_in_scope = args.change is None or change == args.change
         in_selection = started_in_bounds and named_in_scope
+        if in_selection:
+            selected += 1
         end = run["end"]
         if run_id in damaged or end is None:
             if in_selection:
@@ -804,6 +809,12 @@ def cmd_slips(args: argparse.Namespace) -> int:
     lower = since.isoformat() if since is not None else "none"
     upper = until.isoformat() if until is not None else "none"
     print(f"repository {os.path.realpath(str(Path.cwd()))} · {scope} · since {lower} · until {upper}")
+    if not selected:
+        # Nothing of this scope was measured: an observed absence needs runs.
+        print("0 runs selected, no statement possible")
+        for finding in findings:
+            print(f"history note: {finding}")
+        return 1
     print(f"slips: {slips}; incomplete/not countable runs: {uncountable}")
     for finding in findings:
         print(f"history note: {finding}")

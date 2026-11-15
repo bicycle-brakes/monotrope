@@ -70,7 +70,8 @@ slips` derives the count from the one local history and reports it beside
 the number of incomplete or not countable runs. Interrupted work,
 conflicting records, moved trees, and red full runs without comparison
 identity (legacy rows included) are reported as gaps beside the count, never as evidence of zero, and
-missing history is unavailable. Reading never appends, repairs or creates
+missing history is unavailable, as is a scope that selects no run at all.
+Reading never appends, repairs or creates
 history, and a failed measurement write never changes a verification
 verdict. Admission, gate selection and the full check's semantics stay
 untouched; the targeted route's selection and limits remain this spec's

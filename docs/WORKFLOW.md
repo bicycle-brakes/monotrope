@@ -611,7 +611,9 @@ the number of incomplete or not countable runs — interrupted work,
 conflicting records, moved trees and red full runs without comparison
 identity (legacy rows included) are gaps, not zeros; a green full run is a
 complete observation of zero slips — and
-missing history is unavailable, never a counted zero. Red full runs recorded
+missing history is unavailable, never a counted zero; a scope that selects no
+run at all (a misspelled `--change`, another checkout, an empty window) reads
+"0 runs selected, no statement possible" with exit 1. Red full runs recorded
 before the counter existed therefore keep an unbounded read partial for as
 long as they stay in the history; `--since` bounds the read to the runs that
 carry comparison context. Reading never appends

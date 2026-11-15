@@ -904,7 +904,9 @@ def test_slips_require_complete_matching_predecessor(
     elif case == "other-config":
         events = _slip_events(repository, config="d2" * 32, full_config=CONFIG)
     elif case == "other-repository":
-        events = _slip_events(repository + "-elsewhere")
+        # The green predecessor is another repository's; the red full run is ours.
+        elsewhere = _slip_events(repository + "-elsewhere")
+        events = elsewhere[:2] + _slip_events(repository)[2:]
     elif case == "unknown-tree":
         events = _slip_events(repository, tree=None)
     else:  # legacy-predecessor
@@ -1170,6 +1172,15 @@ def test_slips_distinguish_complete_partial_and_unavailable_history(
     code, out, _ = _slips(capsys)
     assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
     assert "evidence partial" not in out, out
+
+    # An empty selection — a misspelled change, another checkout, a window
+    # with no runs — selects nothing to observe: no statement, never a bare
+    # zero and never a complete success (maintainer, 2026-11-15; loop row L2-1).
+    for empty in (("--change", "dmeo"), ("--since", "2026-11-14T00:00:00+00:00")):
+        code, out, _ = _slips(capsys, *empty)
+        assert code == 1, (empty, out)
+        assert "0 runs selected, no statement possible" in out, (empty, out)
+        assert "slips: 0" not in out, (empty, out)
 
 
 def test_slips_are_read_only_and_preserve_duration_history(
