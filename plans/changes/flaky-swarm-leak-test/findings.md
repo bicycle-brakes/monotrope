@@ -687,3 +687,15 @@ Stage-2 call, 2026-11-14: repair · attempt 3 · route stage-1 · endpoint claud
 > - F6-2: tests/test_atomic_test_log.py::test_race_rejects_a_delayed_unlocked_observer: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-3-20261114T213155474338Z-66e407d1.md
 > ```
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1065 files, 4283 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | 03418923 | tests/test_atomic_test_log.py:268–271 | A nested reader that closes over `log = Path("calls.jsonl")` in its enclosing function and calls `log.read_text()` produces zero guard findings, reproduced with the current analyzer in memory. Every function inherits only module bindings, so ordinary closure variables lose their declared-log identity. An unlocked read can therefore pass the guard and reintroduce torn observations. [Acceptance criterion 5] | Codex | open | — |
+| F6-5 | MINOR | SPEC | 03418923 | tests/test_atomic_test_log.py:249–251 | With module-level `log = Path("calls.jsonl")`, a function `read_doc(log)` called with `Path("notes.md")` incorrectly reports its `log.read_text()` as raw stand-in-log access, reproduced in memory. Function parameters are omitted from shadowed bindings, so the guard rejects an operation on an unrelated document. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1dcb4-4d6a-71f0-8b92-7548ed2bcf95, 2026-11-15
+Reviewer session: codex 01a1dcb4-4d6a-71f0-8b92-7548ed2bcf95 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
