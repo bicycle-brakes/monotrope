@@ -95,7 +95,6 @@ import fcntl
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 CATALOG = (
@@ -289,7 +288,6 @@ record = {
 }
 with locked(False), log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
-time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
