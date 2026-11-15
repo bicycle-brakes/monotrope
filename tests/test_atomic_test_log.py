@@ -882,6 +882,8 @@ def test_guard_detects_raw_log_access(tmp_path: Path) -> None:
 SWALLOWED = """
 import threading
 
+import pytest
+import stand_in_log_guard
 from atomic_test_log import append_record
 
 
@@ -909,10 +911,39 @@ def test_swallowed_in_a_thread(tmp_path):
     reader.join()
 
 
-def test_helper_only(tmp_path):
+@pytest.fixture(params=["yield", "addfinalizer"])
+def swallowed_finalizer(request, tmp_path):
+    def get_log():
+        return tmp_path / "@LOG@"
+
+    append_record(get_log(), {"seq": 1})
+
+    def finalize():
+        try:
+            get_log().read_text()
+        except stand_in_log_guard.RawStandInLogAccess:
+            pass
+
+    if request.param == "addfinalizer":
+        request.addfinalizer(finalize)
+    yield
+    if request.param == "yield":
+        finalize()
+
+
+def test_swallowed_in_a_finalizer(swallowed_finalizer):
+    pass
+
+
+def test_after_finalizers():
+    assert stand_in_log_guard.take_violations() == []
+
+
+def test_helper_only(tmp_path, request):
     log = tmp_path / "@LOG@"
     append_record(log, {"seq": 1})
     assert [record["seq"] for record in __import__("atomic_test_log").read_records(log)] == [1]
+    request.addfinalizer(lambda: __import__("atomic_test_log").read_records(log))
 """
 
 
@@ -1002,7 +1033,8 @@ def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) ->
     The swarm gates turn an exception into a refusal by design, so a raised
     error alone can vanish. A separate pytest run over the repository's own
     conftest, guard and helper must fail both swallowing tests - in the test
-    body and in a thread - and pass the helper-only one.
+    body, in a thread and in yield/addfinalizer fixture teardown - and pass
+    the following clean test and helper-only access, including its finalizer.
     """
     project = tmp_path / "project"
     project.mkdir()
@@ -1019,6 +1051,8 @@ def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) ->
     )
     output = run.stdout + run.stderr
     assert run.returncode == 1, output
-    assert "2 failed, 1 passed" in output, output
+    assert "2 failed, 4 passed, 2 errors" in output, output
+    for style in ("yield", "addfinalizer"):
+        assert f"ERROR test_swallowed.py::test_swallowed_in_a_finalizer[{style}]" in output, output
     assert output.count("raw read_text of the declared stand-in log") >= 1, output
     assert output.count("raw open of the declared stand-in log") >= 1, output

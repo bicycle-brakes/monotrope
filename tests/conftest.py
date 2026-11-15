@@ -37,6 +37,10 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call():
     outcome = yield
+    _fail_on_recorded_access(outcome)
+
+
+def _fail_on_recorded_access(outcome) -> None:
     recorded = stand_in_log_guard.take_violations()
     if recorded and outcome.excinfo is None:
         outcome.force_exception(
@@ -47,6 +51,11 @@ def pytest_runtest_call():
         )
 
 
-@pytest.hookimpl(trylast=True)
-def pytest_runtest_teardown() -> None:
-    stand_in_log_guard.suspend(False)
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_teardown():
+    # Wrap every finalizer, retaining the test's marker suspension until they finish.
+    outcome = yield
+    try:
+        _fail_on_recorded_access(outcome)
+    finally:
+        stand_in_log_guard.suspend(False)

@@ -245,6 +245,19 @@ ended `2 failed, 14 passed` - the raw forms `DID NOT RAISE`, and with an empty
 `tests/conftest.py` the swallowing run passed `3 passed` (expected exit 1).
 Green on `4209819c`: `16 passed`. The static guard is unchanged.
 
+## Finalizer check — 2026-11-15
+
+Phase-6 row F6-9: a fixture finalizer that swallowed the refusal left its test
+green, because violations were read only after the test body and the next
+setup discarded the rest. `tests/conftest.py` now wraps
+`pytest_runtest_teardown` too: a violation recorded while the finalizers run
+errors that test's teardown phase, so the session fails. Red first, on
+`48e41f0f` with the extended planted run and the old `tests/conftest.py`:
+`test_runtime_check_fails_a_test_that_swallows_the_refusal` failed, the inner
+run ending `2 failed, 4 passed` with no teardown error. Green with the new
+hook: the inner run ends `2 failed, 4 passed, 2 errors`, one error per
+finalizer style.
+
 ## Criterion ledger
 
 - 1: tests/test_atomic_test_log.py::test_concurrent_log_snapshots_are_complete — a reader observes a forced partial append
@@ -256,7 +269,7 @@ Green on `4209819c`: `16 passed`. The static guard is unchanged.
 - 4: not a test — review the 17-site inventory and all corresponding readers/renderings; the five migrated suites verify existing fixture behavior
 - 5: tests/test_atomic_test_log.py::test_runtime_check_refuses_raw_access_to_declared_logs — a raw access of a declared log runs in the pytest process, including both forms of phase-6 row F6-8
 - 5: tests/test_atomic_test_log.py::test_runtime_check_lets_the_helper_through — the runtime check refuses the helper's locked access, on the main thread or in an observer thread, or an unrelated file
-- 5: tests/test_atomic_test_log.py::test_runtime_check_fails_a_test_that_swallows_the_refusal — a refusal swallowed in the test body or in a thread leaves the test green
+- 5: tests/test_atomic_test_log.py::test_runtime_check_fails_a_test_that_swallows_the_refusal — a refusal swallowed in the test body, in a thread or in a yield or addfinalizer fixture teardown leaves the test green (phase-6 row F6-9)
 - 5: tests/test_atomic_test_log.py::test_test_logs_use_the_shared_helper — a raw read or append of a stand-in log remains under tests/
 - 5: tests/test_atomic_test_log.py::test_guard_detects_raw_log_access — planted raw reads or appends pass, or helper calls and non-log operations are flagged
 - 5: tests/test_atomic_test_log.py::test_only_declared_logs_take_records — the helper serves a JSON log the guard does not know about
@@ -272,6 +285,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-15
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-13 19:17:30–20:17:30 UTC, 3600 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -281,3 +298,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-14 21:32:03–22:56:35 UTC, 5071 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-14 22:56:42–22:58:12 UTC, 90 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-14 22:58:19–23:00:06 UTC, 107 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-15 14:33:25–15:31:10 UTC, 3465 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-15 15:31:18–16:14:43 UTC, 2605 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-11-15 16:14:50–17:03:48 UTC, 2938 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
