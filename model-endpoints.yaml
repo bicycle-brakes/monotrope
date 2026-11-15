@@ -158,8 +158,9 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # gpt-6.1-terra replaced gpt-6.1-sol on 2026-11-15 (maintainer's word).
     modelle:
-      - gpt-6.1-sol
+      - gpt-6.1-terra
     bemerkung: >-
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.

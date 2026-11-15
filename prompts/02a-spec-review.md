@@ -11,7 +11,7 @@ otherwise started by `python3 scripts/stage2.py spec-review <change>`
 path (a spike), start it with a fixed id, `claude --model claude-opus-5-5
 --session-id <uuid> -n review-<name>`, and write the id under the table in
 `findings.md` (`Reviewer session: <uuid>`). Through the runner no session is
-kept: phase 6 is Codex's (`gpt-6.1-sol`), in a fresh session. The runner adds
+kept: phase 6 is Codex's (`gpt-6.1-terra`), in a fresh session. The runner adds
 the reviewer and the Status to each row it writes, and no session line. The
 review loop
 between the two phases runs until a round is clean — a free-model swarm, a
