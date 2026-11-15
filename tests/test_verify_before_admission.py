@@ -475,6 +475,20 @@ def test_changed_tree_refreshes_selection_and_rechecks(checkout: SimpleNamespace
     Planted fault: an edit to an already dirty file during the wait is missed, or the stale gate list
     is reused after a reclassification.
     """
+    # This gate is selected only after the wait. Its nested protected work must
+    # inherit the admission just acquired by the scheduler, rather than queue
+    # behind that same scheduler. Keep its script outside the measured tree.
+    nested_script = checkout.tmp_path / "nested.py"
+    nested_script.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r})\n"
+        "import verify_lock\n"
+        "assert verify_lock.nested_holder_pid() is not None, "
+        "'refreshed cheap gates must inherit the held admission'\n"
+        "with verify_lock.hold_admission(['refreshed-nested']) as descriptor:\n"
+        "    assert descriptor is None, 'nested work must reuse admission without acquiring a lock'\n",
+        encoding="utf-8",
+    )
     tracked = checkout.root / "tracked.txt"
     tracked.write_text("first\n", encoding="utf-8")
     write_gates(
@@ -499,7 +513,10 @@ def test_changed_tree_refreshes_selection_and_rechecks(checkout: SimpleNamespace
                 checkout.root,
                 [
                     _gate("cheap-a", f"python3 {gate_script} cheap-a 0"),
-                    _gate("cheap-b", f"python3 {gate_script} cheap-b 0"),
+                    _gate(
+                        "cheap-b",
+                        f"python3 {gate_script} cheap-b 0 && {shlex.quote(sys.executable)} {nested_script}",
+                    ),
                     _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
                 ],
             )
@@ -512,6 +529,7 @@ def test_changed_tree_refreshes_selection_and_rechecks(checkout: SimpleNamespace
         assert [entry["gate"] for entry in entries] == ["cheap-a", "cheap-a", "cheap-b", "heavy"], entries
         assert entries[0]["released"] is False, entries
         assert all(entry["released"] for entry in entries[1:]), entries
+        assert all(entry["held"].isdigit() for entry in entries[1:]), entries
         assert "── [cheap-b] gruen" in out, out
         assert "── [heavy] gruen" in out, out
         assert "VERIFY GREEN" in out, out

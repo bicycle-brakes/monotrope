@@ -621,7 +621,11 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MAJOR | SPEC | base | scripts/verify_run.py:861 | When the tree changes during the admission wait, refreshed cheap gates receive the pre-admission `gate_env`, although the scheduler now holds admission. If such a gate starts a nested admission, its child receives neither ownership markers nor the lock descriptor and queues behind its own parent. A source-extracted reproduction confirmed that the refreshed cheap execution lacks the marker while the protected execution receives it. Pass the held admission environment to refreshed gates so nested work can reuse ownership. [Acceptance criterion 7.] | Codex | taken | — |
+| F6-5 | MAJOR | SPEC | base | scripts/verify_run.py:861 | When the tree changes during the admission wait, refreshed cheap gates receive the pre-admission `gate_env`, although the scheduler now holds admission. If such a gate starts a nested admission, its child receives neither ownership markers nor the lock descriptor and queues behind its own parent. A source-extracted reproduction confirmed that the refreshed cheap execution lacks the marker while the protected execution receives it. Pass the held admission environment to refreshed gates so nested work can reuse ownership. [Acceptance criterion 7.] | Codex | fixed — tests/test_verify_before_admission.py::test_changed_tree_refreshes_selection_and_rechecks | — |
 
 Phase 6 verdict: codex 01a1dfa9-3125-7e91-bcb5-60933f70c0a6, 2026-11-15
 Reviewer session: codex 01a1dfa9-3125-7e91-bcb5-60933f70c0a6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1084 files, 4360 commits, 12 rules.
+
+Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged

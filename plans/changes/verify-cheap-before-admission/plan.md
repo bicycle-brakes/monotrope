@@ -241,3 +241,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-14 16:43:52–17:05:49 UTC, 1317 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-14 17:06:08–17:45:23 UTC, 2355 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-14 17:45:31–18:11:07 UTC, 1536 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-15 14:46:20–15:31:27 UTC, 2707 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_run.py` is shared execution infrastructure · measured by the runner

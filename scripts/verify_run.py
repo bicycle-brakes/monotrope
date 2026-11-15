@@ -858,7 +858,7 @@ def run_verification(
                     cheap = [g for g in refreshed if not g["admission"]]
                     protected = [g for g in refreshed if g["admission"]]
                     for gate in cheap:
-                        if run_gate(gate, gate_env):
+                        if run_gate(gate, held):
                             note_blocking(gate)
                     if reds and not ci:
                         context = verify_lock.admission_context()
