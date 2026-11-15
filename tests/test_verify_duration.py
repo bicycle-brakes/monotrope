@@ -1205,3 +1205,58 @@ def test_slips_are_read_only_and_preserve_duration_history(
     assert "run old" in listed and "42.000s" in listed and "green" in listed, listed
     assert "run f-1" in listed and "red" in listed, listed
     assert path.read_text(encoding="utf-8") == original
+
+
+def test_slips_pair_one_repository_under_two_spellings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A targeted check and a full run of one repository pair even when its path is spelled twice.
+
+    Fault this pins (loop rows L1-1, L1-11): scope resolved the recorded path
+    while pairing compared the raw strings, so a symlinked spelling of the same
+    worktree stayed in scope, never paired, and the report read a complete zero.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    alias = tmp_path / "alias"
+    alias.symlink_to(repository)
+    events = _slip_events(repository)
+    events[2]["repository"] = str(alias)  # the full run recorded under the symlinked spelling
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert "slips: 1; incomplete/not countable runs: 0" in out and code == 0, out
+
+
+@pytest.mark.parametrize("verdict", ["green", "red"])
+def test_slips_diagnose_an_unknown_check_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verdict: str
+) -> None:
+    """A run naming a check kind outside the known ones is unsupported evidence, never a clean run.
+
+    Fault this pins (loop row L1-8): an unknown kind was routed into the full
+    branch, where a green verdict passed as a complete observation with exit 0.
+    """
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository, full_kind="nightly", full_verdict=verdict)
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys)
+    assert "slips: 0; incomplete/not countable runs: 1" in out and code == 1, out
+
+
+def test_environment_cannot_mint_a_targeted_start(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An exported kind `targeted` never reaches a shell-started record as a targeted start.
+
+    Fault this pins (loop row L1-9): the comment above `CHECK_KINDS` promised
+    that only `begin_targeted_run` writes `targeted`, but the environment path
+    accepted it.
+    """
+    monkeypatch.setenv(verify_duration.KIND_ENV, "targeted")
+    monkeypatch.setenv(verify_duration.CHANGE_ENV, "demo")
+    monkeypatch.setenv(verify_duration.TREE_ENV, TREE)
+    code, _, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    start = next(e for e in _history(verify_lock.state_root().parent) if e["event"] == "run_start")
+    assert start["check_kind"] is None, start

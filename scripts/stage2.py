@@ -6939,8 +6939,9 @@ def run_targeted(
     the checks and the end follows their completion (`verify_duration`
     bead coding-harness-bxxt.7); the checked tree is captured on both sides of
     execution, so a tree that moved during the check invalidates its own
-    comparison evidence. A check that never completes records no end — no green
-    evidence exists for work that did not finish. A refused history append
+    comparison evidence. A timed-out or failed-to-launch check is red and ends
+    with a red row, never a predecessor; an exception that escapes the checks
+    records no end — no green evidence exists for work that did not finish. A refused history append
     becomes a reported note and never changes the verdict. Order: ruff over the
     touched files, pytest over the whole test files, then the selected gates
     through `run_gates`. The first blocking red, launch error or timeout ends

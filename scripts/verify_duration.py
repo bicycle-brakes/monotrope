@@ -237,7 +237,7 @@ def _comparison_fields() -> dict:
         return {}
     kind = os.environ.get(KIND_ENV, "").strip()
     return {
-        "check_kind": kind if kind in CHECK_KINDS else None,
+        "check_kind": kind if kind in CHECK_KINDS and kind != "targeted" else None,
         "change": os.environ.get(CHANGE_ENV, "").strip() or None,
         "tree_id": os.environ.get(TREE_ENV, "").strip() or None,
     }
@@ -309,8 +309,9 @@ def finish_targeted_run(evidence: TargetedRun, tree_after: str | None, outcome: 
     """Complete the targeted evidence after the checks; an unfinished check records no end.
 
     `outcome` is "green" or "red" once the checks returned, and None when they
-    never completed — interrupted, timed-out or failed-to-start work stays a
-    start without an end, so no green completion of it can exist. The end row
+    never returned. The runner reports a timed-out or failed-to-launch check as
+    red, so it ends with a red row — never a predecessor; only work interrupted
+    before the checks returned stays a start without an end. The end row
     carries the identity captured after execution: a tree that moved during the
     check shows in the reader as a mismatch and the run counts nowhere. A
     refused append keeps its diagnostic and changes no verdict.
@@ -669,6 +670,14 @@ def _same_repository(recorded: str) -> bool:
         return False
 
 
+def _same_path(first: str, second: str) -> bool:
+    """Whether two recorded repository spellings resolve to one directory, as scope resolves them."""
+    try:
+        return os.path.realpath(first) == os.path.realpath(second)
+    except OSError:
+        return False
+
+
 def _slip_predecessor_match(
     predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]],
     moment: datetime.datetime,
@@ -685,7 +694,13 @@ def _slip_predecessor_match(
     pair. Several qualifying predecessors still count the full run once.
     """
     for completion, place, named, content, basis in predecessors:
-        if completion < moment and place == repository and named == change and content == tree and basis == config:
+        if (
+            completion < moment
+            and _same_path(place, repository)
+            and named == change
+            and content == tree
+            and basis == config
+        ):
             return True
     return False
 
@@ -750,6 +765,10 @@ def cmd_slips(args: argparse.Namespace) -> int:
             continue
         verdict = end.get("verdict")
         kind = start.get("check_kind")  # absent: a legacy duration record
+        if kind is not None and kind not in CHECK_KINDS:
+            if in_selection:
+                uncountable += 1  # an unknown kind is unsupported evidence, never a clean run
+            continue
         if kind == "targeted":
             stable = (
                 isinstance(start.get("tree_id"), str)
