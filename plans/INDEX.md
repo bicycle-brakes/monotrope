@@ -522,6 +522,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/outcome-test/plan.md`](changes/outcome-test/plan.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/research.md`](changes/outcome-test/research.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
 | [`changes/outcome-test/spec.md`](changes/outcome-test/spec.md) | draft | partial | 2026-11-06 | coding-harness-3nm5 |
+| [`changes/pi-neutral-path/research.md`](changes/pi-neutral-path/research.md) | draft | none | 2026-11-15 | coding-harness-xul8 |
 | [`changes/pi-no-compaction/decisions.md`](changes/pi-no-compaction/decisions.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/pi-no-compaction/findings.md`](changes/pi-no-compaction/findings.md) | draft | none | 2026-11-06 | coding-harness-mwzv.2 |
 | [`changes/pi-no-compaction/plan.md`](changes/pi-no-compaction/plan.md) | draft | partial | 2026-11-06 | coding-harness-mwzv.2 |
