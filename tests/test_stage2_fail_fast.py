@@ -194,7 +194,19 @@ def test_failed_test_ids_are_read_from_the_pytest_summary() -> None:
 
 def test_empty_targets_skip_their_command(world: World) -> None:
     """Ledger 4. Planted fault: a zero-target check started ruff or pytest, or rejected a text-only attempt."""
-    successful_implementation(world)  # plants `src/app.py` only: outside `scripts/` and `tests/`
+    # A text-only attempt: it changes `src/app.py` alone, outside `scripts/` and `tests/`. The shared
+    # helper `successful_implementation` also plants a covering test file, which rightly starts ruff
+    # and pytest, so this guarantee states its own attempt.
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
     assert world.run("implement") == 0
     assert world.calls("ruff") == [] and world.calls("python3") == []
     assert len(world.calls("make")) == 1
@@ -203,26 +215,31 @@ def test_empty_targets_skip_their_command(world: World) -> None:
 
 
 def test_cheap_green_still_requires_full_verification(world: World) -> None:
-    """Ledger 5. Planted fault: cheap green checkpointed without `make verify`, or despite its red result."""
+    """Ledger 5. Planted fault: an uncovered attempt checkpointed without `make verify`, or despite its red result.
+
+    A targeted green checkpoints when the coverage is safe (no `make verify`); when it is not, the
+    admitted full check runs and its red result still blocks the checkpoint (`decisions.md#Q-6`).
+    """
     red = red_verify(("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"]))
-    venv_ruff(world)
-    venv_pytest(world)
     baseline = git(world.root, "rev-parse", "HEAD")
+    # `src/app.py` is tracked code with no linked test: the coverage is not safe, so the full check runs.
     world.script(
         claude=[
-            formatted_attempt(plant={"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"}),
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
             {"stdout": "must not run"},
             {"stdout": "must not run"},
         ],
-        ruff=[{}] * 8,
-        python3=[{}] * 3,
         make=[red] * 3,
     )
     assert world.run("implement") == 1
     names = [call["name"] for call in world.calls()]
-    assert names[:7] == ["claude", "ruff", "ruff", "ruff", "ruff", "python3", "make"], names[:7]
-    assert len(names) == 21 and names.count("make") == 3, "a checkpoint or a skipped verification appeared"
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    assert names[:2] == ["claude", "make"], names[:2]
+    assert "make" in names, "the full check did not run for an uncovered attempt"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a red full check checkpointed"
 
 
 def test_cheap_failures_reach_findings_and_next_route_safely(world: World) -> None:
