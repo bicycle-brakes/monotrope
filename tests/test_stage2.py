@@ -1387,7 +1387,9 @@ def test_the_kimi_exclusion_is_lifted_and_its_models_carry_terms() -> None:
     assert kimi, "no Kimi model is declared after the exclusion was lifted"
     for model in kimi:
         terms = go["modelle_terms"][model]
-        assert terms["training"] == "Not used" and terms["gelesen"] == "2026-10-30", model
+        # The reading's date moves with every re-read; a reading must exist and be an ISO day.
+        assert terms["training"] == "Not used", model
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(terms["gelesen"])), model
 
 
 def test_the_glm_remark_names_its_work_verbs_and_no_review_phase() -> None:
