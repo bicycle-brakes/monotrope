@@ -2087,6 +2087,34 @@ def test_layered_settings_default_override_and_sources(tmp_path: Path) -> None:
     assert "slots 2" in both.describe() and "pytest workers per run 6" in both.describe()
 
 
+def test_slot_count_above_the_logical_cores_warns_and_never_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row L5-6 of verify-slots. Planted fault: `slots = 256` on a 12-core machine starts 256 one-worker
+    checks without any diagnostic, or the warning refuses a valid file the admission must still honour."""
+    setting = tmp_path / verify_lock.SETTINGS_NAME
+    setting.write_text("[verify]\nslots = 16\n", encoding="utf-8")
+    over = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=64 * GIB, env={})
+    assert over.slots == 16 and over.workers == 1, over
+    assert over.warning is not None and "slots 16" in over.warning and "12 logical cores" in over.warning
+    assert str(setting) in over.warning, "the warning names where the value came from"
+    assert "warning: slots 16" in over.describe()
+    assert verify_lock.read_capacity(tmp_path) == 16, "a warning, not a refusal"
+    caller = verify_lock.read_settings(tmp_path, cores=12, env={verify_lock.WORKERS_ENV: "2"})
+    assert caller.warning is not None, "a caller's workers do not hide an oversubscribing slot count"
+    setting.write_text("[verify]\nslots = 12\n", encoding="utf-8")
+    assert verify_lock.read_settings(tmp_path, cores=12, env={}).warning is None, "equality fits"
+    setting.unlink()
+    assert verify_lock.read_settings(tmp_path, cores=12, env={}).warning is None
+    monkeypatch.setattr(verify_lock, "machine_size", lambda: (2, None))
+    fallback = verify_lock.read_settings(tmp_path, env={})
+    assert fallback.warning is not None and "2 logical cores" in fallback.warning, (
+        "without a given reading, this machine's"
+    )
+    monkeypatch.setattr(verify_lock, "machine_size", lambda: (None, None))
+    assert verify_lock.read_settings(tmp_path, env={}).warning is None, "no reading, no claim"
+
+
 @pytest.mark.parametrize(
     ("slots", "cores", "memory", "expected"),
     [

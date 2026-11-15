@@ -6822,18 +6822,22 @@ def targeted_pytest_env(_root: Path, env: dict[str, str]) -> dict[str, str]:
     """The targeted pytest's worker count from the one settings reader, without entering the admission.
 
     `verify_lock.read_settings` is the reader `verify_all.sh` asks too, so a targeted run and a full
-    check use the same workers per run (layered verify settings, bead coding-harness-u1ha). A caller's
-    own non-empty value passes through; with no machine reading the variable is dropped and xdist's own
-    auto applies. An unusable settings file fails the launch with the reader's diagnostic.
+    check use the same workers per run (layered verify settings, bead coding-harness-u1ha), and
+    `verify_lock.log_settings` prints the same `[verify-settings]` line the shell path prints: the values
+    in force and where each came from. A caller's own non-empty value passes through verbatim and is
+    logged as the caller's; with no machine reading the variable is dropped and xdist's own auto
+    applies. An unusable settings file fails the launch with the reader's diagnostic. The targeted run
+    writes no duration history record; only the shell runner does.
     """
     env = dict(env)
-    if env.get(verify_lock.WORKERS_ENV):
-        return env
     cores, memory = verify_lock.machine_size()
     try:
-        settings = verify_lock.read_settings(cores=cores, memory_bytes=memory, env={})
+        settings = verify_lock.read_settings(cores=cores, memory_bytes=memory, env=env)
     except verify_lock.VerifyLockRefused as refused:
         raise CallFailed(str(refused)) from refused
+    verify_lock.log_settings(settings)
+    if env.get(verify_lock.WORKERS_ENV):
+        return env
     if settings.workers is None:
         env.pop(verify_lock.WORKERS_ENV, None)
     else:
@@ -6986,14 +6990,7 @@ def _targeted_body(
     admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
-    admission_names = (
-        verify_lock.LOCK_ENV,
-        verify_lock.TOKEN_ENV,
-        verify_lock.SLOT_ENV,
-        verify_lock.ADMISSION_ID_ENV,
-        verify_lock.ADMISSION_WAIT_ENV,
-    )
-    env = {name: value for name, value in env.items() if name not in admission_names}
+    env = {name: value for name, value in env.items() if name not in verify_lock.ADMISSION_MARKERS}
 
     def ledger(error: BaseException) -> list[str]:
         return [
@@ -10171,19 +10168,9 @@ def verify_draft(
         ),
         root,
     )
-    # Nothing a document check starts carries or claims the verify admission: its ownership,
-    # token and context variables are stripped here, and `run_gates` enters no admission.
-    env = {
-        name: value
-        for name, value in env.items()
-        if name
-        not in (
-            verify_lock.LOCK_ENV,
-            verify_lock.TOKEN_ENV,
-            verify_lock.ADMISSION_ID_ENV,
-            verify_lock.ADMISSION_WAIT_ENV,
-        )
-    }
+    # Nothing a document check starts carries or claims the verify admission: the five markers
+    # (ownership, token, slot and context) are stripped here, and `run_gates` enters no admission.
+    env = {name: value for name, value in env.items() if name not in verify_lock.ADMISSION_MARKERS}
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation, owed, not_completed

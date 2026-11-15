@@ -26103,6 +26103,40 @@ def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, mo
         stage2.targeted_pytest_env(tmp_path, {})
 
 
+def test_targeted_pytest_logs_the_values_in_force_and_their_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Row L5-1 and criterion 12 of verify-slots. Planted fault: the targeted pytest sets its worker count
+    silently, or words the settings line apart from the shell path's `--settings` line."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setattr(verify_lock, "machine_size", lambda: (12, 24 * 2147483648))
+    stage2.targeted_pytest_env(tmp_path, {"PATH": "/usr/bin"})
+    expected = verify_lock.read_settings(cores=12, memory_bytes=24 * 2147483648, env={}).describe()
+    logged = capsys.readouterr().err.splitlines()
+    assert logged == [f"{verify_lock.SETTINGS_LOG_PREFIX} {expected}"], logged
+    assert "slots 4 (repository default) · pytest workers per run 3 (repository default: 12 logical cores" in expected
+    stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
+    caller = capsys.readouterr().err
+    assert f"pytest workers per run 2 ({verify_lock.CALLER_WORKERS})" in caller, "a caller's value is logged as its own"
+
+
+def test_admission_filters_strip_the_one_shared_marker_list() -> None:
+    """Row L5-5 of verify-slots. Planted fault: a marker added to `verify_lock` is stripped by one filter only,
+    or a filter keeps a hand-written copy of the list."""
+    markers = {
+        value
+        for name, value in vars(verify_lock).items()
+        if name.endswith("_ENV")
+        and isinstance(value, str)
+        and value.startswith(("HARNESS_VERIFY_LOCK_", "HARNESS_VERIFY_ADMISSION_"))
+    }
+    assert set(verify_lock.ADMISSION_MARKERS) == markers and len(verify_lock.ADMISSION_MARKERS) == 5
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert source.count("not in verify_lock.ADMISSION_MARKERS") == 2, "the targeted and the document-check filter"
+    for name in ("LOCK_ENV", "TOKEN_ENV", "SLOT_ENV", "ADMISSION_ID_ENV", "ADMISSION_WAIT_ENV"):
+        assert not re.search(rf"verify_lock\.{name},", source), f"a hand-written marker list names {name}"
+
+
 @pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])
 def test_targeted_failure_never_checkpoints_or_marks_fixed(
     world: World, monkeypatch: pytest.MonkeyPatch, failure: str

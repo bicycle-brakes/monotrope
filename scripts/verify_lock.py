@@ -132,6 +132,9 @@ FLOOR_ENV = "HARNESS_VERIFY_MEMORY_FLOOR"
 # alone, the one secret of the relation.
 ADMISSION_ID_ENV = "HARNESS_VERIFY_ADMISSION_ID"
 ADMISSION_WAIT_ENV = "HARNESS_VERIFY_ADMISSION_WAIT"
+# The five admission markers, the one list every filter strips: a run that must
+# take an admission of its own, or must not carry one, removes exactly these.
+ADMISSION_MARKERS = (LOCK_ENV, TOKEN_ENV, SLOT_ENV, ADMISSION_ID_ENV, ADMISSION_WAIT_ENV)
 DEFAULT_MEMORY_FLOOR = 25.0
 MEMORY_POLL_SECONDS = 30.0
 QUEUE_LOG_SECONDS = 300.0
@@ -304,11 +307,39 @@ class VerifySettings:
     slots_source: str
     workers: int | None
     workers_source: str
+    warning: str | None = None
 
     def describe(self) -> str:
         """The one log line every run prints: values and sources, no machine-private path beyond the state root."""
         workers = "xdist auto (no machine reading)" if self.workers is None else str(self.workers)
-        return f"slots {self.slots} ({self.slots_source}) · pytest workers per run {workers} ({self.workers_source})"
+        line = f"slots {self.slots} ({self.slots_source}) · pytest workers per run {workers} ({self.workers_source})"
+        return line if self.warning is None else f"{line} · warning: {self.warning}"
+
+
+SETTINGS_LOG_PREFIX = "[verify-settings]"
+
+
+def log_settings(settings: VerifySettings) -> None:
+    """Log the values in force and their sources on the operator's stderr: the one line of every run.
+
+    `scripts/verify_all.sh` (through `--settings`) and the runner's targeted
+    pytest both print through here, so the two paths cannot word it apart.
+    """
+    print(f"{SETTINGS_LOG_PREFIX} {settings.describe()}", file=sys.stderr, flush=True)
+
+
+def oversubscription_warning(slots: int, slots_source: str, cores: int | None) -> str | None:
+    """The diagnostic of a slot count above the logical cores, or None when it fits or no reading exists.
+
+    A warning, not a refusal: the value is valid content, the core count a
+    machine reading, and the admission's log never refuses (decisions Q-6).
+    """
+    if cores is None or slots <= cores:
+        return None
+    return (
+        f"slots {slots} ({slots_source}) exceed the {cores} logical cores; each run gets one worker "
+        "and the machine is oversubscribed"
+    )
 
 
 def _settings_refused(path: Path, why: str) -> VerifyLockRefused:
@@ -417,12 +448,15 @@ def read_settings(
     inherited `HARNESS_VERIFY_WORKERS_SOURCE` keeps naming where an
     ancestor's value came from). A derived worker count is recomputed from
     an overriding slot count. Every reservation decision re-reads the file,
-    so a lowered capacity drains before new reservations are granted.
+    so a lowered capacity drains before new reservations are granted. A slot
+    count above the logical cores (the given `cores`, else this machine's)
+    carries `oversubscription_warning`'s diagnostic; it never refuses.
     """
     if type(DEFAULT_SLOTS) is not int or not 1 <= DEFAULT_SLOTS <= MAX_SLOTS:
         raise VerifyLockRefused(f"the repository default of {DEFAULT_SLOTS!r} slots is invalid; refusing admission")
     base = state_root() if root is None else root
     overrides, path = _read_settings_file(base)
+    ceiling = cores if cores else machine_size()[0]
     machine = f"machine file {path}"
     slots = overrides.get(SLOTS_KEY, DEFAULT_SLOTS)
     slots_source = machine if SLOTS_KEY in overrides else REPOSITORY_DEFAULT
@@ -430,14 +464,17 @@ def read_settings(
     caller = environment.get(WORKERS_ENV, "")
     if caller:
         source = environment.get(WORKERS_SOURCE_ENV) or CALLER_WORKERS
-        return VerifySettings(slots, slots_source, _caller_workers(caller), source)
+        warning = oversubscription_warning(slots, slots_source, ceiling)
+        return VerifySettings(slots, slots_source, _caller_workers(caller), source, warning)
     if WORKERS_KEY in overrides:
         workers, workers_source = overrides[WORKERS_KEY], machine
     else:
         workers, workers_source = derived_workers(slots, cores, memory_bytes)
         if slots_source != REPOSITORY_DEFAULT:
             workers_source += f" (slots from {machine})"
-    return VerifySettings(slots, slots_source, workers, workers_source)
+    return VerifySettings(
+        slots, slots_source, workers, workers_source, oversubscription_warning(slots, slots_source, ceiling)
+    )
 
 
 def _caller_workers(value: str) -> int | None:
@@ -474,9 +511,9 @@ def _settings_main(arguments: list[str]) -> int:
     try:
         settings = read_settings(cores=reading(args.cores, cores), memory_bytes=reading(args.memory_bytes, memory))
     except VerifyLockRefused as refused:
-        print(f"[verify-settings] refused: {refused}", file=sys.stderr, flush=True)
+        print(f"{SETTINGS_LOG_PREFIX} refused: {refused}", file=sys.stderr, flush=True)
         return 2
-    print(f"[verify-settings] {settings.describe()}", file=sys.stderr, flush=True)
+    log_settings(settings)
     caller = os.environ.get(WORKERS_ENV, "")
     workers = caller or ("" if settings.workers is None else str(settings.workers))
     print(workers)
@@ -857,7 +894,8 @@ class _Admission:
         self._queue_wait()
         try:
             in_force = read_settings(self.state.root, env={})
-            _log(f"slot {self.slot_index} reserved; capacity {in_force.slots} ({in_force.slots_source})")
+            line = f"slot {self.slot_index} reserved; capacity {in_force.slots} ({in_force.slots_source})"
+            _log(line if in_force.warning is None else f"{line}; warning: {in_force.warning}")
         except VerifyLockRefused:
             pass  # The reservation decision itself already read the setting; a log line never refuses.
         self._publish()
