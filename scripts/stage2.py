@@ -213,6 +213,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 # GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
+# The endpoints whose models a subscription carries until a declared end date: each listed model
+# needs a dated, sourced `modelle_terms` record with `valid_until`, and no call runs after that UTC
+# day (bead coding-harness-dcu3). `opencode-go` keeps its fuller paid-terms rule (`terms_problem`).
+# Each endpoint maps to the subscription's name its expiry notice and refusal give (phase 6, F6-4a).
+SUBSCRIPTION_TERMS_ENDPOINTS = {"glm-coding-plan": "Z.ai"}
 HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 # Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
@@ -1677,7 +1682,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
 
     For the `opencode-go` endpoint a model is also refused while its data terms
     are unread or its declaration records a dated skip (ADR 0021, decision 5):
-    no paid or interactive call runs on unread terms.
+    no paid or interactive call runs on unread terms. For a subscription
+    endpoint (`SUBSCRIPTION_TERMS_ENDPOINTS`, the Z.ai plan) a model is refused
+    without a dated, sourced record or after its `valid_until` day (bead
+    coding-harness-dcu3).
     """
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
@@ -1693,6 +1701,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"the endpoint {endpoint} does not list the model {model}"
     if endpoint == OPENCODE:
         problem = terms_problem(found, model)
+        if problem:
+            return problem
+    elif endpoint in SUBSCRIPTION_TERMS_ENDPOINTS:
+        problem = subscription_terms_problem(found, model)
         if problem:
             return problem
     allowed = found.get("darf_sehen")
@@ -1843,7 +1855,9 @@ def checked_prompt(
 
     `admission_problem`, when given, replaces the individual declaration (the
     free class, ADR 0021 decision 3); the leak check is mandatory either way.
+    A subscription endpoint's expiry notice prints first (bead coding-harness-dcu3).
     """
+    subscription_terms_warnings(ctx.root, endpoint[0], endpoint[1])
     problem = (
         admission_problem(ctx.root, endpoint[1])
         if admission_problem is not None
@@ -2007,6 +2021,35 @@ def terms_problem(entry: dict, model: str) -> str | None:
     The declared dates rule: the runner never infers, extends or renews one.
     """
     record = _terms(entry, model)
+    problem = _reading_problem(record, model)
+    if problem:
+        return problem
+    retention = record.get("aufbewahrung")
+    if not isinstance(retention, str) or not retention.strip():
+        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
+    if record.get("training") != "Not used":
+        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    return _expiry_problem(record, model)
+
+
+def subscription_terms_problem(entry: dict, model: str) -> str | None:
+    """Why a subscription endpoint's model may not be called on its declared terms, or None.
+
+    The record states when the subscription that carries the model ends - a
+    dated, sourced reading with a quoted `valid_until`, valid through that UTC
+    day - not a retention or training reading, so only the reading and the
+    expiry part of `terms_problem` bind (bead coding-harness-dcu3). A missing
+    record refuses: the endpoint is in `SUBSCRIPTION_TERMS_ENDPOINTS`, so silence
+    admits nothing.
+    """
+    record = _terms(entry, model)
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS.get(str(entry.get("name")), str(entry.get("name")))
+    expired = f"the {subscription} subscription for {model} expired on {{expiry}}; no further call runs on it"
+    return _reading_problem(record, model) or _expiry_problem(record, model, expired)
+
+
+def _reading_problem(record: dict, model: str) -> str | None:
+    """Why the record is a dated skip or no dated, sourced reading, or None."""
     if record.get("uebersprungen"):
         reason = record.get("grund") or "reason not stated"
         return f"the model {model} was skipped on {record.get('uebersprungen')}: {reason}"
@@ -2017,17 +2060,50 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
     if not record.get("quelle"):
         return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
-    retention = record.get("aufbewahrung")
-    if not isinstance(retention, str) or not retention.strip():
-        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
-    if record.get("training") != "Not used":
-        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    return None
+
+
+def _expiry_problem(record: dict, model: str, expired: str | None = None) -> str | None:
+    """Why the record has no usable end date or is past it (UTC), or None.
+
+    `expired`, when given, is the refusal past the end date with an `{expiry}` field;
+    without it the paid-terms wording stands.
+    """
     expiry, why = _valid_until(record)
     if expiry is None:
         return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
     if expiry < terms_today():
+        if expired is not None:
+            return expired.format(expiry=expiry.isoformat())
         return f"the model {model}'s data terms expired on {expiry.isoformat()}; the reading admits no further call"
     return None
+
+
+def subscription_terms_warnings(root: Path, endpoint: str, model: str) -> list[str]:
+    """Print and retain the expiry notice of one subscription endpoint's model; empty for every other endpoint.
+
+    The Go routes print theirs at `dispatch_go`; this is the notice of the Z.ai
+    routes (explore, implement, the draft fallback), shown before each call.
+    An unreadable declaration warns nothing here - the declaration check refuses it.
+    """
+    if endpoint not in SUBSCRIPTION_TERMS_ENDPOINTS:
+        return []
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return []
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return []
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS[endpoint]
+    warnings = terms_warnings(
+        {**found, "modelle": [model]},
+        notice=f"the {subscription} subscription for {{model}} ends on {{expiry}} ({{left}} left)",
+    )
+    retain_terms_warnings(warnings)
+    for warning in warnings:
+        print(f"Terms warning: {warning}")
+    return warnings
 
 
 TERMS_WARNING_DAYS = 7
@@ -2081,13 +2157,15 @@ def retain_address_notices(notices: list[str]) -> list[str]:
     return evidence
 
 
-def terms_warnings(entry: dict) -> list[str]:
+def terms_warnings(entry: dict, notice: str | None = None) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
     Every declared record warns on a valid date inside the window, a skipped
     record included: a warning is advance notice, never admission ([DETAIL],
     2026-10-26). An expired date warns not — that is a skip with its reason —
     and an unusable one warns not either, for it refuses admission outright.
+    `notice`, when given, is the line with `{model}`, `{expiry}` and `{left}`
+    fields (a subscription's end); without it the paid-terms wording stands.
     """
     today = terms_today()
     warnings = []
@@ -2098,7 +2176,10 @@ def terms_warnings(entry: dict) -> list[str]:
         days = (expiry - today).days
         if 0 <= days <= TERMS_WARNING_DAYS:
             left = "1 day" if days == 1 else f"{days} days"
-            warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
+            if notice is not None:
+                warnings.append(notice.format(model=model, expiry=expiry.isoformat(), left=left))
+            else:
+                warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
     return warnings
 
 
@@ -2839,15 +2920,10 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
         if not tree or tree.split()[0] not in {"100644", "100755"}:
             return False
         try:
-            blob = subprocess.run(
-                [GIT, "-C", str(root), "show", f"{base}:{rel}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
-            )
+            blob = run_git(root, "show", f"{base}:{rel}")
         except subprocess.TimeoutExpired as error:
             raise Refused(f"git show did not finish within {GIT_SECONDS // 60} minutes") from error
-        if blob.returncode or b"\0" in blob.stdout:
+        if b"\0" in blob.stdout:
             return False
         executable = tree.split()[0] == "100755"
     if parts[0] == "scripts":
@@ -2864,12 +2940,10 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
 
 def _merge_base(root: Path) -> str:
     """The merge base with origin/main, refused when there is none."""
-    done = subprocess.run(
-        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
-    )
+    done = run_git(root, "merge-base", "HEAD", "origin/main", text=True, timeout=None)
     base = done.stdout.strip()
-    if done.returncode != 0 or not base:
-        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+    if not base:
+        raise Refused("there is no merge base with origin/main; the diff cannot be built. " + done.diagnostic)
     return base
 
 
@@ -2929,7 +3003,7 @@ def free_diff(root: Path) -> tuple[str, str | None]:
     total = 0
     for index, rel in enumerate(names):
         if rel in untracked_set:
-            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
+            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow={1: r""})
         else:
             piece = _git_output(root, "diff", *flags, base, "--", rel)
         bounded = _bound_hunks(rel, piece)
@@ -4642,29 +4716,31 @@ def release_loop(
     release(root, change)
 
 
+def git_error_text(text: str) -> str:
+    """Join every non-empty line of git's diagnostic without truncating its reason."""
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
 def _git_output(
     root: Path,
     *args: str,
-    allow: tuple[int, ...] = (0,),
+    allow: dict[int, str] | None = None,
     env: dict[str, str] | None = None,
     stdin: str | None = None,
     preserve_newlines: bool = False,
 ) -> str:
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
-            capture_output=True,
+        done = run_git(
+            root,
+            *args,
+            env=env,
+            stdin=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             text=not preserve_newlines,
             errors=None if preserve_newlines else "replace",
-            check=False,
-            env=env,
-            timeout=GIT_SECONDS,
+            allow=allow,
         )
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
-    if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
     return os.fsdecode(done.stdout)
 
 
@@ -4675,7 +4751,7 @@ def change_diff(root: Path) -> str:
     parts = [_git_output(root, "diff", *flags, base)]
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
     for path in filter(None, untracked):
-        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow=(0, 1)))
+        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow={1: r""}))
     return "".join(parts)
 
 
@@ -4803,6 +4879,55 @@ VERIFY_SECONDS = 45 * 60
 # the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
 TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
+
+
+@dataclass(frozen=True)
+class GitRun:
+    """One finished git command: its status, its output, and git's whole diagnostic."""
+
+    returncode: int
+    stdout: str | bytes
+    stderr: str | bytes
+    diagnostic: str
+
+
+def run_git(
+    root: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    stdin: str | bytes | None = None,
+    text: bool = False,
+    errors: str | None = None,
+    timeout: float | None = GIT_SECONDS,
+    allow: dict[int, str] | None = None,
+) -> GitRun:
+    """The one launch of git in the runner (decisions.md#Q-8): the resolved `GIT`, run in `root`.
+
+    It forces the C locale over the inherited or supplied environment, so git's reason is English
+    and recognisable, and keeps every non-empty line of git's diagnostic in `diagnostic`. The
+    command fails closed unless both its nonzero exit code and its whole normalised diagnostic
+    match an explicit `allow` entry (a code mapped to a full-match regular expression). An empty
+    pattern handles only a silent status, such as diff's 1. One Refused error carries every
+    non-empty diagnostic line. A timeout raises
+    `subprocess.TimeoutExpired` for the caller to name; `timeout=None` waits as before.
+    """
+    done = subprocess.run(
+        [GIT, "-C", str(root), *args],
+        input=stdin,
+        capture_output=True,
+        text=text,
+        errors=errors,
+        check=False,
+        env={**(os.environ if env is None else env), "LC_ALL": "C"},
+        timeout=timeout,
+    )
+    stderr = done.stderr if done.stderr is not None else ("" if text else b"")
+    diagnostic = git_error_text(stderr if isinstance(stderr, str) else os.fsdecode(stderr))
+    if done.returncode != 0 and (
+        allow is None or done.returncode not in allow or re.fullmatch(allow[done.returncode], diagnostic) is None
+    ):
+        raise Refused(f"git {args[0]} failed (exit {done.returncode}): {diagnostic}")
+    return GitRun(done.returncode, done.stdout, stderr, diagnostic)
 
 
 UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
@@ -4995,19 +5120,9 @@ def changed_paths(
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=stdin,
-            capture_output=True,
-            text=False,
-            check=False,
-            env=env,
-            timeout=GIT_SECONDS,
-        )
+        done = run_git(root, *args, env=env, stdin=stdin)
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
-    if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
     return done.stdout
 
 
@@ -5973,19 +6088,11 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
             if entry.name != "scripts":
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
-            archive = subprocess.run(
-                [GIT, "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
-                capture_output=True,
-                check=False,
-                env=env,
-                timeout=GIT_SECONDS,
-            )
+            archive = run_git(root, "archive", "--format=tar", "HEAD", "scripts/", env=env)
         except subprocess.TimeoutExpired as error:
             # The runner's own bound, turned into a diagnostic: an escaping TimeoutExpired would end the
             # run as a traceback and leave the mirror behind (P2 of the #188 review).
             raise Refused(f"the committed scripts could not be read within {GIT_SECONDS // 60} minutes") from error
-        if archive.returncode:
-            raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
             for member in tar.getmembers():
                 if not member.isfile() or not member.name.startswith("scripts/"):
@@ -7434,15 +7541,12 @@ def checkpoint(
     except Refused as error:
         raise CallFailed(f"the runner checkpoint failed: {error}") from error
     try:
-        ancestor = subprocess.run(
-            [GIT, "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
-            capture_output=True,
-            check=False,
-            timeout=GIT_SECONDS,
-        )
+        run_git(root, "merge-base", "--is-ancestor", baseline, "HEAD")
     except subprocess.TimeoutExpired as error:
         raise CallFailed(f"the runner checkpoint could not be measured within {GIT_SECONDS // 60} minutes") from error
-    if ancestor.returncode != 0 or count != "1":
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
+    if count != "1":
         raise CallFailed("the runner checkpoint is not exactly one descendant commit")
     try:
         dirty = _git_output(root, "status", "--porcelain=v1", "--untracked-files=all").strip()
@@ -7468,7 +7572,7 @@ def _ref_targets(root: Path) -> dict[str, str]:
     listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
     refs = {name: target.rstrip() for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
     head = _git_output(root, "rev-parse", "HEAD").strip()
-    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
+    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow={1: r""}).strip()
     refs["HEAD"] = f"{head} {symbolic or '(detached)'}"
     return refs
 
@@ -7708,7 +7812,7 @@ def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
             names.add(name)
     snapshot = {}
     for name in sorted(names):
-        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow=(0, 1)).strip()
+        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow={1: r""}).strip()
         if symbolic:
             snapshot[name] = ("symbolic", symbolic)
         else:
@@ -10084,12 +10188,13 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
         if not NEW_ADR.fullmatch(posix):
             continue
         try:
-            held = subprocess.run(
-                [GIT, "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
+            # Exit 128 also means an unreadable tree. Only the exact missing-path
+            # diagnostic establishes absence; added warnings/fatal lines must refuse.
+            missing = (
+                rf"fatal: path '{re.escape(posix)}' "
+                rf"(?:does not exist in|exists on disk, but not in) '{re.escape(base)}'"
             )
+            held = run_git(root, "cat-file", "-e", f"{base}:{posix}", allow={128: missing})
             present = held.returncode == 0
         except subprocess.TimeoutExpired:
             present = True  # unmeasured reads as present: the path stays a keep
