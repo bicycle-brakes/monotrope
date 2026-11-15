@@ -129,12 +129,12 @@ endpunkte:
     modelle_terms:
       glm-5.3:
         gelesen: "2026-11-15"
-        valid_until: "2026-12-09"
-        quelle: "maintainer's statement in the conversation, 2026-11-15: the Z.ai subscription ends on 2026-12-09"
+        valid_until: "2026-12-08"
+        quelle: "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day of the Z.ai subscription"
       glm-5.3-flash:
         gelesen: "2026-11-15"
-        valid_until: "2026-12-09"
-        quelle: "maintainer's statement in the conversation, 2026-11-15: the Z.ai subscription ends on 2026-12-09"
+        valid_until: "2026-12-08"
+        quelle: "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day of the Z.ai subscription"
     bemerkung: >-
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. No review phase routes to it since 2026-10-07 (ADR 0011): the

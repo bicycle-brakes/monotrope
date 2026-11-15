@@ -24,7 +24,19 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import stage2  # noqa: E402
-from test_stage2 import REPO_ROOT, World, successful_implementation  # noqa: E402
+from test_stage2 import (  # noqa: E402
+    OTHER_RED,
+    PLAN_CARD,
+    REPO_ROOT,
+    LocalCommands,
+    World,
+    codex_ok,
+    draft_world,
+    gate_red_then_green,
+    git,
+    red_verify,
+    successful_implementation,
+)
 from test_stage2 import world as stage2_world  # noqa: E402
 
 world = stage2_world
@@ -36,8 +48,8 @@ def zai_record(**overrides: object) -> dict:
     """A subscription-terms record: dated, sourced, with an end date; no retention or training reading."""
     record = {
         "gelesen": "2026-11-15",
-        "valid_until": "2026-12-09",
-        "quelle": "maintainer's statement in the conversation, 2026-11-15",
+        "valid_until": "2026-12-08",
+        "quelle": "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day",
     }
     record.update(overrides)
     return record
@@ -82,13 +94,13 @@ def set_zai_terms(w: World, model: str, **changes: object) -> None:
 def test_zai_terms_are_valid_through_their_last_utc_day(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: str
 ) -> None:
-    """Explore/implement (Flash) and the draft fallback (glm-5.3) are admitted through 2026-12-09, refused after."""
+    """Explore/implement (Flash) and the draft fallback (glm-5.3) are admitted through 2026-12-08, refused after."""
     root = declaration(tmp_path, {m: zai_record() for m in ("glm-5.3", "glm-5.3-flash")})
-    on(monkeypatch, "2026-12-09")
+    on(monkeypatch, "2026-12-08")
     assert stage2.declaration_problem(root, ZAI, model) is None
-    on(monkeypatch, "2026-12-10")
+    on(monkeypatch, "2026-12-09")
     problem = stage2.declaration_problem(root, ZAI, model)
-    assert problem is not None and "expired on 2026-12-09" in problem and model in problem
+    assert problem == f"the Z.ai subscription for {model} expired on 2026-12-08; no further call runs on it"
 
 
 def test_zai_record_needs_no_retention_or_training_reading(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -140,19 +152,20 @@ def test_zai_without_a_terms_block_refuses(tmp_path: Path, monkeypatch: pytest.M
 def test_explore_over_zai_warns_within_seven_days(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-09")
-    on(monkeypatch, "2026-12-06")
+    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-08")
+    on(monkeypatch, "2026-12-05")
     world.script(claude=[{"stdout": "Fact from `src/app.py` and its symbol `value`."}])
     assert world.run("explore") == 0
     out = capsys.readouterr().out
-    assert "Terms warning: the data terms of glm-5.3-flash expire on 2026-12-09 (3 days left)" in out
+    assert "Terms warning: the Z.ai subscription for glm-5.3-flash ends on 2026-12-08 (3 days left)" in out
+    assert "data terms" not in out
     assert len(world.calls("claude")) == 1
 
 
 def test_explore_over_zai_prints_no_warning_outside_the_window(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-09")
+    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-08")
     on(monkeypatch, "2026-11-15")
     world.script(claude=[{"stdout": "Fact from `src/app.py` and its symbol `value`."}])
     assert world.run("explore") == 0
@@ -163,16 +176,52 @@ def test_explore_over_zai_prints_no_warning_outside_the_window(
 def test_expired_zai_terms_refuse_explore_and_implement_before_any_call(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verb: str
 ) -> None:
-    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-09")
-    on(monkeypatch, "2026-12-10")
+    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-08")
+    on(monkeypatch, "2026-12-09")
     if verb == "implement":
         successful_implementation(world)
     else:
         world.script(claude=[{"stdout": "Fact from `src/app.py` and its symbol `value`."}])
     assert world.run(verb) != 0
     captured = capsys.readouterr()
-    assert "expired on 2026-12-09" in captured.out + captured.err
+    assert "the Z.ai subscription for glm-5.3-flash expired on 2026-12-08" in captured.out + captured.err
     assert world.calls("claude") == [], "a Z.ai call started on expired subscription terms"
+
+
+def test_implement_over_zai_warns_within_seven_days(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Phase 6, F6-1: the notice reaches the implement route too, and the call still runs."""
+    set_zai_terms(world, "glm-5.3-flash", valid_until="2026-12-08")
+    git(world.root, "commit", "--quiet", "-am", "the subscription's end")  # implement refuses a dirty tree
+    on(monkeypatch, "2026-12-05")
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert "Terms warning: the Z.ai subscription for glm-5.3-flash ends on 2026-12-08 (3 days left)" in (
+        capsys.readouterr().out
+    )
+    assert world.calls("claude"), "the implement call did not run inside the warning window"
+
+
+def test_expired_zai_terms_refuse_the_draft_fallback_before_its_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Phase 6, F6-1: `draft` preflights Codex only; the glm-5.3 attempt is refused at its own call check."""
+    draft_world(world)
+    set_zai_terms(world, "glm-5.3", valid_until="2026-12-08")
+    git(world.root, "commit", "--quiet", "-am", "the subscription's end")  # a draft refuses a dirty tree
+    on(monkeypatch, "2026-12-09")
+    red = red_verify(OTHER_RED)["stdout"]
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
+        claude=[{"stdout": "must not run"}],
+    )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=2)
+    assert world.run("draft") != 0
+    assert len(world.calls("codex")) == 2, "the refusal must come at the GLM attempt, after both Codex attempts"
+    assert world.calls("claude") == [], "a Z.ai draft call started on an expired subscription"
+    captured = capsys.readouterr()
+    assert "the Z.ai subscription for glm-5.3 expired on 2026-12-08" in captured.out + captured.err
 
 
 # ---------------------------------------------------------------------------

@@ -215,7 +215,8 @@ GLM = ("glm-coding-plan", "glm-5.3", "max")
 # The endpoints whose models a subscription carries until a declared end date: each listed model
 # needs a dated, sourced `modelle_terms` record with `valid_until`, and no call runs after that UTC
 # day (bead coding-harness-dcu3). `opencode-go` keeps its fuller paid-terms rule (`terms_problem`).
-SUBSCRIPTION_TERMS_ENDPOINTS = ("glm-coding-plan",)
+# Each endpoint maps to the subscription's name its expiry notice and refusal give (phase 6, F6-4a).
+SUBSCRIPTION_TERMS_ENDPOINTS = {"glm-coding-plan": "Z.ai"}
 HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 # Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
@@ -2041,7 +2042,9 @@ def subscription_terms_problem(entry: dict, model: str) -> str | None:
     admits nothing.
     """
     record = _terms(entry, model)
-    return _reading_problem(record, model) or _expiry_problem(record, model)
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS.get(str(entry.get("name")), str(entry.get("name")))
+    expired = f"the {subscription} subscription for {model} expired on {{expiry}}; no further call runs on it"
+    return _reading_problem(record, model) or _expiry_problem(record, model, expired)
 
 
 def _reading_problem(record: dict, model: str) -> str | None:
@@ -2059,12 +2062,18 @@ def _reading_problem(record: dict, model: str) -> str | None:
     return None
 
 
-def _expiry_problem(record: dict, model: str) -> str | None:
-    """Why the record has no usable end date or is past it (UTC), or None."""
+def _expiry_problem(record: dict, model: str, expired: str | None = None) -> str | None:
+    """Why the record has no usable end date or is past it (UTC), or None.
+
+    `expired`, when given, is the refusal past the end date with an `{expiry}` field;
+    without it the paid-terms wording stands.
+    """
     expiry, why = _valid_until(record)
     if expiry is None:
         return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
     if expiry < terms_today():
+        if expired is not None:
+            return expired.format(expiry=expiry.isoformat())
         return f"the model {model}'s data terms expired on {expiry.isoformat()}; the reading admits no further call"
     return None
 
@@ -2085,7 +2094,11 @@ def subscription_terms_warnings(root: Path, endpoint: str, model: str) -> list[s
     found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
     if found is None:
         return []
-    warnings = terms_warnings({**found, "modelle": [model]})
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS[endpoint]
+    warnings = terms_warnings(
+        {**found, "modelle": [model]},
+        notice=f"the {subscription} subscription for {{model}} ends on {{expiry}} ({{left}} left)",
+    )
     retain_terms_warnings(warnings)
     for warning in warnings:
         print(f"Terms warning: {warning}")
@@ -2143,13 +2156,15 @@ def retain_address_notices(notices: list[str]) -> list[str]:
     return evidence
 
 
-def terms_warnings(entry: dict) -> list[str]:
+def terms_warnings(entry: dict, notice: str | None = None) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
     Every declared record warns on a valid date inside the window, a skipped
     record included: a warning is advance notice, never admission ([DETAIL],
     2026-10-26). An expired date warns not — that is a skip with its reason —
     and an unusable one warns not either, for it refuses admission outright.
+    `notice`, when given, is the line with `{model}`, `{expiry}` and `{left}`
+    fields (a subscription's end); without it the paid-terms wording stands.
     """
     today = terms_today()
     warnings = []
@@ -2160,7 +2175,10 @@ def terms_warnings(entry: dict) -> list[str]:
         days = (expiry - today).days
         if 0 <= days <= TERMS_WARNING_DAYS:
             left = "1 day" if days == 1 else f"{days} days"
-            warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
+            if notice is not None:
+                warnings.append(notice.format(model=model, expiry=expiry.isoformat(), left=left))
+            else:
+                warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
     return warnings
 
 
