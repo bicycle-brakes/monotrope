@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -95,3 +95,18 @@ context: |
   Architecture change: none.
 
 In the context of a change that travels in the kit, facing a choice between one behaviour everywhere and a configuration value per repository, we decided against a switch, to achieve one variant to test and explain, accepting that a repository cannot return to the old behaviour on its own. — 2026-11-13
+
+## Q-6 · Criterion 10 and the draft's document check
+
+asked: 2026-11-15
+answer: "Criterion 10 follows the merged design of bead coding-harness-0swp (ADR 0025 amendment, point 4)" — a draft's post-run check runs only the locally runnable document gates, without the machine-wide verify admission, each gate bounded by the runner's tool limit (`TOOL_SECONDS`); it does not share the full check's execution allowance. No code change. Stated by the maintainer in the conversation on 2026-11-15.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec criterion 10 said the draft's document check uses the same admission-by-gate scheduler as the full check.
+  Intention: bead coding-harness-0swp merged first and moved the draft's document check outside any admission (ADR 0025 amendment, point 4); the criterion and the merged code disagreed during phase 6.
+  Today: the draft runs the registry's local document gates directly, unadmitted, each launch bounded by TOOL_SECONDS; the full post-attempt check and the full fallback use the scheduler.
+  Repository change: the spec's criterion 10 and the plan's criterion ledger are amended; no code changes.
+  Architecture change: none; ADR 0025's amendment already holds the draft rule.
+
+In the context of a criterion that still routed the draft's document check through the before-admission scheduler, facing a choice between amending the criterion to the merged design of bead coding-harness-0swp and changing the code back, we decided to amend criterion 10 so the draft runs only the local document gates outside the verify admission, each bounded by TOOL_SECONDS, to achieve one rule shared with ADR 0025, accepting that the draft's gates do not share the full check's execution allowance. — 2026-11-15

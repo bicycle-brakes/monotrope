@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -209,7 +209,8 @@ and `make verify` have not run for this unimplemented change.
 - 8: tests/test_ci.py::test_duration_storage_failure_warns_without_changing_verdict — broken measurement storage changes enforcement
 - 8: tests/test_verify_duration.py::test_completion_context_is_additive_and_old_history_reads — old records fail or final context is misattributed
 - 9: tests/test_verify_cheap_first.py::test_multiple_cheap_failures_keep_parser_frames — captured output loses either failed section or invents a skipped one
-- 10: tests/test_stage2.py::test_full_and_draft_checks_share_before_admission_scheduler — one consumer retains an outer admission or loses its gate selection
+- 10: tests/test_stage2.py::test_full_and_draft_checks_share_before_admission_scheduler — a full consumer retains an outer admission or loses its gate selection, or the draft leg requests an admission or runs the verify selection
+- 10: tests/test_stage2.py::test_draft_docs_check_keeps_admission_and_execution_limit — a draft document gate inherits an admission or loses the per-gate tool limit
 - 10: tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free — each gate resets the allowance or queue time consumes it
 - 10: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — a queued timely check times out or a hung gate survives the bound
 - 11: tests/test_verify_before_admission.py::test_transferred_kit_keeps_before_admission_behavior — renamed recipient gates need a source-tree import or an opt-out

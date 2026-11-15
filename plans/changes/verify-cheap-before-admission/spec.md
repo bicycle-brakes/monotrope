@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -24,7 +24,7 @@ neighbours: []
 Catch all cheap blocking faults before waiting for the machine's expensive-work
 slot, everywhere the kit's full check runs (bead coding-harness-bxxt.6 — cheap
 verification before admission). Research: [research.md](research.md).
-Maintainer answers: [decisions.md](decisions.md), Q-1 through Q-5.
+Maintainer answers: [decisions.md](decisions.md), Q-1 through Q-6.
 
 ## Problem
 
@@ -113,13 +113,20 @@ different contents of an already dirty file (research, “Draft gap resolution�
    *Refuted by:* the parser losing either of two cheap failures, its command or
    diagnostic, or treating a not-run summary as an executed gate.
    *Basis:* decisions.md#Q-3; research, frame guard.
-10. When Stage 2 performs full post-attempt verification, full fallback/final
-    review verification, or draft document verification, it uses the same
-    admission-by-gate behavior as the shell entry point.
-    *Refuted by:* any of those paths taking a whole-run admission before cheap
+10. When Stage 2 performs full post-attempt verification or full
+    fallback/final review verification, it uses the same admission-by-gate
+    behavior as the shell entry point. A draft's post-run document check runs
+    only the locally runnable document gates, without the machine-wide verify
+    admission, each gate bounded by the runner's tool limit (`TOOL_SECONDS`);
+    it does not share the full check's execution allowance.
+    *Refuted by:* a full path taking a whole-run admission before cheap
     gates/preparation, changing its selected gate set, losing its execution
-    bound or timeout diagnostic, or charging admission wait to that bound.
-    *Basis:* decisions.md#Q-1; decisions.md#Q-4; research, outer runner and limits.
+    bound or timeout diagnostic, or charging admission wait to that bound; or
+    the draft check requesting any admission, running the verify selection or
+    a protected gate, or launching a gate without the per-gate tool limit.
+    *Basis:* decisions.md#Q-1; decisions.md#Q-4; decisions.md#Q-6; ADR 0025,
+    implement and draft amendment, point 4 (bead coding-harness-0swp);
+    research, outer runner and limits.
 11. When the kit transfers the full check into a recipient repository, the same
     behavior works with recipient gate IDs and no opt-out switch.
     *Refuted by:* a missing transferred dependency or proof, renamed IDs
@@ -175,7 +182,8 @@ validation and lock-lifetime mechanics retain their current guarantees.
 
 ## Open decisions
 
-None open. The five maintainer answers are retained unchanged.
+None open. The five maintainer answers of 2026-11-13 are retained unchanged;
+Q-6 (2026-11-15) amends criterion 10 for the draft's document check.
 
 [DETAIL] Use an optional `needs_admission` boolean under schema 3 and derive
 effective protection as `cost == minutes` or that value being true. Absence
