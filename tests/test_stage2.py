@@ -88,6 +88,9 @@ OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 # The real bash, resolved when this module loads, before any test puts its stand-in first on PATH:
 # the stand-in hands every non-document bash call to it, wherever the host keeps bash.
 REAL_BASH = shutil.which("bash") or "/bin/bash"
+# The real sh, likewise: a non-plain gate runs under `sh -c` (`verify_run.shell_argv`), and the
+# stand-in hands every sh call to it, so a gate command really runs instead of answering green.
+REAL_SH = shutil.which("sh") or "/bin/sh"
 
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
@@ -129,6 +132,8 @@ if alias == "bash" and not docs_check:
         sys.stderr.write("stand-in: bash steps are not served; script the document check as `docs`\\n")
         raise SystemExit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
+if alias == "sh":
+    os.execv(scenario["_sh"], [scenario["_sh"], *argv])
 log = here / "calls.jsonl"
 
 
@@ -369,7 +374,7 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
-        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH}
+        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH, "_sh": REAL_SH}
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
