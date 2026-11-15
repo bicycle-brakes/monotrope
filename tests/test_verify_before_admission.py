@@ -1152,4 +1152,3 @@ def test_staging_over_an_identical_working_file_moves_the_tree(checkout: SimpleN
     after = verify_run.tree_snapshot(root)
     assert before.fingerprint != after.fingerprint, "staging B over a working B changed no fingerprint"
     assert before.moved(after) == ["staged.txt"], before.moved(after)
-
