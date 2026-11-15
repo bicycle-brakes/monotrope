@@ -1230,6 +1230,54 @@ def test_slips_distinguish_complete_partial_and_unavailable_history(
         assert "slips: 0" not in out, (empty, out)
 
 
+@pytest.mark.parametrize("damaged_line", [0, 2, 4])
+def test_slips_preserve_observations_beside_invalid_utf8(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], damaged_line: int
+) -> None:
+    """A damaged byte line must not hide valid runs before or after it."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    path = _write_history(tmp_path / "state", _slip_events(repository))
+    lines = path.read_bytes().splitlines(keepends=True)
+    lines.insert(damaged_line, b"\xff\n")
+    original = b"".join(lines)
+    path.write_bytes(original)
+
+    try:
+        code, out, err = _slips(capsys)
+    except UnicodeDecodeError:
+        pytest.fail("invalid UTF-8 must leave valid observations visible in a partial report")
+
+    assert code == 1, (out, err)
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert f"history note: line {damaged_line + 1}: not valid UTF-8" in out, out
+    assert "evidence partial" in out, out
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("instant", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_slips_preserve_observations_beside_overflowing_timestamp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], instant: str
+) -> None:
+    """A damaged run whose UTC conversion overflows must not abort valid observations."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    path = _write_history(
+        tmp_path / "state",
+        [*_slip_events(repository), _run_start("damaged", utc=instant, repository=repository)],
+    )
+    original = path.read_bytes()
+
+    try:
+        code, out, err = _slips(capsys)
+    except OverflowError:
+        pytest.fail("an unrepresentable UTC instant must leave valid observations visible in a partial report")
+
+    assert code == 1, (out, err)
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "invalid run_start fields: utc for run damaged" in out, out
+    assert "evidence partial" in out, out
+    assert path.read_bytes() == original
+
+
 def test_slips_are_read_only_and_preserve_duration_history(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

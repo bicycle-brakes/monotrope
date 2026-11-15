@@ -437,8 +437,8 @@ def _read_events() -> tuple[list[dict], list[str]]:
             info = os.fstat(fd)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise StorageUnusable(f"the history file {path} is not an unaliased regular file; refusing history")
-            with os.fdopen(fd, encoding="utf-8", closefd=False) as stream:
-                text = stream.read()
+            with os.fdopen(fd, "rb", closefd=False) as stream:
+                data = stream.read()
         finally:
             os.close(fd)
     except FileNotFoundError:
@@ -449,7 +449,12 @@ def _read_events() -> tuple[list[dict], list[str]]:
         ) from error
     events: list[dict] = []
     findings: list[str] = []
-    for number, line in enumerate(text.split("\n"), start=1):
+    for number, raw_line in enumerate(data.split(b"\n"), start=1):
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError:
+            findings.append(f"line {number}: not valid UTF-8 — a damaged row stays a diagnosed gap, never a run")
+            continue
         if not line.strip():
             continue
         try:
@@ -670,11 +675,11 @@ def _instant(value: object) -> datetime.datetime | None:
         return None
     try:
         parsed = datetime.datetime.fromisoformat(value)
-    except ValueError:
+        if parsed.tzinfo is None:
+            return None
+        return parsed.astimezone(datetime.UTC)
+    except (ValueError, OverflowError):
         return None
-    if parsed.tzinfo is None:
-        return None
-    return parsed.astimezone(datetime.UTC)
 
 
 def _same_repository(recorded: str) -> bool:

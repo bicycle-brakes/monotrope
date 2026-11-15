@@ -395,8 +395,12 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-3 | MAJOR | SPEC | base | scripts/verify_duration.py:440–441 | Appending a malformed UTF-8 line containing byte `0xff` after a valid qualifying pair makes `slips` raise uncaught `UnicodeDecodeError`, suppressing the valid observation and partial report. Reproduced at `24b0178e`. Decode and diagnose damaged lines independently so valid observations remain visible. [AC 6] | Codex | taken | — |
-| P6-4 | MINOR | MAINT | base | scripts/verify_duration.py:667–677 | A history row with UTC field `0001-01-01T00:00:00+01:00` makes `slips` raise uncaught `OverflowError` during timezone conversion, even though validation already marked that run damaged. Reproduced alongside a valid qualifying pair at `24b0178e`; its count disappears. Reject the invalid instant without aborting the report. [AC 6] | Codex | taken | — |
+| P6-3 | MAJOR | SPEC | base | scripts/verify_duration.py:440–441 | Appending a malformed UTF-8 line containing byte `0xff` after a valid qualifying pair makes `slips` raise uncaught `UnicodeDecodeError`, suppressing the valid observation and partial report. Reproduced at `24b0178e`. Decode and diagnose damaged lines independently so valid observations remain visible. [AC 6] | Codex | fixed — tests/test_verify_duration.py::test_slips_preserve_observations_beside_invalid_utf8 | — |
+| P6-4 | MINOR | MAINT | base | scripts/verify_duration.py:667–677 | A history row with UTC field `0001-01-01T00:00:00+01:00` makes `slips` raise uncaught `OverflowError` during timezone conversion, even though validation already marked that run damaged. Reproduced alongside a valid qualifying pair at `24b0178e`; its count disappears. Reject the invalid instant without aborting the report. [AC 6] | Codex | fixed — tests/test_verify_duration.py::test_slips_preserve_observations_beside_overflowing_timestamp | — |
 
 Phase 6 verdict: codex 01a1e014-f02f-79c0-9bc9-46082a1ba9d5, 2026-11-15
 Reviewer session: codex 01a1e014-f02f-79c0-9bc9-46082a1ba9d5 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1088 files, 4374 commits, 12 rules.
+
+Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
