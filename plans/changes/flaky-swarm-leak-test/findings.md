@@ -699,3 +699,15 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1dcb4-4d6a-71f0-8b92-7548ed2bcf95, 2026-11-15
 Reviewer session: codex 01a1dcb4-4d6a-71f0-8b92-7548ed2bcf95 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1065 files, 4300 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-6 | MAJOR | SPEC | base | tests/test_atomic_test_log.py:279–281 | Ordinary tuple assignment loses declared-log identity: `log, document = Path("calls.jsonl"), Path("notes.md")` followed by `log.read_text()` produces zero findings with the current guard, reproduced in memory. Only assignment targets that are directly names are tracked. An unlocked read through this variable therefore passes the guard and can observe partial records. [Acceptance criterion 5] | Codex | open | — |
+| F6-7 | MINOR | SPEC | base | tests/test_atomic_test_log.py:331–337 | `Path("notes.md").write_text("calls.jsonl")` incorrectly produces a raw-log-access finding, reproduced in memory. The guard treats the first argument of `write_text` as a potential destination, although it contains document text; the destination is the receiver. This rejects an operation on an unrelated document. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1deb3-0577-7a11-8de0-4f8d90138dc8, 2026-11-15
+Reviewer session: codex 01a1deb3-0577-7a11-8de0-4f8d90138dc8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
