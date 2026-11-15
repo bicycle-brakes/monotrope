@@ -164,7 +164,7 @@ class RunResult:
 class TreeSnapshot:
     """One stable reading of a checkout's tree identity (bead coding-harness-bxxt.6).
 
-    HEAD, the semantic index entries and the tracked working paths' types,
+    HEAD, the semantic index entries (path, mode, staged blob) and the tracked working paths' types,
     modes and contents, plus the non-ignored untracked paths and contents.
     Index stat-cache churn and the gates' own cache directories change
     nothing here; a content or path change changes the fingerprint.
@@ -246,10 +246,14 @@ def _measure(path: Path, allow_missing: bool) -> str:
     return f"file {mode:o} {digest.hexdigest()}"
 
 
-def _index_entries(root: Path) -> list[tuple[str, int]]:
-    """The semantic index entries: paths and modes; conflict stages and gitlinks refused."""
+def _index_entries(root: Path) -> list[tuple[str, int, str]]:
+    """The semantic index entries: paths, modes and staged blob IDs; conflict stages and gitlinks refused.
+
+    The staged blob is part of the tree: staging B over a working file that already holds B moves
+    the index alone, and a reading without the blob would reuse checks against staged A (row F6-1).
+    """
     raw = _git_bytes(root, "ls-files", "-z", "--stage")
-    entries: list[tuple[str, int]] = []
+    entries: list[tuple[str, int, str]] = []
     for record in raw.split(b"\0"):
         if not record:
             continue
@@ -258,13 +262,14 @@ def _index_entries(root: Path) -> list[tuple[str, int]]:
         if len(words) != 3:
             raise SnapshotUnusable("the git index could not be parsed; refusing to measure the tree")
         mode = int(words[0], 8)
+        blob = words[1].decode("ascii", "replace")
         stage = int(words[2])
         path = os.fsdecode(path_bytes)
         if stage != 0:
             raise SnapshotUnusable("the index holds conflict stages; refusing to measure an unresolved tree")
         if mode == 0o160000:
             raise SnapshotUnusable(f"{path} is a gitlink; the tree cannot be measured until submodules are supported")
-        entries.append((_safe(path), mode))
+        entries.append((_safe(path), mode, blob))
     return entries
 
 
@@ -279,8 +284,8 @@ def tree_snapshot(root: Path | str) -> TreeSnapshot:
     readings: dict[tuple[str, str], str] = {("head", "HEAD"): head}
     entries = sorted(_index_entries(wurzel))
     digest.update(b"index\0")
-    for path, mode in entries:
-        reading = f"{mode:o}\0{_measure(wurzel / path, allow_missing=True)}"
+    for path, mode, blob in entries:
+        reading = f"{mode:o}\0{blob}\0{_measure(wurzel / path, allow_missing=True)}"
         readings[("tracked", path)] = reading
         digest.update(f"{path}\0{reading}\0".encode())
     others = _git_bytes(wurzel, "ls-files", "-z", "--others", "--exclude-standard")

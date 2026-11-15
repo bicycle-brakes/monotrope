@@ -1132,3 +1132,24 @@ def test_real_tool_caches_keep_the_baseline_stable(checkout: SimpleNamespace) ->
     assert result.exit_code == 0, (result, out, err)
     assert (root / ".ruff_cache").is_dir() and (root / ".pytest_cache").is_dir(), "the caches were not written"
     assert result.executed == ["lint", "suite", "heavy"], result
+
+
+def test_staging_over_an_identical_working_file_moves_the_tree(checkout: SimpleNamespace) -> None:
+    """The "same tree" includes the index entries' contents (phase-6 row F6-1).
+
+    Commit A, write B to the working file, measure, then stage B: the working file is unchanged,
+    only the staged blob moved. Planted fault: the index reading keeps path and mode but drops the
+    staged blob, so cheap results against staged A are reused for staged B.
+    """
+    root = checkout.root
+    target = root / "staged.txt"
+    target.write_text("A\n", encoding="utf-8")
+    _git(root, "add", ".")
+    _git(root, "commit", "--quiet", "-m", "A")
+    target.write_text("B\n", encoding="utf-8")
+    before = verify_run.tree_snapshot(root)
+    _git(root, "add", "staged.txt")
+    after = verify_run.tree_snapshot(root)
+    assert before.fingerprint != after.fingerprint, "staging B over a working B changed no fingerprint"
+    assert before.moved(after) == ["staged.txt"], before.moved(after)
+
