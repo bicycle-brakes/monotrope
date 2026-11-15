@@ -6114,11 +6114,18 @@ def verify_evidence_text(out_text: str, err_text: str, key: str | None) -> str:
     return verify_evidence(subprocess.CompletedProcess([], 1, out_text, err_text), key)
 
 
-# A gate command made only of these characters is a plain argument vector: it starts as that vector,
-# so the runner's own launch resolves its program exactly as it resolved `make verify` before. Any
-# other command — quoting, expansion, an environment assignment, a pipe — runs through the shell
-# entry point's own shell (`verify_run.shell_argv`, loop row L3-4).
+# A syntactically plain external command may start as a vector, so the runner still resolves its
+# program as it resolved `make verify` before. Shell builtins and reserved words are shell syntax
+# even without quoting or expansion: `:` and `exit 1` must return gate verdicts, not launch errors.
+# Include the POSIX shell words and common sh extensions; a builtin with an external counterpart
+# (notably echo, printf and test) must also keep the shell's own semantics.
 PLAIN_GATE_COMMAND = re.compile(r"[A-Za-z0-9_./:,@%+ -]+")
+SHELL_GATE_WORDS = frozenset(
+    "! . : [ alias bg break case cd command continue coproc declare disown do done echo elif else "
+    "enable esac eval exec exit export false fc fg fi for function getopts hash help history if "
+    "in jobs kill let local logout popd printf pushd pwd read readonly return select set shift "
+    "source test then time times trap true type typeset ulimit umask unalias unset until wait while".split()
+)
 
 
 def _gate_argv(command: str, pinned: str) -> list[str]:
@@ -6128,7 +6135,9 @@ def _gate_argv(command: str, pinned: str) -> list[str]:
     """
     resolved = command.replace("python3", shlex.quote(pinned), 1)
     if PLAIN_GATE_COMMAND.fullmatch(command):
-        return shlex.split(resolved)
+        argv = shlex.split(resolved)
+        if argv and argv[0] not in SHELL_GATE_WORDS:
+            return argv
     return verify_run.shell_argv(resolved)
 
 

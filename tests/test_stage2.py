@@ -27627,3 +27627,32 @@ def test_scheduled_gate_shell_is_the_shell_entry_points():
     argv = stage2._gate_argv(command, "/pinned/python")
     assert argv == verify_run.shell_argv('FOO=1 /pinned/python -c "print(1)" | cat')
     assert argv[0] == "sh"
+
+
+@pytest.mark.parametrize("command, expected", [(":", 0), ("exit 1", 1), ("command exit 1", 1)])
+def test_scheduled_shell_builtins_keep_gate_verdicts(
+    world: World, monkeypatch: pytest.MonkeyPatch, command: str, expected: int
+) -> None:
+    """A builtin runs as a shell gate, with blocking red retained as repair evidence (row F6-7).
+
+    Planted fault: the plain-vector shortcut attempts to spawn the builtin itself. The scheduler
+    then reports an incomplete check (or launch raises CallFailed), losing the gate's verdict.
+    """
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    gate = copy.deepcopy(doc["gates"][0])
+    gate.update(id="shell-builtin", command=command, cost="seconds", enforcement="block", job="verify")
+    doc["gates"] = [gate]
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        stdout, stderr, code = stage2._scheduled_verify(world.root, env, "verify")
+    except (stage2.CallFailed, FileNotFoundError) as error:
+        pytest.fail(f"a shell builtin must return an ordinary gate verdict, not a launch failure: {error}")
+    assert code == expected, f"{command!r} must keep its shell exit status: {stdout}\n{stderr}"
+    assert "verification could not complete" not in stderr, stderr
+    if expected:
+        evidence = stage2.verify_evidence_text(stdout, stderr, None)
+        assert "shell-builtin" in evidence and command in evidence, evidence
+        assert "The gates that blocked" in evidence, evidence
