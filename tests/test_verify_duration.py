@@ -1238,17 +1238,21 @@ def test_slips_pair_one_repository_under_two_spellings(
     assert "slips: 1; incomplete/not countable runs: 0" in out and code == 0, out
 
 
+@pytest.mark.parametrize("kind", ["nightly", "full-fallback"])
 @pytest.mark.parametrize("verdict", ["green", "red"])
 def test_slips_diagnose_an_unknown_check_kind(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verdict: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verdict: str, kind: str
 ) -> None:
     """A run naming a check kind outside the known ones is unsupported evidence, never a clean run.
 
     Fault this pins (loop row L1-8): an unknown kind was routed into the full
     branch, where a green verdict passed as a complete observation with exit 0.
+    `full-fallback` is no kind of this change (loop row L4-2): no code writes
+    it, and a distinct fallback kind is follow-up work (bead coding-harness-rodx),
+    so a record naming it is read as unknown, not as a comparable full run.
     """
     repository = _measured_repo(tmp_path, monkeypatch)
-    events = _slip_events(repository, full_kind="nightly", full_verdict=verdict)
+    events = _slip_events(repository, full_kind=kind, full_verdict=verdict)
     _write_history(tmp_path / "state", events)
 
     code, out, _ = _slips(capsys)
@@ -1262,7 +1266,9 @@ def test_environment_cannot_mint_a_targeted_start(
 
     Fault this pins (loop row L1-9): the comment above `CHECK_KINDS` promised
     that only `begin_targeted_run` writes `targeted`, but the environment path
-    accepted it.
+    accepted it. Since loop row L4-1 the record keeps the refused value marked
+    as unrecognised instead of the null a legacy record reads as; the
+    guarantee is the same: no known kind, and never `targeted`.
     """
     monkeypatch.setenv(verify_duration.KIND_ENV, "targeted")
     monkeypatch.setenv(verify_duration.CHANGE_ENV, "demo")
@@ -1270,4 +1276,31 @@ def test_environment_cannot_mint_a_targeted_start(
     code, _, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
     assert code == 0
     start = next(e for e in _history(verify_lock.state_root().parent) if e["event"] == "run_start")
-    assert start["check_kind"] is None, start
+    kind = start["check_kind"]
+    assert kind is not None and kind != "targeted" and kind not in verify_duration.CHECK_KINDS, start
+
+
+@pytest.mark.parametrize("kind", ["nightly", "targeted", "full-fallback"])
+def test_an_unrecognised_environment_kind_is_diagnosed_by_the_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], kind: str
+) -> None:
+    """A start launched with an unrecognised kind is read as not countable, never as a legacy clean run.
+
+    Fault this pins (loop row L4-1): `_comparison_fields` mapped an unknown
+    environment kind to null, the value a legacy record carries, so the
+    reader's unknown-kind diagnosis could never fire for it and a green run
+    passed as a complete observation of zero slips with exit 0.
+    """
+    _measured_repo(tmp_path, monkeypatch)
+    monkeypatch.setenv(verify_duration.KIND_ENV, kind)
+    monkeypatch.setenv(verify_duration.CHANGE_ENV, "demo")
+    monkeypatch.setenv(verify_duration.TREE_ENV, TREE)
+    code, run_id, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0
+    code, _, _ = _run(capsys, "end", "--run", run_id.strip(), "--start", "0.0", "--end", "1.0", "--verdict", "green")
+    assert code == 0
+    for name in (verify_duration.KIND_ENV, verify_duration.CHANGE_ENV, verify_duration.TREE_ENV):
+        monkeypatch.delenv(name)
+
+    code, out, _ = _slips(capsys)
+    assert "slips: 0; incomplete/not countable runs: 1" in out and code == 1, out

@@ -80,8 +80,16 @@ GATE_FILE = Path("decisions") / "gates.yaml"
 GIT_TIMEOUT_SECONDS = 10.0
 # The check kinds a start record can name. `targeted` is written only by
 # `begin_targeted_run`, never from the environment: no launcher can mint a
-# targeted predecessor by exporting a variable.
-CHECK_KINDS = ("targeted", "full", "full-fallback")
+# targeted predecessor by exporting a variable. A distinct kind for a fallback
+# full run is not part of this change (bead coding-harness-rodx); a fallback is
+# recorded as `full`, and a record naming any other kind is read as unknown.
+CHECK_KINDS = ("targeted", "full")
+# The one kind a launcher may name through the environment (full_run_context).
+ENVIRONMENT_KINDS = ("full",)
+# The prefix that keeps a refused environment kind in the record: never a
+# known kind, never null, so the reader diagnoses it instead of reading a
+# legacy record.
+UNRECOGNISED_KIND_PREFIX = "unrecognised:"
 # The runner-owned variables of one full launch (full_run_context, full_verify).
 # Absent means a legacy record; present-but-empty means the explicit unknown.
 KIND_ENV = "HARNESS_VERIFY_DURATION_KIND"
@@ -228,16 +236,23 @@ def _comparison_fields() -> dict:
 
     Only the runner's own full checks carry these variables (`full_verify` hands
     them to the one `make verify` it starts); a start without them stays a
-    legacy duration record. Empty values become the explicit unknown. A kind
-    outside the known ones becomes the unknown too, never `targeted`: the
-    environment must not be able to mint a targeted predecessor, and a fallback
-    stays a full run.
+    legacy duration record. Empty values become the explicit unknown. Any other
+    kind than `full` (`targeted` included: the environment must not be able to
+    mint a targeted predecessor) is kept with the `unrecognised:` prefix, which
+    is no known kind, so the reader diagnoses the run as not countable instead
+    of reading a null kind as a legacy record (loop row L4-1).
     """
     if KIND_ENV not in os.environ:
         return {}
     kind = os.environ.get(KIND_ENV, "").strip()
+    if not kind:
+        recorded = None
+    elif kind in ENVIRONMENT_KINDS:
+        recorded = kind
+    else:
+        recorded = UNRECOGNISED_KIND_PREFIX + kind
     return {
-        "check_kind": kind if kind in CHECK_KINDS and kind != "targeted" else None,
+        "check_kind": recorded,
         "change": os.environ.get(CHANGE_ENV, "").strip() or None,
         "tree_id": os.environ.get(TREE_ENV, "").strip() or None,
     }
@@ -789,10 +804,10 @@ def cmd_slips(args: argparse.Namespace) -> int:
             continue
         if not in_selection:
             continue
-        # A full verification run: kinds full and full-fallback, and every
-        # legacy record, which predates comparison evidence.
+        # A full verification run: kind full, and every legacy record, which
+        # predates comparison evidence.
         comparable = (
-            kind in ("full", "full-fallback")
+            kind == "full"
             and isinstance(start.get("tree_id"), str)
             and isinstance(change, str)
             and isinstance(start.get("config_sha256"), str)
