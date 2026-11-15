@@ -780,3 +780,14 @@ Stage-2 call, 2026-11-15: repair · attempt 3 · route stage-1 · endpoint claud
 > - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-3-20261115T143316586499Z-0f48d50f.md
 > ```
+
+Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1067 files, 4382 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-10 | MAJOR | SPEC | base | tests/conftest.py:43–45 | A test that catches `RawStandInLogAccess` and then calls `pytest.skip()` leaves the suite green. Reproduced with the installed hooks: `1 skipped`, exit 0, no remaining violations. `_fail_on_recorded_access` clears the recorded access but refuses to fail whenever another exception exists, including pytest’s skip exception. The forbidden access must still fail the suite when its refusal was swallowed. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1e09e-fd4a-7da0-8652-376b88744376, 2026-11-15
+Reviewer session: codex 01a1e09e-fd4a-7da0-8652-376b88744376 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
