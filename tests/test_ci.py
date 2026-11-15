@@ -4456,3 +4456,46 @@ def test_research_handoff_blocks_local_and_hosted_verification() -> None:
     ci = ci_gates.generate_ci()
     assert "id: research-handoff" in ci and "python3 scripts/check_research_handoff.py" in ci
     assert (REPO_ROOT / "scripts" / "check_research_handoff.py").is_file()
+
+
+def test_queued_shell_derives_workers_after_capacity_change(tmp_path: Path) -> None:
+    """F6-2: a supervised restart derives workers from the capacity after waiting."""
+    base = tmp_path / "queued"
+    tree = _worker_probe_tree(base, base / "inherited")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="12", memory=str(24 * 1024**3))
+    state = base / "state"
+    _write_runner_capacity(state, "2")
+    root = state / "coding-harness"
+    # A legacy exclusive holder keeps the child queued until the settings change.
+    with (root / verify_lock.LOCK_NAME).open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        run = subprocess.Popen(
+            [shutil.which("bash") or "/bin/bash", str(tree / "scripts" / "verify_all.sh")],
+            cwd=tree,
+            env=_runner_env(tree, tmp_path / "home", [tools]),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            queue = root / verify_lock.QUEUE_DIR
+            while time.monotonic() < deadline and not list(queue.glob("*.json")):
+                assert run.poll() is None, "the shell exited instead of queueing"
+                time.sleep(0.05)
+            assert list(queue.glob("*.json")), "the shell never registered its wait"
+            replacement = root / "next.toml"
+            replacement.write_text("[verify]\nslots = 4\n", encoding="utf-8")
+            replacement.replace(root / verify_lock.SETTINGS_NAME)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            out, err = run.communicate(timeout=60)
+            assert run.returncode == 0, f"{out}\n{err}"
+            assert _inherited(tmp_path, "queued") == ("3", "declared"), (
+                "12 cores at the admitted capacity of four must use three workers"
+            )
+            assert "slots 4" in err and "pytest workers per run 3" in err, err
+        finally:
+            if run.poll() is None:
+                run.kill()
+                run.communicate(timeout=10)

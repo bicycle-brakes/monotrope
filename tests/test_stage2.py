@@ -27594,3 +27594,26 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_verify_attempt_preserves_caller_workers_for_targeted_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6-3: local verification keeps the caller override across foreign-env filtering."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(verify_lock.WORKERS_ENV, "1")
+    monkeypatch.delenv(verify_lock.WORKERS_SOURCE_ENV, raising=False)
+    monkeypatch.setattr(verify_lock, "machine_size", lambda: (12, 24 * 1024**3))
+    monkeypatch.setattr(stage2, "tool_problem", lambda *_args: None)
+    monkeypatch.setattr(stage2, "time_log", lambda *_args: None)
+    seen = []
+
+    def targeted_probe(root, _plan, env, *_args, **_kwargs):
+        seen.append(stage2.targeted_pytest_env(root, env))
+        return []
+
+    monkeypatch.setattr(stage2, "_targeted_body", targeted_probe)
+    assert stage2.verify_attempt(tmp_path, tmp_path / "plan.md", mode="targeted") == []
+    assert len(seen) == 1
+    assert seen[0][verify_lock.WORKERS_ENV] == "1", "the caller's worker override must reach local pytest"
+    assert verify_lock.WORKERS_ENV not in stage2.foreign_env({}), "foreign calls keep their existing filter"

@@ -372,11 +372,14 @@ def _read_settings_file(base: Path) -> tuple[dict[str, int], Path]:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise _settings_refused(path, "is not a regular file (substituted state)")
         payload = b""
-        while len(payload) < 65536:
-            block = os.read(fd, 65536)
+        # Bound the input, but never parse a prefix as the complete settings.
+        while True:
+            block = os.read(fd, 65537 - len(payload))
             if not block:
                 break
             payload += block
+            if len(payload) > 65536:
+                raise _settings_refused(path, "exceeds the 65536-byte settings limit")
     except OSError as error:
         raise _settings_refused(path, f"cannot be read ({error.strerror or error})") from error
     finally:

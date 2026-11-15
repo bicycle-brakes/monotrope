@@ -2184,3 +2184,12 @@ def test_settings_command_logs_values_and_sources(tmp_path: Path) -> None:
         check=False,
     )
     assert refused.returncode == 2 and "refusing admission" in refused.stderr
+
+
+def test_settings_refuse_invalid_workers_beyond_read_boundary(tmp_path: Path) -> None:
+    """F6-1: no unchecked settings suffix may reach protected work."""
+    prefix = "[verify]\nslots = 2\n"
+    document = prefix + " " * (65536 - len(prefix)) + "\nworkers_per_run = 0\n"
+    (tmp_path / verify_lock.SETTINGS_NAME).write_text(document, encoding="utf-8")
+    with pytest.raises(verify_lock.VerifyLockRefused, match="refusing admission"):
+        verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})

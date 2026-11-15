@@ -7214,6 +7214,11 @@ def verify_attempt(
         ),
         root,
     )
+    # Local verification honours the caller's worker choice; foreign model calls
+    # keep their stricter allow-list unchanged.
+    for name in (verify_lock.WORKERS_ENV, verify_lock.WORKERS_SOURCE_ENV):
+        if name in os.environ:
+            env[name] = os.environ[name]
     tampered = tool_problem(root, tools)
     if tampered:
         # The attempt overwrote a program the runner starts: it fails here, before the renderer or

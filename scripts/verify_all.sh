@@ -99,6 +99,37 @@ if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
 fi
 
+# One machine-wide admission for this user (queue for a free slot, free-memory
+# check) before any protected work: concurrent full checks across repositories
+# and worktrees exhausted the machine (bead coding-harness-p6mu). The capacity
+# comes from the same settings reader: the repository default, or `slots` in
+# the machine-local `verify.toml` in the shared state root. A valid inherited marker
+# (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
+# ancestor already holds — re-enter the unchanged gate loop directly; the
+# module is invoked as `-m scripts.verify_lock`, and the supervisor below
+# execs this script again with the original arguments.
+# Keep this boundary callable so both parent relationships can be checked directly.
+duration_admission_context() {
+    if [ "$1" != "${HARNESS_VERIFY_LOCK_HELD:-}" ]; then
+        unset HARNESS_VERIFY_ADMISSION_ID HARNESS_VERIFY_ADMISSION_WAIT 2>/dev/null || :
+    fi
+}
+
+if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
+    # A valid marker means this run nests in an admission an ancestor holds.
+    # One shape is the exception: when our parent IS the supervisor that holds
+    # the admission (the pid the holder published), this runner is the very
+    # command that admission admitted, and its fresh context — measured id and
+    # wait — is ours to record. Every genuinely nested run drops that context
+    # here, so its helpers resolve the shared wait from the validated
+    # ownership record and mark it reused instead of passing the ancestor's
+    # admission off as their own (bead coding-harness-1um6).
+    duration_admission_context "$PPID"
+else
+    exec "$PYTHON" -m scripts.verify_lock -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
+fi
+
+# Derive workers only after admission: a queued run may see a capacity change.
 # The pytest workers per run (bead coding-harness-l7sc; layered verify
 # settings, bead coding-harness-u1ha): the pytest gate's `-n auto` would
 # otherwise take every logical core, and a probe under that died in memory
@@ -165,36 +196,6 @@ if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
     else
         unset PYTEST_XDIST_AUTO_NUM_WORKERS
     fi
-fi
-
-# One machine-wide admission for this user (queue for a free slot, free-memory
-# check) before any protected work: concurrent full checks across repositories
-# and worktrees exhausted the machine (bead coding-harness-p6mu). The capacity
-# comes from the same settings reader: the repository default, or `slots` in
-# the machine-local `verify.toml` in the shared state root. A valid inherited marker
-# (`HARNESS_VERIFY_LOCK_HELD` with its `HARNESS_VERIFY_LOCK_TOKEN`) means this run is nested in an admission an
-# ancestor already holds — re-enter the unchanged gate loop directly; the
-# module is invoked as `-m scripts.verify_lock`, and the supervisor below
-# execs this script again with the original arguments.
-# Keep this boundary callable so both parent relationships can be checked directly.
-duration_admission_context() {
-    if [ "$1" != "${HARNESS_VERIFY_LOCK_HELD:-}" ]; then
-        unset HARNESS_VERIFY_ADMISSION_ID HARNESS_VERIFY_ADMISSION_WAIT 2>/dev/null || :
-    fi
-}
-
-if "$PYTHON" -m scripts.verify_lock --held >/dev/null 2>&1; then
-    # A valid marker means this run nests in an admission an ancestor holds.
-    # One shape is the exception: when our parent IS the supervisor that holds
-    # the admission (the pid the holder published), this runner is the very
-    # command that admission admitted, and its fresh context — measured id and
-    # wait — is ours to record. Every genuinely nested run drops that context
-    # here, so its helpers resolve the shared wait from the validated
-    # ownership record and mark it reused instead of passing the ancestor's
-    # admission off as their own (bead coding-harness-1um6).
-    duration_admission_context "$PPID"
-else
-    exec "$PYTHON" -m scripts.verify_lock -- bash "$PWD/scripts/verify_all.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
 fi
 
 # ── The runner-owned temporary area (bead coding-harness-bxxt.3) ───────────
