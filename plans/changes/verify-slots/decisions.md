@@ -27,6 +27,7 @@ asked: 2026-11-09
 answer: "Ich erlaube 2 parallel make verify" — two full checks (`make verify`) may run at the same time on the machine.
 answered_by: maintainer
 status: answered
+superseded_by: Q-6 — the count of two is replaced by four slots (2026-11-15)
 context: |
   Topic: the machine-wide verify lock (scripts/verify_lock.py) admits one full check at a time; on 2026-11-09 five repair lanes waited one to five hours each at the lock while one check of about 25 minutes ran.
   Intention: shorten the wait without overloading the machine.
@@ -41,12 +42,18 @@ run at the same time on the machine, to achieve a shorter wait, accepting that
 two checks side by side each run slower and that the effect must be measured
 before the change counts as done — 2026-11-09
 
+Superseded in its count by Q-6 (recorded 2026-11-15, review round 5, row
+L5-4): the shipped default is four slots, not two. The answer above stays
+as the maintainer gave it. The statement behind Q-6, verbatim, made by the
+maintainer in the conversation on 2026-11-14: "stelle auf 4 slots mit 3 workern um, messe das, und mache daraus wenn gut irgendwann eine kit regel, messen auch die ram auslastung".
+
 ## Q-2 · Where the number lives
 
 asked: 2026-11-09
 answer: "Das muss auch zentral leicht änderbar sein in Zukunft" — the slot count is a value that is easy to change in one central place (default 2), later inside the central harness configuration (bead coding-harness-twvx); no constant repeats it.
 answered_by: maintainer
 status: answered
+superseded_by: Q-6 — the default 2 and the bare slot file are replaced by four slots in layered settings (2026-11-15)
 context: |
   Topic: the slot count needs a home.
   Intention: change it without a code change when the machine or the measurements say so.
@@ -60,6 +67,12 @@ one central, easily changed place with the default 2 and that no constant
 repeats it, to achieve a change of the count without a code change, accepting
 that the central harness configuration is its own change (bead
 coding-harness-twvx) and the value moves there later — 2026-11-09
+
+Superseded in its default by Q-6 (recorded 2026-11-15, review round 5, row
+L5-4): the default is four slots, and the one central place is the layered
+settings of Q-6; that the count is easy to change centrally still holds. The
+answer above stays as the maintainer gave it; the statement behind Q-6 is
+quoted under Q-1.
 
 Evidence to keep in view (bead coding-harness-p6mu): three concurrent full
 checks once drove the load above 100 and each check past 30 minutes, against
@@ -129,6 +142,7 @@ asked: 2026-11-15
 answer: the number of slots and the number of pytest workers per run are set centrally and easily, in layers — a validated default in the repository (workers = logical cores / slots, floored, at least 1, still bounded by memory at 2 GiB per worker across all slots); one machine-local file that may override both values; ONE reading function used by verify_lock, verify_all.sh and the runner; every run logs the values in force and where they came from. The keys move unchanged into the central configuration later (bead coding-harness-twvx). The repository default of this change is 4 slots, so 3 workers on 12 logical cores. (Relayed in English by the orchestrator.)
 answered_by: maintainer
 status: answered
+supersedes: Q-1 (the count of two) and Q-2 (the default 2); the maintainer's statement of 2026-11-14 is quoted under Q-1
 context: |
   Topic: where the slot count and the pytest worker count live, and who reads them.
   Intention: change both without a code change, see in every run which values were used.

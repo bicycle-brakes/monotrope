@@ -26,6 +26,16 @@ decided (`decisions.md#Q-3`). The raw files are machine-local, under
 `paired-trial/`, `quad-trial/`: `summary.txt`, `load*.csv`, `verify-*.log`);
 every figure below was read from them on 2026-11-15.
 
+**What these figures are, and are not** (review round 5, row L5-2). The
+serial figures are the worker curve on `main` at `1d4419d1`; the paired
+(2 x 6) and quad (4 x 3) figures come from the branch at `8ad6b533`. All six
+trial runs on the branch exited red for the content reason below, and no
+trial ran at capacity one on the branch. No figure here is a comparison on
+the same implementation: each ratio below sets a branch run beside a `main`
+run of another revision, under a night load that differed between them.
+Criterion 11 is therefore not met by this file yet; the trials on the
+repaired head (last section) are owed.
+
 **Measured** means read from those files. **Derived** means computed here
 from measured figures; the derivation is shown. Execution seconds are the
 runner's own `execution …s · admission wait …s` line (the admission wait is
@@ -121,14 +131,17 @@ in `327e51d7`; with it both tests pass.
 ## Reading — derived
 
 Against the maintainer's threshold (`decisions.md#Q-4`: both runs within
-1.6 times a single run, no test red or flaky because of the parallelism):
+1.6 times a single run, no test red or flaky because of the parallelism) —
+read across revisions, red branch runs beside green `main` runs, so an
+orientation, not the comparison criterion 11 asks for:
 
 - **Paired, 2 x 6 against the single six-worker run** (execution 748 s):
   814 s and 847 s, **1.09x and 1.13x**; by pytest seconds 787 and 793
-  against 575, 1.37x and 1.38x. Within the threshold on either measure.
+  against 575, 1.37x and 1.38x. Below 1.6 on either measure, across
+  revisions.
 - **Quad, 4 x 3 against the single three-worker run** (execution 1,106 s):
   1,477–1,523 s, **1.34x–1.38x**; by pytest seconds 1,417–1,446 against
-  934, **1.52x–1.55x**. Within the threshold, but slower than the fit
+  934, **1.52x–1.55x**. Below 1.6 across revisions, but slower than the fit
   predicts: four three-worker runs use the 12 cores once, so the fit expects
   each about as fast as one three-worker run alone. The cause of this
   slowdown is **not read**; memory is not it by the sampled free memory
@@ -154,9 +167,23 @@ time from queueing to result, provided no additional test turns red or flaky
 and free memory never falls below 25 %. The repository default of four slots
 (three workers on this machine) starts the first window; the verify history
 now records slots, workers, their sources, the end load and the pytest peak
-memory of every run, which those windows read.
+memory of every full check the shell runner (`scripts/verify_all.sh`) runs,
+which those windows read. The runner's targeted pytest logs its values and
+their sources but writes no history record.
 
 What is still missing for criterion 11 as the spec words it: no trial ran
 at capacity one on the branch itself (the worker curve on `main` stands in
 for it), and the six trial runs are red for the content reason above, so no
 green paired run is recorded yet.
+
+## Trials on the repaired head — owed, not yet run
+
+Empty on purpose. The orchestrator runs these trials on the repaired head
+and fills the rows; until then nothing in this section is measured. Each
+trial records the tested commit, and a batch row per run.
+
+| Trial | Commit | Run | Wall s | pytest s | Peak pytest RSS MiB | Load (1-min mean / max) | Free memory min % | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| Serial, capacity one | | | | | | | | |
+| Paired, 2 x 6 | | | | | | | | |
+| Quad, 4 x 3 | | | | | | | | |

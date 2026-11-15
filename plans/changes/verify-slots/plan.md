@@ -18,7 +18,7 @@ tags: [plan, verification]
 # Plan — `verify-slots`
 
 ```text
-For you:     Two full checks can share the machine at once; the limit is one adjustable value.
+For you:     Four full checks can share the machine at once; slots and workers per run are one adjustable setting.
 Done when:   The capacity regressions and the existing lock tests pass, make verify is green, and serial-versus-paired wall time and load are recorded.
 Appetite:    Four hours of phase 4, repairs and both trials included; a stop, not an estimate.
 Not now:     Worker tuning, swarm slots, automatic tuning, the general harness configuration.
@@ -37,15 +37,17 @@ is recorded, so there is no Explore fallback to carry. At the drafted commit
 `templates/plan.md` and `scripts/validate_change_artefacts.py` do not exist:
 this plan follows the phase-3 prompt's form, and their gate is not claimed.
 
-1. Change `scripts/verify_lock.py`: add one declared capacity default (two)
-   and a safe reader for the shared root's `verify.slots` file (the root
-   `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`). A missing file
-   means the default; present content must be a whitespace-trimmed positive
-   decimal integer and nothing else. Refuse a
-   symlinked, nonregular, unreadable or invalid file with a diagnostic
-   before any protected work; read it without following and never write it
-   during admission; re-read it under the registry lock for every
-   reservation decision.
+1. Change `scripts/verify_lock.py`: declare the repository default of four
+   slots (`DEFAULT_SLOTS`) and one reader, `read_settings`, of the layered
+   settings: the default, then the machine-local `verify.toml` in the shared
+   root (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/`), a `[verify]`
+   table with `slots` and `workers_per_run`, positive integers within their
+   bounds (corrected 2026-11-15 to the shipped design, review round 5, row
+   L5-3; `decisions.md#Q-6`). A missing file means the default. Refuse a
+   symlinked, nonregular, unreadable or invalid file, and a leftover bare
+   `verify.slots`, with a diagnostic before any protected work; read it
+   without following and never write it during admission; re-read it under
+   the registry lock for every reservation decision.
 2. In the same file, keep `verify.lock` as the compatibility lock: the
    updated implementation takes it shared, so a legacy exclusive holder
    excludes all new work and new holders do not exclude each other. Add
@@ -124,17 +126,25 @@ make verify
 ```
 
 Policy behaviour is tested with injected clocks and memory readers; no test
-manufactures memory pressure. When the suite is green, the orchestrator
-coordinates a quiet window with the other lanes and runs the trials: at one
-tested implementation commit, both trials use a temporary shared
-`XDG_STATE_HOME` with the inherited admission markers cleared, so the trial
-children take their own admissions there; the live machine setting is never
-edited. Run `make verify` twice sequentially with capacity one, then twice
-concurrently with capacity two, starting both children coordinated and
-joining both; no edits between runs, and no trials beside other full
-checks. The enclosing runner's own verification stays on normal admission.
+manufactures memory pressure. Corrected 2026-11-15 to the shipped design
+(review round 5, row L5-3): the trials run under the night load, beside the
+other lanes (`decisions.md#Q-3`), not in a quiet window. At one tested
+implementation commit — the repaired head — the orchestrator runs three
+trials, each child with the five inherited admission markers cleared so it
+takes an admission of its own: a serial trial at capacity one, a paired
+trial of two slots with six workers each, and a quad trial of four slots
+with three workers each, starting the children of a batch coordinated and
+joining them; no edits between runs. Each batch is read against
+`decisions.md#Q-4` (every run within 1.6 times the serial run, no test red
+or flaky because of the parallelism). After the merge the configuration is
+chosen in real operation (`decisions.md#Q-7`): three windows of two days
+each — four slots x three workers (the repository default), then three x
+four, then two x six, the later two set in `verify.toml` — and the winner
+is the shorter mean time from queueing to result, provided no additional
+test turns red or flaky and free memory never falls below 25 %. The
+enclosing runner's own verification stays on normal admission.
 
-Record, in `measurements.md`: date, commit, dirty state, Python and worker
+Record, in `measurements.md` (section "Trials on the repaired head"): date, commit, dirty state, Python and worker
 configuration, memory floor, hardware, background workload, each exit code,
 queue wait, execution and wall time per run, and the batch elapsed time.
 Sample `os.getloadavg()` every five seconds across each batch and record

@@ -166,12 +166,20 @@ worker count).
     the machine-local `verify.toml` (`[verify]` with `slots` and
     `workers_per_run`), and for the workers by a caller's non-empty
     `PYTEST_XDIST_AUTO_NUM_WORKERS`, which passes verbatim. Every run logs
-    the values in force and where each came from.
+    the values in force and where each came from, on the operator's stderr
+    as one `[verify-settings]` line printed by one helper
+    (`log_settings`): `scripts/verify_all.sh` through `--settings`, the
+    runner's targeted pytest before it launches; the admission's own line
+    names the slot, the capacity and its source. Only the shell runner's
+    full check also writes the values into the duration history; the
+    targeted pytest writes no history record. A slot count above the logical
+    cores adds a warning to both lines and never refuses.
     *Refuted by:* a caller of its own rule (a copied half-the-cores formula),
     workers that do not follow an overriding slot count, a caller's value
     rewritten, a runner-started full check whose worker count differs from a
-    shell-started one, or a run whose log does not name the values and
-    their sources.
+    shell-started one, a run whose log does not name the values and
+    their sources, or the two paths printing the line through separate
+    wordings.
     *Basis:* `decisions.md#Q-6`.
 
 13. When a run of `scripts/verify_all.sh` is recorded in the verify history,
@@ -267,6 +275,17 @@ answered on the maintainer's behalf:
 - [DETAIL] An explicit `workers_per_run` in the machine file is not bounded
   by memory. Reason: an operator's stated value wins, as a caller's
   environment value does.
+- [DETAIL] A slot count above the logical cores (the shell's reading, else
+  Python's) warns, it does not refuse (review round 5, row L5-6): the
+  `[verify-settings]` line and the admission's reservation line carry
+  "slots N (source) exceed the M logical cores; each run gets one worker and
+  the machine is oversubscribed". Reason: `read_settings` refuses unusable
+  *content* — a value that is not a positive integer within its bound — and
+  such a slot count is valid content judged against a machine reading that
+  may be absent or differ between machines (a hosted runner has fewer cores
+  than the maintainer's machine, where the repository default of four still
+  has to start); the admission's own log line never refuses. The bound of
+  256 stays the refusal.
 - [DETAIL] Exclusion with older checkouts is preserved by keeping the
   existing `verify.lock` as a compatibility lock the updated implementation
   takes shared; FIFO applies among the updated implementation's

@@ -167,8 +167,9 @@ These are operator details; you can skip them on a first read.
   memory is below a floor (`scripts/verify_lock.py`). The slot count and the
   pytest workers per run are layered settings read by one function: the
   repository default, overridden by `[verify]` `slots` and
-  `workers_per_run` in `verify.toml` in the shared state root; every run
-  logs the values in force and their source.
+  `workers_per_run` in `verify.toml` in the shared state root; a full check
+  and the runner's targeted pytest both log the values in force and their
+  source, and the full check records them in its duration history.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
@@ -344,9 +345,13 @@ What is particular to this repository:
   2 GiB of memory across all slots), and the lanes fill the machine
   admission's configured capacity — four verification slots by default, set
   by `verify.toml` in the shared state root ([lanes](orchestration.md)).
-  Measured on 2026-11-14 on a 12-core, 24-GiB machine under load: one run
-  took 594 s with 12 workers and 1,106 s with 3; four runs of 3 workers side
-  by side took 1,477–1,523 s each
+  First trials on 2026-11-14, on a 12-core, 24-GiB machine under load and
+  across two revisions, not yet a comparison on one implementation: single
+  runs on `main` at `1d4419d1` took 594 s with 12 workers and 1,106 s with 3;
+  four runs of 3 workers side by side on the branch at `8ad6b533` took
+  1,477–1,523 s each, and every branch trial run exited red for a content
+  reason, not the parallelism. No trial at capacity one ran on the branch;
+  the trials on the repaired head are still owed
   (`plans/changes/verify-slots/measurements.md`).
 
 ## Follow one completed change

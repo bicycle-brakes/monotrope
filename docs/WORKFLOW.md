@@ -587,9 +587,12 @@ workers_per_run = 4  # pytest workers of each run; without it, cores / slots
 A derived worker count follows an overriding slot count; a caller's non-empty
 `PYTEST_XDIST_AUTO_NUM_WORKERS` still wins for its own run. The admission,
 `verify_all.sh` and the runner's targeted pytest all ask the same function,
-and every run logs the values in force and where each came from
-(`[verify-settings] slots 4 (repository default) · pytest workers per run 3
-(…)`). The keys move unchanged into the central harness configuration later
+and both runs print the values in force and where each came from through one
+helper, as one stderr line (`[verify-settings] slots 4 (repository default) ·
+pytest workers per run 3 (…)`); the admission's own line names the slot, the
+capacity and its source. Only the shell runner's full check writes the values
+into the duration history; the targeted pytest writes no record. A slot count
+above the logical cores adds a warning to both lines and never refuses. The keys move unchanged into the central harness configuration later
 (bead coding-harness-twvx). Change the file by atomic replacement (write a
 new file, rename it over the old one); a symlinked, nonregular, unreadable or
 otherwise invalid file — empty, unparsable, another table or key, a value
