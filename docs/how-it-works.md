@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-11-02
-updated: 2026-11-12
+updated: 2026-11-15
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -161,12 +161,14 @@ These are operator details; you can skip them on a first read.
   the loop record until the final review releases it into `findings.md`.
 - The `session` verb opens a macOS Terminal window through `osascript`, so it
   needs a graphical login. Every other verb runs in a plain shell.
-- One admission per machine, with a configurable capacity: two independent
+- One admission per machine, with a configurable capacity: four independent
   `make verify` or runner checks run beside each other by default, further
   ones queue in registration order, and each admitted check waits while free
-  memory is below a floor (`scripts/verify_lock.py`). The capacity is the
-  `verify.slots` file in the shared state root — a whitespace-trimmed
-  positive decimal integer, absence meaning the default of two.
+  memory is below a floor (`scripts/verify_lock.py`). The slot count and the
+  pytest workers per run are layered settings read by one function: the
+  repository default, overridden by `[verify]` `slots` and
+  `workers_per_run` in `verify.toml` in the shared state root; every run
+  logs the values in force and their source.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
@@ -338,10 +340,14 @@ What is particular to this repository:
 - **Runs take time.** A full `make verify` took about 11 minutes on
   2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
   4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
-  test workers from the machine (half the cores, at most one per 2 GiB of
-  memory), and the lanes fill the machine admission's configured capacity —
-  two verification slots by default, set by `verify.slots` in the shared
-  state root ([lanes](orchestration.md)).
+  test workers from the slot count (logical cores / slots, at most one per
+  2 GiB of memory across all slots), and the lanes fill the machine
+  admission's configured capacity — four verification slots by default, set
+  by `verify.toml` in the shared state root ([lanes](orchestration.md)).
+  Measured on 2026-11-14 on a 12-core, 24-GiB machine under load: one run
+  took 594 s with 12 workers and 1,106 s with 3; four runs of 3 workers side
+  by side took 1,477–1,523 s each
+  (`plans/changes/verify-slots/measurements.md`).
 
 ## Follow one completed change
 

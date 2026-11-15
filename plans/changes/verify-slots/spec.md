@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -21,10 +21,13 @@ neighbours: []
 
 # Spec — `verify-slots`
 
-The goal in one sentence: two independent protected checks may run at once by
-default, and their number is one value adjustable without a code change
-(bead `coding-harness-u1ha` — configurable verification capacity). Research:
-`research.md`. Decisions: `decisions.md`.
+The goal in one sentence: several independent protected checks may run at
+once — four by the repository default — and the slot count and the pytest
+workers per run are set in layers, read by one function, without a code
+change (bead `coding-harness-u1ha` — configurable verification capacity).
+Research: `research.md`. Decisions: `decisions.md` (Q-1 and Q-2 of
+2026-11-09; Q-3 to Q-7 of 2026-11-14/15, which raise the default and add the
+worker count).
 
 ## Problem
 
@@ -42,6 +45,11 @@ default, and their number is one value adjustable without a code change
 - Two simultaneous checks have not been measured on this implementation; the
   recorded incident concerns three checks and cannot establish how two behave
   (`decisions.md`, closing evidence note).
+- The pytest worker count is a second, separate rule (half the logical cores,
+  bounded by memory) copied into `scripts/verify_all.sh` and
+  `scripts/stage2.py`; it knows nothing of the slot count, so more slots
+  oversubscribe the cores, and the runner's environment allow-list drops a
+  caller's worker variable (`decisions.md#Q-6`).
 
 ## Terms
 
@@ -57,15 +65,17 @@ default, and their number is one value adjustable without a code change
 
 ## Acceptance criteria
 
-1. When independent protected checks contend and no capacity setting is
-   present, two slots are available across repositories and worktrees.
-   *Refuted by:* an eligible second check cannot reserve the idle second
-   slot, or a third runs while two are occupied.
-   *Basis:* `decisions.md#Q-1`.
+1. When independent protected checks contend and no machine settings file
+   is present, the repository default of slots (four) is available across
+   repositories and worktrees.
+   *Refuted by:* an eligible check cannot reserve an idle slot below the
+   default, or one more runs while every default slot is occupied.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-6`.
 
-2. When capacity is changed in its single documented machine-wide setting,
-   later reservation decisions use that positive integer, with no code edit
-   and no per-checkout copy of the value.
+2. When capacity is changed in its single documented machine-wide setting
+   (`slots` in the machine-local `verify.toml`), later reservation decisions
+   use that positive integer, with no code edit and no per-checkout copy of
+   the value.
    *Refuted by:* settings of one or three are ignored, different working
    directories select different values, or a lowered capacity grants new
    reservations before existing ones drain below it.
@@ -74,9 +84,11 @@ default, and their number is one value adjustable without a code change
 3. If a present capacity setting is invalid or cannot be safely read,
    independent admission refuses with a diagnostic before any protected work.
    *Refuted by:* an empty, zero, negative, fractional, nonnumeric,
-   substituted or unreadable setting silently selects a fallback, hangs, or
-   lets work start.
-   *Basis:* `decisions.md#Q-2` (one declared, validated value).
+   substituted or unreadable setting, an unknown key or table, or a leftover
+   bare `verify.slots` file silently selects a fallback, hangs, or lets work
+   start.
+   *Basis:* `decisions.md#Q-2` (one declared, validated value),
+   `decisions.md#Q-6`.
 
 4. While live independent checks wait, free slots are reserved in FIFO order,
    without waiting for all occupied slots to empty.
@@ -140,16 +152,50 @@ default, and their number is one value adjustable without a code change
     configuration, outcomes, per-run wall times, batch elapsed times and
     sampled load for both trials, or a current-policy document still
     prescribes one slot.
-    *Basis:* `decisions.md`, closing evidence note; `decisions.md#Q-2`.
+    *Basis:* `decisions.md`, closing evidence note; `decisions.md#Q-2`;
+    `decisions.md#Q-3` (under the night load) and `decisions.md#Q-4`
+    (both runs within 1.6x a single run, no test red or flaky because of the
+    parallelism).
+
+12. When a verification run starts — through `scripts/verify_all.sh`, the
+    admission or the runner's targeted pytest — one reading function
+    (`read_settings` in `scripts/verify_lock.py`) supplies the slot count and
+    the pytest workers per run: the validated repository default (four
+    slots; workers = logical cores / slots, floored, at least one, bounded
+    by 2 GiB of memory per worker across all slots), overridden per value by
+    the machine-local `verify.toml` (`[verify]` with `slots` and
+    `workers_per_run`), and for the workers by a caller's non-empty
+    `PYTEST_XDIST_AUTO_NUM_WORKERS`, which passes verbatim. Every run logs
+    the values in force and where each came from.
+    *Refuted by:* a caller of its own rule (a copied half-the-cores formula),
+    workers that do not follow an overriding slot count, a caller's value
+    rewritten, a runner-started full check whose worker count differs from a
+    shell-started one, or a run whose log does not name the values and
+    their sources.
+    *Basis:* `decisions.md#Q-6`.
+
+13. When a run of `scripts/verify_all.sh` is recorded in the verify history,
+    its start record names the slots and workers in force with their
+    sources, and its end record the load average at the end and the peak
+    summed resident memory of its pytest process trees, sampled every five
+    seconds; a value that cannot be read is recorded as unknown, never as
+    zero, and records written before these fields stay readable.
+    *Refuted by:* a record without the values or sources, a missing sample
+    recorded as a number, xdist workers left out of the peak, or the reader
+    refusing an older record.
+    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-7` (the real-operation
+    windows read these records).
 
 ## Non-goals
 
-- Research-swarm invocation slots, pytest worker-count tuning, priority
+- Research-swarm invocation slots, automatic worker-count tuning, priority
   scheduling, continuous memory monitoring, new bypasses, or any change to
   which work needs admission (research, "Meaning B", "Protected areas").
 - The future general harness configuration (bead `coding-harness-twvx` —
-  central configuration); this change supplies only the capacity value and
-  its one documented home.
+  central configuration); this change supplies only the slot and worker
+  values and their one documented home, whose keys move there unchanged.
+- The choice between 4 x 3, 3 x 4 and 2 x 6: the real-operation windows of
+  `decisions.md#Q-7` make it after the merge; a kit rule is its own bead.
 - A throughput guarantee, a new performance threshold or automatic tuning;
   the trials report evidence, they do not promise an improvement.
 - Design phase 2b and an ADR: this is the bounded extension recorded in
@@ -172,8 +218,10 @@ coding-harness-42em (each admission an explicit handle).
 `Makefile`, `decisions/gates.yaml`, `.github/`, `provenance.yaml`, ADRs,
 `AGENTS.md`, prompts, templates and model routing stay unchanged: the change
 adjusts admission capacity, not governance, gate commands or foreign calls.
-The existing memory thresholds and pytest worker sizing stay as they are, so
-the capacity measurement stays interpretable. Historical measurements stay
+The existing memory thresholds stay as they are. The pytest worker sizing
+changes only as `decisions.md#Q-6` states (criterion 12): its machine
+readings in `scripts/verify_all.sh` keep their tested rules, and only the
+formula moves into the one reader. Historical measurements stay
 historical; only current-policy statements change.
 
 ## Definition of Done
@@ -197,14 +245,28 @@ historical; only current-policy statements change.
 None open. The following reversible details are chosen visibly here, not
 answered on the maintainer's behalf:
 
-- [DETAIL] One optional `verify.slots` text file in the existing shared state
-  root holds the capacity; absence means the sole declared default of two.
-  This gives a machine-wide edit today without anticipating the future
-  configuration system (its own change, bead `coding-harness-twvx`). A
-  whitespace-trimmed positive decimal integer is the only accepted content;
-  any other present content refuses. The value is re-read under admission
-  coordination; a decrease drains existing reservations without cancelling
-  them. Reason: one file, no code change, no per-checkout copies.
+- [DETAIL] One optional machine-local `verify.toml` in the existing shared
+  state root holds the overrides (`[verify]`, keys `slots` and
+  `workers_per_run`, positive integers up to 256 and 1024); absence means
+  the repository default (`DEFAULT_SLOTS = 4` in `scripts/verify_lock.py`).
+  It replaces the bare `verify.slots` file of the first implementation
+  (2026-11-15): no criterion needs the old file, and none was in use on the
+  machine, so it is not read as a fallback; a leftover one refuses with a
+  diagnostic naming the new file, so a stale value never silently changes
+  meaning. Any other present content refuses. The file is re-read under
+  admission coordination; a decrease drains existing reservations without
+  cancelling them. Reason: one file, no code change, no per-checkout
+  copies, keys that move unchanged into bead `coding-harness-twvx`.
+- [DETAIL] `scripts/verify_all.sh` keeps its machine readings (`sysctl`,
+  `nproc`, `/proc/meminfo`, with their validation) and hands them to the
+  reader; the runner's targeted pytest uses Python's own readings
+  (`machine_size`). Reason: the tested reading rules of bead
+  coding-harness-l7sc stay where they are; the formula exists once. The
+  runner's full check needs no worker variable: `verify_all.sh` derives it
+  itself, so the allow-list that drops the variable no longer matters.
+- [DETAIL] An explicit `workers_per_run` in the machine file is not bounded
+  by memory. Reason: an operator's stated value wins, as a caller's
+  environment value does.
 - [DETAIL] Exclusion with older checkouts is preserved by keeping the
   existing `verify.lock` as a compatibility lock the updated implementation
   takes shared; FIFO applies among the updated implementation's

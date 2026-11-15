@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-12
+updated: 2026-11-15
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -48,11 +48,17 @@ then:
    lanes.** Such a step runs `make verify`: an implement or repair attempt
    whose targeted check falls back to the full run, the final review's own
    check, or the orchestrator's own full run, which runs at lower priority
-   (`nice -n 10`). The machine-wide admission admits two independent checks at
-   once by default, and its count is the `verify.slots` file in the shared
-   state root (see `docs/WORKFLOW.md`, "One admission per user and machine");
-   the number of test workers is sized from the machine: half the logical
-   cores, at most one per 2 GiB of memory (bead coding-harness-l7sc, #305).
+   (`nice -n 10`). The machine-wide admission admits four independent checks
+   at once by default; the slot count and the pytest workers per run come
+   from the layered verify settings — the repository default, overridden by
+   `verify.toml` in the shared state root (see `docs/WORKFLOW.md`, "One
+   admission per user and machine"). Without an override the workers per run
+   are the logical cores divided by the slots, floored, at least one, and at
+   most one per 2 GiB of memory across all slots (beads coding-harness-l7sc,
+   coding-harness-u1ha). From the merge the machine runs three measured
+   windows of two days each — 4 slots x 3 workers, then 3 x 4, then 2 x 6 —
+   and keeps the one with the shorter mean time from queueing to result
+   (decisions Q-7 of the change verify-slots).
 2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,
    the phase-6 review, CI waits and pull-request text use little local
    memory.
@@ -132,7 +138,7 @@ handover.
 | Rule | Today | Planned |
 | --- | --- | --- |
 | Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
-| Verify-bearing steps within the configured capacity, memory floor | enforced: one admission per machine with two slots by default, set by `verify.slots` in the shared state root, and a memory floor per slot (bead coding-harness-p6mu, coding-harness-u1ha, #284) | — |
+| Verify-bearing steps within the configured capacity, memory floor | enforced: one admission per machine with four slots by default, set by `verify.toml` in the shared state root, and a memory floor per slot (bead coding-harness-p6mu, coding-harness-u1ha, #284) | — |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |

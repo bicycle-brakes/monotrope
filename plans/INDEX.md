@@ -607,7 +607,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-first/spec.md`](changes/verify-cheap-first/spec.md) | draft | none | 2026-11-10 | coding-harness-bxxt.1 |
 | [`changes/verify-slots/decisions.md`](changes/verify-slots/decisions.md) | draft | none | 2026-11-09 | coding-harness-u1ha |
 | [`changes/verify-slots/findings.md`](changes/verify-slots/findings.md) | draft | none | 2026-11-09 | coding-harness-u1ha |
-| [`changes/verify-slots/measurements.md`](changes/verify-slots/measurements.md) | draft | none | 2026-11-10 | coding-harness-u1ha |
+| [`changes/verify-slots/measurements.md`](changes/verify-slots/measurements.md) | draft | partial | 2026-11-15 | coding-harness-u1ha |
 | [`changes/verify-slots/plan.md`](changes/verify-slots/plan.md) | draft | partial | 2026-11-09 | coding-harness-u1ha |
 | [`changes/verify-slots/research.md`](changes/verify-slots/research.md) | draft | none | 2026-11-09 | coding-harness-u1ha |
 | [`changes/verify-slots/spec.md`](changes/verify-slots/spec.md) | draft | partial | 2026-11-09 | coding-harness-u1ha |

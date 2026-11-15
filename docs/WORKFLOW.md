@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-14
+updated: 2026-11-15
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -566,17 +566,37 @@ and the schedule runs only the drift gates.
 configurable since bead coding-harness-u1ha). Before its gates, `verify_all.sh`
 hands the run to `scripts.verify_lock`: protected work of one user on one
 machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/` — shared
-across repositories and worktrees. The capacity defaults to two independent
+across repositories and worktrees. The capacity defaults to four independent
 admissions at once; each reserves one per-slot lock
 (`verify.slot-<n>.lock`) under the shared compatibility lock (`verify.lock`),
 which an older single-slot checkout still takes exclusively, so old and new
-implementations never overlap. The count is one machine-wide setting, not a
-per-checkout copy: the file `verify.slots` in that state directory holds a
-whitespace-trimmed positive decimal integer, and nothing else; absence means
-the default of two. Change it by atomic replacement (write a new file, rename
-it over the old one); a symlinked, nonregular, unreadable or otherwise
-invalid setting refuses admission with a diagnostic before any protected
-work. The value is re-read for every reservation decision, so a lowered
+implementations never overlap. **The verify settings come in layers, read by
+one function** (`read_settings` in `scripts/verify_lock.py`, decisions Q-6 of
+the change verify-slots, 2026-11-15): the repository default — four slots,
+and pytest workers per run = logical cores / slots, floored, at least one,
+bounded by 2 GiB of memory per worker across all slots (three workers on a
+12-core machine) — then the one machine-wide file `verify.toml` in that state
+directory, which may override either value:
+
+```toml
+[verify]
+slots = 3            # independent admissions at once
+workers_per_run = 4  # pytest workers of each run; without it, cores / slots
+```
+
+A derived worker count follows an overriding slot count; a caller's non-empty
+`PYTEST_XDIST_AUTO_NUM_WORKERS` still wins for its own run. The admission,
+`verify_all.sh` and the runner's targeted pytest all ask the same function,
+and every run logs the values in force and where each came from
+(`[verify-settings] slots 4 (repository default) · pytest workers per run 3
+(…)`). The keys move unchanged into the central harness configuration later
+(bead coding-harness-twvx). Change the file by atomic replacement (write a
+new file, rename it over the old one); a symlinked, nonregular, unreadable or
+otherwise invalid file — empty, unparsable, another table or key, a value
+that is not a positive integer — or a leftover bare `verify.slots` file of
+the first implementation refuses admission with a diagnostic before any
+protected work. After the merge the configured count holds at once; checks
+already running finish on the old lock (decisions Q-5). The value is re-read for every reservation decision, so a lowered
 capacity lets the occupied slots — including indices at or above the new
 count — drain before new reservations are granted; freed indices are reused.
 Waiters are admitted in registration order (FIFO); while waiting, an entry

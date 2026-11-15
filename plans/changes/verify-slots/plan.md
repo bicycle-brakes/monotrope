@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -163,7 +163,7 @@ rows stand in `findings.md`.
 
 ## Criterion ledger
 
-- 1: tests/test_verify_lock.py::test_default_two_slots_share_capacity_across_trees — a second cannot enter or a third overlaps two occupied reservations.
+- 1: tests/test_verify_lock.py::test_default_slots_share_capacity_across_trees — a check cannot enter below the default or one more overlaps every occupied default slot.
 - 2: tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease — one/three are ignored or a decrease overlooks occupied higher slots.
 - 3: tests/test_verify_lock.py::test_invalid_or_unsafe_capacity_refuses_before_work — invalid, substituted or unreadable settings start work or hang.
 - 4: tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order — a later waiter overtakes or an idle slot waits for another holder to finish.
@@ -178,6 +178,13 @@ rows stand in `findings.md`.
 - 8: tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — the wait is included in execution.
 - 9: tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens — a holder disappears from the progress logs or a token is exposed.
 - 10: tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
+- 12: tests/test_verify_lock.py::test_layered_settings_default_override_and_sources — a layer is ignored, workers do not follow an overriding slot count, or a source names the wrong layer.
+- 12: tests/test_verify_lock.py::test_workers_follow_slots_and_memory_bound — the old half-the-cores rule, a per-run memory bound, or a guessed count with nothing readable.
+- 12: tests/test_verify_lock.py::test_settings_command_logs_values_and_sources — a run's log does not name the values in force and their sources.
+- 12: tests/test_ci.py::test_runner_takes_workers_from_the_machine_settings_file — a runner without a caller value (as the Stage-2 runner starts it) ignores the machine file or the slot-derived count.
+- 12: tests/test_stage2.py::test_targeted_pytest_uses_the_memory_derived_worker_bound — the runner's targeted pytest derives its own count instead of the one reader's.
+- 13: tests/test_verify_duration.py::test_history_records_settings_load_and_peak_rss — the history lacks the values, sources, end load or peak, records a missing sample as a number, or refuses older records.
+- 13: tests/test_verify_duration.py::test_pytest_tree_rss_sums_pytest_trees_below_the_runner — xdist workers are left out, a process counts twice, or a foreign pytest counts.
 - 11: not a test — the phase-6 review reads `measurements.md` and the three updated current-policy documents against criterion 11; absent revision-bound serial-versus-paired wall-time and load evidence, or a stale one-slot prescription, refutes it.
 
 ## Runner route — 2026-11-10
@@ -228,6 +235,34 @@ rows L4-3, L4-4 and L4-9).
   appetite of three hours for the rest of the change. The paired trial runs
   first; if it shows no throughput gain over one slot, the lane stops and
   reports what stands.
+
+### Addendum — 2026-11-15
+
+This addendum extends the plan without rewriting it (maintainer, 2026-11-14/15,
+`decisions.md#Q-3` to `#Q-7`; new appetite three hours for the lane).
+
+- **Layered settings** (criteria 12 and 13). `read_settings` in
+  `scripts/verify_lock.py` is the one reader of the slot count and the
+  pytest workers per run; the repository default is four slots, so three
+  workers on twelve logical cores. The machine-local `verify.toml` in the
+  shared state root replaces `verify.slots`. `scripts/verify_all.sh` hands
+  its machine readings to the reader instead of its half-the-cores rule;
+  `scripts/stage2.py`'s targeted pytest asks the same reader. The runner's
+  full check needs no worker variable, so its allow-list's drop of
+  `PYTEST_XDIST_AUTO_NUM_WORKERS` no longer matters
+  (`tests/test_ci.py::test_runner_takes_workers_from_the_machine_settings_file`).
+  `scripts/verify_duration.py` records the values and sources at the start
+  and the end load and pytest peak memory at the end. Step 8's "worker
+  sizing" exclusion is superseded by `decisions.md#Q-6`.
+- **The census tests.** The research header of this change was untruthful
+  since pull request 388; it is corrected through `research_publication` in
+  `scripts/stage2.py` (`327e51d7`).
+- **The trials** of 2026-11-14 are recorded in `measurements.md`, under the
+  night load, with the deviations from the protocol above named there. The
+  real-operation windows of `decisions.md#Q-7` follow the merge.
+- **Time used, by hand (Opus subagent), 2026-11-15:** about 1.5 hours for
+  the census fix, the layered settings with their tests, and the documents;
+  not measured by the runner.
 
 ## Runner route — 2026-11-11
 
