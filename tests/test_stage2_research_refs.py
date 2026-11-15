@@ -63,6 +63,89 @@ def test_reference_heading_keeps_inline_formatting_and_case():
     assert not resolve("a.md", text, "the `criterion` ledger")["supported"]
 
 
+@pytest.mark.parametrize("space", [" ", "  ", "\t"])
+@pytest.mark.parametrize("marks", ["#", "##", "###", "####", "#####", "######"])
+def test_reference_markdown_accepts_opening_heading_marks(marks, space):
+    # Criterion 1. Planted fault: a heading cited with its opening ATX marks fails the exact-title
+    # comparison, or resolves to a different frozen extent than its bare title.
+    text = marks + " Heading\nbody\n\n" + marks + " Next\nend\n"
+    bare = resolve("a.md", text, "Heading")
+    copied = resolve("a.md", text, marks + space + "Heading")
+    assert bare["supported"] and copied["supported"]
+    assert (copied["start_line"], copied["end_line"], copied["excerpt"]) == (
+        bare["start_line"],
+        bare["end_line"],
+        bare["excerpt"],
+    )
+    assert copied["reference"] == marks + space + "Heading", "the recorded reference keeps the seat's spelling"
+
+
+@pytest.mark.parametrize("closing", [" ##", " #", " ######", " ##  ", "\t###"])
+def test_reference_markdown_accepts_a_copied_closing_run(closing):
+    # Criterion 1 (loop rows L1-1, L1-9). Planted fault: the copied line keeps its closing ATX run,
+    # which the heading scan strips from the title, so the most literal copy of a heading fails.
+    text = "## Retry policy ##\nbody\n\n## Next\nend\n"
+    bare = resolve("a.md", text, "Retry policy")
+    copied = resolve("a.md", text, "## Retry policy" + closing)
+    assert bare["supported"] and copied["supported"]
+    assert (copied["start_line"], copied["end_line"], copied["excerpt"]) == (
+        bare["start_line"],
+        bare["end_line"],
+        bare["excerpt"],
+    )
+    assert not resolve("a.md", "## Retry policy\nbody\n", "## Retry policy#")["supported"], (
+        "a mark run glued to the title is title text, as the heading scan reads it"
+    )
+
+
+@pytest.mark.parametrize("indent", [" ", "  ", "   "])
+def test_reference_markdown_accepts_a_copied_indented_heading_line(indent):
+    # Criterion 1 (loop row L2-3). Planted fault: the copied citation is read by a rule other than the
+    # heading scan's, so a heading line indented by one to three spaces is a heading to the scan but
+    # its verbatim copy is refused as absent.
+    text = indent + "## Retry policy\nbody\n\n## Next\nend\n"
+    bare = resolve("a.md", text, "Retry policy")
+    copied = resolve("a.md", text, indent + "## Retry policy")
+    assert bare["supported"] and copied["supported"], copied
+    assert (copied["start_line"], copied["end_line"]) == (bare["start_line"], bare["end_line"])
+
+
+@pytest.mark.parametrize("cited,actual", [("######", "#"), ("#", "##"), ("###", "##")])
+def test_reference_markdown_copied_marks_must_match_the_heading_level(cited, actual):
+    # Criterion 1 (loop rows L1-1, L1-9). Planted fault: the fallback strips any opening run, so
+    # marks of another level resolve a different heading's extent; the seat is told the level fault.
+    text = actual + " Title\nbody\n"
+    result = resolve("a.md", text, cited + " Title")
+    assert not result["supported"]
+    assert result["reason"] == (f"heading is level {len(actual)}, but the citation copies {len(cited)} opening marks")
+    assert resolve("a.md", text, actual + " Title")["supported"], "the heading's own marks resolve"
+
+
+def test_reference_markdown_prefix_tolerance_keeps_exact_boundaries():
+    # Criterion 2. Planted fault: prefix tolerance overrides an exact title, disambiguates duplicate
+    # titles, accepts a prose, fenced or space-indented non-heading, or compares inexactly.
+    text = "## # Radix\nhash title\n\n## Later\n\n#### Radix\nplain\n"
+    exact = resolve("a.md", text, "# Radix")
+    assert exact["supported"] and exact["start_line"] == 1, "a literal hash title keeps its exact meaning"
+    copied = resolve("a.md", text, "#### Radix")
+    assert copied["supported"] and copied["start_line"] == 6, "a copied opening run resolves like its bare title"
+    double = "## Radix\none\n\n### Radix\ntwo\n"
+    assert not resolve("a.md", double, "# Radix")["supported"], "a copy must not disambiguate duplicate titles"
+    assert not resolve("a.md", double, "Radix")["supported"], "an exact ambiguity never falls back to a copy"
+    assert not resolve("a.md", "```md\n## Heading\n```\n", "## Heading")["supported"]
+    assert not resolve("a.md", "The heading is prose. ## Heading\n", "## Heading")["supported"]
+    assert not resolve("a.md", "    ## Heading\n", "## Heading")["supported"]
+    assert not resolve("a.md", "## Heading\nbody\n", "##Heading")["supported"], (
+        "marks without following whitespace are no opening ATX run"
+    )
+    assert not resolve("a.md", "## Heading\nbody\n", "####### Heading")["supported"], (
+        "seven marks are no ATX heading run"
+    )
+    assert not resolve("a.md", "## The `criterion` ledger ###\nbody\n", "## the `criterion` ledger")["supported"], (
+        "a copy compares exactly, so case and inline formatting still matter"
+    )
+
+
 @pytest.mark.parametrize(
     "reference,excerpt",
     [

@@ -580,6 +580,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/status-fields-restore/plan.md`](changes/status-fields-restore/plan.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/research.md`](changes/status-fields-restore/research.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
 | [`changes/status-fields-restore/spec.md`](changes/status-fields-restore/spec.md) | draft | none | 2026-11-06 | coding-harness-ljmi |
+| [`changes/swarm-citation-feedback/decisions.md`](changes/swarm-citation-feedback/decisions.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/findings.md`](changes/swarm-citation-feedback/findings.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/plan.md`](changes/swarm-citation-feedback/plan.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/research.md`](changes/swarm-citation-feedback/research.md) | draft | none | 2026-11-14 | coding-harness-t2wm |
+| [`changes/swarm-citation-feedback/spec.md`](changes/swarm-citation-feedback/spec.md) | draft | partial | 2026-11-14 | coding-harness-t2wm |
 | [`changes/swarm-report-format/decisions.md`](changes/swarm-report-format/decisions.md) | draft | none | 2026-11-10 | coding-harness-4q9y |
 | [`changes/swarm-report-format/findings.md`](changes/swarm-report-format/findings.md) | draft | none | 2026-11-09 | coding-harness-4q9y |
 | [`changes/swarm-report-format/plan.md`](changes/swarm-report-format/plan.md) | draft | none | 2026-11-10 | coding-harness-4q9y |
@@ -615,4 +620,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-step-limit/plan.md`](changes/verify-step-limit/plan.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/research.md`](changes/verify-step-limit/research.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/spec.md`](changes/verify-step-limit/spec.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-tmp-cleanup/decisions.md`](changes/verify-tmp-cleanup/decisions.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/findings.md`](changes/verify-tmp-cleanup/findings.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/plan.md`](changes/verify-tmp-cleanup/plan.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/research.md`](changes/verify-tmp-cleanup/research.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/spec.md`](changes/verify-tmp-cleanup/spec.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
