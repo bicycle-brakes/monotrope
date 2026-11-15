@@ -729,7 +729,7 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-9 | MAJOR | SPEC | base | tests/conftest.py:29–52 | A fixture finalizer that catches the refusal from `get_log().read_text()` leaves its test green. Violations are checked only after the test body; finalizer violations are discarded at the next test’s setup. Reproduced with the installed hooks: two tests passed, pytest exited 0, and no violation remained. The function-returned path also escapes the static advisory, so neither check fails the suite. [Acceptance criterion 5] | Codex | open | — |
+| F6-9 | MAJOR | SPEC | base | tests/conftest.py:29–52 | A fixture finalizer that catches the refusal from `get_log().read_text()` leaves its test green. Violations are checked only after the test body; finalizer violations are discarded at the next test’s setup. Reproduced with the installed hooks: two tests passed, pytest exited 0, and no violation remained. The function-returned path also escapes the static advisory, so neither check fails the suite. [Acceptance criterion 5] | Codex | taken | — |
 
 Phase 6 verdict: codex 01a1df9e-04bb-7e00-a9c2-e0d43048cfa8, 2026-11-15
 Reviewer session: codex 01a1df9e-04bb-7e00-a9c2-e0d43048cfa8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
