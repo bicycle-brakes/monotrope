@@ -909,7 +909,7 @@ for another repository is `templates/agents-mergeable-prs.md`.
 
 Since ADR 0007 (2026-09-30) a reviewer from another vendor reads a change
 before it merges — for **framework content only**: this repository's own tree,
-the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-terra`, OpenAI)
+the class `framework` of `model-endpoints.yaml`. Codex (OpenAI; `gpt-6.1-terra` since 2026-11-15, `gpt-6.1-sol` before)
 drafts the spec, the design and the plan (2, 2b and 3, the `draft` verb) and
 reviews the code (6). **Since ADR 0016 (2026-10-12)** the spec review (2a) runs
 on Opus 5.5 through the `spec-review` verb — a fresh context, and a model other
@@ -932,7 +932,7 @@ every change of the night run — so GLM has left the reviewer roles.
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
 repaired the findings the orchestrator takes, of the loop (4b) and of phase 6;
-**since the merge of ADR 0017** Codex (`gpt-6.1-terra`) does, with Sonnet 5.5
+**since the merge of ADR 0017** Codex (`gpt-6.1-sol` until 2026-11-15, `gpt-6.1-terra` since) does, with Sonnet 5.5
 after two failed post-run checks, through the runner's `repair` verb — since the
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
