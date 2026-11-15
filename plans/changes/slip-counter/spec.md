@@ -124,6 +124,17 @@ a red full run caused by it — for example from a gate that reads them, such as
 the criterion ledger — can count as one slip too many. The count is an
 observation, not a cause, and this overcount stays possible.
 
+**Boundary — the full run records its tree only at its start (maintainer,
+2026-11-15).** A targeted check records its checked tree at its start and at
+its end, and a moved tree makes it not countable. The full run's start record
+carries its tree, but its end record is written by `scripts/verify_all.sh`,
+which is outside this change, so the full run records no tree at its end. A
+red full run whose tree moved during the check therefore still pairs with the
+targeted green of its starting tree and can be counted as a slip although it
+proved nothing about one tree. The error goes one way only: an overcount,
+never an undercount. Recording the tree at the full run's end as well is
+follow-up work (bead coding-harness-cf9h).
+
 ## Non-goals
 
 - A slip writer, persistent tally, receipt, repair of history or global service.
