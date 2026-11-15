@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-tr84
@@ -74,9 +74,19 @@ Pin the tracker CLI to stable bd 1.3.4 from `gastownhall/beads`, retaining verif
 - The pull request's file list demonstrates that protected areas and non-goals are untouched.
 - The pull request closes the tracker-binary update (bead `coding-harness-tr84`); its last commit carries `Closes-Bead: coding-harness-tr84`.
 
+## Boundary
+
+Two limits this change accepts; phase 6 judges a row that describes only one of them as that limit.
+
+- **An already present versioned binary is trusted, not re-hashed.** Criterion 3 governs what a route *installs*. When `~/.local/bin/bd-<pin>` is already executable and its first `version` line is exactly `bd version <pin>` (anchored: 1.3.40, 11.3.4 or a release candidate do not count, loop row L2-4), both routes skip the download and keep that binary. The committed checksum covers the release archive, not the extracted binary, so a binary placed there by another route is not verified again; a mismatching or merely similar one is replaced through the verified download.
+- **The owner move rests on GitHub's own records, not on an independent statement by the project.** Verified on 2026-11-15 (plan.md, "Release verification"): `steveyegge/beads` and `gastownhall/beads` resolve to one repository object (node id `R_kgDOQAyAEg`, created 2025-10-12), so the move is a transfer of the same repository, not a new one under a similar name; both release archives carry a GitHub build-provenance attestation (SLSA v1, Sigstore) that `gh attestation verify` accepts, signed for `gastownhall/beads/.github/workflows/release.yml` at `refs/tags/v1.3.4`, commit `7ef2fd05`; GitHub marks that commit's signature valid. Not verifiable here: the tag `v1.3.4` is unsigned; no announcement of the move by the project was read; and every check above trusts GitHub and the account that controls `gastownhall` — a compromised owner account producing all of them is outside what this change can rule out.
+
 ## Open decisions
 
-None open. The maintainer's version and repository choice is recorded in `decisions.md#Q-1`; it is not answered again here.
+None open for the maintainer. The maintainer's version and repository choice is recorded in `decisions.md#Q-1`; it is not answered again here. The two questions research left for the spec phase are answered:
+
+- **Schema between 1.3.0 and 1.3.4: no migration.** Read on 2026-11-15 in the upstream release notes (`gh release view v1.3.1` … `v1.3.4`, `gastownhall/beads`) and in `CHANGELOG.md` at tag `v1.3.4`: each of 1.3.1, 1.3.2, 1.3.3 and 1.3.4 states "no schema migration" or "no new migration file" and calls the upgrade from 1.3.x a binary swap; the migrations the changelog names (0059, 0061, 0062, 0065, 0066) all shipped in 1.3.0, the pin before this change. Whether the tracker store itself is at the 1.3.0 schema was not measured here (Protected areas: the store is not opened for this change). Two upstream upgrade notes touch a 1.3.0 store without being migrations, and both stay outside this change (Protected areas: no tracker writes): the 1.3.2 note to run `bd recompute-blocked` once per workspace whose store crossed migration 0059 under 1.3.0 (a Dolt planner bug on the embedded engine can mark unblocked beads blocked), and the 1.3.3/1.3.4 known issue not to run `bd compact` or `bd flatten` on a clone that adopted migration 0062 by `bd dolt pull` or `bd bootstrap`. Plan.md, "Release verification", records the reading; the pull request names both notes for the maintainer.
+- **1.3.0-bound measurements: dated, not remeasured.** The research note of 2026-09-23 (`docs/research/2026-09-23-worktree-tracker-writes.md`) now says its pin statement held on that date and that its five checks were not repeated on 1.3.4. `docs/adr/0005-workers-claim-their-own-bead.md` (line 43) and `docs/WORKFLOW.md` (line 776) already name bd 1.3.0 and the measurement date and stay untouched under Protected areas. A remeasurement on 1.3.4 is not part of this change.
 
 - [DETAIL] Update both installation routes and their current cloud documentation together, because they deliver the same pinned binary and otherwise drift.
 - [DETAIL] Leave `tools/bd` unchanged unless a demonstrated compatibility fault requires revisiting this scope: it already reads the pin dynamically, so tests establish the new selection without a redundant version literal.

@@ -60,6 +60,7 @@ The orchestrator supplies the release-verification evidence before completion. `
 - 2: tests/test_beads_install.py::test_install_routes_request_canonical_release — either route requesting the old owner or another release fails.
 - 3: tests/test_beads_install.py::test_install_routes_install_verified_archive — a valid platform archive failing to produce the versioned binary or overwriting unversioned bd fails.
 - 3: tests/test_beads_install.py::test_install_routes_refuse_unverified_archive — missing or wrong expected checksum reaching extraction or install fails.
+- 3: tests/test_beads_install.py::test_install_routes_skip_only_an_exact_pinned_binary — either route skipping the download for a versioned binary whose first version line is not exactly `bd version <pin>` (1.3.40, 11.3.4, a release candidate), or re-downloading over the exact pin, fails (loop row L2-4).
 - 3: tests/test_beads_install.py::test_committed_checksums_cover_both_platforms — a missing or malformed committed 1.3.4 checksum file for Darwin arm64 or Linux amd64 fails (loop row L1-2).
 - 4: tests/test_beads_install.py::test_cloud_pin_and_checksum_match_repository — cloud version or digest diverging from the committed pin and Linux checksum fails.
 - 5: tests/test_beads_install.py::test_wrapper_refuses_version_mismatch — mismatched version dispatch, even with the verb bypass set, fails.
@@ -68,28 +69,75 @@ The orchestrator supplies the release-verification evidence before completion. `
 
 ## Release verification — 2026-11-15
 
-Step 1's evidence, recorded by the orchestrator (Opus subagent) for the pull
-request to cite (loop rows L1-1, L1-6 and L1-10; spec, Definition of Done).
+Step 1's evidence, recorded by the orchestrator (Opus subagents) for the pull
+request to cite (loop rows L1-1, L1-6, L1-10, L2-1, L2-2 and L2-3; spec,
+Definition of Done and "Boundary"). All times UTC, read from git and the
+command output.
 
-- Source: the `gastownhall/beads` release `v1.3.4`; the tag `refs/tags/v1.3.4`
-  points at commit `7ef2fd05eb0cd3bdbde051f93cfc14ccf270cdde` (annotated tag
-  object `a60c4c3a`), read with `git ls-remote` on 2026-11-15.
-- Downloaded on 2026-11-14 23:55 UTC into disposable storage, from
-  `https://github.com/gastownhall/beads/releases/download/v1.3.4/`:
-  `checksums.txt`, `beads_1.3.4_darwin_arm64.tar.gz` (48,577,082 bytes) and
-  `beads_1.3.4_linux_amd64.tar.gz` (53,448,333 bytes).
-- Independently computed with `shasum -a 256`, and equal to the release's
-  `checksums.txt` line for the same file:
+Chronology (loop row L2-3):
+
+- 2026-11-14 21:51:21 — commit `78d6f738` enters both digest files and the
+  cloud `BD_SHA256`, finishing runner attempt 3 by hand; its message says the
+  values match the release's `checksums.txt`. No independent hash of the
+  archives is recorded at this point: the values entered the repository
+  before the independent check below, not after it as step 1 ordered.
+- 2026-11-14 23:55 — the archives were downloaded into disposable storage and
+  hashed independently (round-1 hand pass); the digests below confirmed the
+  committed values. The record was committed in `c60c980d` at 23:59:39.
+- 2026-11-15 00:15:26 — downloaded again (`gh release download v1.3.4 -R
+  gastownhall/beads`) into a fresh disposable directory and hashed with
+  `shasum -a 256`: the same two digests, equal to the release's
+  `checksums.txt` and to the committed files (round-2 hand pass).
+
+Archives and digests:
+
+- Source: `https://github.com/gastownhall/beads/releases/download/v1.3.4/`,
+  files `checksums.txt`, `beads_1.3.4_darwin_arm64.tar.gz` (48,577,082 bytes)
+  and `beads_1.3.4_linux_amd64.tar.gz` (53,448,333 bytes).
   - Darwin arm64: `b08a9c15bff80c42235f32946f94a6566a7d90944fe8afe45f3fd2f350596cdb`
   - Linux amd64: `175c26904bde3ff9168d2282ff6b56f17b17f60c22fa5acb3dacc9fb3465303a`
-- Both equal the committed files
-  `tools/beads/checksums/beads_1.3.4_darwin_arm64.tar.gz.sha256` and
+- Both equal `tools/beads/checksums/beads_1.3.4_darwin_arm64.tar.gz.sha256`,
   `tools/beads/checksums/beads_1.3.4_linux_amd64.tar.gz.sha256` and the
-  `BD_SHA256` of `tools/cloud-env/setup.sh`, as committed in `78d6f738`
-  (the verification commit).
-- Not checked: a signature or attestation of the release beyond GitHub's
-  release download over HTTPS; the release notes' migration statement was not
-  re-read here.
+  `BD_SHA256` of `tools/cloud-env/setup.sh`, unchanged since `78d6f738`.
+
+Identity of the release (loop row L2-2), read 2026-11-15:
+
+- The tag `refs/tags/v1.3.4` is the annotated tag object `a60c4c3a` on
+  commit `7ef2fd05eb0cd3bdbde051f93cfc14ccf270cdde` (`git ls-remote`). GitHub
+  reports the tag object as unsigned and the commit's signature as valid.
+- `https://github.com/steveyegge/beads` answers 301 to
+  `https://github.com/gastownhall/beads`, and `gh repo view` resolves both
+  names to the same repository node id `R_kgDOQAyAEg` (created 2025-10-12):
+  a transfer of one repository, not a second repository.
+- `gh attestation verify <archive> --repo gastownhall/beads` (gh 2.102.1)
+  accepts both archives: one SLSA v1 build-provenance attestation each,
+  issuer `https://token.actions.githubusercontent.com`, signer
+  `gastownhall/beads/.github/workflows/release.yml@refs/tags/v1.3.4`, source
+  commit `7ef2fd05`, run `41804108426`.
+- Not verified: a signature on the tag; a statement of the move by the
+  project itself; anything independent of GitHub and of the account that
+  controls `gastownhall`. The spec names this as a Boundary.
+
+Migrations (loop row L2-1), read 2026-11-15 from `gh release view v1.3.1`
+… `v1.3.4 -R gastownhall/beads` and from `CHANGELOG.md` at tag `v1.3.4`
+(`raw.githubusercontent.com/gastownhall/beads/v1.3.4/CHANGELOG.md`):
+
+- 1.3.1 (2026-09-30): "There is no schema migration. Upgrading from v1.3.0
+  … is a binary swap."
+- 1.3.2 (2026-10-24): "There is no schema migration, and the embedded Dolt
+  engine is unchanged"; upgrade note: run `bd recompute-blocked` once per
+  workspace whose store crossed migration 0059 under 1.3.0 (a data repair,
+  not a migration; nothing in 1.3.2 runs it automatically).
+- 1.3.3 (2026-11-03): "no new migration file … upgrading from 1.3.x is a
+  binary swap"; known issue, unfixed in 1.3.4: do not run `bd compact` or
+  `bd flatten` on a clone that adopted migration 0062 by `bd dolt pull` or
+  `bd bootstrap`.
+- 1.3.4 (2026-11-04): "no new migration file … upgrading from 1.3.x is a
+  binary swap"; one fix (`GT_ROOT` from `.beads/.env`).
+- The migrations the changelog names (0059, 0061, 0062, 0065, 0066) shipped
+  in 1.3.0. Step 1's stop condition does not apply. The two notes are
+  tracker-side work outside this change (spec, Protected areas); the pull
+  request names them for the maintainer.
 
 ## Route and draft checks
 
