@@ -188,3 +188,73 @@ Still owed from earlier in the day:
     Recommendation: yes. It changes no answer, and it unblocks the redraft.
   - After that, the superseded runner output in that worktree is cleared
     and the draft restarts through the runner.
+
+## Addendum — 2026-11-16, 19:40 UTC: answers given, night start through the launcher
+
+Written by a fresh session that took over after the day session ended. It
+started no runner job, wrote nothing to the tracker and armed no wake.
+
+### Done (implemented and checked)
+
+- **Night launcher installed.** `tools/claude-code/install.sh` ran from
+  `main` fast-forwarded to `24632499`; `~/.claude/night.py` and
+  `~/.claude/night-settings.json` exist (19:25 UTC). The replaced files are
+  kept beside them as `*.bak-20261116-202538`.
+- **Q-4 to Q-7 of the swarm answer reader quoted** (bead coding-harness-xsta),
+  text unchanged, as the maintainer allowed ("quote Q-4 bis Q-7"): commit
+  `725d13d6` on `fix/swarm-answer-reader`, pushed. Every `answer:` line of
+  that `decisions.md` now parses as YAML (checked with the venv's PyYAML).
+
+### Found: the redraft is still blocked (measured, not repaired)
+
+- `scripts/check_research_handoff.py --change swarm-answer-reader` no
+  longer ends "not measured"; it now reads the file and ends with exit 1 and
+  **83 findings** (19:35 UTC, at `725d13d6`): research items H-1 … H-83 of
+  run `7c55fc99…` are open because no Q-record links them in
+  `research_items`. Some are maintainer decisions, for example H-82 (is the
+  change `feature` or `architectural`?).
+- So the draft's post-run check would fail again. Do not spend runner
+  attempts on it; park the lane and put the linking (and H-82) to the
+  maintainer.
+- The superseded draft output (`docs/adr/0026-swarm-answer-reading-and-repair.md`,
+  untracked, and a change to `plans/INDEX.md`) is still in that worktree.
+
+### The night plan, as the maintainer set it (2026-11-16, 20:26 CET)
+
+Verbatim: "führe den nachtplan aus, bis morgen um 10, mit 5 lanes, achte
+darauf, dass es genügend beads gibt, frage mich um 22 uhr nochmals 10 fragen."
+
+- **Five lanes** (this replaces "six" above), until **10:00 Europe/Berlin
+  on 2026-11-17 (09:00 UTC)**.
+- **Enough beads:** keep two to three eligible items per lane, taken from
+  `tools/bd ready` before anything is created. Limits: at most three open
+  pull requests touching `scripts/stage2.py` (slip counter, cheap gates and
+  verify slots already fill them, so extra items avoid that file — which
+  excludes bead coding-harness-m98e, the Codex-capacity retry); night lanes on
+  disjoint files; the Pi pin (bead coding-harness-e01y) and the Pi neutral
+  path (bead coding-harness-xul8) never side by side; one verify slot.
+- **Ten questions at 22:00 Europe/Berlin (21:00 UTC)**, one at a time, each
+  with its context block, the one that frees the most night work first.
+  Candidates: the xsta research-item linking and H-82, F-12/F-13 of
+  provenance stamping (bead coding-harness-f9sv), F-9 of the qwen4-max/hy4
+  admission (bead coding-harness-x0ph), the cheap-gates R1 triage (bead
+  coding-harness-bxxt.6), interview questions of freshly explored beads.
+  Write each into its bead notes before asking.
+- **Still to create (search first):** a bead for the two readers of
+  `decisions.md` that disagree (`check_research_handoff.py` reads
+  `answer:` as YAML, `check_question_context.py` accepts unquoted `: `;
+  house rule 9, one reader per format), and the owed WORKFLOW.md bead.
+
+### Resume
+
+1. The maintainer starts the night session from the main checkout:
+   `python3 ~/.claude/night.py` (the night profile; this restart also
+   loads the new hooks and the waiting Claude Code update).
+2. That session follows `docs/WORKFLOW.md` "Night runs": run id
+   `2026-11-16-a` (unused at 19:40 UTC; `2026-11-16-trials` exists),
+   state directory, 30-minute wake, `caffeinate -i -t` until 09:00 UTC, a
+   separate wake at 21:00 UTC for the ten questions, a run handover file of
+   its own.
+3. Then the lanes from the table above, read fresh from each worktree first
+   (three hold uncommitted runner output), with set -o pipefail on every
+   runner call.
