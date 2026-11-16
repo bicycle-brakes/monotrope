@@ -40,76 +40,52 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 
 ## House rules
 
-1. **The repository is English** — documents, code, identifiers, comments,
-   messages, tests, commit messages and PR bodies. German is the language of
-   the conversation with the maintainer and of the texts the maintainer's
-   display shows at run time (`tools/claude-code/`), nothing else. German
-   that is still in the tree (2026-09-29: mainly `scripts/`, `tests/` and
-   `docs/governance/`) is translated in pull requests of its own, never in
-   passing inside an unrelated change (bead coding-harness-yim).
-2. **Beads only.** The tracker is the Dolt database under `.beads/`,
-   transported via `refs/dolt/data` on origin. No rendered copy is committed:
-   the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every
-   reader goes through `scripts/bead_render.py`. A fresh clone needs
-   `tools/beads/install.sh && tools/bd bootstrap --yes` before any
-   tracker-reading gate can measure.
-3. **Use `tools/bd`, never bare `bd`.** The wrapper pins the version and
-   refuses `init`, `migrate`, `upgrade` — the three verbs that can change the
-   shared database for everyone. The prefix (`coding-harness-`) was fixed at
-   init and cannot be corrected afterwards.
-4. **One writer per tracker, and one exception.** While more than one
-   writing session runs in a repository, the session that started first
-   writes the tracker: it hands out beads, runs `tools/bd ready`, creates
-   follow-up work as `discovered-from`, closes, reprioritises and links.
-   Every other writing session works in a worktree of its own and writes
-   exactly two things: the claim of the one bead it works on
-   (`tools/bd update <id> --claim`) and its handover comment on that bead —
-   nothing more (ADR 0006, lakeswitch-ai D-60). At most
-   `writing_sessions_per_repository` writing sessions (default 2) run in one
-   repository. Until the D-60 write guard exists, this is stated, not
-   enforced: the start hook and the status line show a second session, and
-   a session that is not first checks before any tracker write. After the
-   writes run `tools/bd dolt push`. The push order is tracker first, git
-   second: CI renders the gate from `refs/dolt/data`, so a git push that
-   outruns the tracker push merges against a stand the commits claim to
-   include — and goes red on exactly that gap (bead coding-harness-4t8).
-   Auto-export is off, and no rendered copy is committed (bead
-   coding-harness-1jg.3): a local reader renders fresh through
-   `scripts/bead_render.py`. Because the diff no longer shows tracker
-   changes, a pull request names in its body every bead it opens, changes
-   or closes (maintainer, 2026-09-23).
-5. **The handover is the file, not the chat.** Session end → a file under
-   `docs/journal/handover/`. A number without its commit or date reads as a
-   historical one — every count carries its cut-off.
-6. **The customer instance is out of bounds.** What is needed from the
-   customer instance (private, never named) travels as a *requirement*, never
-   as an expression — no filename, field name, entity or layer name from there
+1. **The repository is English** — documents, code, identifiers, comments, messages, tests, commit messages and PR
+   bodies. German is the language of the conversation with the maintainer and of the texts the maintainer's display
+   shows at run time (`tools/claude-code/`), nothing else. German that is still in the tree (2026-09-29: mainly
+   `scripts/`, `tests/` and `docs/governance/`) is translated in pull requests of its own, never in passing inside an
+   unrelated change (bead coding-harness-yim).
+2. **Beads only.** The tracker is the Dolt database under `.beads/`, transported via `refs/dolt/data` on origin. No
+   rendered copy is committed: the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every reader goes
+   through `scripts/bead_render.py`. A fresh clone needs `tools/beads/install.sh && tools/bd bootstrap --yes` before
+   any tracker-reading gate can measure.
+3. **Use `tools/bd`, never bare `bd`.** The wrapper pins the version and refuses `init`, `migrate`, `upgrade` — the
+   three verbs that can change the shared database for everyone. The prefix (`coding-harness-`) was fixed at init and
+   cannot be corrected afterwards.
+4. **One writer per tracker, and one exception.** While more than one writing session runs in a repository, the
+   session that started first writes the tracker: it hands out beads, runs `tools/bd ready`, creates follow-up work as
+   `discovered-from`, closes, reprioritises and links. Every other writing session works in a worktree of its own and
+   writes exactly two things: the claim of the one bead it works on (`tools/bd update <id> --claim`) and its handover
+   comment on that bead — nothing more (ADR 0006, lakeswitch-ai D-60). At most `writing_sessions_per_repository`
+   writing sessions (default 2) run in one repository. Until the D-60 write guard exists, this is stated, not
+   enforced: the start hook and the status line show a second session, and a session that is not first checks before
+   any tracker write. After the writes run `tools/bd dolt push`. The push order is tracker first, git second: CI
+   renders the gate from `refs/dolt/data`, so a git push that outruns the tracker push merges against a stand the
+   commits claim to include — and goes red on exactly that gap (bead coding-harness-4t8). Auto-export is off, and no
+   rendered copy is committed (bead coding-harness-1jg.3): a local reader renders fresh through
+   `scripts/bead_render.py`. Because the diff no longer shows tracker changes, a pull request names in its body every
+   bead it opens, changes or closes (maintainer, 2026-09-23).
+5. **The handover is the file, not the chat.** Session end → a file under `docs/journal/handover/`. A number without
+   its commit or date reads as a historical one — every count carries its cut-off.
+6. **The customer instance is out of bounds.** What is needed from the customer instance (private, never named)
+   travels as a *requirement*, never as an expression — no filename, field name, entity or layer name from there
    appears in a framework artifact.
-7. **Texts carry their own meaning.** A reader without this session must
-   understand every sentence; bead ids and file names go in parentheses as a
-   suffix, never as the carrier of a sentence.
-8. **A decision takes effect when the maintainer merges its pull request**
-   (ADR 0008). A pull request touching a file `provenance.yaml` reserves for
-   `human-decided` is a decision PR: title `decide(<scope>): …`, label
-   `decision`, body from the decision template
-   (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as
-   the maintainer stated it (`python3 scripts/harness.py
-   decide adr … --stated-in …`), never one of your own. Merge only when the
-   maintainer asks in the conversation, after restating the decision block
-   (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
-   every merge command it recognises — a brake, not a lock: another spelling
-   passes (`docs/WORKFLOW.md`).
-9. **One entry point and one writer per action — no side routes.** Every
-   recurring action (starting a model, writing an artifact header, running a
-   check, merging) has one entry point and one writer, carried by code at one
-   choke point. Variants the maintainer decided (fallback models, routing by
-   class, the text-only verify skip) are declared parameters inside that
-   path, never a second route beside it; no caller reaches around it, and
-   nothing a tool produces is written by hand instead. An existing side
-   route becomes a bead and is folded in by its own change, never in passing.
-   A rule of this kind takes hold through a check that goes red, not through
-   prose. The kit carries it (`templates/agents-working-pace.md`)
-   (maintainer, 2026-11-16).
+7. **Texts carry their own meaning.** A reader without this session must understand every sentence; bead ids and file
+   names go in parentheses as a suffix, never as the carrier of a sentence.
+8. **A decision takes effect when the maintainer merges its pull request** (ADR 0008). A pull request touching a file
+   `provenance.yaml` reserves for `human-decided` is a decision PR: title `decide(<scope>): …`, label `decision`, body
+   from the decision template (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as the
+   maintainer stated it (`python3 scripts/harness.py decide adr … --stated-in …`), never one of your own. Merge only
+   when the maintainer asks in the conversation, after restating the decision block (`prompts/07-commit.md`, "The
+   merge"); `.claude/settings.json` asks before every merge command it recognises — a brake, not a lock: another
+   spelling passes (`docs/WORKFLOW.md`).
+9. **One entry point and one writer per action — no side routes.** Every recurring action (starting a model, writing
+   an artifact header, running a check, merging) has one entry point and one writer, carried by code at one choke
+   point. Variants the maintainer decided (fallback models, routing by class, the text-only verify skip) are declared
+   parameters inside that path, never a second route beside it; no caller reaches around it, and nothing a tool
+   produces is written by hand instead. An existing side route becomes a bead and is folded in by its own change,
+   never in passing. A rule of this kind takes hold through a check that goes red, not through prose. The kit carries
+   it (`templates/agents-working-pace.md`) (maintainer, 2026-11-16).
 
 ## Communication and session continuity
 
