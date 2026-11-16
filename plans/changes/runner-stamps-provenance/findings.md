@@ -89,3 +89,5 @@ Stage-2 call, 2026-11-16: spec-review · endpoint claude-code-plan · model clau
 Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1104 files, 4473 commits, 12 rules.
 
 Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1104 files, 4484 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1104 files, 4488 commits, 12 rules.
