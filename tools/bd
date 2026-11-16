@@ -45,8 +45,11 @@ if [ -z "$BD_BIN" ] || [ ! -x "$BD_BIN" ]; then
 fi
 
 # `bd version` prints e.g. "bd version 1.1.2 (20e493e56)"
-INSTALLED="$("$BD_BIN" version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
-if [ "$INSTALLED" != "$PINNED" ]; then
+INSTALLED="$("$BD_BIN" version 2>/dev/null | head -1 || true)"
+# Match the installers: the pin must end at whitespace or the end of the line,
+# so a prerelease, build suffix or longer version cannot pass as this release.
+EXACT="^bd version ${PINNED//./\\.}([[:space:]]|\$)"
+if ! printf '%s\n' "$INSTALLED" | grep -qE "$EXACT"; then
   die "bd version mismatch: you have ${INSTALLED:-unknown}, this repository is pinned to $PINNED." \
       "" \
       "A mismatched bd against the shared remote can refuse writes for the whole team, so this" \

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-tr84
@@ -155,3 +155,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-14 18:33:47–18:52:29 UTC, 1122 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-14 18:52:37–18:59:35 UTC, 418 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-14 18:59:59–19:00:50 UTC, 51 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-16 06:06:11–07:30:37 UTC, 5066 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `tools/bd` is an input kind the targeted selector does not cover · measured by the runner

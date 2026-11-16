@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-14
 created: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-tr84
@@ -252,7 +252,7 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | tools/bd:48–64; tests/test_beads_install.py:378 | With pin `1.3.4`, a resolved binary reporting `bd version 1.3.4-rc.1` passes the wrapper because its parser discards the prerelease suffix. Executing the unchanged version-check and dispatch code with an in-memory fixture dispatched `ready` and exited 0. The wrapper must refuse this different release; the added mismatch tests omit this case. [Acceptance criterion 5] | Codex | taken — a test that a binary reporting `bd version 1.3.4-rc.1` (and any suffix after the pinned triple) is refused by tools/bd with the same anchored match the installers use | — |
+| F6-1 | MAJOR | SPEC | base | tools/bd:48–64; tests/test_beads_install.py:378 | With pin `1.3.4`, a resolved binary reporting `bd version 1.3.4-rc.1` passes the wrapper because its parser discards the prerelease suffix. Executing the unchanged version-check and dispatch code with an in-memory fixture dispatched `ready` and exited 0. The wrapper must refuse this different release; the added mismatch tests omit this case. [Acceptance criterion 5] | Codex | fixed — tests/test_beads_install.py::test_wrapper_refuses_version_mismatch | — |
 
 Phase 6 verdict: codex 01a1e0e8-f2c0-7be0-b6f0-7b6356641ad6, 2026-11-15
 Reviewer session: codex 01a1e0e8-f2c0-7be0-b6f0-7b6356641ad6 — a fresh session reviewed: no phase-2a session was recorded
@@ -358,3 +358,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-15: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1091 files, 4395 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1091 files, 4398 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/bd-1-3-4/plan.md, plans/changes/bd-1-3-4/spec.md — unchanged

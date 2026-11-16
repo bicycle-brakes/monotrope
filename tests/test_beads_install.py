@@ -366,6 +366,9 @@ def test_wrapper_selects_pinned_versioned_binary(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    "reported_version", ["1.3.0", "9.9.9", *(_pin() + suffix for suffix in ("-rc.1", "+build.1", ".0", "0", "x"))]
+)
+@pytest.mark.parametrize(
     ("installed", "bypass", "command"),
     [
         ("versioned-binary", False, ["ready"]),
@@ -375,7 +378,9 @@ def test_wrapper_selects_pinned_versioned_binary(tmp_path: Path) -> None:
         ("versioned-binary", True, ["migrate"]),
     ],
 )
-def test_wrapper_refuses_version_mismatch(tmp_path: Path, installed: str, bypass: bool, command: list[str]) -> None:
+def test_wrapper_refuses_version_mismatch(
+    tmp_path: Path, installed: str, bypass: bool, command: list[str], reported_version: str
+) -> None:
     """Criterion 5: a binary reporting any version other than the pin is never
     dispatched — not the versioned one, not the one on PATH, and not even when
     BD_PIN_BYPASS=1 is set, for a normal command (the criterion's refuting
@@ -384,11 +389,11 @@ def test_wrapper_refuses_version_mismatch(tmp_path: Path, installed: str, bypass
     log = tmp_path / "mismatching-bd.log"
     extra: dict[str, str] = {}
     if installed == "versioned-binary":
-        _fake_bd(ns.versioned, version="1.3.0", log=log)
+        _fake_bd(ns.versioned, version=reported_version, log=log)
         path = _path(_path_bin(tmp_path))
     else:
         bd_dir = tmp_path / "bd-on-path"
-        _fake_bd(bd_dir / "bd", version="9.9.9", log=log)
+        _fake_bd(bd_dir / "bd", version=reported_version, log=log)
         path = _path(bd_dir, _path_bin(tmp_path))
     if bypass:
         extra["BD_PIN_BYPASS"] = "1"
