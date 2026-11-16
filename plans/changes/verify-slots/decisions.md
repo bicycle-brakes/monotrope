@@ -195,3 +195,26 @@ context: |
 
 The maintainer chose 3 x 4 knowing that it misses Q-4 in the trial; the
 real-operation measurement of Q-7 continues from this default.
+
+## Q-8 · One function computes slots and workers for every caller
+
+asked: 2026-11-16
+answer: "jaja" (to: one function computes slots x workers; verify_all.sh reads its answer instead of computing nproc itself) — the worker count is derived in exactly one place. (Maintainer, 2026-11-16, in the conversation; relayed verbatim by the orchestrator.)
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where the pytest worker count per run is derived.
+  Intention: the phase-6 re-check of 2026-11-16 (codex 01a1e52e) found F6-1 (under a CPU restriction the shell reads the allowed CPUs with nproc, the Python runners read all cores, and the two select different worker counts); the round before found F6-2 (the worker value reported differs from the one that runs); both are the same mechanism, the worker count derived in more than one place, so case repair ends.
+  Today: verify_all.sh computes the worker count from nproc itself, while scripts/verify_lock.py and scripts/stage2.py compute it from all cores.
+  Repository change: one function computes slots x workers; verify_all.sh reads its answer instead of computing nproc itself; the runner and verify_lock use the same function.
+  Architecture change: none; the one reading function of Q-6 becomes the one computing function as well.
+  Question: one choke point computes slots x workers and the shell reads its answer, or keep repairing case by case?
+  Recommendation: one choke point; consequence: verify_all.sh depends on the Python function for its worker count.
+
+In the context of the pytest worker count, facing two findings in two
+phase-6 re-checks from one mechanism, a worker count derived separately in
+the shell and in the Python runners, we decided that one function computes
+slots and workers and that verify_all.sh reads its answer instead of
+computing nproc itself, to achieve one worker count for every entry point,
+accepting that the shell runner depends on the Python function for its
+worker count — 2026-11-16
