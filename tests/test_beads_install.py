@@ -55,6 +55,9 @@ TOOLS = (
     "env",
     "sh",
     "bash",
+    # GNU tar (the Linux runner) execs gzip for `tar -xzf`; bsdtar (macOS)
+    # links zlib and does not. The installer needs it, so the PATH carries it.
+    "gzip",
 )
 
 FAKE_BD = """#!/bin/bash
