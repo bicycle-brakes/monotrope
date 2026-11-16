@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -34,18 +34,18 @@ A **producer record** identifies a producing program and publication date in `pr
 
 ## Acceptance criteria
 
-1. When explore publishes research, the runner stamps a producer record with the actual program, model and publication date of that run.
+1. When a single-model explore publishes research, the runner stamps a producer record with the actual program, model and publication date of that run; a swarm publication instead names the swarm as producer, the bound publication day and no single model.
    *Refuted by:* a GLM route recording `codex`, a different model or a date other than the publication day.
-   *Basis:* `decisions.md#Q-4`.
+   *Basis:* `decisions.md#Q-4`, `decisions.md#Q-8`.
 2. When a draft attempt changes and retains a model-written artifact with frontmatter, including a new ADR if present, the runner stamps a producer record with the actual program, model and publication date before its post-run checks, including an attempt that subsequently fails those checks.
    *Refuted by:* an affected artifact missing that record, or a GLM attempt recorded as `codex`, with a wrong model or date.
    *Basis:* `decisions.md#Q-4`.
 3. When a repair attempt changes and retains a model-written artifact with frontmatter, the runner stamps a producer record with the actual program, model and publication date before its post-run checks.
    *Refuted by:* an affected artifact missing that record, or its record naming a different program, model or publication day.
    *Basis:* `decisions.md#Q-4`.
-4. When a runner verb checks its result, a touched file that fails the full research publication header contract makes its post-run check fail with a diagnostic identifying the file.
+4. When a runner verb checks its result, a touched file that fails the full research publication header contract, including any earlier producer record, makes its post-run check fail with a diagnostic identifying the file.
    *Refuted by:* a touched file with an invalid producer, provenance, review or date accepted by its verb's post-run check.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-6`.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-6`, `decisions.md#Q-7`.
 5. While the runner stamps a draft or repair artifact, it preserves bytes outside `produced_by`, `updated` and a `review` reset required by criterion 8.
    *Refuted by:* changed prose, fences, plan card, `provenance` or unrelated frontmatter; in particular a draft ADR loses its `human-decided` provenance.
    *Basis:* `research.md`, “The runner already stamps provenance in these places”.
@@ -66,7 +66,7 @@ A **producer record** identifies a producing program and publication date in `pr
     *Refuted by:* stamping an unchanged file with that attempt's producer or accepting an unmeasured attempt without a diagnostic.
     *Basis:* `decisions.md#Q-5`.
 
-Criteria 1, 4, 6 and 7 are provisional where the unanswered decisions below affect them. The explore publication's existing removal of generated skeleton notices is outside criterion 5.
+Criteria 2, 4, 5, 6 and 7 are provisional where the unanswered decisions below affect them. The explore publication's existing removal of generated skeleton notices is outside criterion 5.
 
 ## Non-goals
 
@@ -89,23 +89,6 @@ Runner-held paths remain outside model attempts, including `provenance.yaml`, `d
 
 [DETAIL] Insert a missing field at the end of frontmatter when `tags` is absent; this preserves unrelated bytes. Refuse all YAML anchors and aliases, not just ambiguous ones, because their shared source spans make safe edits uncertain. A resumed swarm retains its frozen preparation day, because its publication bytes are bound to the resume snapshot.
 
-### [DECISION] Full contract and earlier records (review finding F-11)
-
-Topic: Prüfung älterer Herkunftsangaben in einer bearbeiteten Datei.
-Intention: Die Prüfung soll Fehler früh finden, ohne laufende Arbeiten unbeabsichtigt anzuhalten.
-Today: Die vollständige Forschungsprüfung lehnt auch ältere, formal fehlerhafte Angaben ab; eine spätere Agentennotiz schlägt vor, lesbare Altangaben nur zu melden.
-Repository change: Die Prüfung eines Laufs lehnt entweder jeden solchen Fehler ab oder meldet lesbare Altfehler bis zur getrennten Migration nur.
-Architecture change: Der Runner bleibt die Prüfstelle; der Umfang der Prüfung ändert sich.
-
-Goal in one sentence: Festlegen, ob lesbare alte Fehler einen neuen Lauf stoppen.
-Options: 1. Ganzen Kopf einschließlich aller Altangaben ablehnen — alle Fehler werden sofort abgefangen; bestehende Arbeitsläufe können blockieren. 2. Lesbare Altfehler melden und nur neue Angaben vollständig prüfen — laufende Arbeiten bleiben möglich; alte Fehler bleiben vorübergehend bestehen.
-Recommendation: Option 1 — weil die ausdrückliche Antwort Q-6 den vollständigen Kopfvertrag für berührte Dateien verlangt.
-If you say "ok": Jeder Fehler des vollständigen Kopfvertrags einschließlich eines alten Eintrags stoppt die Prüfung des Laufs.
-What is lost: Option 2 hätte lesbare Altfehler bis zur Migration ohne Blockade gemeldet.
-Downside you accept: Option 1 kann bestehende Arbeitsläufe blockieren; Option 2 lässt alte Fehler vorübergehend bestehen.
-
-Welche Option und den jeweils genannten Nachteil akzeptierst du?
-
 ### [DECISION] The current session's self-description (review finding F-12)
 
 Topic: Eine Herkunftsangabe, die das gerade laufende Modell selbst in den Kopf schreibt.
@@ -123,23 +106,23 @@ Downside you accept: Option 1 kann falsche aktuelle Angaben behalten; Option 2 e
 
 Welche Option und den jeweils genannten Nachteil akzeptierst du?
 
-### [DECISION] Swarm producer identity (review finding F-14)
+### [DECISION] Header fields changed by stamping (review finding F-13)
 
-Topic: Herkunft einer gemeinsam erstellten Forschungs-Veröffentlichung.
-Intention: Mehrere Modelle liefern Beiträge; die Einzelmodell-Regel nennt nur ein Modell.
-Today: Die Veröffentlichung nennt den gemeinsamen Forschungs-Schwarm als Programm und kein einzelnes Modell.
-Repository change: Der Kopf nennt entweder weiterhin den Schwarm oder die beteiligten Programme und Modelle einzeln.
-Architecture change: Die Veröffentlichung bleibt beim Runner; die Granularität der gespeicherten Herkunft ändert sich.
+Topic: Änderungen am Dokumentkopf durch den Herkunftsstempel.
+Intention: Der Stempel soll Herkunft richtig festhalten und bestehende Entscheidungen und Freigaben schützen.
+Today: Die Forschungs-Veröffentlichung ändert Herkunftsklasse, Urheber, Prüfstatus und Änderungsdatum und entfernt Vorlagenhinweise; eine Architekturentscheidung trägt die Herkunftsklasse `human-decided`.
+Repository change: Der Runner ändert entweder diese Kopfwerte auch bei Entwurf und Reparatur oder erhält Herkunftsklasse und Freigabe dort nach einer gesonderten Regel.
+Architecture change: Der Runner bleibt die zentrale Schreibstelle; der Umfang seiner Schreibrechte am Dokumentkopf unterscheidet sich.
 
-Goal in one sentence: Festlegen, welche Herkunft bei gemeinsamer Forschung gespeichert wird.
-Options: 1. Den Schwarm als gemeinsamen Urheber behalten — die bisherige Darstellung bleibt stabil, einzelne Modelle stehen nicht im Kopf. 2. Alle beitragenden Modelle einzeln nennen — ihre Herkunft ist im Kopf sichtbar, die Ermittlung und Prüfung wird aufwendiger.
-Recommendation: Option 1 — weil die bestehende gemeinsame Veröffentlichung bereits einen eindeutigen Herausgeber hat.
-If you say "ok": Der Runner trägt für eine Schwarm-Veröffentlichung den Schwarm und den gebundenen Veröffentlichungstag ohne einzelnes Modell ein.
-What is lost: Option 2 hätte einzelne Modelle im Kopf sichtbar gemacht.
-Downside you accept: Option 1 nennt dort keine einzelnen Modelle; Option 2 erhöht Aufwand und Fehlerfläche.
+Goal in one sentence: Festlegen, welche Angaben der Stempel bei Entwurf und Reparatur ändern darf.
+Options: 1. Herkunftsklasse und Prüfstatus wie bei Forschungs-Veröffentlichungen ersetzen — ein einheitlicher Vertrag, aber eine Architekturentscheidung verliert ihre vorgesehene Klasse und Freigaben werden zurückgesetzt. 2. Herkunftsklasse erhalten und Freigaben nur bei geändertem Inhalt zurücksetzen — menschliche Entscheidungen bleiben erkennbar, aber die Prüfung braucht eine passende Regel für solche Dokumente.
+Recommendation: Option 2 — weil Architekturentscheidungen ihre menschlich entschiedene Herkunft behalten sollen.
+If you say "ok": Der Stempel erhält die Herkunftsklasse, ergänzt den Urheber, aktualisiert das Änderungsdatum und setzt eine Freigabe nur bei geändertem Inhalt zurück; die Prüfung berücksichtigt diese Fälle.
+What is lost: Option 1 hätte für alle Dokumentarten denselben Forschungs-Kopfvertrag angewendet.
+Downside you accept: Option 1 kann die Herkunftsklasse menschlicher Entscheidungen und bestehende Freigaben überschreiben; Option 2 benötigt eine dokumentartgerechte Prüfung und weicht damit vom unveränderten Forschungs-Kopfvertrag ab.
 
 Welche Option und den jeweils genannten Nachteil akzeptierst du?
 
 ### Further review ambiguities awaiting a maintainer answer
 
-F-9, F-10, F-15, F-16 and F-17 remain open in `findings.md`. The criteria and agent details above are provisional where they address those rows. F-13 also remains open: applying the research contract's `ai-drafted-reviewed` and pending-review requirements to an ADR or a previously approved header conflicts with preserving those values. The maintainer's answer and any resulting spec changes must precede implementation.
+F-9, F-10, F-15, F-16 and F-17 remain open in `findings.md`. The criteria and agent details above are provisional where they address those rows. F-13 also remains open as asked above: applying the research contract's `ai-drafted-reviewed` and pending-review requirements to an ADR or a previously approved header conflicts with preserving those values. The maintainer's answer and any resulting spec changes must precede implementation.

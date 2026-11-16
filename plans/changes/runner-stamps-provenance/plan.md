@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -28,7 +28,7 @@ Starts unless you say stop.
 
 ## Prerequisite
 
-Do not implement until the maintainer answers the open decisions and review ambiguities in `spec.md` and the spec, open review rows and this plan are reconciled. In particular, Q-6 requires the full contract while the later agent detail exempts readable old producer faults; the conflicting instructions cannot both govern the same check. An approved header is also incompatible with the current research contract's pending-only review: resolve that interaction before implementing.
+Do not implement until the maintainer answers the open decisions and review ambiguities in `spec.md` and the spec, open review rows and this plan are reconciled. Q-7 resolves the earlier-record check: any contract fault stops the run. An approved header is also incompatible with the current research contract's pending-only review: resolve that interaction before implementing.
 
 ## Files and steps
 
@@ -72,3 +72,4 @@ Explore used Stage 2, Flash route, endpoint `glm-coding-plan`, model `glm-5.3-fl
 2026-11-16 16:30:43–16:33:10 UTC, 147 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 16:39:46–16:40:52 UTC, 66 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 16:51:25–16:54:12 UTC, 167 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-16 23:49:33–23:50:58 UTC, 86 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
