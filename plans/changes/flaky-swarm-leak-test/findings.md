@@ -856,3 +856,5 @@ Reviewer session: codex 01a1e4bd-8291-7603-9fc3-9c8391b366ad — a fresh session
 Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4445 commits, 12 rules.
 
 Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+
+Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4450 commits, 12 rules.
