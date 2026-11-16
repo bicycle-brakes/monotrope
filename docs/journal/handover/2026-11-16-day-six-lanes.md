@@ -1,0 +1,161 @@
+---
+title: "Session handover — day session with six lanes and the night plan, 2026-11-16"
+category: handover
+created: 2026-11-16
+direction: framework->framework
+provenance: ai-drafted-reviewed
+produced_by:
+  kind: llm-session
+  name: claude-code
+  version: "Opus 5.5, 2026-11-16"
+tags: [handover, lanes, night-run, stage-2, decisions]
+target_ref: 24632499
+status: pending
+review:
+  status: pending
+  approved_by: null
+  approved_at: null
+---
+
+# Resume here
+
+## Where we are
+
+The day session of 2026-11-16 ran up to six lanes through the runner and
+asked the maintainer the open interview questions. At the end, no runner job
+is running (checked with `ps` at the end of the session). Today's merges: PRs
+399, 400, 401, 402 and 404. PR 403 (Pi 1.5.0 prompt-path measurement note) is
+queued in the merge queue at `7eef22e4`. A night plan was agreed with the
+maintainer (below). The night has not started: the night launcher is not
+installed (`~/.claude/night.py` is missing, although `tools/claude-code/night.py`
+has existed since 2026-11-09, commit `13f66173`, bead coding-harness-ibde).
+
+## Next step
+
+Ask the maintainer whether to run `tools/claude-code/install.sh`. Then start
+the night through `python3 ~/.claude/night.py`, with up to six lanes on the
+queue below.
+
+## Needed from the maintainer
+
+1. **Install the night launcher?** `tools/claude-code/install.sh` puts
+   `night.py` into `~/.claude/`. Without it, an unattended session can stall
+   on a permission question. Recommendation: install, then start the night
+   through the launcher.
+2. **The provenance-stamping spec (bead coding-harness-f9sv): F-12 and F-13.**
+   - F-12: does a self-written producer record of the running session stay as
+     an earlier entry, or does the runner's measured record replace it?
+     Recommendation: replace it.
+   - F-13: the research contract's `ai-drafted-reviewed` / pending-review
+     demands conflict with preserving an ADR's `human-decided` header or an
+     approved header.
+   - Both questions are open in the change's `findings.md`. The lane
+     continues by the maintainer's choice ("Weiterlaufen lassen").
+3. **qwen4-max and hy4 admission (bead coding-harness-x0ph):**
+   - F-9: does a single "Hy4" row on the Go page count for `hy4`? Advisor
+     proposal: it counts when the refreshed catalog's display name for `hy4`
+     ("Hy4") equals the row name and no other id carries it; otherwise the row
+     is ambiguous and `hy4` takes a dated skip.
+   - F-8, F-10, F-11 are open and the change is blocked by the Pi pin (below).
+
+## Decisions and preferences
+
+Recorded verbatim (maintainer, 2026-11-16):
+
+- **Six lanes, also at night.** "bitte lasse 6 lanes parallel laufen", and on
+  the night plan "sechs lanes, ja".
+  - The sentence "A night run works its queue alone and sequentially" in
+    `docs/WORKFLOW.md` ("Night runs", commit `2d6d7f37`, 2026-10-27) is stale
+    wording.
+  - The two-lane night rule approved on 2026-10-27 was never written into
+    WORKFLOW, and the later wake paragraph assumes several lanes.
+  - Owed: correct this in the WORKFLOW.md pull request.
+- **Pi pin:** "pinne pi 1.5.2". This is its own bounded change (bead
+  coding-harness-e01y), which blocks bead coding-harness-x0ph. It is not
+  done inside x0ph.
+  - Measured 2026-11-16: pi-ai 1.5.2 ships `hy4` in its `opencode-go.json`,
+    not `qwen4-max`.
+  - Pi 1.5.0 ships neither.
+  - The contract test `test_real_opencode_provider_contracts` reads only that
+    shipped file.
+  - The maintainer sees both ids in Pi because Pi refreshes
+    `~/.pi/agent/models-store.json` live.
+- **Answer-reading rules for the research swarm (bead coding-harness-xsta):**
+  "Nachtrag zu ADR 0020 (Empfohlen)". The runner draft that created a new
+  ADR 0026 is superseded and must be redrafted.
+- **Provenance stamping (bead coding-harness-f9sv):**
+  - F-11: "Ja, jeder Fehler stoppt (Empfohlen)".
+  - F-14: "Schwarm als Urheber (Empfohlen)".
+  - On parking the lane: "Weiterlaufen lassen".
+- **qwen4-max and hy4 admission (bead coding-harness-x0ph):**
+  - F-2: "Ja, wenn Training 'Not used' (Empfohlen)".
+  - F-1: "Je ID datiert überspringen (Empfohlen)", asked after the maintainer
+    requested the advisor's view.
+- **Merges:** "Ja, mergen" covers green non-decision lane pull requests by
+  day. Decision pull requests stay the maintainer's.
+
+## Open work and blockers
+
+Task status lives in Beads. Per lane, state at the end of the session:
+
+| Lane (bead) | Branch @ commit | State | Next authorised action |
+|---|---|---|---|
+| Verify cheap gates before admission (coding-harness-bxxt.6) | `feat/verify-cheap-before-admission` @ `f4a3bddd` | Phase-6 re-check after the R1 repair (git timeout) raised a new R1 (a gate calling the pinned `.venv/bin/ruff` is dropped). Its row is uncommitted in `findings.md` | Triage the new R1. If it is a further case of the same mechanism, park the lane under night rule 2 |
+| Slip counter (coding-harness-bxxt.7) | `feat/slip-counter` @ `3349aefe` | P6-5 and P6-6 repaired by the runner | Phase-6 re-check, then the PR |
+| Verify slots (coding-harness-u1ha) | `feat/verify-slots` @ `0b7a776b` | Redrafted with Q-8 and Q-9 | Spec review, then repair F6-1, re-check, PR |
+| Pi neutral path (coding-harness-xul8) | `fix/pi-neutral-paths-v2` @ `b8a89fc7` | Implement attempts 1 and 2 (GLM Flash) failed their post-run checks, among them ruff SIM105 in `tests/test_pi_contract.py`. Call records are uncommitted in `findings.md` | Sonnet fallback from the saved attempt (`--stage2-off`), then catch up the skipped spec review. Never run it beside the Pi pin change |
+| Provenance stamping (coding-harness-f9sv) | `fix/runner-stamps-provenance` @ `f5e226eb` | 17 phase-2a rows: F-11 and F-14 answered, F-12 and F-13 open | Redraft through the runner with the answered rows |
+| qwen4-max and hy4 admission (coding-harness-x0ph) | `feat/admit-qwen4-hy4` @ `9faf6860` | Parked: blocked by the Pi pin; F-7 to F-11 from the second spec review | After the pin: redraft with "each admission fact needs exact-id evidence; a skip's reason names the failing fact; no criterion restates runner behaviour" |
+| Swarm answer reader (coding-harness-xsta) | `fix/swarm-answer-reader` @ `43b9d10c` | Uncommitted runner draft output with a new ADR 0026, superseded by the maintainer's answer. A redraft is refused while those files exist | Find the runner's record of why the draft did not commit, then clear the superseded output through the runner's own path and redraft as an ADR 0020 amendment |
+| Pi pin 1.5.2 (coding-harness-e01y) | none yet | Created 2026-11-16 | Explore (bounded) on its own worktree; it re-measures the prompt paths on 1.5.2 |
+
+**Night queue** (agreed 2026-11-16, up to six lanes):
+
+1. Lanes that touch `scripts/stage2.py` open their pull requests in this
+   order: slip counter, cheap gates, verify slots. These are lanes 10, 6
+   and 14.
+2. At most three open pull requests may touch `scripts/stage2.py`.
+3. The verify lock admits one `make verify` at a time, so verification runs
+   one lane after another.
+4. Each lane ends the night with either a pull request link or a parked
+   question in its bead notes.
+5. Runner commands run with `set -o pipefail`. A piped `tail` hid the
+   runner's exit status today.
+
+Still owed from earlier in the day:
+
+- A WORKFLOW.md pull request covering the bookkeeping classes, the six-lane
+  limit and the stale sentence above.
+- Origin checks for lanes 6 and 14.
+- Overlap links:
+  - qut1 into nqaf
+  - 3rtn into mwzv.3 (ask the maintainer)
+  - a k0ub note that wmy1 reverses it
+  - x0ph vs xzjs
+  - spgf vs zeun
+- Remove the worktrees `verify-reuse` and `trial-3x4`.
+
+## Working state and parallel-session boundary
+
+- The main checkout is on `main` at `5d70a6aa`, behind `origin/main`
+  (`24632499`), with `.codex/agents/` untracked (not ours).
+- All lane branches are pushed.
+- Uncommitted runner output stays in three worktrees and was left as it is:
+  - `findings.md` in the cheap-gates lane
+  - `findings.md` in the Pi neutral path lane
+  - the draft files in the swarm answer reader lane
+- An Opus sub-agent was recording the xsta and f9sv answers in their
+  `decisions.md` when this file was written. Its result is not read here.
+- No other session ran in this repository at the end; the session scan
+  printed nothing.
+
+## Validation
+
+- PR 404 merged after a CI rerun on 2026-11-16. The first run went red on
+  `test_an_interrupt_on_the_main_thread_kills_the_launched_group[Terminated]`,
+  a flaky test that is not the leak test the PR fixed.
+- PR 403: CI green (gates, verify) at `7eef22e4`. It is queued.
+- No `make verify` ran for this handover: it is a text-only change, so CI is
+  its gate.
+- The lane results above were read from git logs and `findings.md` on
+  2026-11-16. Lane 6's newest R1 row was read only in part.
