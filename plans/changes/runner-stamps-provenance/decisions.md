@@ -162,6 +162,58 @@ accepting that a touched file fails for any header fault, not only for its
 producer record.
 — 2026-11-16
 
+## Q-7 · Earlier producer records in the post-run check
+
+context: |
+  Topic: which producer records in a touched file the post-run check
+  judges.
+  Intention: the spec review (finding F-11) found two readings of AC 4:
+  every record in a touched file's `produced_by`, or only the records this
+  run wrote. Active lanes carry old readable records in a legacy form
+  (for example `name: Claude Code` with the model in `version`).
+  Today: the agent had decided (a [DETAIL] below) that an earlier readable
+  record in a legacy form is reported, not refused.
+  Repository change: the post-run check either stops the run on any
+  producer-header fault in a touched file, earlier readable records
+  included, or judges only the records this run wrote.
+  Architecture change: none.
+asked: 2026-11-16, conversation (spec review finding F-11)
+answer: "Ja, jeder Fehler stoppt (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of the post-run check on the files a run touched, facing
+earlier readable producer records in a legacy form, we decided that the
+full header contract applies and any fault stops the run, earlier
+readable producer records included, to achieve one contract with no
+exemption at the run that touches the file, accepting that a run touching
+a file with an old faulty record fails until that record is corrected.
+— 2026-11-16
+
+## Q-8 · Producer record of a swarm publication
+
+context: |
+  Topic: what the swarm explore route records in `produced_by`.
+  Intention: the spec review (finding F-14) found the spec silent on it:
+  several member models write the swarm's answer, while AC 1 asks for the
+  actual program, model and publication date of the run.
+  Today: the route publishes a publisher record
+  (`stage2-research-swarm`, the publication day) with no model.
+  Repository change: a swarm publication names each member model, keeps
+  the publisher record without a model, or is exempt.
+  Architecture change: none.
+asked: 2026-11-16, conversation (spec review finding F-14)
+answer: "Schwarm als Urheber (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of a research publication written by several member
+models, facing a producer record that asks for one model, we decided that
+a swarm publication names the swarm as its producer with the publication
+day and no single model, to achieve a true record of who published,
+accepting that the member models are not named in the header.
+— 2026-11-16
+
 ## Decided by the agent
 
 [DETAIL] **A redraft that changes a document's body resets a non-pending
@@ -180,3 +232,5 @@ lanes carry such records today, and refusing them would turn those lanes
 red, which the split in Q-4 set out to avoid. An earlier record that
 cannot be read at all stays red, as Q-5 decided; this detail covers only
 readable records in a legacy form.
+Superseded on 2026-11-16 by the maintainer's answer in Q-7: any fault
+stops the run, earlier readable records included.
