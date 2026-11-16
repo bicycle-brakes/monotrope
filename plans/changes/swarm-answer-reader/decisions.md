@@ -114,7 +114,7 @@ repair retry — 2026-11-15
 ## Q-4 · Per-model outcome counts in the run records
 
 asked: 2026-11-15
-answer: Per-model outcome counts in the run records: bare, fenced, repaired, refused.
+answer: "Per-model outcome counts in the run records: bare, fenced, repaired, refused."
 answered_by: maintainer
 status: answered
 context: |
@@ -135,7 +135,7 @@ accepting a larger manifest — 2026-11-15
 ## Q-5 · Quorum of two of three finders
 
 asked: 2026-11-15
-answer: Quorum: the run continues while at least two of three finders answered validly. The failure is recorded in the run record and the research.md header.
+answer: "Quorum: the run continues while at least two of three finders answered validly. The failure is recorded in the run record and the research.md header."
 answered_by: maintainer
 status: answered
 context: |
@@ -158,7 +158,7 @@ amendment of ADR 0020 — 2026-11-15
 ## Q-6 · One reading rule for every swarm stage
 
 asked: 2026-11-15
-answer: Yes: the reading rule of Q-7 in the swarm-report-format change (2026-11-13) applies to every stage of the research swarm.
+answer: "Yes: the reading rule of Q-7 in the swarm-report-format change (2026-11-13) applies to every stage of the research swarm."
 answered_by: maintainer
 status: answered
 context: |
@@ -195,7 +195,7 @@ first answered; this addendum supersedes its answer.
 ## Q-7 · A single-call stage hands its call to another model once
 
 asked: 2026-11-15
-answer: Yes: when the merge or the judge also fails its one repair retry, another model takes that call once; if that fails too, the run ends and keeps what it has for resume.
+answer: "Yes: when the merge or the judge also fails its one repair retry, another model takes that call once; if that fails too, the run ends and keeps what it has for resume."
 answered_by: maintainer
 status: answered
 context: |
