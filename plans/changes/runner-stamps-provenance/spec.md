@@ -21,145 +21,81 @@ neighbours: [plans/changes/archive/2026-11-16-explore-provenance/spec.md, plans/
 
 # Spec — runner-stamps-provenance
 
-The goal in one sentence: the runner stamps the provenance of every artifact
-it publishes, a red check holds the producer header of every artifact under
-`plans/`, and every existing free-form header is migrated once (bead
-`coding-harness-f9sv`). Research: `research.md`. Decisions: `decisions.md`.
+The runner records the actual producer after explore, draft and repair, and rejects invalid producer headers in files touched by a run (bead `coding-harness-f9sv`). Research: `research.md`; decisions: `decisions.md`.
 
 ## Problem
 
-Three failures, each read in this checkout on 2026-11-16:
-
-1. **Hand-written producer headers fail the contract.** 50 `research.md`
-   headers on main carry a free-form `produced_by`, and a lane went red on
-   one (`decisions.md`, Q-1 context; `research.md`, "What exists today").
-   Models and sessions write these headers by hand; only `findings.md`
-   creation and research publications are stamped by the runner
-   (`research.md`, "The runner already stamps provenance in these places").
-2. **Nothing in verify goes red on them.** The metadata contract lives in
-   `scripts/research_census.py`, but as a library no gate runs
-   (`scripts/ci_gates.py` lists it as a library held by tests);
-   `scripts/plans_registry.py` checks lifecycle fields only, and
-   `scripts/check_docs.py` measures presence, and only under `docs/`
-   (`research.md`, "What holds this today").
-3. **The draft artifacts are published unstamped.** `spec.md`, `design.md`
-   and `plan.md` from the `draft` verb are written by the drafting model
-   session itself, so their provenance fields are exactly the hand-written
-   form the census refuses (`research.md`, "The runner does not stamp
-   provenance in these places").
+- Draft artifacts receive headers from the model session; research publication is already stamped by the runner (`research.md`, “What exists today”, 2026-11-16).
+- On 2026-11-16, 271 of 620 producer headers under `plans/` failed the census rule; a tree-wide check would also turn existing lanes red (`decisions.md`, Q-4). The existing stock is addressed separately.
 
 ## Terms
 
-- **producer header** — the `produced_by` field of an artifact's frontmatter.
-- **metadata contract** — the publication header form the explore-provenance
-  change defined: `provenance`, `produced_by` as one record or a list of
-  records (`kind: llm-session`, a program `name`, an ISO date in `version`,
-  optional `model`), `review` pending, `date <= last_reviewed <= updated`
-  (`plans/changes/archive/2026-11-16-explore-provenance/spec.md`;
-  `scripts/research_census.py`).
-- **free-form header** — a `produced_by` outside that record form: prose, a
-  bare string, a record without `kind`/`name`/`version`, or an unknown
-  program name.
-- **per case** — one check at each header's own check, the maintainer's Q-1
-  answer; the rejected alternative was one general detector of side routes.
+A **producer record** identifies the program, model and publication date of a model session in `produced_by`. A **touched file** is a file changed by the run and retained for its post-run checks; files restored by the runner are excluded.
 
 ## Acceptance criteria
 
-1. When the `draft` verb publishes a change's `spec.md`, `design.md` or
-   `plan.md`, the runner stamps the artifact's header so that `provenance`,
-   `produced_by`, `review` and `updated` hold the metadata contract's form,
-   whichever form the drafting session wrote.
-   *Refuted by:* a draft-published artifact whose `produced_by` still carries
-   a free-form value or an unknown program name after the runner's pass.
-   *Basis:* `decisions.md#Q-1` (its Today: headers written by hand, only
-   findings stamped); `research.md`, "What exists today".
-2. When any Markdown artifact under `plans/` carries a `produced_by` that is
-   not the metadata contract's record form, the `plans-registry` gate fails.
-   *Refuted by:* such a header, live or archived, standing in a tree whose
-   `make verify` stays green.
-   *Basis:* `decisions.md#Q-1` (a red check per case at the header's own
-   check).
-3. When this change is done, no Markdown artifact under `plans/`, archived
-   folders included, carries a `produced_by` outside the record form.
-   *Refuted by:* any remaining free-form `produced_by` under `plans/`.
-   *Basis:* `decisions.md#Q-2` (migrate every header once, archived ones
-   included).
-4. While the runner stamps a draft artifact's header, every byte outside the
-   stamped header fields keeps its place: authored prose, the plan card,
-   fences and unrelated frontmatter fields are untouched.
-   *Refuted by:* a stamp that rewrites, reorders or drops bytes outside
-   `provenance`, `produced_by`, `review` and `updated`.
-   *Basis:* `research.md`, "What exists today" — `research_publication`'s
-   byte-preservation contract, the helper the stamp generalizes.
+1. When explore publishes research, the runner stamps a producer record with the actual program, model and publication date of that run.
+   *Refuted by:* a GLM route recording `codex`, a different model or a date other than the publication day.
+   *Basis:* `decisions.md#Q-4`.
+2. When draft retains a model-written artifact with frontmatter, including a new ADR if present, the runner stamps a producer record with the actual program, model and publication date before its post-run checks, including an attempt that subsequently fails those checks.
+   *Refuted by:* an affected artifact missing that record, or a GLM attempt recorded as `codex`, with a wrong model or date.
+   *Basis:* `decisions.md#Q-4`.
+3. When repair retains a model-written artifact with frontmatter, the runner stamps a producer record with the actual program, model and publication date before its post-run checks.
+   *Refuted by:* an affected artifact missing that record, or its record naming a different program, model or publication day.
+   *Basis:* `decisions.md#Q-4`.
+4. When a runner verb checks its result, a failing producer header in a touched file makes its post-run check fail with a diagnostic identifying the file.
+   *Refuted by:* a touched file with an invalid producer header accepted by its verb's post-run check.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`.
+5. While the runner stamps an artifact, it preserves bytes outside the fields that stamping must change.
+   *Refuted by:* changed prose, fences, plan card or unrelated frontmatter.
+   *Basis:* `research.md`, “The runner already stamps provenance in these places”.
+6. If an artifact cannot be stamped safely, the attempt fails with a diagnostic instead of publishing an invented or malformed header.
+   *Refuted by:* accepting a header with ambiguous YAML anchors or undecodable bytes, or failing without identifying the artifact.
+   *Basis:* `research.md`, “The runner already stamps provenance in these places”.
+
+The exact treatment of existing producer records, the validation contract and approval state remains open below; criteria dependent on those answers are not final.
 
 ## Non-goals
 
-- No general detector of side routes: the maintainer chose a check per case
-  (`decisions.md`, Q-1); other hand-written fields get their own checks in
-  their own changes.
-- No enforcement of the `allowed:` classes of `provenance.yaml` — the
-  predecessor explore-provenance refused it; the map stays declaration-only.
-- No change to the deterministic new-change skeleton: an untouched,
-  unpublished skeleton stays `human-written` without `produced_by`
-  (predecessor non-goal).
-- The runner never writes or stamps `decisions.md` — the maintainer's
-  answers file, excluded by `draft_keep()`; the check of criterion 2 reads
-  its header like any other artifact's.
-- No automation of approval: `review: approved` stays a human edit.
-- Artifacts outside `plans/` (handovers, `docs/`) keep their presence-only
-  checks; nothing here measures them.
-- The stale `scripts/validate_provenance.py` reference in
-  `provenance.yaml`'s header comment is separate drift housekeeping, not
-  this change.
+- Migration of existing headers and a tree-wide check belong to the separate migration work (bead `coding-harness-2i7x`), per Q-4.
+- No general side-route detector, enforcement of allowed provenance classes, change to the untouched new-change skeleton, or automated human approval.
+- No change to the maintainer's answers in `decisions.md`, nor to the headerless loop record.
 
 ## Protected areas
 
-- The held set (`provenance.yaml`, `decisions/gates.yaml`, `.claude/`,
-  `.codex/`, `.agents/`, `.pi/`, `.mcp.json`, `CLAUDE.md`, `prompts/`,
-  `templates/`, `.github/`, `.beads/`, `AGENTS.md`, `README.md`): no step of
-  this change edits one — the red check lands in the existing
-  `plans-registry` gate, so no gate list changes.
-- `scripts/new_change.py`, the skeleton writer, stays as it is.
-- `docs/adr/`: this change creates, changes or removes no file there.
-- The loop record outside the git directory keeps its headerless form.
+Runner-held paths remain outside model attempts, including `provenance.yaml`, `decisions/gates.yaml`, `prompts/`, `templates/`, and `AGENTS.md`; no edit to them is planned. Existing unrelated artifacts and archived headers are not migrated.
 
 ## Definition of Done
 
-- `verify` green.
-- Moved in the same pull request: the draft stamping in `scripts/stage2.py`,
-  the contract reader exposed in `scripts/research_census.py`, the registry
-  check in `scripts/plans_registry.py`, the one-time migration
-  `scripts/migrate_producer_headers.py` with the migrated headers under
-  `plans/`, and the tests named in the plan's criterion ledger.
-- The protected areas untouched and the non-goals unbuilt, shown by the pull
-  request's file list.
-- Bead: the pull request closes `coding-harness-f9sv`, and its last commit
-  carries the trailer `Closes-Bead: coding-harness-f9sv`
-  (`prompts/07-commit.md`).
-- Special runs: the one-time migration run, its commit named in the pull
-  request body.
+- `make verify` green; the tests in the criterion ledger exercise the runner routes and their failure cases.
+- The runner, its shared producer validation and their tests move in the same pull request; no special migration run is required.
+- The protected areas and non-goals are checked against the pull request's file list.
+- The pull request closes `coding-harness-f9sv` and its final commit carries `Closes-Bead: coding-harness-f9sv`.
 
 ## Open decisions
 
-No `[DECISION]` is open. Decided as `[DETAIL]` by the drafting session, each
-with its reason:
+### [DECISION] Existing producer records (review finding F-2)
 
-- The red check lands in the existing `plans-registry` gate — it already
-  walks every Markdown artifact under `plans/`, live and archived, so no
-  held gate list changes.
-- The migration is a kept, idempotent script
-  (`scripts/migrate_producer_headers.py`) — repeatable and reviewable, not a
-  hand edit of ~50 files, which is exactly the hand repair this change
-  removes.
-- A `produced_by` that is absent stays absent: the check holds the form of a
-  present field, not its presence — presence under `docs/` is
-  `check_docs.py`'s question, and no presence rule for `plans/` was decided.
+Topic: Frühere Angaben zur Urheberschaft eines Dokuments.
+Intention: Ein erneuter Entwurf soll seine Herkunft nachvollziehbar festhalten.
+Today: Die Forschungs-Veröffentlichung behält vorhandene Angaben und ergänzt den aktuellen Lauf; frühere Angaben können aber falsch sein.
+Repository change: Der Runner übernimmt frühere Angaben oder ersetzt sie durch den aktuellen Lauf.
+Architecture change: Der Runner bleibt die zentrale Schreibstelle; die gespeicherte Herkunft unterscheidet sich.
 
-Recorded as `[GAP]` in `research.md` ("What is unclear"): the work item's
-own description (bead `coding-harness-f9sv`) names a four-part fix and could
-not be read in this checkout — the tracker is an embedded Dolt database not
-present in the worktree. The plan's first step reads it through the tracker
-before implementation; whatever it names beyond these criteria enters this
-spec as an amendment with its own criteria, and anything needing a
-maintainer choice goes to `decisions.md` as a question — never a silent
-decision.
+Goal in one sentence: Festlegen, welche Herkunft ein neu veröffentlichter Entwurf zeigt.
+Options: 1. Frühere Angaben behalten und den aktuellen Lauf ergänzen — frühere Beiträge bleiben sichtbar, möglicherweise auch falsche Angaben. 2. Nur den aktuellen Lauf eintragen — seine Herkunft ist eindeutig, frühere Beiträge gehen verloren.
+Recommendation: Option 1 — weil frühere Beiträge sonst nicht mehr erkennbar sind.
+If you say "ok": Der Runner behält interpretierbare frühere Angaben und ergänzt den tatsächlichen aktuellen Lauf.
+What is lost: Option 2 hätte eine ausschließlich auf den aktuellen Lauf begrenzte Herkunft gezeigt.
+Downside you accept: Option 1 kann falsche frühere Angaben mitführen; Option 2 verliert die Herkunft früherer Beiträge.
+
+Welche Option und den jeweils genannten Nachteil akzeptierst du?
+
+### Further unresolved review ambiguities
+
+- F-7: whether the per-run check validates only the producer record's shape or the full research publication metadata contract. No answer recorded.
+- F-9: whether a new draft resets an existing human approval to pending or preserves it. No answer recorded.
+
+[DETAIL] If a field must be inserted and no `tags` field exists, place it at the end of the frontmatter; this preserves unrelated bytes.
+
+[DETAIL] The post-run check identifies the affected file: this makes a failure actionable without changing the intended scope.
