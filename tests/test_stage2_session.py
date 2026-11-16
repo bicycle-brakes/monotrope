@@ -143,7 +143,7 @@ class World:
         self,
         *options: str,
         change: str = "demo",
-        model: str | None = "gpt-6.1-sol",
+        model: str | None = "gpt-6.1-terra",
         root: Path | None = None,
         cwd: Path | None = None,
     ) -> int:
@@ -499,7 +499,7 @@ def test_a_malformed_permission_or_residency_refuses(world: World, changes: dict
         ("mimo-v2.6-flash", "go-declared"),
         ("opencode-go/never-listed-rung", None),  # the entry is declared now (stage2-mimo); no entry lists this rung
         ("glm-5.3", None),  # declared - but for a transport no session drives
-        ("gpt-6.1-sol extra", None),
+        ("gpt-6.1-terra extra", None),
     ],
     ids=["unknown", "plain-go-name", "go-rung-undeclared", "other-transport", "whitespace"],
 )
@@ -513,7 +513,7 @@ def test_a_model_no_declaration_clears_for_a_session_refuses(world: World, model
 def test_the_id_form_decides_and_a_disallowing_declaration_refuses(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    world.declare_go(modelle=[GO_BARE, "gpt-6.1-sol"])
+    world.declare_go(modelle=[GO_BARE, "gpt-6.1-terra"])
     assert world.run() == 0, "a plain id is Codex's even when opencode-go lists the same id"
     assert "endpoint openai-codex" in world.text()
     world.findings.unlink()
@@ -545,7 +545,7 @@ def test_the_id_form_decides_and_a_disallowing_declaration_refuses(
         "schema_version: 1\n",
         "endpunkte: [{}]\n",
         "endpunkte: [{name: somewhere, modelle: not-a-list}]\n",
-        "endpunkte: [{name: openai-codex, modelle: [gpt-6.1-sol]}, {name: openai-codex, modelle: []}]\n",
+        "endpunkte: [{name: openai-codex, modelle: [gpt-6.1-terra]}, {name: openai-codex, modelle: []}]\n",
     ],
     ids=["unparsable", "no-endpoints", "unnamed-entry", "modelle-not-a-list", "duplicate-name"],
 )
@@ -690,7 +690,7 @@ def test_the_audit_names_the_attempt_and_keeps_prior_findings(world: World) -> N
     world.findings.write_text("# Findings — demo\n\nEarlier rows stand.\n", encoding="utf-8")
     assert world.run() == 0
     matches = re.findall(
-        r"^Stage-2 session, \d{4}-\d{2}-\d{2}: attempt ([0-9a-f]+) · model gpt-6\.1-sol · endpoint openai-codex · "
+        r"^Stage-2 session, \d{4}-\d{2}-\d{2}: attempt ([0-9a-f]+) · model gpt-6\.1-terra · endpoint openai-codex · "
         r"handover plans/changes/demo/handover\.md · leak check clean over (\d+) files, (\d+) commits, "
         r"(\d+) rules · dispatch accepted\.$",
         world.text(),
@@ -834,7 +834,7 @@ def test_codex_is_dispatched_interactively_with_its_exact_safety_flags(world: Wo
     assert argv == [
         "--no-daemon",
         "--model",
-        "gpt-6.1-sol",
+        "gpt-6.1-terra",
         "--cd",
         str(world.tree),
         "--sandbox",
@@ -1144,7 +1144,7 @@ def test_the_session_switches_belong_to_no_other_verb(world: World) -> None:
     assert world.run("--stage2-off", model=None) == 2
     assert world.run(model=None) == 2, "session needs its model"
     for verb in ("spec-review", "review", "release-loop"):
-        assert stage2.main([verb, "demo", "--model", "gpt-6.1-sol", "--root", str(world.tree)]) == 2
+        assert stage2.main([verb, "demo", "--model", "gpt-6.1-terra", "--root", str(world.tree)]) == 2
     for verb in ("explore", "spec-review"):
         assert stage2.main([verb, "demo", "--handover", "x", "--root", str(world.tree)]) == 2
     assert stage2.main(["explore", "demo", "--stage2-off", "r", "--model", "m", "--root", str(world.tree)]) == 2

@@ -1,19 +1,35 @@
-"""Session-wide test configuration: the runtime check on declared stand-in logs.
+"""Session-wide test setup: two runtime guards, installed at conftest import.
 
-During the test session a declared stand-in log is read or appended only
-through the locked helper (`tests/atomic_test_log.py`); any raw access raises
-and fails its test, even when the code under test swallows the error
-(`tests/stand_in_log_guard.py`; change flaky-swarm-leak-test, decisions.md#Q-5).
-The wrappers are installed when this file is imported, before any test module.
+The stand-in log check: during the test session a declared stand-in log is
+read or appended only through the locked helper (`tests/atomic_test_log.py`);
+any raw access raises and fails its test, even when the code under test
+swallows the error (`tests/stand_in_log_guard.py`; change
+flaky-swarm-leak-test, decisions.md#Q-5).
+
+The runner clock guard (decisions.md, runner-clock Q-2): installed before any
+test module imports the runner, so a read the runner makes at import (a
+default argument, a module-level value) and every reference it binds at
+import reach a wrapper. The autouse fixture below then fails any test during
+which runner code read a machine clock outside `clock_now`
+(`tests/runner_clock_guard.py`).
 """
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
+from pathlib import Path
+
 import pytest
-import stand_in_log_guard
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import runner_clock_guard  # noqa: E402
+import stand_in_log_guard  # noqa: E402
 
 MARKER = "raw_stand_in_log_access"
 
+runner_clock_guard.install()
 stand_in_log_guard.install()
 
 
@@ -59,3 +75,24 @@ def pytest_runtest_teardown():
         _fail_on_recorded_access(outcome)
     finally:
         stand_in_log_guard.suspend(False)
+
+
+
+@pytest.fixture(autouse=True)
+def runner_clock_reads() -> Iterator[None]:
+    """Fail a test during which runner code read a machine clock outside `clock_now`."""
+    problems = runner_clock_guard.installation_problems()
+    if problems:
+        pytest.fail(f"the runner clock guard is not in effect: {problems}")
+    bound = runner_clock_guard.unscanned_bound_reference_violations()
+    if bound:
+        pytest.fail(f"the runner holds clock references bound past the guard: {bound}")
+    unreported = runner_clock_guard.unreported_import_time_reads()
+    if unreported:
+        pytest.fail("runner code read a machine clock outside clock_now at import: " + "; ".join(map(str, unreported)))
+    start = len(runner_clock_guard.READS)
+    with runner_clock_guard.in_test():
+        yield
+    new = runner_clock_guard.READS[start:]
+    if new:
+        pytest.fail("runner code read a machine clock outside clock_now: " + "; ".join(map(str, new)))

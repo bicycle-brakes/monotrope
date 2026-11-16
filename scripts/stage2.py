@@ -42,20 +42,29 @@ failed or timed-out refresh refuses instead of listing a stale cache.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
-Implement lets the model edit but not run commands; before `make verify` the
+Implement lets the model edit but not run commands; before its post-run check the
 runner applies ruff's safe fixes and its formatter to the changed Python files
-under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
-makes the one checkpoint commit. A
+under `scripts/` and `tests/`, runs the selected verification - the targeted
+check for implement and repair, the admitted full `make verify` where a targeted
+coverage is unsafe - checks the time log and
+makes the one checkpoint commit. New production code without a reachable test
+refuses an implement attempt before any test runs (bead coding-harness-0swp). A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to Codex in one
 call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
 stops), proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines. A repair's post-run check is targeted when
-its coverage can be determined safely - the whole touched and linked test files, ruff
-over the touched Python files and the local gates its file kinds need, outside the
-verify admission - and the admitted full `make verify` otherwise; `review` (phase 6)
-runs a fresh full `make verify` of the current head before it calls the reviewer.
+rows `fixed` from the answer's fixed lines. The implement and repair post-run
+checks are targeted when
+their coverage can be determined safely - the whole touched and import-linked
+test files, ruff
+over the touched Python files and the local gates the file kinds need, outside the
+verify admission - and the admitted full `make verify` otherwise; a targeted red
+fails the attempt and never calls the full check to override it. The draft's
+document check runs only the locally runnable document gates, outside the
+admission. `review` (phase 6)
+runs a fresh full `make verify` of the current head before it calls the reviewer,
+and refuses a red, unstartable or timed-out check.
 Codex runs in its configured `workspace-write` sandbox; the tests do not measure that
 confinement.
 
@@ -203,16 +212,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 # GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
+# The endpoints whose models a subscription carries until a declared end date: each listed model
+# needs a dated, sourced `modelle_terms` record with `valid_until`, and no call runs after that UTC
+# day (bead coding-harness-dcu3). `opencode-go` keeps its fuller paid-terms rule (`terms_problem`).
+# Each endpoint maps to the subscription's name its expiry notice and refusal give (phase 6, F6-4a).
+SUBSCRIPTION_TERMS_ENDPOINTS = {"glm-coding-plan": "Z.ai"}
 HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
-# Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
+# Codex's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
 # review start at `high`, the repair at `medium`. This mapping is the one place a later adjustment
 # edits - the instructions link its entries and the tests read them. A call's verb selects the
 # entry, retries included: the `codex-repair` route label names a retry of draft and repair and
 # picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
 # `run_codex` takes the effort from the caller's verb instead.
 CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
-CODEX = ("openai-codex", "gpt-6.1-sol", None)
+CODEX = ("openai-codex", "gpt-6.1-terra", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # The change classes (check_interview_minimums.py's vocabulary). Explore routes on
@@ -662,8 +676,42 @@ class MalformedAnswer(CallFailed):
         self.answer = answer
 
 
+@dataclass(frozen=True)
+class ClockReading:
+    """One instant of the runner's time, in its three domains.
+
+    `monotonic` is the seconds value every duration is measured in, `utc` the
+    wall clock of UTC boundaries (terms expiry, audit and token stamps), and
+    `local_date` the local calendar date of document stamps. A consumer reads
+    the whole reading at once and never touches the machine clocks itself, so
+    a wall-clock step cannot bend a duration and a timezone boundary cannot
+    swap a terms date for a stamp date.
+    """
+
+    monotonic: float
+    utc: dt.datetime
+    local_date: dt.date
+
+
+def clock_now() -> ClockReading:
+    """The one time boundary of this module (a seam for tests).
+
+    Every current monotonic reading, wall clock and calendar date the runner
+    obtains flows through here, and the source guard admits raw acquisition in
+    this body alone - no caller or line is exempt. Keeping the three domains in
+    one reading is what preserves their meanings: durations stay monotonic
+    differences, terms stay UTC dates and stamps stay local dates.
+    """
+    return ClockReading(
+        monotonic=time.monotonic(),
+        utc=dt.datetime.now(dt.UTC),
+        local_date=dt.date.today(),
+    )
+
+
 def today() -> str:
-    return dt.date.today().isoformat()
+    """The local calendar date of this run, as an ISO string."""
+    return clock_now().local_date.isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -1197,7 +1245,7 @@ def append(path: Path, text: str) -> None:
     except UnicodeDecodeError:
         stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
     else:
-        stamped = check_frontmatter_current.stamped(decoded, dt.date.today()).encode("utf-8")
+        stamped = check_frontmatter_current.stamped(decoded, clock_now().local_date).encode("utf-8")
     write_atomic(path, stamped)
 
 
@@ -1227,12 +1275,346 @@ def write_atomic(path: Path, data: bytes) -> None:
         os.close(directory)
 
 
+RESEARCH_TITLE = re.compile(r"(?m)^#[ \t][^\n]*\n")
+RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?research-swarm/v2)")
+
+
+def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
+    """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
+    node = yaml.compose(block)
+    spans = []
+    for key_node, value in node.value:
+        if key_node.value == key:
+            start = block.rfind("\n", 0, key_node.start_mark.index) + 1
+            end = value.end_mark.index
+            # A block mapping's end mark includes its final line ending; keep that separator.
+            while end > start and block[end - 1] in "\r\n":
+                end -= 1
+            spans.append((start, end))
+    return spans
+
+
+def research_visible_text(text: str) -> str:
+    """Mask Markdown fenced code (including unclosed fences) without moving source offsets.
+
+    CommonMark permits up to three leading spaces and a closing fence at least as long
+    as the opener. Keeping line endings makes this useful for both evidence and edits.
+    """
+    marker = None
+    width = 0
+    visible = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if marker is None:
+            opening = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", content)
+            if opening and not (opening[1][0] == "`" and "`" in opening[2]):
+                marker, width = opening[1][0], len(opening[1])
+            else:
+                visible.append(line)
+                continue
+        else:
+            closing = re.fullmatch(r" {0,3}([`~]+)[ \t]*", content)
+            if closing and set(closing[1]) == {marker} and len(closing[1]) >= width:
+                marker = None
+        visible.append("".join(char if char in "\r\n" else " " for char in line))
+    return "".join(visible)
+
+
+def skeleton_notices() -> list[str]:
+    """The two generated opening notices of a research skeleton, derived from the template itself.
+
+    They are read from `scripts/new_change.py` at call time, so the removal patterns cannot drift from
+    what the skeleton actually writes. The template's first line is the title heading and stays.
+    """
+    import new_change
+
+    body = new_change.BODY_TEMPLATE.split("\n", 1)[1].strip("\n")
+    return [part.strip("\n") for part in re.split(r"\n[ \t]*\n+", body) if part.strip()]
+
+
+def _notice_pattern(notice: str) -> re.Pattern[str]:
+    """An exact opening notice at line start, including its own trailing line endings."""
+    lines = [re.escape(line) for line in notice.split("\n")]
+    return re.compile(r"(?m)^" + r"\r?\n".join(lines) + r"(?:\r?\n){1,2}")
+
+
+def research_opening_notices(text: str, body_start: int) -> list[str]:
+    """Generated notices still present before the research's first section or runner audit.
+
+    The active-file census shares the publisher's exact notice patterns, so authored mentions
+    below the opening cannot be mistaken for an unfilled skeleton.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    start = title.end() if title else body_start
+    visible = research_visible_text(text[body_start:])
+    visible = text[:body_start] + visible
+    boundary = RESEARCH_OPENING_END.search(visible, start)
+    opening = visible[start : boundary.start() if boundary else len(text)]
+    return [notice for notice in skeleton_notices() if _notice_pattern(notice).search(opening)]
+
+
+def _without_skeleton_opening(text: str, body_start: int) -> str:
+    """The body's opening region without its generated notices; everything below the first section stays.
+
+    The region reaches from the title heading to the first section boundary (a `##` heading, the audit
+    call line or a swarm envelope); only notices inside it are removed, and only when one matched does
+    an all-blank leftover collapse.
+    """
+    title = RESEARCH_TITLE.search(text, body_start)
+    if title is None or text[body_start : title.start()].strip():
+        raise Refused("research publication requires an opening title heading after the frontmatter")
+    region_start = title.end()
+    visible = text[:body_start] + research_visible_text(text[body_start:])
+    boundary = RESEARCH_OPENING_END.search(visible, region_start)
+    region_end = boundary.start() if boundary else len(text)
+    region = text[region_start:region_end]
+    spans = []
+    for notice in skeleton_notices():
+        match = _notice_pattern(notice).search(visible[region_start:region_end])
+        if match:
+            spans.append(match.span())
+    for start, end in sorted(spans, reverse=True):
+        region = region[:start] + region[end:]
+    removed = bool(spans)
+    if removed and not region.strip():
+        # Nothing authored is left: keep the one blank line between the title and what follows.
+        region = ("\r\n" if "\r\n" in text[region_start:region_end] else "\n") if boundary else ""
+    return text[:region_start] + region + text[region_end:]
+
+
+RESEARCH_PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+
+
+def research_producers(value, *, program_hint=None) -> list[dict]:
+    """Retain evidence-backed contributors, separating legacy model/date spellings.
+
+    A model name alone never establishes a program: only publication evidence may
+    supply that program. Unknown or ambiguous historical attribution is refused.
+    """
+    if value is None:
+        return []
+    records = value if isinstance(value, list) else [value]
+    if not records:
+        raise ValueError("empty producer list")
+    result = []
+    for record in records:
+        if not isinstance(record, dict) or record.get("kind") != "llm-session":
+            raise ValueError("invalid historical producer")
+        name = record.get("name")
+        name = "claude-code" if name == "Claude Code" else name
+        version = str(record.get("version", ""))
+        days = re.findall(r"\d{4}-\d{2}-\d{2}", version)
+        if len(days) != 1:
+            raise ValueError("no unique historical producer date")
+        try:
+            dt.date.fromisoformat(days[0])
+        except ValueError as error:
+            raise ValueError("invalid historical producer date") from error
+        legacy = version.replace(days[0], "").strip(" ,")
+        models = record.get("model")
+        if not isinstance(name, str) or name not in RESEARCH_PROGRAMS:
+            if name == "glm-5.3-flash" and program_hint in RESEARCH_PROGRAMS:
+                models, name = name, program_hint
+            else:
+                raise ValueError("no program evidence for historical producer")
+        if legacy and not legacy.startswith("stage-2 explore"):
+            if models and models != legacy:
+                raise ValueError("conflicting historical model evidence")
+            models = legacy
+        if models is not None and (not isinstance(models, str) or not models.strip()):
+            raise ValueError("invalid historical model evidence")
+        for model in re.split(r" and ", models) if models else [None]:
+            entry = dict(record, name=name, version=days[0])
+            if model:
+                entry["model"] = model
+            if entry not in result:
+                result.append(entry)
+    return result
+
+
+def research_header_producers(raw_header: str, *, body="") -> list[dict]:
+    """Read every owned producer span without silently losing duplicate-key evidence."""
+    node = yaml.compose(raw_header)
+    if not isinstance(node, yaml.MappingNode):
+        raise ValueError("research header is not a mapping")
+
+    def unique(value):
+        if isinstance(value, yaml.MappingNode):
+            keys = [key.value for key, _ in value.value]
+            if len(keys) != len(set(keys)):
+                raise ValueError("duplicate historical producer keys")
+            for _, child in value.value:
+                unique(child)
+        elif isinstance(value, yaml.SequenceNode):
+            for child in value.value:
+                unique(child)
+
+    # Only historical accepted publications can establish a legacy model-only producer's
+    # program. The program making this new publication says nothing about earlier work.
+    visible = research_visible_text(body)
+    programs: dict[str, set[str]] = {}
+    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
+        calls = list(
+            re.finditer(
+                r"(?m)^Stage-2 call, (\d{4}-\d{2}-\d{2}): explore ·[^\r\n]*?endpoint ([\w-]+)",
+                visible[: answer.start()],
+            )
+        )
+        if calls and calls[-1][1] == answer[1]:
+            programs.setdefault(answer[1], set()).add(producer_for((calls[-1][2], "", None)))
+
+    records = []
+    for key, value in node.value:
+        if key.value == "produced_by":
+            unique(value)
+            loaded = yaml.safe_load(yaml.serialize(value))
+            if loaded == []:
+                raise ValueError("empty producer list")
+            for entry in loaded if isinstance(loaded, list) else [loaded]:
+                days = (
+                    re.findall(r"\d{4}-\d{2}-\d{2}", str(entry.get("version", ""))) if isinstance(entry, dict) else []
+                )
+                evidence = programs.get(days[0], set()) if len(days) == 1 else set()
+                hint = next(iter(evidence)) if len(evidence) == 1 else None
+                for record in research_producers(entry, program_hint=hint):
+                    if record not in records:
+                        records.append(record)
+    return records
+
+
+def research_producer_field(records: list[dict]) -> str:
+    """Render only the owned field; unrelated header bytes never pass through YAML."""
+
+    def inline(record):
+        # Quoting dates keeps them scalar strings, as the publication contract requires.
+        return (
+            "{"
+            + ", ".join(
+                f"{key}: {json.dumps(value) if key in {'version', 'model'} else value}" for key, value in record.items()
+            )
+            + "}"
+        )
+
+    if len(records) == 1:
+        return "produced_by: " + inline(records[0])
+    return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
+
+
+def research_publication(existing: bytes, *, producer: str, day: str, model: str | None = None) -> bytes:
+    """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
+
+    The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
+    a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
+    missing field is inserted before `tags:` or at the header's end — and the generated opening
+    paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
+    prose, audit lines, envelopes and the file's line-ending style. Undecodable bytes, missing
+    frontmatter and a missing title heading are refused before publication.
+    """
+    try:
+        text = existing.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused("research publication refused: research is not UTF-8") from error
+    header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    if header is None:
+        raise Refused("research publication requires frontmatter")
+    start, end = header.span(1)
+    block = text[start:end]
+    eol = "\r\n" if "\r\n" in block else "\n"
+    try:
+        # Alias nodes reuse the anchor's source marks, even for mapping keys.
+        # Refuse the mechanism throughout the header before deriving any edit span.
+        # YAML tokens distinguish real anchors/aliases from quoted text and comments.
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                kind = "anchor" if isinstance(token, yaml.tokens.AnchorToken) else "alias"
+                raise Refused(f"research publication refused: YAML {kind} {token.value!r} in header")
+        metadata = yaml.safe_load(block)
+        if not isinstance(metadata, dict):
+            raise ValueError("header is not a mapping")
+        records = research_header_producers(block, body=text[header.end() :])
+    except (ValueError, yaml.YAMLError) as error:
+        raise Refused(f"research publication refused: {error}") from error
+    contribution = {"kind": "llm-session", "name": producer, "version": day}
+    if model:
+        contribution["model"] = model
+    if contribution not in records:
+        records.append(contribution)
+    fields = {
+        "provenance": "provenance: ai-drafted-reviewed",
+        "produced_by": research_producer_field(records),
+        "review": "review: {status: pending, approved_by: null, approved_at: null}",
+        "updated": f"updated: {day}",
+    }
+    edits: list[tuple[int, int, str]] = []
+    inserted: list[str] = []
+    for key, replacement in fields.items():
+        matches = _header_field_spans(block, key)
+        if not matches:
+            inserted.append(replacement)
+            continue
+        first = matches[0]
+        edits.append((*first, replacement))
+        for extra in matches[1:]:
+            drop_end = extra[1]
+            follow = block[drop_end : drop_end + 2]
+            if follow == "\r\n":
+                drop_end += 2
+            elif follow[:1] in ("\n", "\r"):
+                drop_end += 1
+            edits.append((extra[0], drop_end, ""))
+    edits.sort(key=lambda edit: edit[0])
+    pieces: list[str] = []
+    position = 0
+    for edit_start, edit_end, replacement in edits:
+        pieces.append(block[position:edit_start])
+        pieces.append(replacement)
+        position = edit_end
+    pieces.append(block[position:])
+    corrected = "".join(pieces)
+    if inserted:
+        tags = re.search(r"(?m)^tags:[^\r\n]*", corrected)
+        if tags is not None:
+            tags_at = tags.start()
+            corrected = corrected[:tags_at] + eol.join(inserted) + eol + corrected[tags_at:]
+        else:
+            corrected = eol.join([corrected, *inserted])
+    # Validate the complete prepared header before it can reach the atomic writer.
+    try:
+        # Compose checks YAML syntax/aliases without constructing the private brief's
+        # deliberate 0000-00-00 date sentinel as a Python calendar date.
+        yaml.compose(corrected)
+    except yaml.YAMLError as error:
+        raise Refused(f"research publication refused: corrected header is invalid YAML: {error}") from error
+    shifted = text[:start] + corrected + text[end:]
+    return _without_skeleton_opening(shifted, header.end() + len(corrected) - len(block)).encode("utf-8")
+
+
+def publish_research(path: Path, prepared: bytes, text: str) -> None:
+    """Write the prepared research bytes with the publication's record appended, in one atomic replacement.
+
+    The prepared bytes already carry the corrected header and the removed skeleton notices; this adds the
+    runner's own record after them, stamps `updated:` like any research append and replaces the file once
+    through `write_atomic`. A resumed swarm retains its stored producer day while `updated:` records
+    this publication's day. A failure before or during the replacement leaves the previous bytes intact.
+    """
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
+    joined = prepared + separator + addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    else:
+        stamped = check_frontmatter_current.stamped(decoded, dt.date.fromisoformat(today())).encode("utf-8")
+    write_atomic(path, stamped)
+
+
 def stamp_updated(path: Path) -> None:
     """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
 
     The stamp edits that one line. A file without a header, like the loop record, is left as it is.
     """
-    check_frontmatter_current.stamp(path, dt.date.today())
+    check_frontmatter_current.stamp(path, clock_now().local_date)
 
 
 def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) -> list[str]:
@@ -1333,7 +1715,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
 
     For the `opencode-go` endpoint a model is also refused while its data terms
     are unread or its declaration records a dated skip (ADR 0021, decision 5):
-    no paid or interactive call runs on unread terms.
+    no paid or interactive call runs on unread terms. For a subscription
+    endpoint (`SUBSCRIPTION_TERMS_ENDPOINTS`, the Z.ai plan) a model is refused
+    without a dated, sourced record or after its `valid_until` day (bead
+    coding-harness-dcu3).
     """
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
@@ -1349,6 +1734,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"the endpoint {endpoint} does not list the model {model}"
     if endpoint == OPENCODE:
         problem = terms_problem(found, model)
+        if problem:
+            return problem
+    elif endpoint in SUBSCRIPTION_TERMS_ENDPOINTS:
+        problem = subscription_terms_problem(found, model)
         if problem:
             return problem
     allowed = found.get("darf_sehen")
@@ -1499,7 +1888,9 @@ def checked_prompt(
 
     `admission_problem`, when given, replaces the individual declaration (the
     free class, ADR 0021 decision 3); the leak check is mandatory either way.
+    A subscription endpoint's expiry notice prints first (bead coding-harness-dcu3).
     """
+    subscription_terms_warnings(ctx.root, endpoint[0], endpoint[1])
     problem = (
         admission_problem(ctx.root, endpoint[1])
         if admission_problem is not None
@@ -1635,7 +2026,7 @@ def terms_today() -> dt.date:
     decides admission, so tests pin this seam alone and leave the runner's
     accounting clocks live.
     """
-    return dt.datetime.now(dt.UTC).date()
+    return clock_now().utc.date()
 
 
 def _valid_until(record: dict) -> tuple[dt.date | None, str]:
@@ -1663,6 +2054,35 @@ def terms_problem(entry: dict, model: str) -> str | None:
     The declared dates rule: the runner never infers, extends or renews one.
     """
     record = _terms(entry, model)
+    problem = _reading_problem(record, model)
+    if problem:
+        return problem
+    retention = record.get("aufbewahrung")
+    if not isinstance(retention, str) or not retention.strip():
+        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
+    if record.get("training") != "Not used":
+        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    return _expiry_problem(record, model)
+
+
+def subscription_terms_problem(entry: dict, model: str) -> str | None:
+    """Why a subscription endpoint's model may not be called on its declared terms, or None.
+
+    The record states when the subscription that carries the model ends - a
+    dated, sourced reading with a quoted `valid_until`, valid through that UTC
+    day - not a retention or training reading, so only the reading and the
+    expiry part of `terms_problem` bind (bead coding-harness-dcu3). A missing
+    record refuses: the endpoint is in `SUBSCRIPTION_TERMS_ENDPOINTS`, so silence
+    admits nothing.
+    """
+    record = _terms(entry, model)
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS.get(str(entry.get("name")), str(entry.get("name")))
+    expired = f"the {subscription} subscription for {model} expired on {{expiry}}; no further call runs on it"
+    return _reading_problem(record, model) or _expiry_problem(record, model, expired)
+
+
+def _reading_problem(record: dict, model: str) -> str | None:
+    """Why the record is a dated skip or no dated, sourced reading, or None."""
     if record.get("uebersprungen"):
         reason = record.get("grund") or "reason not stated"
         return f"the model {model} was skipped on {record.get('uebersprungen')}: {reason}"
@@ -1673,17 +2093,50 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
     if not record.get("quelle"):
         return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
-    retention = record.get("aufbewahrung")
-    if not isinstance(retention, str) or not retention.strip():
-        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
-    if record.get("training") != "Not used":
-        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    return None
+
+
+def _expiry_problem(record: dict, model: str, expired: str | None = None) -> str | None:
+    """Why the record has no usable end date or is past it (UTC), or None.
+
+    `expired`, when given, is the refusal past the end date with an `{expiry}` field;
+    without it the paid-terms wording stands.
+    """
     expiry, why = _valid_until(record)
     if expiry is None:
         return f"the model {model} has no usable terms expiry ({why}); the reading grants no admission"
     if expiry < terms_today():
+        if expired is not None:
+            return expired.format(expiry=expiry.isoformat())
         return f"the model {model}'s data terms expired on {expiry.isoformat()}; the reading admits no further call"
     return None
+
+
+def subscription_terms_warnings(root: Path, endpoint: str, model: str) -> list[str]:
+    """Print and retain the expiry notice of one subscription endpoint's model; empty for every other endpoint.
+
+    The Go routes print theirs at `dispatch_go`; this is the notice of the Z.ai
+    routes (explore, implement, the draft fallback), shown before each call.
+    An unreadable declaration warns nothing here - the declaration check refuses it.
+    """
+    if endpoint not in SUBSCRIPTION_TERMS_ENDPOINTS:
+        return []
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return []
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return []
+    subscription = SUBSCRIPTION_TERMS_ENDPOINTS[endpoint]
+    warnings = terms_warnings(
+        {**found, "modelle": [model]},
+        notice=f"the {subscription} subscription for {{model}} ends on {{expiry}} ({{left}} left)",
+    )
+    retain_terms_warnings(warnings)
+    for warning in warnings:
+        print(f"Terms warning: {warning}")
+    return warnings
 
 
 TERMS_WARNING_DAYS = 7
@@ -1737,13 +2190,15 @@ def retain_address_notices(notices: list[str]) -> list[str]:
     return evidence
 
 
-def terms_warnings(entry: dict) -> list[str]:
+def terms_warnings(entry: dict, notice: str | None = None) -> list[str]:
     """The declared paid models whose reading expires within seven UTC days, declared order.
 
     Every declared record warns on a valid date inside the window, a skipped
     record included: a warning is advance notice, never admission ([DETAIL],
     2026-10-26). An expired date warns not — that is a skip with its reason —
     and an unusable one warns not either, for it refuses admission outright.
+    `notice`, when given, is the line with `{model}`, `{expiry}` and `{left}`
+    fields (a subscription's end); without it the paid-terms wording stands.
     """
     today = terms_today()
     warnings = []
@@ -1754,7 +2209,10 @@ def terms_warnings(entry: dict) -> list[str]:
         days = (expiry - today).days
         if 0 <= days <= TERMS_WARNING_DAYS:
             left = "1 day" if days == 1 else f"{days} days"
-            warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
+            if notice is not None:
+                warnings.append(notice.format(model=model, expiry=expiry.isoformat(), left=left))
+            else:
+                warnings.append(f"the data terms of {model} expire on {expiry.isoformat()} ({left} left)")
     return warnings
 
 
@@ -2439,7 +2897,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     if not selected and not allow_empty:
         raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
     return {
-        "checked_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "checked_at": utc_now().isoformat(timespec="seconds"),
         "source": "pi.dev",
         "pi_version": PI_VERSION,
         "rule": json.loads(json.dumps(rule)),
@@ -2495,15 +2953,10 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
         if not tree or tree.split()[0] not in {"100644", "100755"}:
             return False
         try:
-            blob = subprocess.run(
-                [GIT, "-C", str(root), "show", f"{base}:{rel}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
-            )
+            blob = run_git(root, "show", f"{base}:{rel}")
         except subprocess.TimeoutExpired as error:
             raise Refused(f"git show did not finish within {GIT_SECONDS // 60} minutes") from error
-        if blob.returncode or b"\0" in blob.stdout:
+        if b"\0" in blob.stdout:
             return False
         executable = tree.split()[0] == "100755"
     if parts[0] == "scripts":
@@ -2520,12 +2973,10 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
 
 def _merge_base(root: Path) -> str:
     """The merge base with origin/main, refused when there is none."""
-    done = subprocess.run(
-        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
-    )
+    done = run_git(root, "merge-base", "HEAD", "origin/main", text=True, timeout=None)
     base = done.stdout.strip()
-    if done.returncode != 0 or not base:
-        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+    if not base:
+        raise Refused("there is no merge base with origin/main; the diff cannot be built. " + done.diagnostic)
     return base
 
 
@@ -2585,7 +3036,7 @@ def free_diff(root: Path) -> tuple[str, str | None]:
     total = 0
     for index, rel in enumerate(names):
         if rel in untracked_set:
-            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
+            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow={1: r""})
         else:
             piece = _git_output(root, "diff", *flags, base, "--", rel)
         bounded = _bound_hunks(rel, piece)
@@ -2754,7 +3205,7 @@ def remaining(deadline: float | None) -> float:
     """
     if deadline is None:
         return REVIEWER_MINUTES * 60
-    seconds = deadline - time.monotonic()
+    seconds = deadline - monotonic_now()
     if seconds <= 0:
         raise NotStarted("the round time limit expired; no further reviewer starts")
     return seconds
@@ -2900,7 +3351,7 @@ def run_swarm(
     an answer with neither raises `MalformedAnswer`, which carries the answer
     for the round's asked-again call and its record.
 
-    `deadline` is the round's one deadline (`time.monotonic()` seconds): members and every
+    `deadline` is the round's one deadline (`monotonic_now()` seconds): members and every
     replacement share it, so a round cannot outlast `REVIEWER_MINUTES` by summing its members'
     limits (R-8 of the review-swarm review).
     """
@@ -3281,7 +3732,9 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     if clean_before == clean_after:
         return True
     try:
-        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), dt.date.today()).encode("utf-8")
+        stamped = check_frontmatter_current.stamped(clean_before.decode("utf-8"), clock_now().local_date).encode(
+            "utf-8"
+        )
     except UnicodeDecodeError:
         return False
     return stamped == clean_after
@@ -3337,10 +3790,6 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "them back, then run review again. No reviewer was called."
         )
     problems = full_verify(root, env, None)
-    if problems:
-        raise CallFailed(
-            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
-        )
     try:
         after = standing()
     except (Refused, OSError) as error:
@@ -3349,6 +3798,10 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         raise CallFailed(
             f"the head or the tree changed while the full check before phase 6 ran (HEAD {head[:12]}); "
             "no reviewer was called. Run review again."
+        )
+    if problems:
+        raise CallFailed(
+            "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
 
@@ -4298,29 +4751,31 @@ def release_loop(
     release(root, change)
 
 
+def git_error_text(text: str) -> str:
+    """Join every non-empty line of git's diagnostic without truncating its reason."""
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
 def _git_output(
     root: Path,
     *args: str,
-    allow: tuple[int, ...] = (0,),
+    allow: dict[int, str] | None = None,
     env: dict[str, str] | None = None,
     stdin: str | None = None,
     preserve_newlines: bool = False,
 ) -> str:
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
-            capture_output=True,
+        done = run_git(
+            root,
+            *args,
+            env=env,
+            stdin=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             text=not preserve_newlines,
             errors=None if preserve_newlines else "replace",
-            check=False,
-            env=env,
-            timeout=GIT_SECONDS,
+            allow=allow,
         )
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
-    if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
     return os.fsdecode(done.stdout)
 
 
@@ -4331,7 +4786,7 @@ def change_diff(root: Path) -> str:
     parts = [_git_output(root, "diff", *flags, base)]
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
     for path in filter(None, untracked):
-        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow=(0, 1)))
+        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow={1: r""}))
     return "".join(parts)
 
 
@@ -4371,15 +4826,19 @@ RUFF_FORMAT_CHECK = ("format", "--check", "--force-exclude", "--no-cache")
 PYTEST = (".venv/bin/python3", "-m", "pytest", "-q", "-n", "auto")
 CHEAP_LABEL = "Runner cheap checks before post-run verification"
 
-# A repair's post-run verification is targeted when its coverage can be determined safely (bead
-# coding-harness-gxwg): the whole touched and linked test files, ruff over the touched Python files
-# and the existing local gates its file kinds need, all outside the machine-wide verify admission.
-# Anything the selector cannot cover - a prompt, an unclassified input, code without a linked test,
-# an unreadable inventory - falls back to the admitted full `make verify`. Targeted green is never
-# reported as full green; phase 6 owes its own fresh full check (`review`).
+# An implement or repair attempt's post-run verification is targeted when its coverage can be
+# determined safely (bead coding-harness-gxwg, coding-harness-0swp): the whole touched and
+# import-linked test files, ruff over the touched Python files and the existing local gates the
+# file kinds need, all outside the machine-wide verify admission. Implement refuses new production
+# code without a reachable test before any test runs or a fallback is admitted. Anything the
+# selector cannot cover - a prompt, an unclassified input, code without a linked test, shared
+# infrastructure, an unreadable inventory - falls back to the admitted full `make verify`. A
+# targeted red, launch failure or timeout fails the attempt; it is never an invitation to the full
+# check. Targeted green is never reported as full green; phase 6 owes its own fresh full check
+# (`review`).
 TARGETED_LABEL = "Runner targeted checks"
 SCOPE_LABEL = "Runner verification scope"
-SCOPE_COMMIT_HEADING = "Runner verification scope (the repair's post-run check):"
+SCOPE_COMMIT_HEADING = "Runner verification scope (the runner's post-run check):"
 # Inputs whose change makes the full check necessary, whatever else the repair touched.
 SHARED_INFRASTRUCTURE = (
     "scripts/ci_gates.py",
@@ -4455,6 +4914,55 @@ VERIFY_SECONDS = 45 * 60
 # the swarm tests alone measured 8.5 to 10.5 minutes (2026-11-12/13), past TOOL_SECONDS (coding-harness-dq4u).
 TARGETED_PYTEST_SECONDS = VERIFY_SECONDS
 GIT_SECONDS = 2 * 60
+
+
+@dataclass(frozen=True)
+class GitRun:
+    """One finished git command: its status, its output, and git's whole diagnostic."""
+
+    returncode: int
+    stdout: str | bytes
+    stderr: str | bytes
+    diagnostic: str
+
+
+def run_git(
+    root: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    stdin: str | bytes | None = None,
+    text: bool = False,
+    errors: str | None = None,
+    timeout: float | None = GIT_SECONDS,
+    allow: dict[int, str] | None = None,
+) -> GitRun:
+    """The one launch of git in the runner (decisions.md#Q-8): the resolved `GIT`, run in `root`.
+
+    It forces the C locale over the inherited or supplied environment, so git's reason is English
+    and recognisable, and keeps every non-empty line of git's diagnostic in `diagnostic`. The
+    command fails closed unless both its nonzero exit code and its whole normalised diagnostic
+    match an explicit `allow` entry (a code mapped to a full-match regular expression). An empty
+    pattern handles only a silent status, such as diff's 1. One Refused error carries every
+    non-empty diagnostic line. A timeout raises
+    `subprocess.TimeoutExpired` for the caller to name; `timeout=None` waits as before.
+    """
+    done = subprocess.run(
+        [GIT, "-C", str(root), *args],
+        input=stdin,
+        capture_output=True,
+        text=text,
+        errors=errors,
+        check=False,
+        env={**(os.environ if env is None else env), "LC_ALL": "C"},
+        timeout=timeout,
+    )
+    stderr = done.stderr if done.stderr is not None else ("" if text else b"")
+    diagnostic = git_error_text(stderr if isinstance(stderr, str) else os.fsdecode(stderr))
+    if done.returncode != 0 and (
+        allow is None or done.returncode not in allow or re.fullmatch(allow[done.returncode], diagnostic) is None
+    ):
+        raise Refused(f"git {args[0]} failed (exit {done.returncode}): {diagnostic}")
+    return GitRun(done.returncode, done.stdout, stderr, diagnostic)
 
 
 UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
@@ -4647,19 +5155,9 @@ def changed_paths(
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
-        done = subprocess.run(
-            [GIT, "-C", str(root), *args],
-            input=stdin,
-            capture_output=True,
-            text=False,
-            check=False,
-            env=env,
-            timeout=GIT_SECONDS,
-        )
+        done = run_git(root, *args, env=env, stdin=stdin)
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
-    if done.returncode != 0:
-        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
     return done.stdout
 
 
@@ -4827,7 +5325,7 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     The commit carries the runner's own identity, so a machine without a configured git user (a CI
     runner) saves as well, and the ref says who wrote it.
     """
-    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    stamp = utc_now().strftime("%Y%m%dT%H%M%S%fZ")
     ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
     with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
@@ -5008,12 +5506,12 @@ def time_log(path: Path) -> str:
 
 def utc_now() -> dt.datetime:
     """The wall clock of a measured span, in UTC (a seam for tests)."""
-    return dt.datetime.now(dt.UTC)
+    return clock_now().utc
 
 
 def monotonic_now() -> float:
     """The monotonic clock whose difference is a measured span (a seam for tests)."""
-    return time.monotonic()
+    return clock_now().monotonic
 
 
 def time_entry(
@@ -5025,8 +5523,12 @@ def time_entry(
     started: dt.datetime,
     ended: dt.datetime,
     seconds: int,
+    scope: Sequence[str] = (),
 ) -> str:
     """The line the runner writes under `## Time used` for one completed attempt.
+
+    `scope` is a passing attempt's verification evidence: it stands after the verdict word, in one
+    line without the field separator, so the passing attempt leaves nothing else in findings.md.
 
     The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
     its date when that differs from the start's, so a span across midnight reads unambiguously.
@@ -5041,7 +5543,15 @@ def time_entry(
         route,
         model,
         time_records.ACCEPTED if accepted else time_records.REJECTED,
+        scope_in_time_line(scope),
     )
+
+
+def scope_in_time_line(scope: Sequence[str]) -> str | None:
+    """A scope record as the time line's single field: one line, no `·`, never blank - or None."""
+    plain = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in " ".join(scope))
+    text = " ".join(plain.split()).replace("·", "-").strip()
+    return text or None
 
 
 def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
@@ -5613,19 +6123,11 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
             if entry.name != "scripts":
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
-            archive = subprocess.run(
-                [GIT, "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
-                capture_output=True,
-                check=False,
-                env=env,
-                timeout=GIT_SECONDS,
-            )
+            archive = run_git(root, "archive", "--format=tar", "HEAD", "scripts/", env=env)
         except subprocess.TimeoutExpired as error:
             # The runner's own bound, turned into a diagnostic: an escaping TimeoutExpired would end the
             # run as a traceback and leave the mirror behind (P2 of the #188 review).
             raise Refused(f"the committed scripts could not be read within {GIT_SECONDS // 60} minutes") from error
-        if archive.returncode:
-            raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
             for member in tar.getmembers():
                 if not member.isfile() or not member.name.startswith("scripts/"):
@@ -5667,7 +6169,7 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
                 if path.is_file():
                     if path.stat().st_nlink > 1:
                         raise OSError("refusing a hard-linked document path")
-                    check_frontmatter_current.stamp(path, dt.date.today())
+                    check_frontmatter_current.stamp(path, clock_now().local_date)
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
         if not errors:
@@ -6170,26 +6672,32 @@ MUST_RUN_DELEGATED = (
     "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
-    "ledger test fails the attempt before post-run verification. The runner then runs the targeted check for repair "
-    "or full `make verify` for implement; repair uses full fallback when targeted coverage is unsafe, "
-    "and a fresh full `make verify` runs before phase 6. Execute nothing yourself - delegation to the "
-    "runner is the contract, and no extra tool is yours."
+    "ledger test fails the attempt before post-run verification. The runner then runs the post-run "
+    "targeted check for implement and repair - the whole touched and linked test files, ruff and the "
+    "existing local gates, outside the verify admission. Implement refuses new production code without "
+    "a reachable test before any test runs: add its test. When the targeted coverage cannot be "
+    "established safely, the same route takes the admitted full `make verify`; a targeted red never "
+    "falls back to override it, and a fresh full `make verify` runs before phase 6. Execute nothing "
+    "yourself - delegation to the runner is the contract, and no extra tool is yours."
 )
 MUST_RUN_COMMANDS = (
     "Before you hand back, run the must-run checks yourself and leave them green: "
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
     "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
-    "checks after the call, then the targeted check for repair or full `make verify` for implement; "
-    "repair uses full fallback when targeted coverage is unsafe, and a fresh full `make verify` runs "
-    "before phase 6. Findings.md is the runner's audit file: an edit "
+    "checks after the call, then the post-run targeted check for implement and repair - the whole "
+    "touched and linked test files, ruff and the existing local gates, outside the verify admission. "
+    "Implement refuses new production code without a reachable test before any test runs: add its "
+    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "full `make verify`; a targeted red never falls back to override it, and a fresh full "
+    "`make verify` runs before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there."
 )
 
 
 @dataclass
 class Targeted:
-    """The coverage of one targeted repair check - or the reason it must be the full check."""
+    """The coverage of one implement or repair targeted check - or the reason it must be the full check."""
 
     tests: list[str]  # whole test files to run, sorted
     ruff: list[str]  # touched Python files the cheap checks' ruff did not already cover
@@ -6201,6 +6709,39 @@ def _baseline_inventory(root: Path, env: dict[str, str], against: str) -> set[st
     """Every path the baseline commit holds, as the repository's own posix names."""
     names = _git_bytes(root, "ls-tree", "-r", "-z", "--name-only", against, env=env).split(b"\0")
     return {touch_map.inventory_path(name) for name in names if name}
+
+
+def new_code_without_test(root: Path, env: dict[str, str], against: str) -> list[str] | None:
+    """Added production `.py`/`.sh` files the current inventory proves uncovered, or None when it cannot.
+
+    An implement attempt with new production code and no reachable test is refused before any test
+    runs or a fallback is admitted (bead coding-harness-0swp): a baseline-only, a deleted or an
+    unreachable test never licenses the new file, while a test untracked in the working tree may.
+    `None` means the delta or the link inventory could not be read: absence is then unproven, and
+    the attempt keeps its existing fallbacks instead of a refusal. Existing uncovered code stays
+    the selector's own fallback, and prompts or shared infrastructure the selector's refusals.
+    """
+    try:
+        touched = sorted(path.as_posix() for path in changed_paths(root, env=env, against=against))
+        if any(0xDC80 <= ord(char) <= 0xDCFF for path in touched for char in path):
+            return None
+        before = _baseline_inventory(root, env, against)
+        links = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
+        )
+    except (Refused, OSError, touch_map.CannotMeasure, ValueError, RecursionError):
+        return None
+    return sorted(
+        posix
+        for posix in touched
+        if posix not in before
+        and posix.endswith((".py", ".sh"))
+        and not posix.startswith("prompts/")
+        and posix not in SHARED_INFRASTRUCTURE
+        and not _is_test_module(posix)
+        and posix.rsplit("/", 1)[-1] != "conftest.py"
+        and not links.get(posix)
+    )
 
 
 @dataclass
@@ -6248,15 +6789,50 @@ def _parse_gate_command(command: list[str]) -> GateCommand:
     return GateCommand(assignments, words, entrypoints)
 
 
-def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
-    """What a targeted check of a repair covers, or why only the full check may stand in (bead coding-harness-gxwg).
+def _linked_tests(edges: set[tuple[str, str, str]], root: Path) -> dict[str, set[str]]:
+    """Per file, the surviving test modules that reach it directly or through import chains.
 
-    The touched paths are the repair's whole delta against `against` - index, working tree, untracked
-    files, both names of a rename, edits an earlier attempt left. Linked tests are the test files the
-    touch map links to a touched path, in the working tree and, for a path the repair removed, at the
-    baseline; every surviving touched or linked test file runs whole. A prompt, shared test or
-    execution configuration, an input kind outside Python and the documents, production code with no
-    linked test, an aliased file or an unreadable inventory makes the check full instead.
+    Two edge kinds count, never `runs` or `reads` (bead coding-harness-0swp): a `tests` edge names
+    the file a surviving `tests/**/test_*.py` module covers, and an `imports` edge names the file a
+    Python source imports. The walk goes from a file to its importers and collects the `tests` edges
+    of everything reached - static links only, never a claim of runtime coverage - and the visited
+    set ends cycles. One graph, one closure: the caller computes this per snapshot and unions the
+    results, so a chain is never fabricated across the current and the baseline graph.
+    """
+    importers: dict[str, set[str]] = {}
+    direct: dict[str, set[str]] = {}
+    for source, target, kind in edges:
+        if kind == "imports":
+            importers.setdefault(target, set()).add(source)
+        elif kind == "tests" and _is_test_module(source) and (root / source).is_file():
+            direct.setdefault(target, set()).add(source)
+
+    def reach(node: str) -> set[str]:
+        found: set[str] = set()
+        seen = {node}
+        waiting = [node]
+        while waiting:
+            for importer in sorted(importers.get(waiting.pop(), ())):
+                if importer not in seen:
+                    seen.add(importer)
+                    waiting.append(importer)
+                    found |= direct.get(importer, set())
+        return found | direct.get(node, set())
+
+    return {node: reach(node) for node in set(direct) | set(importers)}
+
+
+def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targeted:
+    """What a targeted check covers, or why only the full check may stand in (bead coding-harness-gxwg, coding-harness-0swp).
+
+    The touched paths are the attempt's whole delta against `against` - index, working tree, untracked
+    files, both names of a rename, edits an earlier attempt left. Linked tests are the surviving test
+    modules the touch map links to a touched path directly or through reverse `imports` chains; the
+    working tree and the baseline each keep their own closure and their union covers the whole delta,
+    so a chain is never fabricated across the two snapshots. Every surviving touched or linked test
+    file runs whole. A prompt, shared test or execution configuration, an input kind outside Python
+    and the documents, production code with no linked test in either graph, an aliased file or an
+    unreadable inventory makes the check full instead.
     """
 
     def full(reason: str) -> Targeted:
@@ -6304,21 +6880,31 @@ def targeted_selection(root: Path, env: dict[str, str], against: str) -> Targete
             code.append(posix)
         if present[posix]:
             python.append(posix)
+    # Two independent closures, one per snapshot: the current graph sees the attempt's own new
+    # links, the baseline graph the chains a removed or renamed file sat in. Their union covers
+    # the whole delta; a chain neither graph holds on its own is not coverage.
     try:
-        edges = touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)) | touch_map.links(
-            touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)
+        current = _linked_tests(
+            touch_map.links(touch_map.WorktreeSnapshot(str(root), env=env, timeout=GIT_SECONDS)), root
         )
     except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
         return full(f"the link inventory could not be read ({error})")
+    try:
+        baseline = _linked_tests(
+            touch_map.links(touch_map.Snapshot(str(root), against, env=env, timeout=GIT_SECONDS)), root
+        )
+    except (touch_map.CannotMeasure, OSError, ValueError, RecursionError) as error:
+        return full(f"the link inventory could not be read ({error})")
+
+    def linked(posix: str) -> set[str]:
+        """The surviving test modules either snapshot's own closure reaches this file through."""
+        return current.get(posix, set()) | baseline.get(posix, set())
+
     touched_set = set(touched)
-    linked: dict[str, set[str]] = {}
-    for source, target, _kind in edges:
-        if target in touched_set and _is_test_module(source) and (root / source).is_file():
-            linked.setdefault(target, set()).add(source)
     for posix in code:
-        if not linked.get(posix):
+        if not linked(posix):
             return full(f"`{posix}` has no linked test")
-    tests = sorted(set(touched_tests).union(*(linked.get(posix, set()) for posix in touched)))
+    tests = sorted(set(touched_tests).union(*(linked(posix) for posix in touched)))
     # Maintainer's option A (2026-11-04): until bead coding-harness-vg9 splits this
     # file, its whole-file run needs the admitted full check's budget. Select that
     # route before execution; a targeted timeout must still reject the attempt.
@@ -6407,42 +6993,32 @@ def targeted_pytest_env(root: Path, env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
-    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+def run_gates(root: Path, env: dict[str, str], key: str | None, gates: Sequence[dict]) -> tuple[list[str], list[str]]:
+    """Run the selected gates outside the verify admission: (blocking problems, reported notes).
 
-    Order: ruff over the touched files, pytest over the whole test files, then the selected gates in
-    declaration order through the locked interpreter. The first blocking
-    red, launch error or timeout ends the run with one bounded, protected diagnostic; a gate that only
-    reports or advises is noted and never blocks, as in the local runner. A missing tool is red.
+    Gate-list order, through the locked interpreter, as `verify_all.sh` runs them - the one gate
+    executor of the targeted check and of the draft's document check alike (bead
+    coding-harness-0swp). The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a gate that only reports or advises is noted and never blocks,
+    as in the local runner. A missing locked interpreter or tool is red.
     """
-    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
-    if chosen.ruff:
-        problem = _cheap_ruff(root, env, key, chosen.ruff)
-        if problem:
-            return [f"{TARGETED_LABEL}: {problem}"], []
     python = root / PYTEST[0]
-    if (chosen.tests or chosen.gates) and not python.is_file():
+    if gates and not python.is_file():
         return [
             protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
         ], []
-    if chosen.tests:
-        identity = "`" + " ".join(PYTEST) + "`"
-        try:
-            done = launch(
-                [*PYTEST, *chosen.tests],
-                root,
-                targeted_pytest_env(root, env),
-                key,
-                timeout=TARGETED_PYTEST_SECONDS,
-                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
-            )
-        except (StepTimedOut, CallFailed) as error:
-            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
-        if done.returncode:
-            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    limit = f"the runner's tool limit after {TOOL_SECONDS // 60} minutes"
     notes: list[str] = []
-    gate_env = {**env, "PYTHON": str(python), "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")])}
-    for gate in chosen.gates:
+    # The shared state root travels to every gate child, the way the admitted run's
+    # `inherit_env` hands it to a local child: the base, never the root itself, so a gate
+    # resolves the same shared root without carrying any admission ownership marker.
+    gate_env = {
+        **env,
+        "PYTHON": str(python),
+        "PATH": os.pathsep.join([str(python.parent), env.get("PATH", "")]),
+        "XDG_STATE_HOME": str(verify_lock.state_base()),
+    }
+    for gate in gates:
         command = str(gate["command"])
         command = _parse_gate_command(shlex.split(command)).locked_command(python, command)
         identity = f"gate `{gate['id']}` ({gate['enforcement']})"
@@ -6463,10 +7039,44 @@ def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targe
     return [], notes
 
 
+def run_targeted(root: Path, env: dict[str, str], key: str | None, chosen: Targeted) -> tuple[list[str], list[str]]:
+    """Run the selected targeted commands outside the verify admission: (blocking problems, reported notes).
+
+    Order: ruff over the touched files, pytest over the whole test files, then the selected gates
+    through `run_gates`. The first blocking red, launch error or timeout ends the run with one
+    bounded, protected diagnostic; a missing tool is red.
+    """
+    if chosen.ruff:
+        problem = _cheap_ruff(root, env, key, chosen.ruff)
+        if problem:
+            return [f"{TARGETED_LABEL}: {problem}"], []
+    python = root / PYTEST[0]
+    if chosen.tests and not python.is_file():
+        return [
+            protect_diagnostics(f"{TARGETED_LABEL}: no interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)
+        ], []
+    if chosen.tests:
+        identity = "`" + " ".join(PYTEST) + "`"
+        try:
+            done = launch(
+                [*PYTEST, *chosen.tests],
+                root,
+                targeted_pytest_env(root, env),
+                key,
+                timeout=TARGETED_PYTEST_SECONDS,
+                limit=f"the runner's targeted-test limit after {TARGETED_PYTEST_SECONDS // 60} minutes",
+            )
+        except (StepTimedOut, CallFailed) as error:
+            return [protect_diagnostics(f"{TARGETED_LABEL}: {identity} could not be run: {error}", key)], []
+        if done.returncode:
+            return [f"{TARGETED_LABEL}: {identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"], []
+    return run_gates(root, env, key, chosen.gates)
+
+
 def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
-    The full check of a repair whose targeted coverage was not safe, and of phase 6's boundary. New
+    The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
     files are added intent-to-add for the gates and dropped afterwards; a refusal of the admission,
     a timeout and a red exit are problems; a `make` that cannot be started raises `CallFailed`.
     """
@@ -6478,10 +7088,11 @@ def full_verify(root: Path, env: dict[str, str], key: str | None) -> list[str]:
                 intended = intend_new_files(root, env)
             except (Refused, OSError) as error:
                 return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+            child_env = verify_lock.inherit_env(env)
             done = launch(
                 ["make", "verify"],
                 root,
-                verify_lock.inherit_env(env),
+                child_env,
                 timeout=VERIFY_SECONDS,
                 limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
                 pass_fds=_lock_fds(owned),
@@ -6512,16 +7123,19 @@ def _targeted_body(
     previous_failures: Sequence[str],
     against: str,
     scope: list[str] | None,
+    new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
 ) -> list[str]:
-    """A repair's post-run checks in targeted mode: the shared preparation, then the targeted or full check.
+    """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
     Everything before the selection - format, cheap checks, ledger clearing, derived preparation - is
     `verify_attempt`'s own, run outside the admission and without its marker. The selection follows
     the preparation, so generated files are in it; a coverage that cannot be determined safely runs the
-    admitted full check instead. A passing result is never worded as full verification. The clearing
-    capture covers the fallback too: the clearing happened in the shared preparation, before the
-    selection chose the admitted full check.
+    admitted full check instead. A passing result is never worded as full verification. Implement adds
+    the `new_file_guard`: new production code without a reachable test refuses the attempt before any
+    test runs or a fallback is admitted (bead coding-harness-0swp). The clearing capture covers the
+    fallback too: the clearing happened in the shared preparation, before the selection chose the
+    admitted full check.
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -6537,6 +7151,14 @@ def _targeted_body(
             formatted.append(line)
     except (OSError, RuntimeError, ValueError) as error:
         return ledger(error)
+    if new_file_guard:
+        uncovered = new_code_without_test(root, env, against)
+        if uncovered:
+            listing = ", ".join(f"`{_one_line(path)}`" for path in uncovered)
+            return [
+                f"{TARGETED_LABEL}: new production code without a reachable test: {listing} — "
+                "add a test that reaches this file before the attempt can run"
+            ]
     try:
         cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
     except (OSError, RuntimeError, ValueError) as error:
@@ -6595,6 +7217,7 @@ def verify_attempt(
     mode: str = "full",
     against: str = "HEAD",
     scope: list[str] | None = None,
+    new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
@@ -6611,12 +7234,16 @@ def verify_attempt(
     When `clearing` carries a container, the ledger clearing's exact rewrites are captured in it
     for the work check's discount; without one, clearing stands unchanged for direct callers.
 
-    `mode="targeted"` is the repair's: the same format, cheap checks, ledger clearing and derived
-    preparation run outside the verify admission, and the repair's delta against `against` selects the
-    whole touched and linked test files, ruff over the touched Python files and the existing local
-    gates its file kinds need (`targeted_selection`). A coverage that cannot be determined safely runs
-    the admitted full `make verify` instead. `scope` receives the runner-owned evidence line that names
-    the mode, the selected checks and the result. Implement and draft keep the default `full`.
+    `mode="targeted"` is the implement and repair post-run check (bead coding-harness-0swp): the same
+    format, cheap checks, ledger clearing and derived preparation run outside the verify admission,
+    and the attempt's delta against `against` selects the whole touched and import-linked test files,
+    ruff over the touched Python files and the existing local gates its file kinds need
+    (`targeted_selection`). A coverage that cannot be determined safely runs the admitted full
+    `make verify` instead, and a targeted red, launch failure or timeout fails the attempt - it never
+    falls back to the full check to override it. `new_file_guard` adds the implement-only refusal of
+    new production code without a reachable test. `scope` receives the runner-owned evidence line
+    that names the mode, the selected checks and the result; `evidence` receives the selected
+    coverage for the targeted-scope record. Draft keeps its own document-only path (`verify_draft`).
     """
     env = runner_env(
         foreign_env(
@@ -6648,10 +7275,22 @@ def verify_attempt(
             f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
         ]
     if mode == "targeted":
-        # Only a repair asks for this (bead coding-harness-gxwg): the same preparation outside the
-        # admission, then the targeted checks - or the admitted full check when the coverage is unsafe.
+        # Implement and repair ask for this (bead coding-harness-gxwg, coding-harness-0swp): the same
+        # preparation outside the admission, then the targeted checks - or the admitted full check
+        # when the coverage is unsafe. A targeted red is a failed attempt, never a fallback trigger.
         targeted = _targeted_body(
-            root, plan, env, key, formatted, tools, accepted_plan, previous_failures, against, scope, clearing
+            root,
+            plan,
+            env,
+            key,
+            formatted,
+            tools,
+            accepted_plan,
+            previous_failures,
+            against,
+            scope,
+            clearing=clearing,
+            new_file_guard=new_file_guard,
         )
         try:
             time_log(plan)
@@ -6874,15 +7513,12 @@ def checkpoint(
     except Refused as error:
         raise CallFailed(f"the runner checkpoint failed: {error}") from error
     try:
-        ancestor = subprocess.run(
-            [GIT, "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
-            capture_output=True,
-            check=False,
-            timeout=GIT_SECONDS,
-        )
+        run_git(root, "merge-base", "--is-ancestor", baseline, "HEAD")
     except subprocess.TimeoutExpired as error:
         raise CallFailed(f"the runner checkpoint could not be measured within {GIT_SECONDS // 60} minutes") from error
-    if ancestor.returncode != 0 or count != "1":
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
+    if count != "1":
         raise CallFailed("the runner checkpoint is not exactly one descendant commit")
     try:
         dirty = _git_output(root, "status", "--porcelain=v1", "--untracked-files=all").strip()
@@ -6908,7 +7544,7 @@ def _ref_targets(root: Path) -> dict[str, str]:
     listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname) %(symref)")
     refs = {name: target.rstrip() for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
     head = _git_output(root, "rev-parse", "HEAD").strip()
-    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow=(0, 1)).strip()
+    symbolic = _git_output(root, "symbolic-ref", "-q", "HEAD", allow={1: r""}).strip()
     refs["HEAD"] = f"{head} {symbolic or '(detached)'}"
     return refs
 
@@ -7148,7 +7784,7 @@ def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
             names.add(name)
     snapshot = {}
     for name in sorted(names):
-        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow=(0, 1)).strip()
+        symbolic = _git_output(root, "symbolic-ref", "--no-recurse", "-q", name, allow={1: r""}).strip()
         if symbolic:
             snapshot[name] = ("symbolic", symbolic)
         else:
@@ -8262,7 +8898,16 @@ def explore(
         tail = "\n".join(answer.strip().splitlines()[-40:])
         print(f"explore: the answer, as it came:\n{tail}", file=sys.stderr)
         raise CallFailed("the exploration answer names no file of the repository; nothing was appended")
-    append(ctx.research, f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}")
+    # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
+    # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
+    prepared = research_publication(
+        ctx.research.read_bytes(), producer=producer_for(endpoint), day=today(), model=endpoint[1]
+    )
+    publish_research(
+        ctx.research,
+        prepared,
+        f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}",
+    )
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 
@@ -8691,7 +9336,8 @@ def run_attempts(
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
     tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
     retain_answer: bool = False,  # repair: every attempt's protected answer is saved before any check can stop the run
-    verify_mode: str = "full",  # repair: "targeted"; implement keeps the full check
+    verify_mode: str = "full",  # implement and repair: "targeted" (bead coding-harness-0swp); draft keeps its own path
+    new_file_guard: bool = False,  # implement: new production code without a reachable test refuses the attempt
     protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
@@ -8766,7 +9412,7 @@ def run_attempts(
     aliases = alias_baseline(root, baseline, ignored_before)
     # One token per invocation: every attempt's evidence file carries it beside its attempt number,
     # so a rerun of the verb never overwrites an earlier run's evidence (spec, criterion 6).
-    token = f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
+    token = f"{utc_now().strftime('%Y%m%dT%H%M%S%fZ')}-{os.urandom(4).hex()}" if retain_answer else ""
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -9090,6 +9736,7 @@ def run_attempts(
                         mode=verify_mode,
                         against=baseline,
                         scope=scope_lines,
+                        new_file_guard=new_file_guard,
                         clearing=clearing,
                     )
             except Refused as error:
@@ -9264,6 +9911,9 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
+                    # A passing attempt's verification scope stands in its time line, after the
+                    # verdict word; a failed attempt's stays in its one diagnostics block.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
                 ),
                 baseline_time,
                 inputs_before,
@@ -9279,16 +9929,6 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
-                if scope_record:
-                    # The runner's own evidence of how this repair was verified: never a model's claim.
-                    append(
-                        ctx.findings,
-                        quote_block(
-                            f"{SCOPE_LABEL}:\n" + "\n".join(scope_record),
-                            key,
-                            whole=scope_record,
-                        ),
-                    )
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
@@ -9452,6 +10092,11 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         answer_check=check,
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
+        # Every model route's post-run check is targeted when the coverage is safe (bead
+        # coding-harness-0swp): the covered initial, retry and stage-1 routes alike. New production
+        # code without a reachable test refuses before any test runs or a fallback is admitted.
+        verify_mode="targeted",
+        new_file_guard=True,
     )
 
 
@@ -9515,12 +10160,13 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
         if not NEW_ADR.fullmatch(posix):
             continue
         try:
-            held = subprocess.run(
-                [GIT, "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
-                capture_output=True,
-                check=False,
-                timeout=GIT_SECONDS,
+            # Exit 128 also means an unreadable tree. Only the exact missing-path
+            # diagnostic establishes absence; added warnings/fatal lines must refuse.
+            missing = (
+                rf"fatal: path '{re.escape(posix)}' "
+                rf"(?:does not exist in|exists on disk, but not in) '{re.escape(base)}'"
             )
+            held = run_git(root, "cat-file", "-e", f"{base}:{posix}", allow={128: missing})
             present = held.returncode == 0
         except subprocess.TimeoutExpired:
             present = True  # unmeasured reads as present: the path stays a keep
@@ -9598,32 +10244,62 @@ def card_problem(text: str) -> str | None:
     return None
 
 
-# The draft's post-run check is the verify job's existing document subset, selected through the
-# shared script and the selector CI uses - never a gate list of this caller's own (decisions/gates.yaml,
-# bead coding-harness-77qj). Implement keeps full `make verify`; repair takes the targeted check,
-# with the full suite as its fallback and before phase 6.
-DOCS_VERIFY = ["bash", "scripts/verify_all.sh", "--job", "docs"]
-DOCS_VERIFY_NAME = " ".join(DOCS_VERIFY)
+# The draft's post-run check is the verify job's locally runnable document subset, selected through
+# the one gate list CI uses - never a gate list of this caller's own (decisions/gates.yaml, bead
+# coding-harness-77qj), and since coding-harness-0swp run through the shared gate executor without
+# the machine-wide verify admission: a draft rewrites documents, so it starts no pytest, no admitted
+# shell runner and no kit probe. Implement and repair take the targeted check
+# (`verify_attempt`, mode "targeted"), with the admitted full `make verify` as the fallback and the
+# fresh full check before phase 6.
+def document_gates() -> list[dict]:
+    """The locally runnable document subset of the one gate list, in registry order.
+
+    Selected through `ci_gates`, never a list of this caller's own: the verify job's local gates
+    whose subsets name the documents. A draft rewrites plan, findings and index text, so it runs
+    these and nothing else - no pytest, no code or kit gate (bead coding-harness-0swp).
+    """
+    return [
+        gate
+        for gate in ci_gates.gates()
+        if gate["job"] == "verify"
+        and gate["local_runnable"]
+        and ci_gates.misst_in(gate, "lokal")
+        and "docs" in gate["subsets"]
+    ]
+
+
+def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
+    """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
+    named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
+    line = (
+        f"document checks only, no tests ran; result: {result}; gates {named}; not the full `make verify`; "
+        "a fresh full `make verify` is still required before phase 6"
+    )
+    if notes:
+        line += "; reported without blocking: " + ", ".join(notes)
+    return line
 
 
 def verify_draft(
     root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
-) -> tuple[list[str], bool]:
-    """A draft attempt's post-run checks: the problems, and whether the answer is owed.
+) -> tuple[list[str], bool, str]:
+    """A draft attempt's post-run checks: the problems, whether the answer is owed, and the scope evidence.
 
-    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document check
-    `bash scripts/verify_all.sh --job docs` - its exit code decides; the one missing answer it tolerates
-    is the gate's own, asked for through `check_adr_answers.TOLERATE_ENV`, never read from its output -
-    the two artefacts, the plan card and the `## Time used` heading. Implement keeps full `make verify`;
-    repair takes the targeted check, with the full suite as its fallback and before phase 6.
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, the document gates
+    through `run_gates` - each gate's exit code decides, never its prose - the two artefacts, the plan
+    card and the `## Time used` heading. The gates run outside the machine-wide verify admission: the
+    child environment carries none of its ownership, token or context variables (bead
+    coding-harness-0swp). The one missing answer a document gate tolerates is the gate's own, asked
+    for through `check_adr_answers.TOLERATE_ENV`, never read from its output.
     """
     owed = False
+    not_completed = document_scope_text([], "not completed")
     if len(new_adrs) > 1:
         problems = ["the attempt left more than one new ADR file: " + ", ".join(f"`{path}`" for path in new_adrs)]
-        return problems, owed
+        return problems, owed, not_completed
     tampered = tool_problem(root, tools)
     if tampered:
-        return [tampered], owed
+        return [tampered], owed, not_completed
     env = runner_env(
         foreign_env(
             {
@@ -9638,29 +10314,30 @@ def verify_draft(
         ),
         root,
     )
+    # Nothing a document check starts carries or claims the verify admission: its ownership,
+    # token and context variables are stripped here, and `run_gates` enters no admission.
+    env = {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
     preparation = prepare_derived(root, env, key)
     if preparation:
-        return preparation, owed
+        return preparation, owed, not_completed
     try:
-        # One machine-wide admission before the timed check: queue and memory waits consume no
-        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        with verify_lock.hold_admission(DOCS_VERIFY) as owned:
-            done = launch(
-                DOCS_VERIFY,
-                root,
-                verify_lock.inherit_env(env),
-                timeout=VERIFY_SECONDS,
-                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-                pass_fds=_lock_fds(owned),
-            )
-    except (CallFailed, verify_lock.VerifyLockError) as error:
-        # A document check that cannot start is as failed a post-run check as a red one: its
-        # diagnostics reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
-        return [f"`{DOCS_VERIFY_NAME}` could not run: {error}"], owed
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`{DOCS_VERIFY_NAME}` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
-    else:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], owed, not_completed
+    if not gates:
+        return ["no locally runnable document gates were selected; the draft check cannot run"], owed, not_completed
+    problems, notes = run_gates(root, env, key, gates)
+    if not problems:
         owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()
     for name in ("spec.md", "plan.md"):
@@ -9674,7 +10351,11 @@ def verify_draft(
             problems.append(CARD_PROBLEM)
         if not TIME_HEADING.search(plan_text):
             problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
-    return problems, owed
+    # The scope line is the check's own record of its outcome, so it stands only once the
+    # artefact guards have spoken: a draft they refuse is never reported as green (bead
+    # coding-harness-0swp, criterion 8).
+    scope = document_scope_text(gates, "red" if problems else "green", notes)
+    return problems, owed, scope
 
 
 def draft(root: Path, change: str) -> None:
@@ -9710,6 +10391,9 @@ def draft(root: Path, change: str) -> None:
             key = read_secret("GLM_KEY")
             if key is None:
                 raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        prior_plan = ctx.plan.read_text(encoding="utf-8") if ctx.plan.exists() else ""
+        prior_time = prior_plan if TIME_HEADING.search(prior_plan) else "## Time used\n"
+        started_wall, started_mono = utc_now(), monotonic_now()
         prompt = draft_prompt(ctx, diagnostics)
         begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
         unmeasured: str | None = None
@@ -9778,11 +10462,13 @@ def draft(root: Path, change: str) -> None:
                     restored,
                 ),
             )
-        problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
+        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
-            # The next attempt starts on the tree this one left; the block quotes its files and
-            # diagnostics below its audit line (spec, criterion 21).
-            listing = protect_diagnostics("\n".join(f"- {problem}" for problem in problems), key)
+            # The scope evidence stands first, as in every verb's block; the next attempt starts on
+            # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
+            listing = protect_diagnostics(
+                "\n".join([f"- {SCOPE_LABEL}: {scope}", *(f"- {problem}" for problem in problems)]), key
+            )
             files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
@@ -9799,13 +10485,42 @@ def draft(root: Path, change: str) -> None:
                     f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
                     "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
+            ended_wall, ended_mono = utc_now(), monotonic_now()
+            persist_time_entry(
+                root,
+                ctx.plan,
+                time_entry(
+                    "draft",
+                    attempt,
+                    route,
+                    endpoint[1],
+                    True,
+                    started_wall,
+                    ended_wall,
+                    max(0, round(ended_mono - started_mono)),
+                    [protect_diagnostics(scope, key)],
+                ),
+                prior_time,
+                {ctx.plan: prior_plan.encode("utf-8")},
+                accepted=True,
+                retry=False,
+            )
+            # The runner's own evidence of what the draft's check ran: never a model's claim, and
+            # never worded as tests or as the full verification (bead coding-harness-0swp). A passing
+            # attempt leaves it in the time line and checkpoint message, nothing after its audit line.
+            scope_line = f"- Attempt {attempt} ({route}): {scope}"
             checkpoint(
                 root,
                 ctx.change,
                 baseline,
                 key,
                 ignored_before,
-                message=f"docs({change}): draft spec and plan — route {route}",
+                message=(
+                    f"docs({change}): draft spec and plan — route {route}\n\n"
+                    + SCOPE_COMMIT_HEADING
+                    + "\n"
+                    + scope_line
+                ),
                 keep=keep,
             )
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
@@ -10233,7 +10948,7 @@ def _review_round(
             audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
-        deadline = time.monotonic() + REVIEWER_MINUTES * 60
+        deadline = monotonic_now() + REVIEWER_MINUTES * 60
         answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
         replaced: list[str] = []
 
@@ -10245,7 +10960,7 @@ def _review_round(
                 return
 
             def expired() -> bool:
-                if time.monotonic() < deadline:
+                if monotonic_now() < deadline:
                     return False
                 notes.append(f"{member} failed: {first}; the round time limit expired; no second call starts")
                 print(f"review-loop: {notes[-1]}", file=sys.stderr)
@@ -10288,7 +11003,7 @@ def _review_round(
                 current = member
                 while isinstance(answers[current], BaseException):
                     reasons[current] = str(answers[current])
-                    if time.monotonic() >= deadline:
+                    if monotonic_now() >= deadline:
                         notes.append(
                             f"{current} failed: {reasons[current]}; the round time limit expired; no replacement starts"
                         )
@@ -10311,7 +11026,7 @@ def _review_round(
                         notes.append(f"{nxt} not admitted: {refusal}")
                         print(f"review-loop: {notes[-1]}", file=sys.stderr)
                         continue
-                    if time.monotonic() >= deadline:
+                    if monotonic_now() >= deadline:
                         # The leak check can outlast the round: a replacement that cannot start writes no
                         # call line and is not consumed (DL-B-10).
                         notes.append(

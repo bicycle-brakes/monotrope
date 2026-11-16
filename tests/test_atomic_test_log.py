@@ -1038,7 +1038,7 @@ def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) ->
     """
     project = tmp_path / "project"
     project.mkdir()
-    for name in ("conftest.py", "stand_in_log_guard.py", "atomic_test_log.py"):
+    for name in ("conftest.py", "stand_in_log_guard.py", "runner_clock_guard.py", "atomic_test_log.py"):
         (project / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8")
     (project / "test_swallowed.py").write_text(_render(SWALLOWED), encoding="utf-8")
     (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")

@@ -18,8 +18,11 @@ from __future__ import annotations
 import ast
 import contextlib
 import copy
+import dataclasses
 import datetime as dt
 import fcntl
+import functools
+import importlib
 import inspect
 import json
 import multiprocessing
@@ -32,8 +35,10 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -49,6 +54,7 @@ import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
+import runner_clock_guard  # noqa: E402
 import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
@@ -98,7 +104,6 @@ STAND_IN = """#!@PYTHON@
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 # The shared log protocol of these suites, embedded verbatim at render time
@@ -121,20 +126,25 @@ argv = sys.argv[1:]
 # The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
 # scripted steps line up; the record's path is what says which program ran.
 alias = "pi" if name == "pin-pi" else name
-# The draft's document check runs through `bash scripts/verify_all.sh --job docs`; its steps
-# are keyed `docs`, so no other bash call consumes them. The record keeps the program name -
-# that is how the tests read the document check's calls among the bash calls.
 scenario = json.loads((here / "scenario.json").read_text())
-# The document check's argv comes from the runner's own vector (`World.script` writes it), so a
-# respelt `DOCS_VERIFY` cannot make the stand-in run the real gates.
-docs_argv = scenario.get("_docs_argv") or []
-docs_check = alias == "bash" and bool(docs_argv) and argv[: len(docs_argv)] == docs_argv
-if alias == "bash" and not docs_check:
-    # Any other bash call is no document check: it runs the real bash, so it neither consumes a
-    # scripted step nor answers green for a command no test scripted. Bash steps are not served.
-    if "bash" in scenario:
-        sys.stderr.write("stand-in: bash steps are not served; script the document check as `docs`\\n")
-        raise SystemExit(97)
+# The real-time knobs are retired (spec runner-clock, criterion 4): a step that still asks for a
+# sleep or a barrier would be served without its wait, and a test of an unconsumed allowance would
+# pass vacuously. End loudly instead, like a scripted bash step (review row L2-3).
+RETIRED = {"sleep", "barrier", "barrier_dir", "barrier_seconds", "pi_version_sleep", "pi_refresh_sleep"}
+asked = RETIRED & set(scenario).union(
+    *(set(item) for steps_ in scenario.values() if isinstance(steps_, list) for item in steps_ if isinstance(item, dict))
+)
+if asked:
+    sys.stderr.write("stage2-stand-in: retired timing keys are not served: " + ", ".join(sorted(asked)) + "\\n")
+    sys.exit(97)
+if alias == "bash":
+    # No runner verb launches bash any more: every gate goes through `sh -c` in the shared
+    # gate executor, so a bash call in a test is never scripted - it runs the real bash, and
+    # it neither consumes a scripted step nor answers green for a command no test scripted.
+    # A step scripted under the key `bash` is a test mistake: end loudly instead of dropping it.
+    if scenario.get("bash"):
+        sys.stderr.write("stage2-stand-in: a scripted bash step is not served\\n")
+        sys.exit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
 log = here / "calls.jsonl"
 
@@ -150,7 +160,7 @@ def agent_settings_text():
 previous = read_records(log)
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
-steps = scenario.get("docs" if docs_check else alias, [])
+steps = scenario.get(alias, [])
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
 # A step that names a `model` is kept for the call that asks for that model, so
@@ -170,8 +180,6 @@ assigned = []
 for call_ in previous:
     if call_["name"] != alias or call_.get("kind"):
         continue
-    if docs_check != (bool(docs_argv) and call_["argv"][: len(docs_argv)] == docs_argv):
-        continue
     for k in range(len(steps)):
         if k not in assigned and fits(steps[k], call_["argv"]):
             assigned.append(k)
@@ -184,7 +192,6 @@ for k in range(len(steps)):
 if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
-    time.sleep(scenario.get("pi_version_sleep", 0))
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     append_record(here / "versions.jsonl", {"name": name, "path": sys.argv[0], "cwd": os.getcwd()})
     raise SystemExit(scenario.get("pi_version_exit", 0))
@@ -205,7 +212,6 @@ if alias == "pi" and "update" in argv and "--models" in argv:
             "stdin": os.read(0, 100).decode(),
         },
     )
-    time.sleep(scenario.get("pi_refresh_sleep", 0))
     # Pi persists the fetched overlay in the agent directory's models-store.json
     # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
     # unless the scenario names the overlay itself or asks for no store.
@@ -288,18 +294,6 @@ record = {
     "findings": findings.read_text() if findings.exists() else None,
 }
 append_record(log, record)
-barrier = step.get("barrier")
-if barrier:
-    # The swarm check: every member of a round waits here until all members of
-    # the round have arrived, so a serial runner holds the whole round past the
-    # deadline and the test reads the elapsed time.
-    wait_dir = Path(step.get("barrier_dir", scenario.get("barrier_dir", ".barrier")))
-    wait_dir.mkdir(exist_ok=True)
-    (wait_dir / (str(os.getpid()) + "-" + str(time.time_ns()) + ".arrived")).write_text("")
-    deadline = time.time() + step.get("barrier_seconds", scenario.get("barrier_seconds", 30))
-    while len(list(wait_dir.glob("*.arrived"))) < barrier and time.time() < deadline:
-        time.sleep(0.05)
-time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
@@ -358,7 +352,7 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(read_records(log))
-        scenario = {**steps, "_since": since, "_docs_argv": stage2.DOCS_VERIFY[1:], "_bash": REAL_BASH}
+        scenario = {**steps, "_since": since, "_bash": REAL_BASH}
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
@@ -582,6 +576,13 @@ def pin_the_ladder(target: Path) -> None:
         "exclude": [],
         "input": "implementation-diff",
     }
+    # The Z.ai subscription's real end date (bead coding-harness-dcu3) must not age the
+    # explore and implement tests into a refusal: they run on a synthetic far-future record.
+    zai = next(e for e in data["endpunkte"] if e["name"] == "glm-coding-plan")
+    zai["modelle_terms"] = {
+        model: {"gelesen": "2026-11-15", "valid_until": "2099-01-01", "quelle": "test world"}
+        for model in zai["modelle"]
+    }
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
@@ -666,9 +667,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    # `bash` stands in for the draft's document check: `verify_draft` launches
-    # `bash scripts/verify_all.sh --job docs`, so the stand-in records the check under its program
-    # name and reads its scripted output and status from the scenario's `docs` key.
+    # `bash` stays a passthrough to the real bash: no runner verb starts it any more, and a test
+    # that sees a bash call must see the real one. The gates of the targeted check and of the
+    # draft's document check run through `sh -c`; their scripted answers come from the scenario's
+    # `sh` key, and a red or inspected launch uses `LocalCommands`.
     for name in ("bash", "sh", "codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
         rendered = STAND_IN.replace("@PYTHON@", sys.executable)
@@ -1030,9 +1032,10 @@ def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
         and isinstance(node.elts[0], ast.Name)
         and node.elts[0].id == "GIT"
     ]
-    # Seven since red-first-own-refs (bead coding-harness-wkxm): the proofs run in a private clone
-    # through `_git_output`, so the `worktree remove` and `prune` launches are gone.
-    assert len(named) >= 7, "fewer git launches name GIT than the seven this check was written against"
+    # Seven launches since red-first-own-refs (bead coding-harness-wkxm); since decisions.md#Q-8 they all
+    # call `run_git`, which builds the one command naming GIT. The seven launch sites are counted as
+    # `run_git` calls by test_every_git_launch_of_the_runner_goes_through_run_git.
+    assert len(named) == 1, f"one command list names GIT, the one inside run_git; found line(s) {named}"
 
 
 @pytest.mark.parametrize(
@@ -1161,12 +1164,16 @@ def test_the_answer_format_names_the_severity_as_free_text() -> None:
     assert "severity cell is free text" in stage2.ANSWER_FORMAT
 
 
-def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
+def test_the_remaining_time_never_outlives_the_round_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
     """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
+    # Planted fault: the exact fake-clock remaining budget or expiry is wrong.
+    clock = FakeClock(monkeypatch, UTC_START)
     assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
-    assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
+    deadline = clock.mono() + 30
+    assert 0 < stage2.remaining(deadline) <= 30, "the budget left overpaid or underpaid the deadline"
+    clock.run_past(deadline)
     with pytest.raises(stage2.CallFailed, match="round time limit"):
-        stage2.remaining(time.monotonic() - 10)
+        stage2.remaining(deadline)
 
 
 def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
@@ -1374,7 +1381,7 @@ def test_openai_codex_is_declared_as_decided() -> None:
     assert codex["residenz"] == "anbieter-erklaert"
     assert codex["abrechnung"] == "abonnement"
     assert codex["darf_sehen"] == ["framework"]
-    assert codex["modelle"] == ["gpt-6.1-sol"]
+    assert codex["modelle"] == ["gpt-6.1-terra"]
     remark = codex["bemerkung"]
     assert "Codex CLI" in remark and "United States" in remark
     assert "moved to `opencode-go`" in remark
@@ -1391,7 +1398,9 @@ def test_the_kimi_exclusion_is_lifted_and_its_models_carry_terms() -> None:
     assert kimi, "no Kimi model is declared after the exclusion was lifted"
     for model in kimi:
         terms = go["modelle_terms"][model]
-        assert terms["training"] == "Not used" and terms["gelesen"] == "2026-10-30", model
+        # The reading's date moves with every re-read; a reading must exist and be an ISO day.
+        assert terms["training"] == "Not used", model
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(terms["gelesen"])), model
 
 
 def test_the_glm_remark_names_its_work_verbs_and_no_review_phase() -> None:
@@ -1839,16 +1848,21 @@ def test_stamp_tests_pin_the_date_they_compare() -> None:
 
 
 def successful_implementation(world: World, *, stdout: str = "implemented") -> None:
-    """One model edit, measured plan line and passing make stand-in."""
+    """One covered model edit — code and the test that reaches it — a measured plan line.
+
+    Since the targeted implement route (bead coding-harness-0swp) an implement attempt without a
+    test for its new code is refused before any check runs, so the standing green attempt carries
+    the linked test; the targeted checks then answer green from the scenario (and a `make` step,
+    if a test ever scripts one, is simply never consumed).
+    """
     world.script(
         claude=[
             {
                 "stdout": stdout,
-                "plant": {"src/app.py": "value = 2\n"},
+                "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
                 "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
             }
         ],
-        make=[{"stdout": "green\n"}],
     )
 
 
@@ -1902,6 +1916,118 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     text = world.research.read_text(encoding="utf-8")
     assert "route stage-1" in text and "reason Z.ai unavailable" in text
     assert "model claude-haiku-5-5" in text
+
+
+def research_skeleton(klass: str = "bounded") -> str:
+    """The research skeleton exactly as `scripts/new_change.py` writes it, plus the change's `class:` line."""
+    import new_change
+
+    header = new_change._frontmatter_template("demo", "demo-1", "framework-architect", dt.date.today().isoformat())
+    header = header.replace("owner: framework-architect\n", f"owner: framework-architect\nclass: {klass}\n")
+    return header + new_change.BODY_TEMPLATE.format(titel="demo")
+
+
+@pytest.mark.parametrize("off", [False, True])
+def test_explore_publishes_truthful_research_provenance(world: World, off: bool) -> None:
+    # Bead coding-harness-g19n. Planted fault: explore appends the model answer and leaves the skeleton's
+    # `human-written` declaration, so published model research carries false provenance (spec, criteria 1-2).
+    world.research.write_text(research_skeleton(), encoding="utf-8")
+    answer = "Fact from `src/app.py` and its symbol `value`."
+    world.script(claude=[{"stdout": answer}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    text = world.research.read_text(encoding="utf-8")
+    header = text.split("---", 2)[1]
+    assert "provenance: ai-drafted-reviewed" in header
+    assert "human-written" not in text, "the false declaration survives the publication"
+    assert text.count("provenance:") == 1 and text.count("produced_by:") == 1 and text.count("review:") == 1
+    import yaml
+
+    producer = yaml.safe_load(header)["produced_by"]
+    assert producer == {
+        "kind": "llm-session",
+        "name": "claude-code",
+        "version": str(dt.date.today()),
+        "model": "claude-haiku-5-5" if off else "glm-5.3-flash",
+    }
+    assert "review: {status: pending, approved_by: null, approved_at: null}" in header
+    assert "class: bounded" in header and "bead: demo-1" in header, "unrelated header fields were touched"
+    assert "# demo — Research" in text and "## Runner exploration" in text and answer in text
+
+
+def test_explore_resets_review_without_changing_lifecycle(world: World) -> None:
+    # Bead coding-harness-g19n. Planted fault: publication keeps an earlier human approval of the shorter
+    # document, or rewrites lifecycle fields along with the provenance (spec, criterion 3).
+    inline = research_skeleton().replace(
+        "tags: [research]\n",
+        'review: {status: approved, approved_by: "A. Reviewer", approved_at: "2026-11-01"}\ntags: [research]\n',
+    )
+    block = research_skeleton().replace(
+        "tags: [research]\n",
+        'review:\n  status: approved\n  approved_by: "A. Reviewer"\n  approved_at: "2026-11-01"\ntags: [research]\n',
+    )
+    for research in (inline, block):
+        world.research.write_text(research, encoding="utf-8")
+        world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+        assert world.run("explore") == 0
+        text = world.research.read_text(encoding="utf-8")
+        header = text.split("---", 2)[1]
+        assert text.count("review:") == 1 and "A. Reviewer" not in text, "the old approval survives"
+        assert header.count("review: {status: pending, approved_by: null, approved_at: null}") == 1
+        for line in (
+            'title: "Research — demo"',
+            "status: draft",
+            "implementation_status: none",
+            f"date: {dt.date.today()}",
+            f"last_reviewed: {dt.date.today()}",
+            "supersedes: null",
+            "superseded_by: null",
+            "bead: demo-1",
+            "class: bounded",
+            "owner: framework-architect",
+            "tags: [research]",
+        ):
+            assert line in header, f"lifecycle field changed: {line}"
+
+
+def test_explore_removes_only_opening_skeleton_text(world: World) -> None:
+    # Bead coding-harness-g19n. Planted fault: the publication keeps a generated notice, or strips authored
+    # prose that quotes the skeleton below the first section heading (spec, criterion 4).
+    quoted = (
+        "We keep this note. The skeleton once said: Phase 1 per "
+        "[`prompts/01-explore.md`](../../../prompts/01-explore.md); this\n"
+        "file is empty until it has run.\n"
+        "\n> **Bring the provenance up to date.** The frontmatter says\n"
+        "> `provenance: human-written` — quoted here on purpose.\n"
+    )
+    world.research.write_text(research_skeleton() + f"\n## Human notes\n\n{quoted}", encoding="utf-8")
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    assert text.count("Phase 1 per") == 1 and text.count("Bring the provenance") == 1, (
+        "a notice survived, or prose went"
+    )
+    opening, rest = text.split("## Human notes", 1)
+    assert "# demo — Research" in opening and "Phase 1 per" not in opening and "Bring the provenance" not in opening
+    assert quoted in rest, "the authored section lost its own quote of the skeleton"
+    assert "provenance: ai-drafted-reviewed" in text.split("---", 2)[1]
+    before_second = world.research.read_bytes()
+    world.script(claude=[{"stdout": "Second fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    second = world.research.read_bytes()
+    assert second.startswith(before_second), "the second publication changed the first publication's bytes"
+    again = second.decode("utf-8")
+    opening, rest = again.split("## Human notes", 1)
+    assert "Phase 1 per" not in opening and "Second fact" in again, "a second publication reintroduced a notice"
+    assert text.count("Phase 1 per") == 1 and quoted in rest
+    before_refusal = world.research.read_bytes()
+    world.script(claude=[{"stdout": "I cannot run the tests, please rerun me"}])
+    assert world.run("explore") == 1
+    after = world.research.read_bytes()
+    assert after.startswith(before_refusal), "a rejected answer touched the published bytes"
+    added = after[len(before_refusal) :].strip()
+    assert added.startswith(b"Stage-2 call,"), "more than the audit line landed"
+    assert b"Runner exploration" not in added, "a rejected answer landed as research"
 
 
 def anthropic_haiku_problems(declaration: dict) -> list[str]:
@@ -1971,9 +2097,9 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     for forbidden in ("WebFetch", "bypassPermissions", "--dangerously-skip-permissions", "--allowedTools"):
         assert forbidden not in argv
     assert "# Agent rules" in prompt and "# Spec" in prompt and "# Plan" in prompt
-    assert "Implementation baseline:" in prompt and "The runner runs `make verify`" in prompt
+    assert "Implementation baseline:" in prompt and "the post-run targeted check for implement and repair" in prompt
     assert "Write no entry under `## Time used`" in prompt, "the prompt still asks the model to measure time"
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]]
+    assert world.calls("make") == [], "the covered implement still waited on the full `make verify`"
     assert git(world.root, "log", "-1", "--pretty=%s") == "feat(demo): implement accepted plan"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -2004,7 +2130,6 @@ def test_first_implement_refreshes_derived_files_without_a_model_repair(
     checking_derived_make(world, day.current)
     assert world.run("implement") == 0
     assert len(world.calls("claude")) == 1
-    assert len(world.calls("make")) == 1
     assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -2249,41 +2374,147 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert world.calls("make") == []
 
 
-def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
-    """A genuine admission holder on the world's state root: a supervised probe child.
+GENUINE_POPEN, GENUINE_KILLPG = subprocess.Popen, os.killpg
+FAKE_PID_BASE = 9_000_000  # above every operating-system pid range the suite meets
 
-    The world fixture pins the shared state root and a floor of zero, so the
-    holder queues exactly where the runner's own checks queue — never on this
-    machine's real lock.
+
+class ScriptedProcess:
+    """One doubled program: a scripted duration and output, a fake pid, each recorded timeout.
+
+    The process exists only between the runner and the double: its pid belongs
+    to no operating-system group, so a group operation on it raises
+    `ProcessLookupError` (the interception lives in `ScriptedPrograms`). The
+    first `communicate(timeout)` advances the fake clock by the scripted
+    duration when the duration fits the handed allowance and raises
+    `subprocess.TimeoutExpired` when it does not; a stopped process drains at
+    once, so the bounded drain's argument is recorded without simulating a hang.
     """
-    return subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "scripts.verify_lock",
-            "--",
-            sys.executable,
-            "-c",
-            "import os, pathlib, time; "
-            "pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); "
-            f"time.sleep({seconds})",
-        ],
-        cwd=REPO_ROOT,
-        env={**os.environ, "HOLDER_READY": str(ready)},
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+
+    def __init__(self, double: ScriptedPrograms, command: list[str], plan: dict) -> None:
+        self.double = double
+        self.command = list(command)
+        self.args = list(command)
+        self.plan = plan
+        self.pid = FAKE_PID_BASE + len(double.launched)
+        self.stdout = None
+        self.stderr = None
+        self.returncode = None
+        self.stopped = False  # per instance: two doubled programs may share one plan
+        double.launched.append({"command": self.command, "pid": self.pid})
+        gate, gate_at = plan.get("gate"), plan.get("gate_at")
+        if gate is not None and gate_at is not None and len(double.launched) >= gate_at:
+            gate.set()  # the partner this gate waits for has now launched
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def __getattr__(self, name: str):
+        # Only the members `launch`'s timed branch uses are served; any other one is the double's
+        # limit, said as such, never a bare AttributeError read as a runner fault (review row L2-6).
+        raise AssertionError(f"the process double does not serve `{name}` for {self.__dict__.get('command')}")
+
+    def __enter__(self):
+        # The untimed path (`subprocess.run`) enters the process as a context; the double serves only `communicate`.
+        raise AssertionError(f"the process double serves no context manager (untimed run) for {self.command}")
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+    def communicate(self, timeout=None):
+        row = {"command": self.command, "pid": self.pid, "timeout": timeout, "outcome": "drained"}
+        gate = self.plan.get("gate")
+        if gate is not None and not gate.wait(30.0):
+            # Watchdog only: bounds a wedged round where the partner never launched.
+            raise AssertionError(f"the doubled program {self.command[0]} never met its launch gate")
+        self.double.communications.append(row)
+        if self.returncode is not None or self.stopped:
+            # The bounded cleanup drain: it ends at once and its timeout is still on record.
+            return self.plan.get("stdout", ""), self.plan.get("stderr", "")
+        duration = self.plan.get("duration", 0.0)
+        if timeout is not None and duration > timeout:
+            self.double.clock.advance(timeout)  # the wait that happened before the stop
+            self.stopped = True
+            row["outcome"] = "timeout"
+            raise subprocess.TimeoutExpired(self.args, timeout)
+        self.double.clock.advance(duration)
+        self.returncode = self.plan.get("exit", 0)
+        row["outcome"] = "completed"
+        return self.plan.get("stdout", ""), self.plan.get("stderr", "")
 
 
-def _holder_acquired(ready: Path, seconds: float = 10.0) -> int:
-    """Wait until the holder owns its admission and answer the holder pid it published."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        if ready.exists():
-            return int(ready.read_text(encoding="utf-8"))
-        time.sleep(0.05)
-    raise AssertionError("the holder never acquired its admission")
+class ScriptedPrograms:
+    """A process double at the runner's `Popen` boundary, moved by one fake clock.
+
+    A test lists the commands to double as `(matcher, plan)` pairs; every other
+    command runs for real through the genuine `Popen`, so git and the stand-in
+    programs keep working. While the double stands, the fake pids exist nowhere
+    in the operating system and group operations on them never reach
+    `os.killpg` — fake pids and intercepted group operations are used together.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, plans: list[tuple]) -> None:
+        self.clock = clock
+        self.plans = plans
+        self.launched: list[dict] = []
+        self.communications: list[dict] = []
+        # The genuine functions, captured at import: a second double installed while a first
+        # still stands must fall back to the operating system, not to the first double.
+        real_popen, real_killpg = GENUINE_POPEN, GENUINE_KILLPG
+        double = self
+
+        class Popen:
+            def __new__(cls, command, *args, **kwargs):
+                for matcher, plan in double.plans:
+                    if matcher(command):
+                        return ScriptedProcess(double, command, plan)
+                return real_popen(command, *args, **kwargs)
+
+        def killpg(group, signum):
+            if group >= FAKE_PID_BASE:
+                raise ProcessLookupError(f"no such process group: the doubled pid {group} exists nowhere")
+            return real_killpg(group, signum)
+
+        monkeypatch.setattr(subprocess, "Popen", Popen)
+        monkeypatch.setattr(os, "killpg", killpg)
+
+    def of(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled communications, optionally only those of one command."""
+        return [row for row in self.communications if command is None or row["command"] == command]
+
+    def waits(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled programs' own waits: every first `communicate`, the cleanup drain left out.
+
+        A stopped program is drained a second time at the kill, and that
+        bounded cleanup has a communication row of its own (`outcome:
+        "drained"`, the `KILL_DRAIN_SECONDS` argument on record); the policy
+        verdicts read the wait rows alone.
+        """
+        return [row for row in self.of(command) if row["outcome"] != "drained"]
+
+
+def test_scripted_programs_fall_back_to_the_genuine_popen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: a second double falls back to the first, not to the operating system.
+
+    The first double scripts `true`; the second scripts nothing, so `true`
+    must run for real once the second stands, with a real pid and no doubled row.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    first = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["true"], {"duration": 1.0})])
+    ScriptedPrograms(monkeypatch, clock, [])
+    process = subprocess.Popen(["true"])
+    assert process.wait(timeout=30) == 0
+    assert process.pid < FAKE_PID_BASE, "the newer double routed an unlisted command through the older one"
+    assert first.launched == [], "the older double ran a command the newer one does not list"
+
+
+def test_scripted_process_names_an_unserved_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: an unserved call on the double surfaces as a bare AttributeError (review row L2-6)."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["doubled"], {"duration": 1.0})])
+    with pytest.raises(AssertionError, match="no context manager.*doubled"):
+        subprocess.run(["doubled"], check=False)
+    with pytest.raises(AssertionError, match="does not serve `wait`.*doubled"):
+        subprocess.Popen(["doubled"]).wait()
 
 
 def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2291,32 +2522,39 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
     monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
-    ready = world.state / "holder-ready"
-    holder = _real_holder(ready)
-    try:
-        _holder_acquired(ready)
-        problems: list[str] = []
+    clock = FakeClock(monkeypatch, UTC_START)
+    admissions: list[str] = []
 
-        def attempt() -> None:
-            problems.extend(stage2.verify_attempt(world.root, world.plan))
+    def queueing_admission(_command):
+        # The queueing is simulated at the clock, never waited out: no holder process, no thread.
+        admissions.append("queued")
+        clock.advance(10 * 60.0)
+        return contextlib.nullcontext(None)
 
-        world.script(make=[{"stdout": "green", "sleep": 1.5}])
-        queued = threading.Thread(target=attempt)
-        queued.start()
-        time.sleep(1.0)  # a real second of queueing while the holder owns the admission
-        holder.terminate()
-        holder.wait(timeout=30)
-        queued.join(timeout=90)
-        assert problems == [], f"the admission wait consumed the step limit: {problems}"
-        assert len(world.calls("make")) == 1
-    finally:
-        if holder.poll() is None:
-            holder.kill()
-            holder.wait(timeout=10)
+    monkeypatch.setattr(verify_lock, "hold_admission", queueing_admission)
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 1.0, "stdout": "green\n"})],
+    )
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert admissions == ["queued"], "the verification ran without its admission"
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "the admission wait consumed the step limit"
+    assert make["outcome"] == "completed", "a timely check failed because it queued"
 
-    # and the limit still binds the executing check: a hung make ends inside it
-    world.script(make=[{"stdout": "too late", "sleep": 30}])
+    # and the limit still binds the executing check: an over-budget make ends in a repairable diagnostic
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 30.0, "stdout": "too late"})],
+    )
     problems = stage2.verify_attempt(world.root, world.plan)
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
+    assert make["outcome"] == "timeout"
+    (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
 
 
@@ -2324,44 +2562,49 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
     # the selected pytest path loses the inherited marker or the shared state root, so the local
     # check queues for its own admission instead of reusing its ancestor's.
-    ready = world.state / "holder-ready-nested"
-    holder = _real_holder(ready)
+    # The holder record and the environment stand in for the ancestor's admission: the marker is
+    # honoured only for a descendant of the published holder (review row F6-2), and this process
+    # names itself the way an ancestor's supervisor would. A real child keeps its inheritance end
+    # to end in test_a_runner_check_hands_its_child_the_admission_token.
+    holder_pid = os.getpid()
+    record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+    record.parent.mkdir(parents=True, exist_ok=True)
+    held = {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+    record.write_text(json.dumps(held), encoding="utf-8")
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+
+    # The planted fault must turn red, not hang: an ordinary admission would queue against the
+    # descriptor this test holds below and poll with no deadline, so it refuses at once (review row L2-1).
+    def queued_for_its_own(*_args, **_kwargs):
+        raise AssertionError("the local check queued for its own admission instead of inheriting")
+
+    monkeypatch.setattr(verify_lock, "_Admission", queued_for_its_own)
+    # The admission is genuinely held by an open descriptor of this process: no thread, no sleep.
+    lock_fd = os.open(record.parent / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        _holder_acquired(ready)
-        # The marker is honoured only for a descendant of the published holder (review row F6-2),
-        # and this test process is not the sibling supervisor's descendant: the record is
-        # republished naming this process, the way an ancestor's supervisor names itself, while
-        # the sibling keeps the work lock genuinely held.
-        holder_pid = os.getpid()
-        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
-        record.write_text(
-            json.dumps(
-                {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
-            ),
-            encoding="utf-8",
-        )
-        monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
-        monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
         assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
-        make_env = world.calls("make")[0]["env"]
-        assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
-        assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
-        assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
-        assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
-        # and the draft post-run path preserves it too, for its document check
-        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-        world.plan.write_text(PLAN_CARD, encoding="utf-8")
-        problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
-        assert problems == [], problems
-        draft_env = world.calls("bash")[0]["env"]
-        assert draft_env[verify_lock.LOCK_ENV] == str(holder_pid), "the draft path lost its inherited marker"
-        assert draft_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
     finally:
-        if holder.poll() is None:
-            holder.terminate()
-            holder.wait(timeout=10)
+        os.close(lock_fd)
+    make_env = world.calls("make")[0]["env"]
+    assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+    assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
+    assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+    assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+    # and the draft's document gates keep the shared state root, while carrying none of the
+    # admission's ownership: a document check queues for no admission of its own (0swp).
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    commands = LocalCommands(monkeypatch)
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems == [], problems
+    gate_env = commands.of("gate")[0]["env"]
+    assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
+    assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
+    assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -2940,7 +3183,10 @@ def test_a_key_fragment_in_a_changed_file_is_removed_and_refused(world: World) -
         claude=[
             {
                 "stdout": "implemented",
-                "plant": {"src/app.py": f"credential = '{KEY[4:16]}'\n"},
+                "plant": {
+                    "src/app.py": f"credential = '{KEY[4:16]}'\n",
+                    "tests/test_fix.py": FIX_TEST,
+                },
                 "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
             },
             {"stdout": "must not run"},
@@ -2966,12 +3212,12 @@ def test_a_key_the_gate_writes_under_venv_is_removed_and_refused(world: World) -
         claude=[
             {
                 "stdout": "implemented",
-                "plant": {"src/app.py": "value = 2\n"},
+                "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
                 "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
             },
             {"stdout": "must not run"},
         ],
-        make=[{"stdout": "green\n", "plant": {".venv/gate.txt": f"token = {KEY}\n"}}],
+        sh=[{"stdout": "green\n", "plant": {".venv/gate.txt": f"token = {KEY}\n"}}, {"stdout": "green\n"}],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("implement") == 2
@@ -2985,7 +3231,7 @@ def test_a_key_the_gate_writes_under_venv_is_removed_and_refused(world: World) -
 def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -> None:
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}},
             {
                 "stdout": "repaired",
                 "append": {
@@ -2994,7 +3240,7 @@ def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -
                 },
             },
         ],
-        make=[{"stdout": f"token {KEY} leaked\n", "exit": 1}, {"stdout": "green\n"}],
+        sh=[{"stdout": f"token {KEY} leaked\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
     prompt = world.calls("claude")[1]["prompt_file"]
@@ -3023,7 +3269,7 @@ def set_denylist(text: str) -> Path:
     return path
 
 
-def failing_run(world: World, verb: str) -> tuple[int, str | None]:
+def failing_run(world: World, verb: str, monkeypatch: pytest.MonkeyPatch) -> tuple[int, str | None]:
     """Run `verb` so its first attempt fails a check printing the fixture traceback.
 
     Returns the exit code and the prompt of the second model call, or None when none was made.
@@ -3037,7 +3283,8 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
             "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
             "plans/changes/demo/plan.md": PLAN_CARD,
         }
-        world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], docs=[bad, green])
+        world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")])
+        gate_red_then_green(LocalCommands(monkeypatch), FIXTURE_TRACEBACK)
         code, name = world.run("draft"), "codex"
     elif verb == "repair":
         repair_world(world)
@@ -3046,7 +3293,8 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
     else:
         first = {
             "stdout": "first",
-            "plant": {"src/app.py": "value = 2\n"},
+            # The covered pair keeps the new-code guard silent so the check itself runs.
+            "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
             "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
         }
         second = {
@@ -3057,10 +3305,12 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
             },
         }
         if verb == "implement":
-            world.script(claude=[first, second], make=[bad, green])
+            world.script(claude=[first, second])
+            gate_red_then_green(LocalCommands(monkeypatch), FIXTURE_TRACEBACK)
             code = world.run("implement")
         else:
-            world.script(claude=[first], make=[bad])
+            world.script(claude=[first])
+            gate_red_then_green(LocalCommands(monkeypatch), FIXTURE_TRACEBACK)
             code = world.run("implement", "demo", "--stage2-off", "GLM unavailable")
         name = "claude"
     calls = world.calls(name)
@@ -3068,9 +3318,11 @@ def failing_run(world: World, verb: str) -> tuple[int, str | None]:
 
 
 @pytest.mark.parametrize("verb", ["draft", "implement", "implement-off", "repair"])
-def test_failed_check_diagnostics_redact_secret_rules_on_every_work_route(world: World, verb: str) -> None:
+def test_failed_check_diagnostics_redact_secret_rules_on_every_work_route(
+    world: World, verb: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Criterion 1. Planted fault: one verb, a keyless route or one destination keeps the value."""
-    code, prompt = failing_run(world, verb)
+    code, prompt = failing_run(world, verb, monkeypatch)
     texts = [("findings", world.text())] + ([("retry prompt", prompt)] if prompt is not None else [])
     assert (prompt is not None) == (verb != "implement-off")
     assert code == (1 if verb == "implement-off" else 0)
@@ -3248,16 +3500,20 @@ def test_a_nonsecret_match_inside_the_credential_alone_does_not_refuse() -> None
     assert protected == "location.py:12\nvalue [credential]\n"
 
 
-def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(world: World) -> None:
+def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Criterion 3. Planted fault: either copy keeps the value, so the real pre-call check refuses call two."""
-    code, prompt = failing_run(world, "draft")
+    code, prompt = failing_run(world, "draft", monkeypatch)
     assert code == 0 and prompt is not None
     assert len(world.calls("codex")) == 2
     assert git(world.root, "log", "-1", "--pretty=%s").startswith("docs(demo): draft spec and plan")
     assert world.text().count("leak check clean") == 2
 
 
-def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_diagnostic_redaction_refuses_an_unusable_denylist(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Criterion 4. Planted fault: raw evidence is written or another attempt starts after a failed rule read."""
     path = set_denylist(DENYLIST + FIXTURE_RULE)
     for broken in ("", "# only a comment\n", "bad = (\n"):
@@ -3273,9 +3529,13 @@ def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys:
     path = set_denylist(DENYLIST + FIXTURE_RULE)
     plant = {"plans/changes/demo/plan.md": PLAN_CARD}
     world.script(
-        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
-        docs=[{"stdout": FIXTURE_TRACEBACK, "exit": 1, "delete": [str(path)]}, {"stdout": "green\n"}],
+        codex=[
+            codex_ok("T1", "drafted", plant=plant, delete=[str(path)]),
+            codex_ok("T2", "again"),
+        ]
     )
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, FIXTURE_TRACEBACK)
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 1
     assert FIXTURE_SECRET not in world.text() and FIXTURE_SECRET not in capsys.readouterr().err
@@ -3283,7 +3543,7 @@ def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys:
 
 @pytest.mark.parametrize("multiline", [False, True], ids=["single-line", "multiline"])
 def test_nonsecret_diagnostic_matches_still_refuse(
-    world: World, capsys: pytest.CaptureFixture[str], multiline: bool
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], multiline: bool
 ) -> None:
     """Criterion 5. Planted fault: a secret replacement over the same span hides a non-secret violation."""
     planted = "LEAKMARK-" + "654321"
@@ -3302,35 +3562,31 @@ def test_nonsecret_diagnostic_matches_still_refuse(
     assert all(line not in refusal for line in planted.splitlines())
     draft_world(world)
     plant = {"plans/changes/demo/plan.md": PLAN_CARD}
-    world.script(
-        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
-        claude=[{"stdout": "glm"}],
-        docs=[{"stdout": f"E {planted}\n", "exit": 1}, {"stdout": "green\n"}],
-    )
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")])
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, f"E {planted}\n")
     assert world.run("draft") == 2
-    assert len(world.calls("codex")) == 1 and world.calls("claude") == []
+    assert len(world.calls("codex")) == 1
     assert planted not in world.text() and planted not in capsys.readouterr().err
 
 
-def test_secret_rules_outside_diagnostics_still_block_retry(world: World) -> None:
+def test_secret_rules_outside_diagnostics_still_block_retry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 6. Planted fault: the runner cleans the tree or skips the pre-call scan to pass the retry."""
     set_denylist(DENYLIST + FIXTURE_RULE)
     draft_world(world)
-    plant = {"plans/changes/demo/plan.md": PLAN_CARD}
-    world.script(
-        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "must not run")],
-        docs=[
-            {
-                "stdout": FIXTURE_TRACEBACK,
-                "exit": 1,
-                "plant": {"src/leak.py": f"token = '{FIXTURE_SECRET}'\n"},
-            },
-            {"stdout": "green\n"},
-        ],
-    )
+    # The secret sits in the change folder, the one place a draft keeps: the draft's put-back would
+    # remove a stray file anywhere else, and the scan before the retry reads what the tree still holds.
+    leak = Path("plans") / "changes" / "demo" / "leak.md"
+    plant = {
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        leak.as_posix(): f"token = '{FIXTURE_SECRET}'\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "must not run")])
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, FIXTURE_TRACEBACK)
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 1
-    assert FIXTURE_SECRET in (world.root / "src" / "leak.py").read_text(encoding="utf-8")
+    assert FIXTURE_SECRET in (world.root / leak).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("anchor", ["^", "$"])
@@ -3378,7 +3634,6 @@ def test_nonsecret_preparation_errors_stop_before_retry(
     world.script(
         **({"codex": [codex_step(s, n) for n, s in enumerate(steps)]} if verb == "draft" else {"claude": steps}),
         make=[{"stdout": "must not run"}],
-        docs=[{"stdout": "must not run"}],
     )
     real_stamp = stage2.check_frontmatter_current.stamp
 
@@ -3647,7 +3902,7 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
     (call,) = world.calls("codex")
     argv = call["argv"]
     assert argv[:2] == ["exec", "--json"]
-    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["draft"]}"' in argv
     assert 'sandbox_mode="workspace-write"' in argv
     assert 'sandbox_mode="read-only"' not in argv
@@ -3778,7 +4033,7 @@ def test_writing_verbs_refuse_an_index_only_change(world: World, verb: str, caps
     assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == committed
 
 
-def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
+def test_each_draft_attempt_has_its_audit_line_and_reason(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 6. Planted fault: the reason dropped from a fallback attempt's audit line.
     draft_world(world)
     world.script(
@@ -3787,20 +4042,20 @@ def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
             codex_ok("T2", "drafted again"),
         ],
         claude=[{"stdout": "drafted by GLM"}],
-        docs=[red_verify(OTHER_RED)] * 3,
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red_verify(OTHER_RED)["stdout"], reds=99)
     assert world.run("draft") == 1
     text = world.text()
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, \d+ rules"
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · "
+        rf"^Stage-2 call, {day}: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · "
         rf"leak check clean over {count}\.$",
         text,
         re.M,
     )
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol"
+        rf"^Stage-2 call, {day}: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra"
         rf" · reason the first draft attempt failed · leak check clean over {count}\.$",
         text,
         re.M,
@@ -4005,60 +4260,63 @@ def test_a_draft_call_that_moves_head_stops_the_run(
     assert git(world.root, "log", "-1", "--pretty=%s") == "the model committed", "the runner makes no commit"
 
 
-def test_a_red_verify_fails_the_draft_attempt(world: World) -> None:
+def test_a_red_verify_fails_the_draft_attempt(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 12. Planted fault: the exit code of the document check ignored, or it never ran.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
+    commands = LocalCommands(monkeypatch)
+    # The gate is matched by its module path — the declared command carries it, the id does not.
+    commands.outcomes["gate"] = lambda command: (1, red) if "check_adr_answers" in command[2] else (0, "")
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        docs=[red, red, red],
     )
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
-    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV] * 3
+    red_gates = [record for record in commands.of("gate") if "check_adr_answers" in record["command"][2]]
+    assert len(red_gates) == 3, "the chain did not retry"
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
     joined = "\n".join(block)
-    assert "`bash scripts/verify_all.sh --job docs` exited 1" in joined and "── [adr-answers] RED (block)" in joined
+    assert "gate `adr-answers` (block) exited 1" in joined and "── [adr-answers] RED (block)" in joined
     assert "other: no answer" in joined
-    assert "make verify" not in joined, "the failed check is not the full suite"
+    assert "`make verify` exited" not in joined, "the failed check is not the full suite"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
 
 
-DOCS_ARGV = ["scripts/verify_all.sh", "--job", "docs"]
-
-
-def test_draft_runs_the_existing_docs_subset(world: World) -> None:
+def test_draft_runs_the_existing_docs_subset(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 1 (draft-gates-only). Planted fault: the draft invokes the full suite, runs a code
     # gate such as pytest, or substitutes its own gate list for the existing document subset.
     draft_world(world)
     passing_draft(world)
+    commands = LocalCommands(monkeypatch)
     assert world.run("draft") == 0
-    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV]
-    assert world.calls("make") == [], "the draft reached the full suite"
+    expected = [gate_command(world, gate) for gate in docs_gates()]
+    assert [record["command"] for record in commands.of("gate")] == expected, "another gate list ran"
+    assert commands.of("pytest") == [], "the draft ran tests"
+    assert commands.of("make") == [], "the draft reached the full suite"
+    assert world.calls("bash") == [], "the draft went through the admitted shell runner"
 
 
 def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Criterion 2 (draft-gates-only). Planted fault: the document check launches before the machine
-    # admission, loses the inherited admission, or runs under a timeout other than VERIFY_SECONDS.
+    # Criterion 2 (draft-gates-only). Planted fault: the document check asks for or inherits the
+    # machine admission, or loses the shared state root or the shared step limit.
     draft_world(world)
     passing_draft(world)
-    order: list[str] = []
+    held: list[str] = []
     seen: dict[str, object] = {}
     real_hold = stage2.verify_lock.hold_admission
-    real_launch = stage2.launch
 
     def hold_admission(command):
-        order.append("admission")
-        seen["admission_command"] = list(command)
+        held.append(list(command))
         return real_hold(command)
 
+    real_launch = stage2.launch
+
     def launch(command, root, env, *rest, **kwargs):
-        if command[0] == "bash":
-            order.append("launch")
+        if command[0] == "sh" and command[1:2] == ["-c"]:
             seen["command"] = list(command)
             seen["env"] = dict(env)
             seen["timeout"] = kwargs.get("timeout")
@@ -4070,18 +4328,23 @@ def test_draft_docs_check_keeps_admission_and_execution_limit(world: World, monk
     monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
     monkeypatch.setattr(stage2, "launch", launch)
     assert world.run("draft") == 0
-    assert order == ["admission", "launch"], "the document check ran outside the machine admission"
-    assert seen["admission_command"] == seen["command"] == ["bash", *DOCS_ARGV], "one vector for admission and launch"
-    assert seen["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the shared step limit was swapped or hard-coded"
-    assert seen["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
-    assert seen["pass_fds"] != (), "the document check lost the admission's descriptor"
-    assert seen["env"][verify_lock.LOCK_ENV], "the document check lost the inherited admission marker"
+    assert held == [], "the document check asked for the machine admission"
+    assert seen["command"][0] == "sh", "the document check left the direct gate launch"
+    assert seen["timeout"] == stage2.TOOL_SECONDS, "the shared step limit was swapped"
+    assert seen["pass_fds"] == (), "the document check kept the admission's descriptor"
+    for marker in (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    ):
+        assert marker not in seen["env"], marker
     assert seen["env"]["XDG_STATE_HOME"] == str(world.state), "the document check lost the shared state root"
 
 
 def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 3 (draft-gates-only). Planted fault: a red, unstartable, timed-out or
-    # admission-refused document check is accepted, committed as a passing draft, reported as a
+    # unreadable-gate-list document check is accepted, committed as a passing draft, reported as a
     # failed `make verify` run, or slips the retry chain.
     draft_world(world)
     spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
@@ -4096,56 +4359,53 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
         (world.bin / "calls.jsonl").unlink()
 
     # a red exit: every attempt fails, the chain runs, nothing is committed
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, red)
     world.script(
         codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[red, red, red],
     )
     assert world.run("draft") == 1
-    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV] * 3, "the chain did not retry"
+    assert commands.of("gate"), "the chain did not retry"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "a red document check was committed"
     block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0])
-    assert "`bash scripts/verify_all.sh --job docs` exited 1" in block and "make verify" not in block
+    assert "exited 1" in block and "`make verify` exited" not in block
 
     # a check that cannot start is as failed a post-run check as a red one
     reset()
-    (world.bin / "bash").chmod(0o644)
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = stage2.CallFailed("sh: Permission denied")
     world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], claude=[{"stdout": "glm"}])
     assert world.run("draft") == 1
-    assert world.calls("bash") == [], "an unstartable document check was started"
+    assert len(commands.of("gate")) == 3, "the chain did not retry the unstartable check"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
     block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
-    assert "`bash scripts/verify_all.sh --job docs` could not run" in block and "Permission denied" in block
-    (world.bin / "bash").chmod(0o755)
+    assert "did not run to the end" in block and "Permission denied" in block
 
-    # a timeout through the real launch: the shared step limit ends the hung check
+    # a timeout through the shared step limit ends the hung check
     reset()
-    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 0.5)
-    world.script(
-        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
-        claude=[{"stdout": "glm"}],
-        docs=[{"stdout": "slow", "sleep": 5}] * 3,
-    )
-    assert world.run("draft") == 1
-    assert len(world.calls("bash")) == 3, "a timed-out document check was not retried"
-    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
-    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
-    assert "could not run" in block and "stopped by" in block
-
-    # an admission refusal is a failed check, never a started one
-    reset()
-
-    def refused(command):
-        raise verify_lock.VerifyLockRefused(f"the admission refused {command}")
-
-    monkeypatch.setattr(stage2.verify_lock, "hold_admission", refused)
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = stage2.StepTimedOut("stopped by the runner's tool limit")
     world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], claude=[{"stdout": "glm"}])
     assert world.run("draft") == 1
-    assert world.calls("bash") == [], "a refused document check was started"
+    assert len(commands.of("gate")) == 3, "a timed-out document check was not retried"
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
     block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
-    assert "`bash scripts/verify_all.sh --job docs` could not run" in block and "make verify" not in block
+    assert "did not run to the end" in block and "stopped by" in block
+
+    # an unreadable gate list is a failed check, never a started one
+    reset()
+
+    def refused():
+        raise stage2.Refused("the gate list could not be read")
+
+    monkeypatch.setattr(stage2, "document_gates", refused)
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], claude=[{"stdout": "glm"}])
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = "\n".join([b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][-1])
+    assert "the document gates could not be selected" in block and "`make verify` exited" not in block
 
 
 def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
@@ -4162,26 +4422,27 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
         return real_launch(command, *rest, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", launch)
-    # the derived preparation still precedes the document gates
+    # the derived preparation still precedes the document gates, which now run one
+    # launch per declared gate through the shared executor (bead coding-harness-0swp)
     world.plan.write_text(PLAN_CARD, encoding="utf-8")
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert problems == [], problems
-    assert order == ["renderer", "docs"], order
+    assert order == ["renderer", *["docs"] * len(stage2.document_gates())], order
     # and the artefact guards still reject what they rejected
     spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
     (world.root / "plans/changes/demo/spec.md").unlink()
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert "plans/changes/demo/spec.md is missing after the draft." in problems, problems
     world.plan.unlink()
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert "plans/changes/demo/plan.md is missing after the draft." in problems, problems
     assert stage2.CARD_PROBLEM not in "\n".join(problems), "an absent plan was read as a cardless one"
     (world.root / "plans/changes/demo/spec.md").write_text(spec, encoding="utf-8")
     world.plan.write_text(PLAN_CARD.replace("For you:     one command drafts the change\n", ""), encoding="utf-8")
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert stage2.CARD_PROBLEM in problems, problems
     world.plan.write_text(PLAN_CARD.replace("\n## Time used\n", "\n"), encoding="utf-8")
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in problems, problems
     # and the new-ADR count still stops the attempt before any gate runs
     world.plan.write_text(PLAN_CARD, encoding="utf-8")
@@ -4192,14 +4453,17 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
     # `new_adrs` is the caller's (`draft` reads it from `draft_keep`), so the direct call names
     # the two files the scenario planted, the way a second attempt on their tree would.
     new_adrs = ["docs/adr/0016-first-record.md", "docs/adr/0017-second-record.md"]
-    problems, _owed = stage2.verify_draft(world.root, ctx, None, new_adrs, stage2.tool_state(world.root))
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, new_adrs, stage2.tool_state(world.root))
     assert len(problems) == 1 and "more than one new ADR file" in problems[0], problems
     assert order == [], "the document check ran despite the rejected artefacts"
 
 
-def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: World) -> None:
+def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Criterion 6 (draft-gates-only). Planted fault: implement or a repair with unsupported
-    # scope omits full verification because a draft's document check already passed.
+    # scope omits full verification because a draft's document check already passed, or an
+    # implement route quietly becomes the document-only check.
     # The renamed contract must travel with its criterion ledger: otherwise the old
     # promise that every repair runs full verification survives in the accepted plan.
     ledger = (REPO_ROOT / "plans/changes/archive/2026-11-06-draft-gates-only/plan.md").read_text(encoding="utf-8")
@@ -4207,9 +4471,21 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
         "criterion 6 must name the fallback-specific repair contract"
     )
     assert "tests/test_stage2.py::test_implement_and_repair_keep_full_verify_after_docs_draft —" not in ledger
-    successful_implementation(world)
+    # The implement route's post-run check is targeted, never the draft's document-only subset.
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+    )
+    commands = LocalCommands(monkeypatch)
     assert world.run("implement") == 0
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "implement left the full suite"
+    assert commands.of("pytest"), "the covered implement ran no targeted tests"
+    assert commands.of("gate"), "the covered implement ran no gates"
+    assert commands.of("make") == [], "the covered implement has no reason to leave the targeted route"
     assert world.calls("bash") == [], "implement ran the document subset"
     # The repair route gets its own scenario: `test_other` reads `src/other.py`, so the file joins
     # the baseline at its unfixed value, and the stand-in's call log starts over (its step index
@@ -4229,8 +4505,13 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(world: 
     }
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
-    assert [call["argv"] for call in world.calls("make")] == [["verify"]], "repair skipped required full fallback"
-    assert "verification-scope.txt" in world.text(), "the fallback must report its unsupported input"
+    # `LocalCommands` still records every local command, `make` included, instead of running it.
+    assert [record["command"] for record in commands.of("make")] == [["make", "verify"]], (
+        "repair skipped required full fallback"
+    )
+    assert "verification-scope.txt" in world.plan.read_text(encoding="utf-8"), (
+        "the fallback must report its unsupported input in the plan time line"
+    )
     assert world.calls("bash") == [], "repair ran the document subset"
 
 
@@ -4240,7 +4521,7 @@ FEATURE_SPEC = (
 )
 
 
-def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> None:
+def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 13 (phase-6 F-9, F-10: the gate tolerates, the exit code decides). Planted fault:
     # the runner does not ask the gate to tolerate this change, or does not say the answer is owed.
     draft_world(world)
@@ -4248,6 +4529,7 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
         "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
         "fix: python3 scripts/harness.py decide adr"
     )
+    commands = LocalCommands(monkeypatch)
     world.script(
         codex=[
             codex_ok(
@@ -4256,10 +4538,10 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
                 plant={"plans/changes/demo/spec.md": FEATURE_SPEC, "plans/changes/demo/plan.md": PLAN_CARD},
             )
         ],
-        docs=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
-    assert world.calls("bash")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
+    assert commands.of("gate"), "the document gates never ran"
+    assert commands.of("gate")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
     assert "ADR answer owed: decisions/answers/demo/adr.yaml does not exist" in world.text()
     assert "tolerated that for this run" in world.text()
     assert "was red only because" not in world.text(), "the document check exited 0 (F-14)"
@@ -4268,10 +4550,11 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
 
     (world.bin / "calls.jsonl").unlink()
     other = "\n".join(_gate("adr-answers", [owed.replace("demo:", "other:", 1)], "red"))
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, other)
     world.script(
         codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[{"stdout": other, "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert world.text().count("ADR answer owed") == 1, "another change's missing answer is not tolerated"
@@ -4280,19 +4563,21 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
         _gate("adr-answers", [owed], "red")
         + _gate("frontmatter-current", ["plans/changes/demo/spec.md: last_reviewed is stale"], "red")
     )
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, second_gate)
     world.script(
         codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[{"stdout": second_gate, "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert world.text().count("ADR answer owed") == 1, "a second blocking gate is not tolerated"
     (world.bin / "calls.jsonl").unlink()
     no_time = PLAN_CARD.replace("\n## Time used\n", "\n")
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, "\n".join(_gate("adr-answers", [owed], "red")))
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_time}), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[{"stdout": "\n".join(_gate("adr-answers", [owed], "red")), "exit": 1}] * 3,
     )
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
@@ -4525,6 +4810,17 @@ def test_draft_statement_precheck_ignores_other_changes(world: World) -> None:
     assert len(world.calls("codex")) == 1
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    [{"codex": [{"sleep": 1.5}]}, {"codex": [{"barrier": "b"}]}, {"pi_version_sleep": 1}, {"pi_refresh_sleep": 1}],
+)
+def test_the_stand_in_refuses_retired_timing_keys(world, scenario):
+    # Planted fault: a scripted sleep or barrier is accepted and silently does nothing (review row L2-3).
+    world.script(**scenario)
+    out = subprocess.run([str(world.bin / "codex"), "exec"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert out.returncode == 97 and "retired timing keys" in out.stderr, "a retired timing key was silently served"
+
+
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     # The stand-in shadows bash for every test; a call that is not the document check must neither
     # consume a scripted step nor answer green for a command no test scripted.
@@ -4537,8 +4833,11 @@ def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
     out = subprocess.run([str(world.bin / "bash"), "-c", "echo real"], capture_output=True, text=True)
     assert out.returncode == 97 and "not served" in out.stderr, "a scripted bash step was silently dropped"
     world.script(docs=[{"stdout": "scripted", "exit": 4}])
-    respelt = subprocess.run([str(world.bin / "bash"), *stage2.DOCS_VERIFY[1:]], capture_output=True, text=True)
-    assert (respelt.returncode, respelt.stdout) == (4, "scripted"), "the runner's own vector is not the document check"
+    # The runner no longer launches bash for the document check (it runs the registry's local docs gates
+    # itself), so no spelling of a bash call reaches a scripted `docs` step: it runs the real bash.
+    vector = [str(world.bin / "bash"), "-c", "echo real-again; exit 4"]
+    respelt = subprocess.run(vector, capture_output=True, text=True)
+    assert (respelt.returncode, respelt.stdout) == (4, "real-again\n"), "a bash call was answered by a scripted step"
 
 
 OWED_ANSWER = (
@@ -4547,7 +4846,7 @@ OWED_ANSWER = (
 )
 
 
-def refused_verification(world: World, verification: str) -> None:
+def refused_verification(world: World, monkeypatch: pytest.MonkeyPatch, verification: str) -> None:
     """Run a draft whose every document check prints `verification` and exits 1; nothing may be committed."""
     draft_world(world)
     planted = {
@@ -4557,40 +4856,49 @@ def refused_verification(world: World, verification: str) -> None:
     world.script(
         codex=[codex_ok("T1", "drafted", plant=planted), codex_ok("T2", "again")],
         claude=[{"stdout": "glm"}],
-        docs=[{"stdout": verification, "exit": 1}] * 3,
     )
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = (1, verification)
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "the draft was committed"
     assert "ADR answer owed" not in world.text()
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
-    assert "`bash scripts/verify_all.sh --job docs` exited 1" in "\n".join(block)
+    assert "exited 1" in "\n".join(block)
 
 
-def test_a_verification_that_stopped_before_its_gates_closed_owes_nothing(world: World) -> None:
-    # 2a's F-6, first case. Planted fault: the exception reads only the gates that closed, so the
-    # missing ADR answer followed by an unfinished `interview-minimums` gate passes for tolerated.
+def test_a_verification_that_stopped_before_its_gates_closed_owes_nothing(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 2a's F-6, first case. Planted fault: the runner reads prose frames, so the missing ADR answer
+    # followed by an unfinished `interview-minimums` gate passes for tolerated.
     interview = "── [interview-minimums] $ run the gate\nhalf the report\n"
-    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")) + interview)
+    refused_verification(world, monkeypatch, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")) + interview)
 
 
-def test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame(world: World) -> None:
+def test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # 2a's F-6, second case. Planted fault: a pytest line `── [pytest] gruen` in a gate's output
     # passes for the gate's closing frame, hiding the real RED one.
     spoofed = "\n".join(
         _gate("adr-answers", [OWED_ANSWER], "red")
         + _gate("pytest", ["FAILED tests/test_x.py::test_a", "── [pytest] gruen"], "red")
     )
-    refused_verification(world, spoofed)
+    refused_verification(world, monkeypatch, spoofed)
 
 
-def test_a_verification_that_ended_right_after_the_adr_gate_owes_nothing(world: World) -> None:
-    # Phase-6 F-9. Planted fault: the exception reads gate frames, so output that stops right after the
+def test_a_verification_that_ended_right_after_the_adr_gate_owes_nothing(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Phase-6 F-9. Planted fault: the runner reads gate frames, so output that stops right after the
     # missing-answer gate closed - before the next gate started - looks like a complete run.
-    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")))
+    refused_verification(world, monkeypatch, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")))
 
 
-def test_a_failing_gate_printing_gate_frames_cannot_hide_its_red_frame(world: World) -> None:
+def test_a_failing_gate_printing_gate_frames_cannot_hide_its_red_frame(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Phase-6 F-10. Planted fault: a failing pytest gate prints `── [pytest] gruen` and a start frame of
     # ruff-check, the frame reader follows them and the real RED frame of pytest goes unseen.
     spoofed = "\n".join(
@@ -4598,7 +4906,7 @@ def test_a_failing_gate_printing_gate_frames_cannot_hide_its_red_frame(world: Wo
         + _gate("ruff-check", [], "green")
         + _gate("adr-answers", [OWED_ANSWER], "red")
     )
-    refused_verification(world, spoofed)
+    refused_verification(world, monkeypatch, spoofed)
 
 
 def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) -> None:
@@ -4668,7 +4976,9 @@ def test_a_put_back_path_with_a_newline_is_never_cut() -> None:
     assert one.split("\n")[1] in block and two.split("\n")[1] in block
 
 
-def test_a_docs_check_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:
+def test_a_docs_check_that_cannot_start_fails_the_attempt_and_moves_the_chain(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # 2a's F-7. Planted fault: the `CallFailed` of a document check that cannot start escapes the
     # post-run checks, so the runner stops after one attempt without a block and starts no later route.
     draft_world(world)
@@ -4686,15 +4996,16 @@ def test_a_docs_check_that_cannot_start_fails_the_attempt_and_moves_the_chain(wo
         ],
         claude=[{"stdout": "glm drafted"}],
     )
-    (world.bin / "bash").chmod(0o644)
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["gate"] = stage2.CallFailed("sh: could not be started: Permission denied")
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
-    assert world.calls("bash") == [], "the document check never ran"
+    assert len(commands.of("gate")) == 3, "the chain skipped the document check"
     assert len(world.calls("codex")) == 2 and len(world.calls("claude")) == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
     joined = "\n".join(block)
-    assert "`bash scripts/verify_all.sh --job docs` could not run" in joined and "could not be started" in joined
+    assert "did not run to the end" in joined and "could not be started" in joined
     assert "Permission denied" in joined
 
 
@@ -4807,10 +5118,12 @@ def test_a_passing_draft_makes_one_commit_and_leaves_a_clean_tree(world: World) 
         assert name in committed, name
 
 
-def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: World) -> None:
+def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Criterion 18. Planted fault: the diagnostics not passed to the second prompt.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
@@ -4822,8 +5135,8 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: 
                 },
             ),
         ],
-        docs=[red, {"stdout": "green\n"}],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red)
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 2
     assert world.calls("claude") == []
@@ -4835,10 +5148,10 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: 
     assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex-repair"
 
 
-def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World) -> None:
+def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 19. Planted fault: the GLM route on `glm-5.3-flash`, a shell tool, or a fourth attempt.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
         claude=[
@@ -4849,8 +5162,8 @@ def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World) -> None:
                 },
             }
         ],
-        docs=[red, red, {"stdout": "green\n"}],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=2)
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 2
     (call,) = world.calls("claude")
@@ -4904,10 +5217,10 @@ def test_a_failed_draft_call_saves_the_attempt_before_putting_back(world: World)
     assert refs[0] in world.text()
 
 
-def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> None:
+def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 21. Planted fault: the tree put back after a post-run failure.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[
             codex_ok(
@@ -4920,8 +5233,8 @@ def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> Non
             ),
             codex_ok("T2", "passed on the tree the first attempt left"),
         ],
-        docs=[red, {"stdout": "green\n"}],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red)
     assert world.run("draft") == 0
     (block,) = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]]
     files = "\n".join(block)
@@ -4932,18 +5245,20 @@ def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> Non
     assert "plans/changes/demo/spec.md" in committed and "plans/changes/demo/plan.md" in committed
 
 
-def test_three_failed_draft_attempts_exit_1_without_a_commit(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_three_failed_draft_attempts_exit_1_without_a_commit(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     # Criterion 22. Planted fault: the loop ends without raising, or a commit is still made.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[
             codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
             codex_ok("T2", "again"),
         ],
         claude=[{"stdout": "glm"}],
-        docs=[red, red, red],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=99)
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
@@ -4964,32 +5279,34 @@ def test_a_codex_draft_never_reads_the_glm_key(world: World, monkeypatch: pytest
     assert world.run("draft") == 0
 
 
-def test_a_missing_glm_key_refuses_the_glm_draft_attempt(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_missing_glm_key_refuses_the_glm_draft_attempt(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     # Criterion 24. Planted fault: a `None` key passed to the GLM call.
     draft_world(world)
     Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
         claude=[{"stdout": "must not run"}],
-        docs=[red, red],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=2)
     assert world.run("draft") == 2
     assert len(world.calls("codex")) == 2 and world.calls("claude") == []
     assert "GLM_KEY" in capsys.readouterr().err
 
 
 def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
-    world: World, capsys: pytest.CaptureFixture[str]
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Criterion 25. Planted fault: the scan skipped on the GLM route.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "glm drafted", "plant": {"plans/changes/demo/spec.md": "the key was @KEY@\n"}}],
-        docs=[red, red, {"stdout": "green\n"}],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=2)
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 2
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
@@ -5001,16 +5318,16 @@ def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
 
 
 def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
-    world: World, capsys: pytest.CaptureFixture[str]
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Repair L2-4. Planted fault: the failed-call branch scans nothing, so the key stays in findings.md.
     draft_world(world)
-    red = red_verify(OTHER_RED)
+    red = red_verify(OTHER_RED)["stdout"]
     world.script(
         codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
-        docs=[red, red],
     )
+    gate_red_then_green(LocalCommands(monkeypatch), red, reds=2)
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 2
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
@@ -5182,14 +5499,16 @@ def test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole
 
 def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World) -> None:
     # Criterion 2. Planted fault: a snapshot taken at the baseline, before the route block or after verify.
+    # The model's own new files are text and binary, not production code: new `.py` files would
+    # refuse for want of tests before any snapshot could be taken.
     red = "\n".join(_gate("pytest", ["FAILED src/test_app.py - assertion"], "red"))
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"src/a.py": "alpha\nbeta\n"}},
+            {"stdout": "first", "plant": {"src/a.txt": "alpha\nbeta\n"}},
             {
                 "stdout": "second",
-                "plant": {"src/b.py": "bravo\n", "src/app.py": "value = 22\n", "src/blob.bin": "a\x00b"},
-                "delete": ["src/a.py"],
+                "plant": {"src/b.txt": "bravo\n", "src/app.py": "value = 22\n", "src/blob.bin": "a\x00b"},
+                "delete": ["src/a.txt"],
             },
             {
                 "stdout": "third",
@@ -5203,13 +5522,13 @@ def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World
     assert len(blocks_) == 3
     assert set(files_of(blocks_[0])) == {
         "Files the attempt changed (lines added, removed):",
-        "- `src/a.py` +2 -0",
+        "- `src/a.txt` +2 -0",
     }
     assert set(files_of(blocks_[1])) == {
         "Files the attempt changed (lines added, removed):",
-        "- `src/a.py` +0 -2",
+        "- `src/a.txt` +0 -2",
         "- `src/app.py` +1 -1",
-        "- `src/b.py` +1 -0",
+        "- `src/b.txt` +1 -0",
         "- `src/blob.bin` binary",
     }
     assert set(files_of(blocks_[2])) == {
@@ -5221,7 +5540,9 @@ def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World
 
 
 def test_a_failed_attempt_that_changed_nothing_says_so(world: World) -> None:
-    # Criterion 3. Planted fault: an empty list renders as a bare heading.
+    # Criterion 3. Planted fault: an empty list renders as a bare heading. The first attempt writes
+    # nothing, so its targeted gates run green but the no-work rule rejects it; the declared retry
+    # work of the second carries the run.
     world.script(
         claude=[
             {"stdout": "nothing"},
@@ -5233,10 +5554,10 @@ def test_a_failed_attempt_that_changed_nothing_says_so(world: World) -> None:
                 },
             },
         ],
-        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
-    (block,) = quote_blocks(world.text())
+    # The passing attempt's runner-owned scope block follows the failed attempt's own.
+    block = quote_blocks(world.text())[0]
     assert "Files the attempt changed: none." in block
 
 
@@ -5407,11 +5728,9 @@ def test_a_passing_attempt_leaves_only_its_audit_line(world: World, passing: str
 def test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Criterion 6. Planted fault: the loop raises before the last block.
-    world.script(
-        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
-        make=[{"stdout": "red", "exit": 1}] * 3,
-    )
+    # Criterion 6. Planted fault: the loop raises before the last block. No attempt writes
+    # anything, so the no-work rule rejects each one, whatever its targeted checks said.
+    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}])
     assert world.run("implement") == 1
     blocks_ = quote_blocks(world.text())
     assert [block[0] for block in blocks_] == [
@@ -5426,7 +5745,9 @@ def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Criteria 1, 6 and 8. Planted fault: a CallFailed from the verify launch escapes `implement` untouched,
-    # or is turned into retry diagnostics so that further model attempts start.
+    # or is turned into retry diagnostics so that further model attempts start. The attempt
+    # declares work in an input kind the targeted selector does not cover, so the route is the
+    # admitted full `make verify` — whose launch failure is fatal, not a retry.
     original_launch = stage2.launch
 
     def no_make(command, root, env, secret=None, **kwargs):
@@ -5435,7 +5756,13 @@ def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit
         return original_launch(command, root, env, secret, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", no_make)
-    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}], make=[{"stdout": "green"}] * 3)
+    world.script(
+        claude=[
+            {"append": {"src/scenario-work.txt": "declared attempt work\n"}, "stdout": "one"},
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green"}],
+    )
     assert world.run("implement") == 1
     blocks_ = quote_blocks(world.text())
     assert [block[0] for block in blocks_] == ["Attempt 1 (flash) failed its post-run checks."]
@@ -5508,14 +5835,14 @@ def test_measuring_files_stores_no_key_the_model_wrote(world: World) -> None:
 
 def test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it(world: World) -> None:
     # Criterion 9. Planted fault: the credential scan before the second snapshot skipped on the Sonnet route.
-    red = "\n".join(_gate("pytest", ["E   AssertionError"], "red"))
+    # The first two attempts write nothing, so the no-work rule rejects them; the third attempt's
+    # key write the credential scan refuses before its checks.
     world.script(
         claude=[
             {"stdout": "one"},
             {"stdout": "two"},
             {"stdout": "fallback", "plant": {"src/app.py": f"credential = '{KEY}'\n"}},
         ],
-        make=[{"stdout": red, "exit": 1}, {"stdout": red, "exit": 1}],
     )
     assert world.run("implement") == 2
     assert KEY not in (world.root / "src/app.py").read_text(encoding="utf-8")
@@ -5687,11 +6014,28 @@ def venv_pytest(world: World, executable: bool = True) -> None:
     (world.root / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
 
 
+A_FIX_TEST = (
+    "from pathlib import Path\n\n\ndef test_a_runs():\n"
+    '    value = (Path(__file__).resolve().parent.parent / "scripts" / "a.py").read_text(encoding="utf-8")\n'
+    '    assert "a" in value\n'
+)
+
+B_FIX_TEST = (
+    "from pathlib import Path\n\n\ndef test_b_runs():\n"
+    '    value = (Path(__file__).resolve().parent.parent / "scripts" / "b.py").read_text(encoding="utf-8")\n'
+    '    assert "b" in value\n'
+)
+
+
 def formatted_attempt(**more: object) -> dict:
-    """One Flash attempt that plants an unformatted `scripts/a.py` and measures the plan."""
+    """One Flash attempt that plants an unformatted `scripts/a.py`, the test that reaches it, and a plan line.
+
+    The linked test keeps the implement route's new-code guard silent, so the attempt reaches the
+    format step and the checks this suite observes; a `plant=` kwarg replaces both files together.
+    """
     return {
         "stdout": "implemented",
-        "plant": {"scripts/a.py": "a=1\n"},
+        "plant": {"scripts/a.py": "a=1\n", "tests/test_a.py": A_FIX_TEST},
         "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"},
         **more,
     }
@@ -5703,31 +6047,24 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
     # The modified, already tracked `scripts/old.py` must stand among them: dropping modified
     # tracked files from the targets would pass while only newly created files carry the step.
     # After the format step the read-only cheap checks repeat the same targets, and the changed
-    # test file is pytest's sole explicit target (bead coding-harness-5tyh).
+    # test file is pytest's sole explicit target (bead coding-harness-5tyh). The step is
+    # `verify_attempt`'s own in both verification modes, so the exact commands are observed on the
+    # full route, where no model call takes part in the sequence.
     venv_ruff(world)
     (world.root / "scripts/old.py").write_text("x = 1\n", encoding="utf-8")
     (world.root / "scripts/gone.py").write_text("y = 2\n", encoding="utf-8")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "an unformatted neighbour, a file the attempt deletes")
-    world.script(
-        claude=[
-            formatted_attempt(
-                plant={
-                    "scripts/a.py": "a=1\n",
-                    "scripts/old.py": "x=1\n",
-                    "tests/test_b.py": "def test_b():\n    assert 1\n",
-                    "src/c.py": "c = 3\n",
-                    "scripts/notes.md": "# notes\n",
-                },
-                delete=["scripts/gone.py"],
-            )
-        ],
-        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}, {}, {}],
-        make=[{"stdout": "green\n"}],
-    )
-    assert world.run("implement") == 0
+    (world.root / "scripts/a.py").write_text("a=1\n", encoding="utf-8")
+    (world.root / "scripts/old.py").write_text("x=1\n", encoding="utf-8")
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests/test_b.py").write_text("def test_b():\n    assert 1\n", encoding="utf-8")
+    (world.root / "src/c.py").write_text("c = 3\n", encoding="utf-8")
+    (world.root / "scripts/notes.md").write_text("# notes\n", encoding="utf-8")
+    (world.root / "scripts/gone.py").unlink()
+    world.script(ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}, {}, {}], make=[{"stdout": "green\n"}])
+    stage2.verify_attempt(world.root, world.plan)
     assert [call["name"] for call in world.calls()] == [
-        "claude",
         "ruff",
         "ruff",
         "ruff",
@@ -5777,12 +6114,27 @@ def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) ->
 
 def test_without_a_target_file_no_ruff_starts(world: World) -> None:
     # Criteria 3 and 8. Planted fault: ruff started with an empty path list, or the commit heading
-    # written with no line below it.
+    # written with no line below it. The attempt changes only the tracked `src/app.py`: no
+    # `scripts/`/`tests/` Python is touched, so the format step and the cheap checks start no ruff,
+    # and the touched code without a linked test keeps the admitted full fallback.
     venv_ruff(world)
-    successful_implementation(world)
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 3\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
     assert world.run("implement") == 0
     assert world.calls("ruff") == []
-    assert git(world.root, "log", "-1", "--format=%B") == "feat(demo): implement accepted plan"
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]]
+    message = git(world.root, "log", "-1", "--format=%B")
+    # No format line: the subject stands alone above the runner's verification-scope section.
+    assert message.startswith("feat(demo): implement accepted plan\n\n" + stage2.SCOPE_COMMIT_HEADING)
+    assert stage2.FORMAT_COMMIT_HEADING not in message
 
 
 def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: World) -> None:
@@ -5802,11 +6154,18 @@ def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: Worl
 def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> None:
     # Criterion 5. Planted fault: the ruff launch given `glm_env` or the caller's environment.
     venv_ruff(world)
-    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    # The extra `src/app.py` edit has no linked test, so the attempt takes the admitted full fallback
+    # and a `make` call exists to compare with; the targeted preparation's ruff runs without the
+    # admission names that only the full check's `make` carries.
+    attempt = formatted_attempt(
+        plant={"scripts/a.py": "a=1\n", "tests/test_a.py": A_FIX_TEST, "src/app.py": "value = 2\n"}
+    )
+    world.script(claude=[attempt], ruff=[{}] * 4, make=[{"stdout": "green\n"}])
     assert world.run("implement") == 0
     make_env = world.calls("make")[0]["env"]
+    assert world.calls("ruff"), "the attempt started no ruff"
     for call in world.calls("ruff"):
-        assert call["env"] == make_env
+        assert call["env"] == {name: make_env[name] for name in call["env"]}, "ruff got another environment"
         assert KEY not in call["env"].values()
         for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
             assert name not in call["env"], name
@@ -5816,11 +6175,13 @@ def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) 
     # Criterion 6. Planted fault: the second snapshot taken after `verify_attempt`. The stand-in
     # spends one ruff step per call - check and format each take one - so the `{}` entries put each
     # plant on a format call, the only place its bytes survive to a snapshot: the faulted snapshot
-    # counts ruff's four lines in block 1 and names `scripts/a.py` in block 2.
+    # counts ruff's four lines in block 1 and names `scripts/a.py` in block 2. The first two
+    # attempts end red at a gate (the `sh` stand-in answers the first gate of each targeted check
+    # red), so the snapshots stay comparable; the third runs the full fallback green.
     venv_ruff(world)
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"scripts/a.py": "a=1\n"}},
+            {"stdout": "first", "plant": {"scripts/a.py": "a=1\n", "tests/test_a.py": A_FIX_TEST}},
             {"stdout": "second"},
             {
                 "stdout": "third",
@@ -5836,26 +6197,33 @@ def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) 
             {},
             {"plant": {"scripts/a.py": "a = 1\n"}},
         ],
-        make=[{"stdout": "red", "exit": 1}, {"stdout": "red", "exit": 1}, {"stdout": "green\n"}],
+        sh=[{"stdout": "checks failed\n", "exit": 1}, {"stdout": "checks failed\n", "exit": 1}],
     )
     assert world.run("implement") == 0
     blocks_ = quote_blocks(world.text())
-    assert files_of(blocks_[0]) == [
-        "Files the attempt changed (lines added, removed):",
-        "- `scripts/a.py` +1 -0",
-    ]
+    # The attempt's own two files: the code with its one line, and the test that reaches it. A
+    # snapshot taken after the format step would count ruff's four lines instead of the one.
+    listed = files_of(blocks_[0])
+    assert listed[0] == "Files the attempt changed (lines added, removed):"
+    assert "- `scripts/a.py` +1 -0" in listed
+    assert sorted(line.split("`")[1] for line in listed[1:]) == ["scripts/a.py", "tests/test_a.py"]
     assert "Files the attempt changed: none." in blocks_[1]
 
 
 def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world: World) -> None:
-    # Criterion 7. Planted fault: the format line appended after the other entries.
+    # Criterion 7. Planted fault: the format line appended after the other entries. The first
+    # gate of the attempt's targeted check answers red through the `sh` stand-in.
     venv_ruff(world)
     red = "\n".join(_gate("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"], "red"))
     world.script(
         claude=[
             {
                 "stdout": "first",
-                "plant": {"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"},
+                "plant": {
+                    "scripts/a.py": "a=1\n",
+                    "tests/test_a.py": A_FIX_TEST,
+                    "tests/test_b.py": "def test_b():\n    assert 1\n",
+                },
             },
             {
                 "stdout": "second",
@@ -5866,7 +6234,7 @@ def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world
             },
         ],
         ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
-        make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
+        sh=[{"stdout": red, "exit": 1}],
     )
     assert world.run("implement") == 0
     first = "- Runner format before post-run verification: ruff changed `scripts/a.py`."
@@ -5881,11 +6249,16 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
     venv_ruff(world)
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "scripts/b.py": "b=1\n"}},
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n", "scripts/b.py": "b=1\n", "tests/test_b.py": B_FIX_TEST},
+            },
             formatted_attempt(),
         ],
         # Four ruff calls per attempt: the format step's check and format, then the cheap checks.
         # Each plant stands on a format call, the only place its bytes survive to a snapshot.
+        # The first attempt keeps the full fallback (`src/app.py` has no linked test), so its red
+        # is a `make` red; the second attempt is covered and runs the targeted checks green.
         ruff=[
             {},
             {"plant": {"scripts/b.py": "b = 1\n"}},
@@ -5899,12 +6272,15 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert git(world.root, "log", "-1", "--format=%B") == (
+    message = git(world.root, "log", "-1", "--format=%B")
+    # The format section stands first; the runner's verification-scope section follows it.
+    assert message.startswith(
         "feat(demo): implement accepted plan\n\n"
         "Runner format before post-run verification (ruff check --fix with safe fixes only, then ruff format):\n"
         "- Attempt 1 (flash): ruff changed `scripts/b.py`.\n"
         "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
     )
+    assert stage2.SCOPE_COMMIT_HEADING in message
 
 
 def test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line(world: World) -> None:
@@ -6015,26 +6391,35 @@ def test_an_unreadable_target_is_named_by_its_repository_path(world: World) -> N
 def test_a_target_named_with_a_line_break_keeps_the_format_line_one_line(world: World) -> None:
     # Repair round 4 (F-1). Planted fault: the target path interpolated verbatim, so a newline in
     # its name split the format line in two - in the block's entry and the checkpoint commit message.
+    # The name is a test module's: new production code under it would need a test that reaches it
+    # (the implement route's new-code guard), and no test can name a path with a line break.
     venv_ruff(world)
-    name = "scripts/a\nb.py"
+    name = "tests/test_a\nb.py"
     world.script(
-        claude=[formatted_attempt(plant={name: "a=1\n"})],
-        ruff=[{}, {"plant": {name: "a = 1\n"}}],
+        claude=[formatted_attempt(plant={name: "def test_x():\n  assert 1\n"})],
+        ruff=[{}, {"plant": {name: "def test_x():\n    assert 1\n"}}],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert world.calls("ruff")[1]["argv"] == ["format", "--force-exclude", "--no-cache", name]
+    format_call = world.calls("ruff")[1]
+    assert format_call["argv"][:3] == ["format", "--force-exclude", "--no-cache"]
+    assert name in format_call["argv"], "the target with the line break did not travel verbatim"
     message = git(world.root, "log", "-1", "--format=%B")
-    assert "- Attempt 1 (flash): ruff changed `scripts/a\\nb.py`." in message.splitlines()
+    assert "- Attempt 1 (flash): ruff changed `tests/test_a\\nb.py`." in message.splitlines()
 
 
 def test_a_commit_message_holds_no_fragment_of_the_key(world: World) -> None:
-    # Criterion 12. Planted fault: the format line built without `scrub`.
+    # Criterion 12. Planted fault: the format line built without `scrub`. The fragment-named file
+    # is tracked before the run: a link test for it could not carry the name's fragment in its
+    # content, and the modified tracked code keeps the admitted full fallback.
     venv_ruff(world)
     name = f"scripts/k{KEY[3:15]}.py"
+    (world.root / name).write_text("a=1\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a tracked target whose name holds a key fragment")
     world.script(
-        claude=[formatted_attempt(plant={name: "a=1\n"})],
-        ruff=[{"plant": {name: "a = 1\n"}}],
+        claude=[formatted_attempt(plant={name: "a=2\n"})],
+        ruff=[{}, {"plant": {name: "a = 1\n"}}],
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
@@ -6066,12 +6451,13 @@ def test_a_long_diagnostic_line_is_cut_with_a_marker(world: World) -> None:
 
 
 def test_a_long_file_list_is_cut_with_a_count(world: World) -> None:
-    # Criterion 14. Planted fault: no cap on the list.
+    # Criterion 14. Planted fault: no cap on the list. The bulk files are text, not production
+    # code: sixty new `.py` files would refuse for want of tests before any check could count them.
     world.script(
         claude=[
             {
                 "stdout": "first",
-                "plant": {f"src/bulk-{n:02d}.py": f"value = {n}\n" for n in range(60)},
+                "plant": {f"src/bulk-{n:02d}.txt": f"value = {n}\n" for n in range(60)},
             },
             {
                 "stdout": "fixed",
@@ -6084,18 +6470,19 @@ def test_a_long_file_list_is_cut_with_a_count(world: World) -> None:
         make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
-    (block,) = quote_blocks(world.text())
+    block = quote_blocks(world.text())[0]  # the passing attempt's scope block follows it
     assert len([line for line in block if line.startswith("- `src/bulk-")]) == 40
     assert "- … and 20 more files" in block
-    assert "src/bulk-40.py" not in "\n".join(block)
+    assert "src/bulk-40.txt" not in "\n".join(block)
 
 
 def test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Criterion 15. Planted fault: the block reads the key to scrub it.
+    # Criterion 15. Planted fault: the block reads the key to scrub it. The attempt writes nothing,
+    # so the no-work rule rejects it whatever its targeted gates said.
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
-    world.script(claude=[{"stdout": "nothing"}], make=[{"stdout": "red", "exit": 1}])
+    world.script(claude=[{"stdout": "nothing"}])
     assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 1
     (block,) = quote_blocks(world.text())
     assert block[0] == "Attempt 1 (stage-1) failed its post-run checks."
@@ -6128,6 +6515,32 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
     )
     with pytest.raises(stage2.CallFailed):
         stage2.checkpoint(tmp_path, "demo", "base")
+
+
+@pytest.mark.parametrize("exit_code", [1, 128])
+def test_checkpoint_git_failure_keeps_every_diagnostic_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, exit_code: int
+) -> None:
+    """F6-6: ancestry failures must carry the complete Git reason through checkpoint's error."""
+    monkeypatch.setattr(stage2, "_held_prefixes", lambda _root: ())
+    monkeypatch.setattr(stage2, "changed_paths", lambda _root: set())
+    monkeypatch.setattr(stage2, "uncommittable", lambda *_args: [])
+    monkeypatch.setattr(stage2, "_git_output", lambda _root, *args: "1" if args[0] == "rev-list" else "")
+    diagnostic = "fatal: could not read baseline object\n\nhint: restore the missing object\n"
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.checkpoint(tmp_path, "demo", "base")
+    except stage2.CallFailed as error:
+        message = str(error)
+    else:
+        pytest.fail("a failed ancestry command must refuse the checkpoint")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"checkpoint discarded Git's diagnostic: {line}"
 
 
 @pytest.mark.parametrize("verb", ["explore", "implement"])
@@ -6302,7 +6715,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
         {"pi_version": f"{stage2.PI_VERSION} (dev)"},
         {"pi_version": ""},
         {"pi_version": stage2.PI_VERSION, "pi_version_exit": 1},
-        {"pi_version": stage2.PI_VERSION, "pi_version_sleep": 30},
+        "too-slow",
         "absent",
     ],
     ids=["newer", "suffix", "silent", "non-zero", "too-slow", "absent"],
@@ -6316,13 +6729,25 @@ def test_a_pi_off_the_pin_is_refused(
         "the runner's pin must be the manifest's, not a literal of its own"
     )
     monkeypatch.setattr(stage2, "PI_VERSION_SECONDS", 0.5)
+    programs = None
     steps = {"pi": [{"stdout": rows(1)}] * 3}
     if fault == "absent":
         (world.bin / "pin-pi").unlink()
         world.script(**steps)
+    elif fault == "too-slow":
+        # A probe past the pin limit is stopped at the injected expiry, never waited out on the
+        # machine: the doubled communicate raises what a hung wrapper would have caused.
+        clock = FakeClock(monkeypatch, UTC_START)
+        version_argv = [str(stage2.PI_WRAPPER), "--version"]
+        plans = [(lambda command: command == version_argv, {"duration": 30.0})]
+        programs = ScriptedPrograms(monkeypatch, clock, plans)
+        world.script(**steps)
     else:
         world.script(**steps, **fault)
     assert world.run(verb) == 2, "a Pi off the pin must refuse with exit 2"
+    if programs is not None:
+        (handed,) = programs.waits([str(stage2.PI_WRAPPER), "--version"])
+        assert handed["timeout"] == 0.5 and handed["outcome"] == "timeout", handed
     assert world.calls() == [], "a call started"
     assert not world.record().exists()
     assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
@@ -6506,17 +6931,26 @@ def test_verify_step_limit_is_45_minutes() -> None:
     assert stage2.VERIFY_SECONDS == 45 * 60
 
 
-def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
+def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """R-20: the runner's own steps are bounded, and the abort names the limit."""
+    # Planted fault: the timeout translation loses the execution-limit diagnostic, or the
+    # bounded kill drain after the stop lost its bound.
+    clock = FakeClock(monkeypatch, UTC_START)
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda seen: seen == command, {"duration": 30.0})])
     minutes = stage2.VERIFY_SECONDS // 60
     with pytest.raises(stage2.CallFailed, match=f"after {minutes} minutes"):
         stage2.launch(
-            [sys.executable, "-c", "import time; time.sleep(30)"],
+            command,
             tmp_path,
             {**os.environ},
             timeout=0.2,
             limit=f"the runner's step limit after {minutes} minutes",
         )
+    handed = programs.of(command)
+    assert handed[0]["timeout"] == 0.2, "the step was handed more than its allowance"
+    assert handed[0]["outcome"] == "timeout", "the overstay was not simulated at the allowance"
+    assert handed[1]["timeout"] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
 
 
 def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
@@ -6526,15 +6960,25 @@ def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
     day = pinned_stamp_date(monkeypatch, dt.date(2026, 11, 10))
     marker = tmp_path / "renderer-ran"
     script = Path("scripts") / Path(plans_registry.__file__).name
+    # The linked test keeps the new-code guard silent: the preflight must not spend the attempt
+    # on the planted renderer, so the green route proves the runner never executes it.
+    covering = {
+        "tests/test_registry_guard.py": (
+            "from pathlib import Path\n\n\ndef test_registry_guard():\n"
+            '    assert (Path(__file__).resolve().parent.parent / "scripts" / "plans_registry.py").name\n'
+        )
+    }
     world.script(
         claude=[
             {
                 "stdout": "implemented",
-                "plant": {str(script): f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"},
+                "plant": {
+                    str(script): f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n",
+                    **covering,
+                },
                 "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
             }
         ],
-        make=[{"stdout": "green\n"}],
     )
     checking_derived_make(world, day.current)
     code = world.run("implement")
@@ -6591,28 +7035,97 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
-def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
-    """O188-4: a grandchild of the stopped step does not survive."""
-    pidfile = tmp_path / "grandchild.pid"
-    started = time.monotonic()
-    with pytest.raises(stage2.CallFailed, match="stopped by"):
-        stage2.launch(
-            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
-            tmp_path,
-            {**os.environ},
-            timeout=1,
-            limit="the test limit",
-        )
-    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
-    pid = int(pidfile.read_text())
-    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
+def _complete_pid(pidfile: Path) -> int | None:
+    """The PID a child recorded, or None while the record is missing or incomplete.
+
+    Readiness is a newline-terminated integer, never the file's existence: a child descheduled
+    between creating the file and writing its PID leaves an empty or partial record.
+    """
+    try:
+        record = pidfile.read_text()
+    except FileNotFoundError:
+        return None
+    if not record.endswith("\n") or not record[:-1].isdecimal():
+        return None
+    return int(record)
+
+
+def _await_complete_pid(pidfile: Path, rounds: int) -> int | None:
+    for _ in range(rounds):  # watchdog only: bounds a wedged start, never a verdict
+        pid = _complete_pid(pidfile)
+        if pid is not None:
+            return pid
         time.sleep(0.02)
-    os.kill(pid, 9)
-    pytest.fail("the grandchild of the timed-out step is still running")
+    return None
+
+
+def _kill_known(pid: int | None) -> None:
+    if pid is not None:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [("", None), ("12", None), ("12\n", 12), ("1x\n", None), ("\n", None)],
+    ids=["created-empty", "partial-no-newline", "complete", "garbled", "newline-only"],
+)
+def test_a_pid_record_is_ready_only_when_complete(tmp_path: Path, record: str, expected: int | None) -> None:
+    """F6-3: a created but empty or partial PID file is not readiness."""
+    pidfile = tmp_path / "child.pid"
+    assert _complete_pid(pidfile) is None, "a missing record read as ready"
+    pidfile.write_text(record)
+    assert _complete_pid(pidfile) == expected
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-4: a grandchild of the stopped step does not survive."""
+    # Planted fault: a timed-out group's descendant survives, or the post-kill drain is unbounded.
+    pidfile = tmp_path / "grandchild.pid"
+    handed: list[float | None] = []  # every timeout a communicate was given, the drain's included
+    known: list[int] = []  # the grandchild's PID once complete, so cleanup can always reach it
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the grandchild's complete PID is held before the expiry is injected.
+                pid = _await_complete_pid(pidfile, 200)
+                assert pid is not None, "the timed step never wrote its grandchild's complete pid"
+                known.append(pid)
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    # The record is written to a temporary file and renamed into place: the name appears only complete.
+    staged = f"{pidfile}.tmp"
+    try:
+        with pytest.raises(stage2.CallFailed, match="stopped by"):
+            stage2.launch(
+                ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {staged} && mv {staged} {pidfile}; wait"],
+                tmp_path,
+                {**os.environ},
+                timeout=1,
+                limit="the test limit",
+            )
+        assert handed[0] == 1, "the step was handed more than its allowance"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
+        (pid,) = known
+        for _ in range(100):  # watchdog only: the kill is delivered at once, the exit is reaped a moment later
+            if not _child_alive(pid):
+                return
+            time.sleep(0.02)
+        pytest.fail("the grandchild of the timed-out step is still running")
+    finally:
+        # cleanup: every known PID is killed; a missing or already dead one is tolerated
+        _kill_known(known[0] if known else _complete_pid(pidfile))
 
 
 def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
@@ -6981,8 +7494,8 @@ def test_preexisting_venv_root_link_keeps_modified_tools_refused(
     monkeypatch.setattr(stage2, "launch", forbidden_launch)
     if runner == "draft":
         ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-        problems, owed = stage2.verify_draft(world.root, ctx, None, [], before)
-        assert not owed
+        problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], before)
+        assert not _owed
     else:
         problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
     assert len(problems) == 1 and f"`.venv/{relative}`" in problems[0]
@@ -7032,8 +7545,8 @@ def test_venv_root_link_and_unreadable_directory_stop_tools(
     try:
         if runner == "draft":
             ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-            problems, owed = stage2.verify_draft(world.root, ctx, None, [], before)
-            assert not owed
+            problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], before)
+            assert not _owed
         else:
             problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
         assert len(problems) == 1 and refused in problems[0]
@@ -7127,8 +7640,8 @@ def test_venv_cache_cleanup_failure_stops_runner_tools(
     monkeypatch.setattr(stage2, "launch", forbidden_launch)
     if runner == "draft":
         ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-        problems, owed = stage2.verify_draft(world.root, ctx, None, [], before)
-        assert not owed
+        problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], before)
+        assert not _owed
     else:
         problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
     assert len(problems) == 1 and refused in problems[0], failure
@@ -7301,7 +7814,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
     for call in world.calls("codex"):
         argv = call["argv"]
         assert argv[:3] == ["exec", "resume", "T1"]
-        assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+        assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
         assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in argv
         assert 'sandbox_mode="read-only"' in argv
         assert "--ephemeral" not in argv and "-s" not in argv
@@ -7827,7 +8340,7 @@ def test_the_review_prompts_give_both_paths() -> None:
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
     assert review_prompt_problems(spec_review, review) == []
     assert review_prompt_problems(
-        spec_review.replace("python3 scripts/stage2.py spec-review <change>", "codex exec -m gpt-6.1-sol"), review
+        spec_review.replace("python3 scripts/stage2.py spec-review <change>", "codex exec -m gpt-6.1-terra"), review
     )
     assert review_prompt_problems(spec_review.replace("Opus 5.5", "Haiku 4.5"), review)
     assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
@@ -8043,10 +8556,27 @@ def test_a_call_over_the_time_limit_is_stopped(
     """Criterion 4/15: a member that outlasts the limit is stopped; stopping every member fails the attempt."""
     assert stage2.REVIEWER_MINUTES == 45
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
-    world.script(pi=[{"stdout": "too late", "sleep": 30}, {"stdout": "too late", "sleep": 30}])
-    started = time.monotonic()
+    # Planted fault: simulated expiry fails to stop a reviewer, or a stop consumes the round.
+    clock = FakeClock(monkeypatch, UTC_START)
+    launched_both = threading.Event()  # no member's clock advance runs before both have launched
+
+    def reviewer_plan(plan: dict) -> tuple:
+        # Only the reviewer calls are doubled (`--print`); the discovery refresh and listing keep
+        # running on the stand-in so the round reaches its members with a real refreshed store.
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and "--print" in command, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            reviewer_plan({"duration": 30.0, "stdout": "too late", "gate": launched_both, "gate_at": 2}),
+        ],
+    )
     assert world.run("review-loop") == 1
-    assert time.monotonic() - started < 15
+    handed = programs.waits()
+    assert len(handed) == 2, "a stopped member was replaced past the shared expiry"
+    assert all(row["outcome"] == "timeout" for row in handed), handed
+    assert all(abs(row["timeout"] - stage2.REVIEWER_MINUTES * 60) < 1e-9 for row in handed), handed
     assert not world.record().exists()
     # Since DL-B-14 the stop names the round's one deadline, which a single member's call shares.
     assert "stopped by the round time limit of" in capsys.readouterr().err
@@ -8163,30 +8693,36 @@ def test_a_restart_reason_cannot_create_rounds_or_state(world: World) -> None:
     assert stage2.restarted_fresh(None, text)
 
 
-def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
+def test_both_swarms_run_in_parallel_as_one_round(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 2: each swarm's members start together and merge into one round with one id series."""
-    barrier = str(world.root / ".barrier")
-    world.script(
-        pi=[
-            {
-                "model": "acme-v1-free",
-                "stdout": rows(1, "A"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "beacon-2-free",
-                "stdout": rows(1, "B"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    # Planted fault: one member waits for another to finish before entering - sequential swarm.
+    # Concurrency is proven with a launch gate inside run_reviewer itself: every member blocks
+    # until all members are inside, so only truly concurrent members answer within the watchdog.
+    free = ["acme-v1-free", "beacon-2-free"]
+    flash = ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+
+    def gate_answers(members: list[str], answers: dict[str, str]) -> dict:
+        inside: list[str] = []
+        all_inside = threading.Event()
+        record: dict = {}
+
+        def probe(_ctx, member, _prompt, _key, **_kwargs):
+            inside.append(member)
+            if len(inside) == len(members):
+                all_inside.set()
+            together = all_inside.wait(30.0)  # watchdog only: bounds a wedged round, never a verdict
+            if together:
+                record.setdefault("seen_together", sorted(inside))
+            else:
+                inside.remove(member)  # a stale entry must not complete a later member's snapshot
+            return answers[member]
+
+        monkeypatch.setattr(stage2, "run_reviewer", probe)
+        return record
+
+    seen = gate_answers(free, {free[0]: rows(1, "A"), free[1]: rows(1, "B")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the free swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(free), "the free swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 1") == 1, "the swarm round got more than one heading"
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
@@ -8194,29 +8730,9 @@ def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
     assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the id series collided or skipped a member"
     assert [cells[6] for cells in rows_] == list(TEST_FREE), "a row carries the wrong member"
     decide_record(world, status=FIXED)
-    shutil.rmtree(world.root / ".barrier")
-    (world.bin / "calls.jsonl").unlink()
-    world.script(
-        pi=[
-            {
-                "model": "deepseek-v4.1-flash",
-                "stdout": rows(1, "D"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "mimo-v2.6-flash",
-                "stdout": rows(1, "M"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    seen = gate_answers(flash, {flash[0]: rows(1, "D"), flash[1]: rows(1, "M")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the Flash swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(flash), "the Flash swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 2") == 1, "the Flash swarm ran as sequential rounds"
     assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
@@ -8385,15 +8901,14 @@ def test_no_second_call_after_the_round_deadline(world: World, monkeypatch, caps
     """Criterion 5. Planted fault: a second call starts after the deadline."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def malformed_at_the_deadline(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", malformed_at_the_deadline)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the expired deadline still started an asked-again call"
@@ -8471,15 +8986,14 @@ def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, mon
 
 def test_a_round_failed_past_the_deadline_names_the_skipped_retry(world: World, monkeypatch) -> None:
     """Plant expiry after the first answers: the no-round audit must retain the reason."""
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls = []
 
     def expire(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expire)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FREE)]
@@ -8554,14 +9068,30 @@ def test_free_discovery_forces_live_refresh_before_listing(
     assert "not filled" in capsys.readouterr().err
     assert [call.get("kind") for call in world.calls("pi")] == ["refresh"], "the listing ran after a failed refresh"
     assert world.reviews("pi") == [] and not world.record().exists()
+    # The refresh that never ends is stopped at the discovery limit by the injected expiry, not by
+    # a real second of waiting: the clock moves only at the doubled communicate.
+    real_discovery_seconds = stage2.PI_DISCOVERY_SECONDS
     monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", 0.4)
-    (world.bin / "calls.jsonl").unlink()
-    world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_sleep=30)
+    clock = FakeClock(monkeypatch, UTC_START)
+    refresh_argv = [str(stage2.PI_WRAPPER), "update", "--models"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == refresh_argv, {"duration": 30.0})])
+    world.script(pi=[{"stdout": rows(1)}] * 2)
     capsys.readouterr()
+    logged_before = len(world.calls("pi"))
     assert world.run("review-loop") == 2
     assert "no stale cache is listed" in capsys.readouterr().err
-    assert [call.get("kind") for call in world.calls("pi")] == ["refresh"]
-    assert world.reviews("pi") == []
+    # The listing is not doubled: had it run, the genuine stand-in would have logged it.
+    assert world.calls("pi")[logged_before:] == [], "a discovery command ran after the simulated timeout"
+    handed = programs.waits(refresh_argv)
+    assert len(handed) == 1, "the listing ran after a simulated refresh timeout"
+    assert handed[0]["timeout"] == 0.4 and handed[0]["outcome"] == "timeout", handed
+    (drain,) = [row for row in programs.of(refresh_argv) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
+    assert len(programs.launched) == 1, "the doubled refresh was launched more than once"
+    assert world.reviews("pi") == [] and not world.record().exists()
+    # The double ends here: the scenarios below run the genuine stand-in programs at the real limit.
+    programs.plans.clear()
+    monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", real_discovery_seconds)
     # The listing's own agent directory: an invalid catalog id forces the separate agent whose
     # settings are the refresh file's byte copy, and the copy must parse to the same JSON
     # (pi-no-compaction, criterion 1).
@@ -9898,13 +10428,14 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
 
 @pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS"])
 def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
-    """Neither tool route may promise unconditional full verification after a repair."""
+    """No tool route may promise unconditional full verification after a work verb (repair-targeted-check L5-2)."""
     text = getattr(stage2, block)
     assert "before full verification" not in text
     assert "checks and full `make verify` after the call" not in text
-    assert "targeted check for repair" in text
-    assert "full `make verify` for implement" in text
-    assert "full fallback" in text
+    assert "targeted check for implement and repair" in text
+    assert "add its test" in text
+    assert "takes the admitted full `make verify`" in text
+    assert "a targeted red never falls back" in text
     assert "before phase 6" in text
 
 
@@ -9942,15 +10473,17 @@ def test_repair_prompt_consistently_describes_targeted_verification(
 
 
 def test_draft_verification_documentation_describes_targeted_repairs() -> None:
-    """The adjacent comment and docstring must preserve the repair/full-check boundary."""
+    """The adjacent comment and docstring must preserve the targeted/full-check boundary (repair-targeted-check L5-4)."""
     source = inspect.getsource(stage2)
-    comment = source[source.index("# The draft's post-run check") : source.index("DOCS_VERIFY =")]
-    for text in (comment, inspect.getdoc(stage2.verify_draft)):
-        words = " ".join(text.replace("#", "").split())
-        assert "repair takes the targeted check" in words
-        assert "full suite as its fallback and before phase 6" in words
-        assert "Implement and repair keep the full" not in words
-        assert "implement, repair and the orchestrator" not in words
+    comment = source[source.index("# The draft's post-run check") : source.index("def document_gates")]
+    comment_words = " ".join(comment.replace("#", "").split())
+    assert "Implement and repair take the targeted check" in comment_words
+    assert "full `make verify` as the fallback and the fresh full check before phase 6" in comment_words
+    assert "Implement and repair keep the full" not in comment_words
+    assert "implement, repair and the orchestrator" not in comment_words
+    words = " ".join(inspect.getdoc(stage2.verify_draft).split())
+    assert "outside the machine-wide verify admission" in words
+    assert "each gate's exit code decides" in words
 
 
 def test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request(world: World) -> None:
@@ -10696,10 +11229,10 @@ def test_repair_uses_codex_at_max_effort(world: World) -> None:
     assert world.calls("claude") == []
     (call,) = world.calls("codex")
     argv = call["argv"]
-    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["repair"]}"' in argv
     assert "resume" not in argv, "a repair attempt resumed a thread"
-    assert "route codex · endpoint openai-codex · model gpt-6.1-sol" in world.text()
+    assert "route codex · endpoint openai-codex · model gpt-6.1-terra" in world.text()
 
 
 def test_codex_repair_uses_workspace_write_without_bypass(world: World) -> None:
@@ -10840,7 +11373,8 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     for relative, content in inputs.items():
         if relative != "plans/changes/demo/plan.md":
             assert (world.root / relative).read_bytes() == content
-    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in runner_entries(world.plan)[-1]
+    assert runner_entries(world.plan)[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -10947,7 +11481,8 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
         assert f"> - `{relative}`" in world.text()
-    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in runner_entries(world.plan)[-1]
+    assert runner_entries(world.plan)[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -11168,7 +11703,7 @@ def test_repair_routes_glm_5_3_then_its_repair_then_sonnet(world: World) -> None
     assert world.run("repair") == 0
     calls = repair_calls(world)
     models = [call["argv"][call["argv"].index("-m" if call["name"] == "codex" else "--model") + 1] for call in calls]
-    assert models == ["gpt-6.1-sol", "gpt-6.1-sol", "claude-sonnet-5-5"]
+    assert models == ["gpt-6.1-terra", "gpt-6.1-terra", "claude-sonnet-5-5"]
     assert not any("glm" in " ".join(call["argv"][:-1]) for call in calls if call["name"] == "codex")
     assert not any("glm" in " ".join(call["argv"]) for call in calls if call["name"] == "claude")
     assert "Attempt 1 (codex):" in prompt_of(calls[2]) and "Attempt 2 (codex-repair):" in prompt_of(calls[2])
@@ -11276,7 +11811,7 @@ def test_repair_leak_blocks_each_route_without_fallback(
 @pytest.mark.parametrize(
     ("missing", "options", "calls_before"),
     [
-        ("gpt-6.1-sol", (), 0),
+        ("gpt-6.1-terra", (), 0),
         ("claude-sonnet-5-5", ("--stage2-off", "r"), 0),
         ("claude-sonnet-5-5", (), 2),
     ],
@@ -11304,8 +11839,8 @@ def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) 
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, \d+ rules"
     for attempt, route, endpoint, model, reason in (
-        (1, "codex", "openai-codex", "gpt-6.1-sol", ""),
-        (2, "codex-repair", "openai-codex", "gpt-6.1-sol", " · reason first Codex post-run check failed"),
+        (1, "codex", "openai-codex", "gpt-6.1-terra", ""),
+        (2, "codex-repair", "openai-codex", "gpt-6.1-terra", " · reason first Codex post-run check failed"),
         (3, "stage-1", "claude-code-plan", "claude-sonnet-5-5", " · reason two Codex post-run checks failed"),
     ):
         assert re.search(
@@ -11491,7 +12026,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     entries = [line for line in plan.splitlines() if line.endswith("measured by the runner")]
     assert len(entries) == attempt
     assert [line.count("rejected") for line in entries] == [1] * (attempt - 1) + [0]
-    assert entries[-1].endswith("accepted · measured by the runner")
+    assert " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
@@ -11501,12 +12036,24 @@ def runner_entries(plan: Path) -> list[str]:
 
 
 class FakeClock:
-    """Wall and monotonic readings that move only when a test moves them; no sleep, no machine speed."""
+    """Wall, monotonic and local-date readings that move only when a test moves them; no sleep, no machine speed.
+
+    The fake replaces the runner's one clock boundary, `stage2.clock_now`, so
+    the adapters (`utc_now`, `monotonic_now`, `today`, `terms_today`) and every
+    read behind them follow it: measured spans, `remaining`, the round
+    deadlines and the document stamps. The three domains are separate values.
+    The local date stays the machine's real calendar unless a test sets
+    `local_date`, because the gates that compare a stamp against today keep
+    their own clock.
+    """
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, start: dt.datetime, wall_drift: float = 0.0) -> None:
         self.start, self.now, self.wall_drift = start, 0.0, wall_drift
-        monkeypatch.setattr(stage2, "utc_now", self.wall)
-        monkeypatch.setattr(stage2, "monotonic_now", self.mono)
+        self.local_date: dt.date | None = None
+        monkeypatch.setattr(stage2, "clock_now", self.reading)
+
+    def reading(self) -> stage2.ClockReading:
+        return stage2.ClockReading(monotonic=self.mono(), utc=self.wall(), local_date=self.local())
 
     def wall(self) -> dt.datetime:
         # The drift appears once time has passed: a wall clock stepped by the system, which a span must ignore.
@@ -11515,6 +12062,18 @@ class FakeClock:
 
     def mono(self) -> float:
         return 1000.0 + self.now
+
+    def local(self) -> dt.date:
+        return self.local_date if self.local_date is not None else dt.date.today()
+
+    def advance(self, seconds: float) -> None:
+        """Move every domain of the fake on by `seconds`, at the boundary the test names."""
+        self.now += seconds
+
+    def run_past(self, deadline: float) -> None:
+        """Move the fake just past a deadline the runner computed from this same fake."""
+        if self.mono() <= deadline:
+            self.now += deadline - self.mono() + 1.0
 
     def after(self, seconds: float, real):
         """`real` wrapped so that calling it moves the clock by `seconds`."""
@@ -11527,6 +12086,647 @@ class FakeClock:
 
 
 UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
+
+
+# ---------------------------------------------------------------------------
+# The runner's one clock boundary (spec runner-clock, criteria 1, 2 and 5)
+# ---------------------------------------------------------------------------
+
+# The clock sets are shared with the runtime guard (`tests/runner_clock_guard.py`),
+# so the static and the runtime check ban one set. The static guard below is the
+# cheap advisory reading of the source; the runtime guard is the choke point
+# (decisions.md Q-2, spec Boundary).
+TIME_CLOCK_ATTRS = runner_clock_guard.TIME_CLOCK_ATTRS
+TIME_CONVERSION_ATTRS = runner_clock_guard.TIME_CONVERSION_ATTRS
+DATETIME_CLOCK_ATTRS = runner_clock_guard.DATETIME_CLOCK_ATTRS
+CLOCK_MODULES = runner_clock_guard.CLOCK_MODULES
+TIME_NON_CLOCK_ATTRS = runner_clock_guard.TIME_NON_CLOCK_ATTRS
+DATETIME_NON_CLOCK_ATTRS = runner_clock_guard.DATETIME_NON_CLOCK_ATTRS
+
+
+def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
+    """The raw clock acquisitions `source` makes outside the one boundary function.
+
+    The guard is structural rather than a list of spellings:
+
+    - *Bindings.* Every name a module-level or nested binding gives the `time`
+      or `datetime` module, or a chain rooted in it, is resolved: `import`,
+      `import … as`, `from … import` (a star import binds every public name the
+      module has), plain, multiple-target and positional tuple assignment,
+      annotated assignment and the walrus. Bindings join, so a later rebinding
+      never launders an earlier alias, and chains resolve to a fixpoint.
+    - *References, not only calls.* A clock function is banned wherever it is
+      named - called, handed on, stored or imported - because a bare reference
+      passes the accessor to a call the guard cannot see. A star import from a
+      clock module is banned for the same reason. The conversions in
+      `TIME_CONVERSION_ATTRS` count when called without their instant as plain
+      positional arguments (a starred, double-starred or keyword argument, or a
+      literal `None`, does not count as the instant), or when handed on bare.
+    - *Module escape.* The modules themselves may be used only by direct
+      attribute access: a clock module named on its own (`clock = time`,
+      `f(time)`, `getattr(time, name)`, a default value) is a violation.
+    - *One exempt function object.* Only the body of the single module-level
+      `def <boundary>` is exempt, nested functions included. A second
+      module-level definition or binding of that name is itself a violation and
+      gets no exemption; the exemption is tied to one definition, not to a name.
+
+    What no static reading of one module can see - a clock reached through
+    `importlib`, `__import__` or `sys.modules`, a `datetime` class handed in as
+    an argument, or a clock read inside another module - is the spec's named
+    boundary of this guard. Pure construction, parsing and formatting
+    (`datetime.fromisoformat`, `strptime`, `timedelta`, the `UTC` constant, an
+    explicit `gmtime(0)`) are not acquisitions.
+    """
+    tree = ast.parse(source)
+    violations: list[str] = []
+    exempt: set[int] = set()
+    boundary_defs = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == boundary and boundary
+    ]
+    if boundary_defs:
+        exempt.update(id(inner) for inner in ast.walk(boundary_defs[0]))
+    for extra in boundary_defs[1:]:
+        violations.append(f"a second definition of {boundary} at line {extra.lineno}")
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+        for target in targets:
+            if boundary and isinstance(target, ast.Name) and target.id == boundary:
+                violations.append(f"a rebinding of {boundary} at line {node.lineno}")
+
+    roots = _clock_roots(tree)
+    attribute_values = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    call_funcs = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+
+    def chains_of(node: ast.AST) -> set[str]:
+        """Every dotted chain a name or attribute can stand for, when rooted in a tracked name."""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.NamedExpr):
+            node = node.value  # `(d := dt.date).today()` reads through the walrus
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(node.id, set())}
+
+    def banned(chain: str, call: ast.Call | None) -> bool:
+        pieces = chain.split(".")
+        if len(pieces) < 2:
+            return False  # the module itself; its escape is judged separately
+        head, tail = pieces[0], pieces[-1]
+        if head == "time" and tail in TIME_CLOCK_ATTRS:
+            return True
+        if head == "time" and tail in TIME_CONVERSION_ATTRS:
+            # Handed on bare, the call it feeds is unseen; called, only a missing instant reads now.
+            # The instant counts as given only as plain positional arguments: a starred or
+            # double-starred argument can expand to nothing (`localtime(**{})` reads now),
+            # the conversions take no keywords, so a keyword is never the instant, and a
+            # literal `None` is the documented request for the current time.
+            plain = [
+                arg
+                for arg in (call.args if call else [])
+                if not isinstance(arg, ast.Starred) and not (isinstance(arg, ast.Constant) and arg.value is None)
+            ]
+            return (
+                call is None
+                or len(plain) != len(call.args)
+                or bool(call.keywords)
+                or len(plain) < TIME_CONVERSION_ATTRS[tail]
+            )
+        return head == "datetime" and tail in DATETIME_CLOCK_ATTRS
+
+    for node in ast.walk(tree):
+        if id(node) in exempt:
+            continue
+        line = getattr(node, "lineno", "?")
+        if isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    violations.append(f"from {node.module} import * at line {line}")
+                elif banned(f"{node.module}.{alias.name}", None):
+                    violations.append(f"{node.module}.{alias.name} imported at line {line}")
+            continue
+        if not isinstance(node, ast.Name | ast.Attribute) or id(node) in attribute_values:
+            continue  # an inner link of a longer chain is judged as part of the whole chain
+        if isinstance(node.ctx, ast.Store | ast.Del):
+            continue
+        chains = chains_of(node)
+        if isinstance(node, ast.Name) and chains & set(CLOCK_MODULES):
+            violations.append(f"the {node.id} module escapes at line {line}")
+        call = call_funcs.get(id(node))
+        violations.extend(f"{chain} at line {line}" for chain in sorted(chains) if banned(chain, call))
+    return violations
+
+
+def _clock_roots(tree: ast.AST) -> dict[str, set[str]]:
+    """Every chain each local name can stand for: the clock modules and anything bound from them."""
+    roots: dict[str, set[str]] = {}
+
+    def add(name: str, chains: set[str]) -> bool:
+        known = roots.setdefault(name, set())
+        grown = not chains <= known
+        known.update(chains)
+        return grown
+
+    def resolve(value: ast.AST) -> set[str]:
+        parts: list[str] = []
+        while isinstance(value, ast.Attribute):
+            parts.append(value.attr)
+            value = value.value
+        if not isinstance(value, ast.Name):
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(value.id, set())}
+
+    def bind(target: ast.AST, value: ast.AST) -> bool:
+        if isinstance(target, ast.Name):
+            chains = resolve(value)
+            return add(target.id, chains) if chains else False
+        if not (isinstance(target, ast.Tuple | ast.List) and isinstance(value, ast.Tuple | ast.List)):
+            return False
+        if len(target.elts) != len(value.elts):
+            return False
+        # Every position binds; a short-circuit would drop the bindings after the first.
+        results = [bind(inner, item) for inner, item in zip(target.elts, value.elts, strict=True)]
+        return True in results
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in CLOCK_MODULES:
+                    add(alias.asname or alias.name, {alias.name})
+        elif isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    public = [name for name in dir(importlib.import_module(node.module)) if not name.startswith("_")]
+                    for name in public:
+                        add(name, {f"{node.module}.{name}"})
+                else:
+                    add(alias.asname or alias.name, {f"{node.module}.{alias.name}"})
+    grown = True
+    while grown:  # chains of chains: `clock = time` then `tick = clock.monotonic`
+        grown = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                results = [bind(target, node.value) for target in node.targets]
+                grown = True in results or grown
+            elif isinstance(node, ast.AnnAssign | ast.NamedExpr) and node.value is not None:
+                grown = bind(node.target, node.value) or grown
+    return roots
+
+
+def test_runner_clock_is_the_only_time_source() -> None:
+    """Spec criterion 1. Planted fault: a runner time/date read sits outside the clock boundary.
+
+    The guard reads the runner module as source, so it sees what an alias
+    hides; the boundary exemption is proven necessary, not vacuous, by
+    running the same guard once without it.
+    """
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^def clock_now\(", source), "the module defines no clock boundary"
+    assert clock_guard_violations(source) == [], "a raw clock read bypasses stage2.clock_now"
+    boundary = [
+        node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "clock_now"
+    ]
+    assert len(boundary) == 1, "the module must define exactly one clock boundary"
+    body_lines = range(boundary[0].lineno, (boundary[0].end_lineno or boundary[0].lineno) + 1)
+    without_boundary = clock_guard_violations(source, boundary="")
+    assert without_boundary, "the exemption is vacuous: the boundary body reads no clock"
+    lines = [int(re.search(r"at line (\d+)$", finding).group(1)) for finding in without_boundary]
+    assert all(line in body_lines for line in lines), without_boundary
+
+
+def test_runner_clock_guard_sets_classify_the_installed_modules() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: a clock-reading `time` or `datetime` callable is in no set.
+
+    The banned sets are a declared complete set, so completeness is measured,
+    not assumed: every public callable of the installed `time` module and every
+    public class method of `datetime.date`, `datetime.datetime` and
+    `datetime.time` must be classified as a clock read, a no-argument
+    conversion or a non-reading callable. A new interpreter's clock function
+    fails here until it is classified (review row L2-2).
+    """
+    time_sets = (TIME_CLOCK_ATTRS, set(TIME_CONVERSION_ATTRS), TIME_NON_CLOCK_ATTRS)
+    assert all(
+        not (a & b)
+        for a, b in [(time_sets[0], time_sets[1]), (time_sets[0], time_sets[2]), (time_sets[1], time_sets[2])]
+    )
+    installed = {name for name in dir(time) if not name.startswith("_") and callable(getattr(time, name))}
+    assert installed - set().union(*time_sets) == set(), "an installed time callable is unclassified"
+    assert not DATETIME_CLOCK_ATTRS & DATETIME_NON_CLOCK_ATTRS
+    for cls in (dt.date, dt.datetime, dt.time):
+        methods = {
+            name
+            for name in dir(cls)
+            if not name.startswith("_")
+            and type(inspect.getattr_static(cls, name)).__name__ in {"classmethod", "classmethod_descriptor"}
+        }
+        unclassified = methods - DATETIME_CLOCK_ATTRS - DATETIME_NON_CLOCK_ATTRS
+        assert unclassified == set(), f"a {cls.__name__} class method is unclassified: {sorted(unclassified)}"
+
+
+@pytest.mark.parametrize(
+    ("planted", "snippet"),
+    [
+        ("plain-read", "def later():\n    return time.monotonic()\n"),
+        ("wall-clock", "def later():\n    return time.time()\n"),
+        ("sleep", "def wait():\n    time.sleep(0.1)\n"),
+        ("aliased-module", "import time as t\ndef later():\n    return t.monotonic()\n"),
+        ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n"),
+        ("assigned-module", "import time\nclock = time\ndef later():\n    return clock.monotonic()\n"),
+        ("assigned-function", "import time\ntick = time.monotonic\ndef later():\n    return tick()\n"),
+        ("nanosecond", "def later():\n    return time.monotonic_ns()\n"),
+        ("cpu-clock", "def later():\n    return time.process_time()\n"),
+        ("localtime-no-argument", "def later():\n    return time.localtime()\n"),
+        ("gmtime-no-argument", "def later():\n    return time.gmtime()\n"),
+        ("ctime-no-argument", "def later():\n    return time.ctime()\n"),
+        ("datetime-now", "import datetime as dt\ndef later():\n    return dt.datetime.now(dt.UTC)\n"),
+        ("datetime-utcnow", "import datetime as dt\ndef later():\n    return dt.datetime.utcnow()\n"),
+        ("datetime-today", "import datetime as dt\ndef later():\n    return dt.datetime.today()\n"),
+        ("date-today", "import datetime as dt\ndef later():\n    return dt.date.today()\n"),
+        ("from-datetime-import", "from datetime import datetime\ndef later():\n    return datetime.now()\n"),
+        ("nested-bypass", "def outer():\n    def inner():\n        return time.time()\n    return inner\n"),
+        ("module-level-read", "import time\nSTARTED = time.time()\n"),
+        (
+            "class-method-boundary",
+            "import time\nclass S:\n    @staticmethod\n    def clock_now():\n        return time.time()\n",
+        ),
+        (
+            "nested-boundary-redefinition",
+            "def outer():\n    def clock_now():\n        return time.time()\n    return clock_now\n",
+        ),
+        ("annotated-module-alias", "clock: object = time\ndef later():\n    return clock.monotonic()\n"),
+        ("annotated-class-alias", "import datetime as dt\nD: type = dt.datetime\ndef later():\n    return D.now()\n"),
+        ("walrus-class-alias", "import datetime as dt\ndef later():\n    return (d := dt.date).today()\n"),
+        ("tuple-class-alias", "import datetime as dt\nD, n = dt.date, 1\ndef later():\n    return D.today()\n"),
+        ("multi-target-class-alias", "import datetime as dt\nA = D = dt.date\ndef later():\n    return D.today()\n"),
+        (
+            "chained-class-alias",
+            "import datetime as dt\nmod = dt\ncls = mod.datetime\ndef later():\n    return cls.utcnow()\n",
+        ),
+        (
+            "rebinding-keeps-alias",
+            "import datetime as dt\ndef a():\n    D = 1\ndef b():\n    D = dt.date\n    return D.today()\n",
+        ),
+        ("module-escape-getattr", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n"),
+        ("module-escape-default", "def later(clock=time):\n    return clock\n"),
+        ("clock-gettime", "def later():\n    return time.clock_gettime(time.CLOCK_MONOTONIC)\n"),
+        ("clock-gettime-ns", "def later():\n    return time.clock_gettime_ns(time.CLOCK_REALTIME)\n"),
+        ("star-import-time", "from time import *\ndef later():\n    return monotonic()\n"),
+        ("star-import-datetime", "from datetime import *\ndef later():\n    return date.today()\n"),
+        ("imported-function-handed-on", "from time import monotonic\ndef later(run):\n    return run(monotonic)\n"),
+        ("bare-reference-handed-on", "def later(run):\n    return run(time.perf_counter)\n"),
+        ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n"),
+        ("asctime-no-argument", "def later():\n    return time.asctime()\n"),
+        ("localtime-double-starred", "def later():\n    return time.localtime(**{})\n"),
+        ("localtime-starred", "def later():\n    return time.localtime(*())\n"),
+        ("strftime-starred-instant", "def later(rest):\n    return time.strftime('%H', *rest)\n"),
+        ("gmtime-keyword", "def later():\n    return time.gmtime(seconds=0)\n"),
+        ("localtime-none-instant", "def later():\n    return time.localtime(None)\n"),
+        ("ctime-none-instant", "def later():\n    return time.ctime(None)\n"),
+        (
+            "second-boundary-definition",
+            "def clock_now():\n    return 0\ndef clock_now():\n    return time.time()\n",
+        ),
+        ("boundary-rebinding", "def clock_now():\n    return time.time()\nclock_now = print\n"),
+    ],
+)
+def test_runner_clock_guard_rejects_bypasses(planted: str, snippet: str) -> None:
+    """Spec criterion 2. Planted fault: a direct or aliased acquisition outside the boundary is accepted.
+
+    Every snippet imports `time` or `datetime` in the way the real module
+    would and hides the read in the shape a bypass would take; the guard must
+    name each one, with no caller or line exemption to add.
+    """
+    source = "import time\n" + snippet
+    violations = clock_guard_violations(source)
+    assert violations, f"the guard accepted the {planted} bypass"
+    assert all("line" in finding for finding in violations), violations
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet"),
+    [
+        (
+            "boundary-body",
+            "def clock_now():\n    return R(time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        ),
+        (
+            "boundary-nested-body",
+            "def clock_now():\n    def read():\n        return time.monotonic()\n    return read()\n",
+        ),
+        ("boundary-caller", "def adapter():\n    return clock_now().utc.date()\n"),
+        ("pure-parse", "def read(value: str):\n    return dt.date.fromisoformat(value)\n"),
+        (
+            "pure-construction",
+            "def made():\n    return dt.datetime(2026, 1, 1, tzinfo=dt.UTC) + dt.timedelta(seconds=1)\n",
+        ),
+        ("pure-format", "def shown(value):\n    return value.isoformat(timespec='seconds')\n"),
+        (
+            "explicit-conversion",
+            "def shown(struct):\n    return time.strftime('%H', struct) and time.gmtime(0)\n",
+        ),
+        ("other-module", "def section(path):\n    return time_records.section_text(path)\n"),
+        ("untracked-name", "def kept(today):\n    return today\n"),
+        ("strftime-with-instant", "def shown(struct):\n    return time.strftime('%H', struct)\n"),
+        ("class-alias-construction", "D = dt.datetime\ndef made():\n    return D(2026, 1, 1)\n"),
+        ("date-class-annotation", "def kept(value: dt.date) -> dt.date:\n    return value\n"),
+    ],
+)
+def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the guard rejects the designated backend or a pure date operation.
+
+    The boundary body may acquire, its callers may consume the reading, and
+    parsing, construction, formatting and explicit-argument conversions stay
+    free; a module whose name merely begins like `time` is not the clock.
+    """
+    source = "import datetime as dt\nimport time\nimport time_records\nR = tuple\n" + snippet
+    assert clock_guard_violations(source) == [], f"the guard rejected {tolerated}"
+
+
+RUNNER_FILE = str(REPO_ROOT / "scripts" / "stage2.py")
+
+
+def run_as_runner(snippet: str, entry: str | None = None) -> Any:
+    """Execute `snippet` as code of the runner file; call its `entry` if named, else hand back the namespace.
+
+    Compiled with the runner's own filename, the snippet's frames are runner
+    frames to the runtime guard, exactly as a line added to `scripts/stage2.py` would be.
+    """
+    namespace: dict[str, Any] = {"__name__": "stage2", "time": time, "dt": dt}
+    exec(compile(snippet, RUNNER_FILE, "exec"), namespace)
+    return namespace[entry]() if entry else namespace
+
+
+def as_module(namespace: dict[str, Any]) -> types.ModuleType:
+    """The executed snippet as the module object the bound-reference scan reads."""
+    module = types.ModuleType("stage2")
+    vars(module).update(namespace)
+    return module
+
+
+RUNTIME_BYPASSES = [
+    ("plain-read", "def later():\n    return time.monotonic()\n", "later"),
+    ("dunder-call", "def later():\n    return time.monotonic.__call__()\n", "later"),
+    ("default-at-import", "def clock_now(cached=time.monotonic()):\n    return cached\n", None),
+    ("keyword-default-at-import", "def clock_now(*, cached=dt.date.today()):\n    return cached\n", None),
+    ("module-level-read", "STARTED = time.time()\n", None),
+    ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n", "later"),
+    ("aliased-class", "from datetime import datetime as D\ndef later():\n    return D.now(dt.UTC)\n", "later"),
+    ("getattr-name", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n", "later"),
+    ("vars-lookup", "def later():\n    return vars(time)['perf_counter_ns']()\n", "later"),
+    (
+        "partial",
+        "import functools\n_tick = functools.partial(time.perf_counter)\ndef later():\n    return _tick()\n",
+        "later",
+    ),
+    ("date-today-dunder", "def later():\n    return dt.date.today.__call__()\n", "later"),
+    ("datetime-today", "def later():\n    return dt.datetime.today()\n", "later"),
+    ("datetime-utcnow", "def later():\n    return dt.datetime.utcnow()\n", "later"),
+    ("subclass-now", "class D(dt.datetime):\n    pass\ndef later():\n    return D.now()\n", "later"),
+    ("runtime-none-instant", "def later(instant=None):\n    return time.localtime(instant)\n", "later"),
+    ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n", "later"),
+    ("clock-gettime", "def later():\n    return time.clock_gettime_ns(time.CLOCK_MONOTONIC)\n", "later"),
+    ("sleep", "def later():\n    return time.sleep(0)\n", "later"),
+    (
+        "nested-boundary-name",
+        "def later():\n    def clock_now():\n        return time.time()\n    return clock_now()\n",
+        "later",
+    ),
+    (
+        "class-boundary-name",
+        "class S:\n    @staticmethod\n    def clock_now():\n        return time.time()\ndef later():\n    return S.clock_now()\n",
+        "later",
+    ),
+    (
+        "dataclass-default-factory",
+        "import dataclasses\n@dataclasses.dataclass\nclass C:\n    t: float = dataclasses.field(default_factory=time.monotonic)\n"
+        "def later():\n    return C()\n",
+        "later",
+    ),
+    (
+        "swallowed",
+        "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n",
+        "later",
+    ),
+]
+
+
+@pytest.mark.parametrize(("planted", "snippet", "entry"), RUNTIME_BYPASSES, ids=[row[0] for row in RUNTIME_BYPASSES])
+def test_runner_clock_runtime_guard_catches_bypasses(planted: str, snippet: str, entry: str | None) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: a clock read from runner code outside clock_now passes at run time.
+
+    The static guard missed `time.monotonic.__call__()` and a default read at
+    import (phase-6 rows F6-1 and F6-2); here every shape reaches a wrapper
+    and is judged by the runner frame that made the call. A read the runner
+    swallows still stands in the record the autouse fixture checks.
+    """
+    held: list[str] = []
+    with runner_clock_guard.capture() as reads:
+        try:
+            namespace = run_as_runner(snippet, None)
+            held = runner_clock_guard.bound_reference_violations(as_module(namespace))
+            if entry:
+                namespace[entry]()
+        except runner_clock_guard.RunnerClockRead:
+            raised = True
+        else:
+            raised = False
+    assert reads or held, f"the runtime guard let the {planted} bypass read the clock"
+    assert raised or held or planted == "swallowed", f"the {planted} read was recorded but not refused"
+    assert all(read.filename == RUNNER_FILE for read in reads), reads
+
+
+RUNTIME_TOLERATED = [
+    (
+        "boundary-body",
+        "def clock_now():\n    return (time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        "clock_now",
+    ),
+    (
+        "explicit-conversion",
+        "def later():\n    return time.strftime('%H', time.gmtime(0)), time.localtime(0)\n",
+        "later",
+    ),
+    (
+        "pure-construction",
+        "def later():\n    return dt.datetime.fromtimestamp(0, dt.UTC), dt.date(2026, 1, 1)\n",
+        "later",
+    ),
+    ("standard-library", "import logging\ndef later():\n    return logging.makeLogRecord({}).created\n", "later"),
+]
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet", "entry"), RUNTIME_TOLERATED, ids=[row[0] for row in RUNTIME_TOLERATED]
+)
+def test_runner_clock_runtime_guard_accepts_the_boundary(tolerated: str, snippet: str, entry: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the runtime guard refuses the boundary, a pure conversion or the standard library.
+
+    `clock_now` may acquire, a conversion handed its instant reads nothing,
+    and a standard-library frame (logging stamps its record with
+    `time.time()`) stays free even when runner code called it.
+    """
+    with runner_clock_guard.capture() as reads:
+        namespace = run_as_runner(snippet, None)
+        assert runner_clock_guard.bound_reference_violations(as_module(namespace)) == []
+        namespace[entry]()
+    assert reads == [], f"the runtime guard refused {tolerated}: {reads}"
+
+
+def test_runner_clock_runtime_guard_admits_the_real_boundary_and_other_callers() -> None:
+    """Spec criterion 2. Planted fault: the guard is inert, or it refuses the runner's own clock_now, a test or another file.
+
+    The wrappers must sit where every alias resolves - on the `time` module and
+    in the `datetime` types, a subclass included - and the runner must have
+    been imported after them, so no import-time read went unseen.
+    """
+    assert runner_clock_guard.installation_problems() == []
+    assert runner_clock_guard.import_time_reads() == [], "a runner clock read happened at import"
+    with runner_clock_guard.capture() as reads:
+        reading = stage2.clock_now()
+        time.monotonic()
+        dt.date.today()
+        exec(compile("import time\ntime.time()\n", str(REPO_ROOT / "scripts" / "stage2_go.py"), "exec"), {})
+    assert reading.local_date and reads == [], reads
+
+
+def test_runner_clock_runtime_guard_finds_references_bound_before_install() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: an original clock reference bound before the guard escapes it.
+
+    A module that bound an original at import would read the clock past
+    every wrapper; the scan finds one in each place a binding can hide, and
+    the real runner holds none.
+    """
+    originals = runner_clock_guard.ORIGINALS
+    monotonic = originals["time.monotonic"]
+    bound_now = originals["datetime.now"].__get__(None, dt.datetime)
+    planted = types.ModuleType("planted_runner")
+
+    def with_default(clock=monotonic):
+        return clock
+
+    def with_keyword(*, clock=bound_now):
+        return clock
+
+    def with_closure():
+        return monotonic
+
+    planted_class = type("Holder", (), {"clock": originals["time.time"], "__module__": "planted_runner"})
+    for function in (with_default, with_keyword, with_closure):
+        function.__module__ = "planted_runner"
+        setattr(planted, function.__name__, function)
+    planted.alias = monotonic
+    planted.dunder = monotonic.__call__
+    planted.partial = functools.partial(originals["time.perf_counter"])
+    planted.listed = [originals["date.today"]]
+    planted.held_wrapper = time.monotonic
+    planted.held_bound = dt.datetime.now
+    planted.Fields = dataclasses.make_dataclass(
+        "Fields", [("t", float, dataclasses.field(default_factory=time.perf_counter))]
+    )
+    planted.Fields.__module__ = "planted_runner"
+    planted.Holder = planted_class
+    found = runner_clock_guard.bound_reference_violations(planted)
+    for where in (
+        "global alias",
+        "global dunder",
+        "global partial",
+        "global listed",
+        "function with_default default 0",
+        "function with_keyword keyword default clock",
+        "function with_closure closure monotonic",
+        "class Holder.clock",
+        "global held_wrapper holds the clock callable time.monotonic",
+        "global held_bound holds the clock callable datetime.now",
+        "class Fields.__dataclass_fields__",
+    ):
+        assert any(where in finding for finding in found), f"the scan missed {where}: {found}"
+    assert runner_clock_guard.bound_reference_violations(stage2) == []
+
+
+def test_runner_clock_runtime_guard_fails_the_test_through_the_autouse_fixture(tmp_path: Path) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: the autouse fixture lets a swallowed runner read pass.
+
+    The planted tests above take their records out of the session; this one
+    runs a separate pytest session with the real `tests/conftest.py`, so the
+    fixture itself must fail a test whose runner code swallowed the refusal,
+    at run time and at import, and leave a clean test green.
+    """
+    swallowed = "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n"
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import time\n"
+        f"RUNNER = {RUNNER_FILE!r}\n"
+        f"SWALLOWED = {swallowed!r}\n"
+        "def run():\n"
+        "    namespace = {'time': time}\n"
+        "    exec(compile(SWALLOWED, RUNNER, 'exec'), namespace)\n"
+        "    return namespace['later']()\n"
+        "def test_swallowed_read():\n"
+        "    run()\n"
+        "def test_clean():\n"
+        "    time.time()\n",
+        encoding="utf-8",
+    )
+    importing = tmp_path / "test_import_probe.py"
+    importing.write_text(
+        "import time\n"
+        f"exec(compile({swallowed + 'later()\n'!r}, {RUNNER_FILE!r}, 'exec'), {{'time': time}})\n"
+        "def test_after_import():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    def session(test_file: Path) -> str:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-p", "conftest", "-p", "no:cacheprovider", "-p", "no:xdist", "-rA", "-q"]
+            + [str(test_file)],
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "tests")},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        return output
+
+    output = session(probe)
+    assert re.search(r"ERROR .*test_probe.py::test_swallowed_read", output), output
+    assert re.search(r"PASSED .*test_probe.py::test_clean", output), output
+    output = session(importing)
+    assert re.search(r"ERROR .*test_import_probe.py::test_after_import", output), output
+    assert "outside clock_now at import" in output, output
+
+
+def test_runner_clock_preserves_time_domains(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 5. Planted fault: a wall jump changes a measured duration, or local and UTC dates swap.
+
+    One fake boundary carries three separate values. A duration follows the
+    monotonic value alone, the wall may step meanwhile, terms read the UTC
+    date, and a document stamp reads the local one.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    clock.local_date = dt.date(2026, 11, 13)
+    assert stage2.today() == "2026-11-13"
+    assert stage2.utc_now() == UTC_START and stage2.monotonic_now() == 1000.0
+    assert stage2.terms_today() == UTC_START.date(), "terms must read the UTC date, not the local one"
+    clock.advance(45)
+    clock.wall_drift = 30.0  # a wall-clock step mid-span, the thing a duration must ignore
+    assert stage2.monotonic_now() == 1045.0, "a wall jump bent the measured duration"
+    assert stage2.utc_now() == UTC_START + dt.timedelta(seconds=75), "the wall clock did not step"
+    assert stage2.terms_today() == UTC_START.date(), "the stepped wall changed the terms date"
+    target = world.plan
+    stage2.stamp_updated(target)
+    assert updated_of(target) == dt.date(2026, 11, 13), "a stamp took the UTC date instead of the local one"
+    clock.advance(1)
+    assert stage2.today() == "2026-11-13", "the local date followed the UTC field"
 
 
 def test_runner_accepts_attempt_without_model_time_entry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -11646,13 +12846,15 @@ def test_discarded_model_changes_are_no_work(world: World, kind: str) -> None:
     elif kind == "index":
         step = {"plant": {"plans/INDEX.md": "model index edit\n"}}
     else:
+        # The fixture's tracked `scripts/helper.py`: the model dirties it, Ruff's format step
+        # restores the committed bytes, and the formatter's rewrite is no model work (the
+        # targeted route runs the format steps and then measures no work).
         step = {"plant": {"scripts/helper.py": "VALUE=2\n"}}
     baseline = script_work(world, "implement", [step] * 3, [GREEN] * 3)
     if kind == "format-only":
         world.script(
             claude=[{"stdout": "done", **step}] * 3,
             ruff=[{"plant": {"scripts/helper.py": "VALUE = 2\n"}}] * 12,
-            make=[GREEN] * 3,
         )
     assert world.run("implement") == 1, "discarded model edits qualified as committed work"
     assert git(world.root, "rev-parse", "HEAD") == baseline
@@ -11909,7 +13111,7 @@ def counting_capture(monkeypatch: pytest.MonkeyPatch, clearings: list[int]) -> N
 
 @pytest.mark.parametrize(
     ("verb", "forced_full"),
-    [("implement", False), ("repair", True), ("repair", False)],
+    [("implement", True), ("repair", True), ("repair", False)],
     ids=["implement-full", "repair-full-fallback", "repair-targeted"],
 )
 def test_runner_ledger_clearing_cannot_qualify_a_retry(
@@ -11929,8 +13131,9 @@ def test_runner_ledger_clearing_cannot_qualify_a_retry(
     first = work_step(verb)
     if verb == "implement":
         first = {**first, "plant": {**first["plant"], "tests/test_fix.py": FIX_TEST}}
-    if verb == "repair" and forced_full:
-        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover.
+    if forced_full:
+        # The idle-retry fixture's forcing: an input kind the targeted selector does not cover. Implement
+        # takes the targeted route too since bead coding-harness-0swp, so its full case is forced alike.
         first = {**first, "plant": {**first["plant"], "verification-scope.txt": "requires full verification\n"}}
     baseline = script_work(
         world,
@@ -12515,9 +13718,15 @@ def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, mo
     assert world.run("implement") == 0
     (entry,) = runner_entries(world.plan)
     # The elapsed span is the monotonic difference (45 s), whatever the wall clock did meanwhile (46 s).
-    assert entry == (
+    # The src/app.py-only attempt has no linked test: the full fallback's scope follows the verdict word.
+    head = (
         f"2026-10-20 23:59:30–2026-10-21 00:00:16 UTC, 45 s — implement · attempt 1 · route flash · "
-        f"model {stage2.GLM_FLASH[1]} · accepted · measured by the runner"
+        f"model {stage2.GLM_FLASH[1]} · accepted"
+    )
+    assert entry.startswith(head + " · full `make verify` ran (result: green)")
+    assert entry.endswith(" · measured by the runner")
+    assert stage2.time_entry("implement", 1, "flash", "m", True, UTC_START, UTC_START, 0).endswith(
+        "model m · accepted · measured by the runner"
     )
     same_day = stage2.time_entry("repair", 2, "codex-repair", "m", False, UTC_START, UTC_START, 0)
     assert same_day == (
@@ -12642,7 +13851,13 @@ def test_runner_preserves_precall_time_on_final_verdict(
 
     monkeypatch.setattr(stage2, "run_work_model", model)
     world.script(
-        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        # Each attempt declares its work in a `.txt` input the targeted selector does not cover, so the
+        # route is the admitted full check the `make` steps below script.
+        claude=[
+            {"stdout": "one", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+            {"stdout": "two", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+            {"stdout": "three", "append": {"src/scenario-work.txt": "declared attempt work\n"}},
+        ],
         make=[{"stdout": "red\n", "exit": 1}] * 2
         + [{"stdout": "green\n" if accepted else "red\n", "exit": 0 if accepted else 1}],
     )
@@ -12687,15 +13902,20 @@ def test_runner_time_doctrine_preserves_interactive_measurement() -> None:
 
 
 def test_runner_time_logging_does_not_retry_red_verification(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 8. Planted fault: a red `make verify` run again to log, or checkpointed after logging."""
+    """Criterion 8. Planted fault: a red post-run check runs again to log, or is checkpointed after logging.
+
+    The covered pair keeps the new-code guard silent so the targeted pytest is the check that fails;
+    the cheap pytest runs first on the changed test file and is red on every attempt.
+    """
     FakeClock(monkeypatch, UTC_START)
     baseline = git(world.root, "rev-parse", "HEAD")
-    world.script(
-        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
-        make=[{"stdout": "red\n", "exit": 1}] * 3,
-    )
+    step = {"stdout": "done", "plant": {"scripts/a.py": "a=1\n", "tests/test_a.py": A_FIX_TEST}}
+    world.script(claude=[{**step, "stdout": f"attempt {number}"} for number in range(1, 4)])
+    commands = LocalCommands(monkeypatch)
+    commands.outcomes["pytest"] = RED_PYTEST
     assert world.run("implement") == 1
-    assert len(world.calls("make")) == len(world.calls("claude")) == 3
+    assert len(commands.of("pytest")) == len(world.calls("claude")) == 3
+    assert world.calls("make") == []
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
@@ -14116,7 +15336,7 @@ def test_repair_lifecycle_fields_are_restored_before_verification(
     # The plan's time section is the runner's bookkeeping: the model's in-section append went with
     # the entry write, and the accepted entry stands beside the restored fields.
     entries = runner_entries(world.plan)
-    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    assert entries and " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     # The checkpoint committed the restored bytes.
     for relative, (status, implementation) in LIFECYCLE_STATES.items():
         shown = git(world.root, "show", f"HEAD:{relative}")
@@ -14714,7 +15934,7 @@ def test_repair_lifecycle_restoration_preserves_other_edits(world: World) -> Non
     assert "last_reviewed: 2026-11-01" not in committed_plan
     assert "The attempt also wrote this line." in committed_plan
     entries = runner_entries(world.plan)
-    assert entries and entries[-1].endswith("accepted · measured by the runner")
+    assert entries and " · accepted" in entries[-1] and entries[-1].endswith(" · measured by the runner")
     # A second repair that also edits the protected fields passes the same checks: the restoration
     # alone never rejects it. It carries one real edit, because an attempt whose only change is the
     # restored fields leaves no model work and is rejected (no-work-done; maintainer 2026-11-09).
@@ -18120,17 +19340,17 @@ def routing_rows(text: str) -> dict[str, tuple[str, str]]:
 
 STAGE2_ROUTING = {
     "1 Explore": "GLM 5.3 Flash",
-    "2 Spec": "gpt-6.1-sol",
-    "2b Design": "gpt-6.1-sol",
+    "2 Spec": "gpt-6.1-terra",
+    "2b Design": "gpt-6.1-terra",
     "2a Spec review": "Opus 5.5",
-    "3 Plan": "gpt-6.1-sol",
+    "3 Plan": "gpt-6.1-terra",
     "4 Implement": "GLM 5.3 Flash",
     "4b Review loop": "the swarms, then the ladder",
     "4b Triage": "none (a local command)",
-    "6 Review": "gpt-6.1-sol",
+    "6 Review": "gpt-6.1-terra",
 }
 
-# Sol's effort lives once per verb in `CODEX_EFFORTS`; every active instruction links its verb's
+# Codex's effort lives once per verb in `CODEX_EFFORTS`; every active instruction links its verb's
 # entry instead of naming a value of its own (bead coding-harness-yzk, spec criteria 4-6).
 SOL_ROUTING_VERBS = {"2 Spec": "draft", "2b Design": "draft", "3 Plan": "draft", "6 Review": "review"}
 SOL_EFFORT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md", "06-review.md")
@@ -18144,11 +19364,11 @@ def effort_reference(verb: str) -> str:
     return f'[`CODEX_EFFORTS["{verb}"]`](../scripts/stage2.py)'
 
 
-SOL_MODEL = re.compile(r"gpt-6\.1-sol|\bSol\b|\bCodex\b")
+SOL_MODEL = re.compile(r"gpt-6\.1-(?:sol|terra)|\bSol\b|\bTerra\b|\bCodex\b")
 
 
 def sol_clauses(text: str) -> list[str]:
-    """Read every Sol mention up to the next model, sentence, row or paragraph (Q-5)."""
+    """Read every Codex mention up to the next model, sentence, row or paragraph (Q-5)."""
     clauses = []
     for paragraph in re.split(r"\n\s*\n|\n(?=\|)|(?<=[.!?])\s+", text):
         mentions = list(SOL_MODEL.finditer(paragraph))
@@ -18161,7 +19381,7 @@ def sol_clauses(text: str) -> list[str]:
 
 
 def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str) -> list[str]:
-    """Check each Sol effort independently; another mention cannot supply its reference.
+    """Check each Codex effort independently; another mention cannot supply its reference.
 
     `verb` is the runner verb the instruction serves, or the set of verbs an unpinned instruction
     names (`instruction_verbs`); only those verbs' entries satisfy it. An empty set means the
@@ -18176,9 +19396,9 @@ def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str
             continue
         checked = True
         if (literal := EFFORT_LITERAL.search(clause)) is not None:
-            found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
+            found.append(f"{where} sets Codex's effort independently ({literal.group(0)})")
         if not verbs:
-            found.append(f"{where} gives Sol an effort but names no runner verb (draft, repair or review)")
+            found.append(f"{where} gives Codex an effort but names no runner verb (draft, repair or review)")
             continue
         references = [effort_reference(key) for key in verbs]
         if not any(reference in clause for reference in references):
@@ -18201,7 +19421,7 @@ def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
     names several, an entry of any of them satisfies it, and an entry of a verb it does not name
     stays red. A sentence that names no verb serves the verb of the `###` subsection it stands in
     (`### Repairing taken findings (repair)` repairs). An instruction with no verb in either place
-    cannot be attributed and is reported, so a Sol effort always says which runner verb it follows.
+    cannot be attributed and is reported, so a Codex effort always says which runner verb it follows.
     """
     if unit.startswith("|"):
         label = (stage2.split_row(unit.splitlines()[0]) or [""])[0].lower()
@@ -18214,7 +19434,7 @@ def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
 
 
 def sol_section_problems(text: str, where: str) -> list[str]:
-    """Every Sol effort clause of a doctrine section, checked against the verb of its own instruction."""
+    """Every Codex effort clause of a doctrine section, checked against the verb of its own instruction."""
     found = []
     heading = ""
     for block in re.split(r"\n\s*\n|\n(?=\|)", text):
@@ -18242,7 +19462,7 @@ def sol_texts(doc: str, text: str) -> tuple[str, dict[str, str]]:
 
 
 def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
-    """Every active Sol effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
+    """Every active Codex effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
     found = []
     # New prose, unpinned rows and later mentions in existing rows are active instructions too,
     # each checked against the verb of its own context.
@@ -18254,8 +19474,8 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
         if row is None:
             found.append(f"section 4 has no routing row {phase}")
         else:
-            found += sol_effort_clause_problems("gpt-6.1-sol " + row[1], verb, f"section 4 routes {phase}")
-    for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Sol clause to §4
+            found += sol_effort_clause_problems("gpt-6.1-terra " + row[1], verb, f"section 4 routes {phase}")
+    for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Codex clause to §4
         stage_1 = rows_3.get(phase)
         if stage_1 is None:
             found.append(f"section 3 has no routing row {phase}")
@@ -18263,10 +19483,10 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
             found += sol_effort_clause_problems(stage_1[1], "draft", f"section 3 routes {phase}")
     line = next((row for row in section(workflow, "## 4 · ").splitlines() if row.startswith(REPAIR_ROW_LABEL)), "")
     cells = stage2.split_row(line) or []
-    if len(cells) != 3 or cells[1] != "**gpt-6.1-sol**":
-        found.append("section 4 has no repair row for gpt-6.1-sol")
+    if len(cells) != 3 or cells[1] != "**gpt-6.1-terra**":
+        found.append("section 4 has no repair row for gpt-6.1-terra")
     else:
-        found += sol_effort_clause_problems("gpt-6.1-sol " + cells[2], "repair", "section 4 routes the repair")
+        found += sol_effort_clause_problems("gpt-6.1-terra " + cells[2], "repair", "section 4 routes the repair")
     draft = section(workflow, "### The draft (phases 2, 2b and 3)")
     prose = flat(draft.partition("A drafted change runs in this order:")[0])
     found += sol_effort_clause_problems(prose, "draft", "the draft prose")
@@ -18283,21 +19503,21 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
 SOL_EFFORT_PLACES = (
     (
         "workflow",
-        "the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
     ),
     (
         "workflow",
-        "the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
     ),
     (
         "workflow",
-        "an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
@@ -18307,11 +19527,11 @@ SOL_EFFORT_PLACES = (
     ("workflow", "effort " + effort_reference("draft") + ", drafted in the same call as 2 and 2b", "draft"),
     ("workflow", "sandbox, effort " + effort_reference("repair") + "; one fresh Codex attempt", "repair"),
     ("workflow", "effort " + effort_reference("review") + ", through the Codex CLI", "review"),
-    ("workflow", "(`gpt-6.1-sol`, effort " + effort_reference("draft") + ") write", "draft"),
-    ("02-spec.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("02b-design.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("03-plan.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("06-review.md", "gpt-6.1-sol at effort " + effort_reference("review") + ", started by", "review"),
+    ("workflow", "(`gpt-6.1-terra`, effort " + effort_reference("draft") + ") write", "draft"),
+    ("02-spec.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("02b-design.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("03-plan.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("06-review.md", "gpt-6.1-terra at effort " + effort_reference("review") + ", started by", "review"),
 )
 
 
@@ -18332,7 +19552,7 @@ def routing_problems(workflow: str) -> list[str]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
         elif phase in SOL_ROUTING_VERBS:
             found += sol_effort_clause_problems(
-                "gpt-6.1-sol " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
+                "gpt-6.1-terra " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
             )
         elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
@@ -18357,22 +19577,22 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         assert needle in four["4b Review loop"][1], needle
     assert four["2a Spec review"][0] == "Opus 5.5"
     for phase in ("2 Spec", "2b Design", "3 Plan", "6 Review"):
-        assert four[phase][0] == "gpt-6.1-sol", phase
+        assert four[phase][0] == "gpt-6.1-terra", phase
     for old, new in (
-        ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
+        ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-terra** |"),
         ("| 4b Review loop | **the swarms, then the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
-        ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 6 Review | **gpt-6.1-terra** |", "| 6 Review | **Opus 5.5** |"),
         ("| 4b Triage | none (a local command) |", "| 4b Triage | misspelled-model |"),
         (
-            f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
+            f"| 2 Spec | **gpt-6.1-terra** | effort {effort_reference('draft')}, one call",
             f"| 2 Spec | **Opus 5.5** | effort {effort_reference('draft')}, one call",
         ),
         (
-            f"| 2b Design | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 2b Design | **gpt-6.1-terra** | effort {effort_reference('draft')}, drafted",
             f"| 2b Design | **GLM 5.3 Flash** | effort {effort_reference('draft')}, drafted",
         ),
         (
-            f"| 3 Plan | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 3 Plan | **gpt-6.1-terra** | effort {effort_reference('draft')}, drafted",
             f"| 3 Plan | **Sonnet 5.5** | effort {effort_reference('draft')}, drafted",
         ),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
@@ -18409,7 +19629,7 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
 def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
     # Criterion 4 beyond the pinned places (loop L3-1). Planted faults: a new sentence in the repair
     # prose, a sentence naming its verb under another verb's heading, and an unpinned routing row
-    # each link another verb's entry; a Sol effort naming no verb at all cannot be attributed.
+    # each link another verb's entry; a Codex effort naming no verb at all cannot be attributed.
     workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
     assert sol_effort_problems(workflow, prompts) == []
     repair_heading = "### Repairing taken findings (repair)"
@@ -18435,15 +19655,15 @@ def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None
             prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('repair')}."),
         ),
         (
-            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('draft')}"),
-            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('review')}"),
+            unpinned_row(f"; `gpt-6.1-terra` re-checks at effort {effort_reference('draft')}"),
+            unpinned_row(f"; `gpt-6.1-terra` re-checks at effort {effort_reference('review')}"),
         ),
     ):
         assert wrong != workflow and right != workflow
         assert sol_effort_problems(wrong, prompts), "another verb's entry passes in an unpinned instruction"
         assert sol_effort_problems(right, prompts) == [], "the instruction's own entry is rejected"
     unattributed = prose(neutral, f"Codex runs at effort {effort_reference('draft')}.")
-    assert sol_effort_problems(unattributed, prompts), "a Sol effort naming no verb passes"
+    assert sol_effort_problems(unattributed, prompts), "a Codex effort naming no verb passes"
 
 
 @pytest.mark.parametrize(
@@ -18466,7 +19686,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
     )
     if verb == "draft":
         draft_world(world)
-        red = red_verify(OTHER_RED)
+        red = red_verify(OTHER_RED)["stdout"]
         world.script(
             codex=[
                 codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
@@ -18478,8 +19698,8 @@ def test_sol_effort_changes_propagate_without_other_edits(
                     },
                 ),
             ],
-            docs=[red, {"stdout": "green\n"}],
         )
+        gate_red_then_green(LocalCommands(monkeypatch), red)
         assert world.run("draft") == 0
         for call in world.calls("codex"):  # the retry keeps the substituted draft entry
             assert f'model_reasoning_effort="{draft_effort}"' in call["argv"]
@@ -18523,34 +19743,34 @@ def test_sol_effort_changes_propagate_without_other_edits(
 
 
 def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
-    # Criterion 6. Planted faults: a valid non-Sol effort is rejected, or it masks a wrong Sol reference.
+    # Criterion 6. Planted faults: a valid non-Codex effort is rejected, or it masks a wrong Codex reference.
     workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
     assert sol_effort_problems(workflow, prompts) == []
     line = next(row for row in workflow.splitlines() if row.startswith(REPAIR_ROW_LABEL))
     assert "Sonnet 5.5 at effort `medium`" in line, "the row does not mix another model's effort in"
     mixed = workflow.replace(line, line[:-2] + "; Sonnet 5.5 drafts by hand at effort `medium` |", 1)
     assert sol_effort_problems(mixed, prompts) == [], "another model's effort is rejected"
-    for model in ("`gpt-6.1-sol`", "Sol", "Codex"):
+    for model in ("`gpt-6.1-terra`", "`gpt-6.1-sol`", "Sol", "Terra", "Codex"):
         later = f"; {model} repairs at effort `high`"
         planted = mixed.replace(
             "; Sonnet 5.5 drafts by hand at effort `medium` |",
             "; Sonnet 5.5 drafts by hand at effort `medium`" + later + " |",
             1,
         )
-        assert sol_effort_problems(planted, prompts), "a later independent Sol effort passes"
+        assert sol_effort_problems(planted, prompts), "a later independent Codex effort passes"
         valid = planted.replace(later, f"; {model} repairs at effort {effort_reference('repair')}", 1)
-        assert sol_effort_problems(valid, prompts) == [], "a later central Sol reference is rejected"
+        assert sol_effort_problems(valid, prompts) == [], "a later central Codex reference is rejected"
         wrong_later = valid.replace(
             f"; {model} repairs at effort {effort_reference('repair')}",
             f"; {model} repairs at effort {effort_reference('review')}",
             1,
         )
-        assert sol_effort_problems(wrong_later, prompts), "a later wrong Sol reference passes"
+        assert sol_effort_problems(wrong_later, prompts), "a later wrong Codex reference passes"
         prose = f"\n\n{model} reviews at effort `high`.\n\n"
         planted = workflow.replace(
             "### The draft (phases 2, 2b and 3)", prose + "### The draft (phases 2, 2b and 3)", 1
         )
-        assert sol_effort_problems(planted, prompts), "new prose with an independent Sol effort passes"
+        assert sol_effort_problems(planted, prompts), "new prose with an independent Codex effort passes"
     for name, text in prompts.items():
         planted = re.sub(
             r"(^\*\*Model:\*\*.*?)(?=^\*\*[A-Z])", r"\1Codex runs at effort `high`.\n", text, count=1, flags=re.M | re.S
@@ -18558,10 +19778,71 @@ def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
         assert planted != text, name
         assert sol_effort_problems(workflow, {**prompts, name: planted}), name
     wrong = workflow.replace(line, line.replace(effort_reference("repair"), effort_reference("review"), 1), 1)
-    assert sol_effort_problems(wrong, prompts), "a wrong Sol reference passes"
+    assert sol_effort_problems(wrong, prompts), "a wrong Codex reference passes"
     planted = prompts["02b-design.md"].replace(effort_reference("draft"), effort_reference("review"), 1)
     assert "Opus 5.5 at effort `xhigh`" in flat(planted), "the planted prompt holds no other model's effort"
-    assert sol_effort_problems(workflow, {**prompts, "02b-design.md": planted}), "a wrong Sol reference is masked"
+    assert sol_effort_problems(workflow, {**prompts, "02b-design.md": planted}), "a wrong Codex reference is masked"
+
+
+CODEX_MODEL_ID = re.compile(r"gpt-6\.1-[a-z0-9][a-z0-9.-]*[a-z0-9]")
+ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+LIVE_PROSE_FILES = ("docs/WORKFLOW.md", "AGENTS.md", "model-endpoints.yaml")
+LIVE_PROSE_DIRS = ("scripts", "prompts", "templates")
+
+
+def live_prose_texts() -> dict[str, str]:
+    """The surfaces that state the current Codex model: scripts, prompts, templates and the doctrine."""
+    paths = [REPO_ROOT / name for name in LIVE_PROSE_FILES]
+    for folder in LIVE_PROSE_DIRS:
+        paths += sorted(path for path in (REPO_ROOT / folder).rglob("*") if path.is_file())
+    texts = {}
+    for path in paths:
+        try:
+            texts[path.relative_to(REPO_ROOT).as_posix()] = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, FileNotFoundError):
+            continue
+    return texts
+
+
+def stale_codex_model_mentions(texts: dict[str, str], current: str) -> list[str]:
+    """Every `gpt-6.1-*` id other than `current` that is not dated history.
+
+    A mention is history when its own line names a date, or when it sits in a comment block
+    (contiguous `#` lines) that names one; anything else states the model as current.
+    """
+    found = []
+    for name, text in texts.items():
+        lines = text.splitlines()
+        for number, line in enumerate(lines):
+            stale = [model for model in CODEX_MODEL_ID.findall(line) if model != current]
+            if not stale or ISO_DATE.search(line):
+                continue
+            if line.lstrip().startswith("#"):
+                first = last = number
+                while first > 0 and lines[first - 1].lstrip().startswith("#"):
+                    first -= 1
+                while last + 1 < len(lines) and lines[last + 1].lstrip().startswith("#"):
+                    last += 1
+                if any(ISO_DATE.search(row) for row in lines[first : last + 1]):
+                    continue
+            found.append(f"{name}:{number + 1} names {', '.join(stale)} as current, not {current}")
+    return found
+
+
+def test_live_prose_names_only_the_current_codex_model() -> None:
+    # A switch of `stage2.CODEX` must reach every unpinned sentence; a dated history line may keep the old id.
+    current = stage2.CODEX[1]
+    texts = live_prose_texts()
+    assert {"docs/WORKFLOW.md", "prompts/04-implement.md", "scripts/stage2.py"} <= set(texts)
+    assert stale_codex_model_mentions(texts, current) == []
+    for name, needle in (
+        ("prompts/04-implement.md", f"Codex (`{current}`)"),
+        ("prompts/02a-spec-review.md", f"(`{current}`)"),
+        ("docs/WORKFLOW.md", f"Codex (`{current}`, effort"),
+    ):
+        assert needle in texts[name], name
+        planted = {**texts, name: texts[name].replace(needle, needle.replace(current, "gpt-6.1-sol"), 1)}
+        assert stale_codex_model_mentions(planted, current), f"a reverted gpt-6.1-sol in {name} passes"
 
 
 DRAFT_ORDER_NEEDLES = (
@@ -18606,14 +19887,15 @@ def draft_document_check_problems(workflow: str) -> list[str]:
         return ["section 4 has no draft section"]
     prose = flat(draft.partition("A drafted change runs in this order:")[0])
     found = []
-    if "`bash scripts/verify_all.sh --job docs`" not in prose:
+    if "(`document_gates` in `scripts/stage2.py`)" not in prose or "no pytest" not in prose:
         found.append("the draft prose does not name the document check")
-    if "`implement` keeps the full `make verify`" not in prose:
-        found.append("the draft prose does not keep implement's full check")
-    if "`repair` takes the targeted check" not in prose or "full suite as its fallback and before phase 6" not in prose:
-        found.append("the draft prose lost the targeted repair and final full-check boundary")
-    if "`implement` and `repair` keep the full" in prose:
-        found.append("the draft prose still requires unconditional full repair verification")
+    if (
+        "`implement` and `repair` take the targeted check" not in prose
+        or "a fresh full `make verify` still runs before phase 6" not in prose
+    ):
+        found.append("the draft prose lost the targeted implement and repair check and the final full-check boundary")
+    if "`implement` keeps the full `make verify`" in prose or "`implement` and `repair` keep the full" in prose:
+        found.append("the draft prose still requires an unconditional full check")
     if "the check's exit code decides" not in prose or "reads no gate output" not in prose:
         found.append("the draft prose does not make the check's exit code the verdict")
     if "ADR_ANSWERS_TOLERATE_CHANGE" not in prose:
@@ -18626,16 +19908,16 @@ def test_the_workflow_names_the_draft_document_check() -> None:
     # check again, or makes parsed gate output the verdict's source.
     text = WORKFLOW.read_text(encoding="utf-8")
     assert draft_document_check_problems(text) == []
-    planted = text.replace("`bash scripts/verify_all.sh --job docs`", "`make verify`", 1)
+    planted = text.replace("(`document_gates` in `scripts/stage2.py`)", "(`make verify`)", 1)
     assert draft_document_check_problems(planted), "the full suite passes as the draft's check again"
     parsed = text.replace("the check's exit code decides", "the parsed gate output decides", 1)
     assert draft_document_check_problems(parsed), "parsed output passes as the verdict's source"
     # The sentence is matched across any line wrapping, so rewrapping WORKFLOW.md cannot turn this
     # planted fault into a no-op.
-    full_suite = r"\s+".join(map(re.escape, "`implement` keeps the full `make verify`;".split()))
+    full_suite = r"\s+".join(map(re.escape, "`implement` and `repair` take the targeted check,".split()))
     dropped = re.sub(full_suite + r"[^.]*\.\s*", "", text, count=1)
-    assert dropped != text, "the full-suite sentence was not found to drop"
-    assert draft_document_check_problems(dropped), "a draft-only section without the full-suite sentence passes"
+    assert dropped != text, "the targeted-check sentence was not found to drop"
+    assert draft_document_check_problems(dropped), "a draft section without the targeted-check sentence passes"
     obsolete = re.sub(full_suite + r"[^.]*\.", "`implement` and `repair` keep the full `make verify`.", text, count=1)
     assert obsolete != text and draft_document_check_problems(obsolete)
 
@@ -18644,7 +19926,7 @@ def test_the_drafting_prompts_name_the_draft_verb() -> None:
     # Criterion 34. Planted fault: a drafting prompt's Model line without `stage2.py draft <change>`.
     for name in ("02-spec.md", "02b-design.md", "03-plan.md"):
         line = model_line((PROMPTS / name).read_text(encoding="utf-8"))
-        assert "Codex (`gpt-6.1-sol`)" in line, name
+        assert "Codex (`gpt-6.1-terra`)" in line, name
         assert "python3 scripts/stage2.py draft <change>" in line, name
         assert "GLM 5.3 after two failed attempts" in line, name
         planted = line.replace("python3 scripts/stage2.py draft <change>", "the model writes them by hand", 1)
@@ -18859,13 +20141,13 @@ def review_prompt_problems(spec_review: str, review: str) -> list[str]:
     """Criterion 34: 2a's Model line is Opus 5.5 through the runner and no Codex; 6 keeps its verb and verdict."""
     found = []
     model = model_line(spec_review)
-    if "gpt-6.1-sol" in model or "Codex" in model:
+    if "gpt-6.1-terra" in model or "Codex" in model:
         found.append("02a-spec-review.md's Model line still routes the spec review to Codex")
     for needle in ("Opus 5.5", "stage2.py spec-review <change>", "scripts/stage2.py"):
         if needle not in model:
             found.append(f"02a-spec-review.md's Model line lacks {needle}")
     one = flat(review)
-    if "gpt-6.1-sol" not in one or "scripts/stage2.py" not in one:
+    if "gpt-6.1-terra" not in one or "scripts/stage2.py" not in one:
         found.append("06-review.md lacks the Codex model or the runner")
     if "stage2.py review <change>" not in one:
         found.append("06-review.md does not name the verb review")
@@ -18993,7 +20275,10 @@ def flash_runner_doctrine_problems(texts: dict[str, str]) -> list[str]:
             phrase in one.lower() for phrase in ("without fallback", "never falls back", "never selects the fallback")
         ):
             found.append(f"{name} does not stop on a leak without fallback")
-    if not re.search(r"runner runs (?:exactly )?`make verify`", workflow) or "checkpoint commit" not in workflow:
+    if (
+        not re.search(r"runner runs its post-run check|runner runs (?:exactly )?`make verify`", workflow)
+        or "checkpoint commit" not in workflow
+    ):
         found.append("workflow does not give verification and the checkpoint to the runner")
     if "file tools but no command tool" not in implement:
         found.append("implement prompt does not state its no-command boundary")
@@ -19158,7 +20443,7 @@ def test_the_prompts_name_the_ladder_and_the_limit() -> None:
     assert "free_stage" in one and "flash_swarm" in one, "04b does not name the configurable rule"
     for name in ("02a", "06"):
         one = flat(texts[name])
-        assert "gpt-6.1-sol" in one, name
+        assert "gpt-6.1-terra" in one, name
         assert "until a round is clean" in one, name
         assert "three rounds" not in one and "round 3 only when round 2 wrote" not in one, name
         assert "deepseek-v4.1-flash" not in one and "mimo-v2.6" not in one, name
@@ -19433,7 +20718,7 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
         found.append("section 4 does not say thirteen verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
-    if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
+    if "| Repair after 4b and 6 | **gpt-6.1-terra** |" not in workflow:
         found.append("the routing table has no repair row")
     if "### Repairing taken findings (repair)" not in workflow:
         found.append("the repair subsection is missing")
@@ -19464,7 +20749,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     )
     assert repair_doctrine_problems(
         workflow.replace(
-            "| Repair after 4b and 6 | **gpt-6.1-sol** |", "| Repair after 4b and 6 | **Sonnet 5.5** |", 1
+            "| Repair after 4b and 6 | **gpt-6.1-terra** |", "| Repair after 4b and 6 | **Sonnet 5.5** |", 1
         ),
         agents,
     )
@@ -19500,7 +20785,7 @@ def repair_prompt_problems(loop: str, implement: str) -> list[str]:
     for needle in ("taken — not a test — <reason>", "Broke a test"):
         if needle not in one:
             found.append(f"04b lacks '{needle}'")
-    for needle in ("red first", "gpt-6.1-sol", "fixed — tests/<path>::<function>", "fixed — not a test — <reason>"):
+    for needle in ("red first", "gpt-6.1-terra", "fixed — tests/<path>::<function>", "fixed — not a test — <reason>"):
         if needle not in four:
             found.append(f"04 lacks '{needle}'")
     return found
@@ -19932,15 +21217,14 @@ def test_an_expired_round_starts_no_replacement_and_consumes_no_stage(world: Wor
     """O196-1: a failed swarm at the deadline cannot buy a fresh second for every remaining rung."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def expired(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.CallFailed("the round time limit expired") for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expired)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the exhausted deadline still launched a replacement"
@@ -21045,6 +22329,9 @@ def test_work_verbs_skip_escaped_scan_parent(
     if verb == "draft":
         draft_world(world)
         red = red_verify(OTHER_RED)
+        # The gate launches answer from the scenario's `sh` steps: one red start frame ends the
+        # first two attempts (the executor stops at the first blocking red), then greens for the
+        # GLM attempt's whole document subset.
         world.script(
             codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
             claude=[
@@ -21056,7 +22343,7 @@ def test_work_verbs_skip_escaped_scan_parent(
                     },
                 }
             ],
-            docs=[red, red, {"stdout": "green\n"}],
+            sh=[red, red] + [{"stdout": "green\n"}] * 12,
         )
     elif verb == "repair":
         repair_world(world)
@@ -21756,7 +23043,11 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
 
     def terminate() -> None:
         os.kill(os.getpid(), signal_.SIGTERM)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, terminate)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -21781,7 +23072,11 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 
     def hang_up() -> None:
         os.kill(os.getpid(), signum)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, hang_up)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -21796,11 +23091,45 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
     """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
     monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
-    escape = "import subprocess, time; subprocess.Popen(['sleep', '8'], start_new_session=True); time.sleep(100)"
-    start = time.monotonic()
-    with pytest.raises(stage2.StepTimedOut):
-        stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
-    assert time.monotonic() - start < 5
+    pidfile = tmp_path / "escapee.pid"
+    escape = (
+        "import pathlib, subprocess, time; "
+        "child = subprocess.Popen(['sleep', '30'], start_new_session=True); "
+        f"staged = pathlib.Path({str(pidfile) + '.tmp'!r}); staged.write_text(str(child.pid) + chr(10)); "
+        f"staged.replace({str(pidfile)!r}); time.sleep(100)"
+    )  # written to a temporary file and renamed into place: the record appears only complete
+    handed: list[float | None] = []
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            nonlocal escapee
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the escapee's complete PID is held before the expiry is injected.
+                escapee = _await_complete_pid(pidfile, 500)
+                assert escapee is not None, "the stopped step never registered its escapee's complete pid"
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    escapee: int | None = None
+    try:
+        with pytest.raises(stage2.StepTimedOut):
+            stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
+        assert escapee is not None
+        assert _child_alive(escapee), "the drain waited for the escaped descendant to die"
+        assert handed[0] == 1, "the step was stopped before its allowance ran out"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the drain after the kill is unbounded"
+    finally:
+        # cleanup: the escapee outlives its step by design; a PID recorded after a failed wait is still killed
+        _kill_known(escapee if escapee is not None else _complete_pid(pidfile))
 
 
 def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
@@ -21870,18 +23199,23 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
     """Criterion 9 (DL-B-10): a rung whose launch the deadline prevented writes no call line and is not consumed."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 3 / 60)
+    clock = FakeClock(monkeypatch, UTC_START)
     original = stage2.checked_prompt
+    burned: list[str] = []
 
     def slow(ctx, endpoint, prompt, admission=None):
-        if endpoint[1] == "mimo-v2.6-pro":
-            time.sleep(2.5)
+        # Once: only the replacement attempt's prompt check burns the shared round budget; a
+        # later round starts a fresh one and its call must not inherit the planted overspend.
+        if endpoint[1] == "mimo-v2.6-pro" and not burned:
+            burned.append(endpoint[1])
+            clock.advance(stage2.REVIEWER_MINUTES * 60)
         return original(ctx, endpoint, prompt, admission)
 
     monkeypatch.setattr(stage2, "checked_prompt", slow)
     world.script(
         pi=[
             {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M"), "sleep": 1},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
         ]
     )
     assert world.run("review-loop") == 0
@@ -21898,11 +23232,8 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
 
 def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, monkeypatch) -> None:
     """Criterion 9: the final admission read can exhaust the deadline without consuming a rung."""
-    from types import SimpleNamespace
-
     _flash_next(world)
-    clock = [time.monotonic()]
-    monkeypatch.setattr(stage2, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    clock = FakeClock(monkeypatch, UTC_START)
     original_dispatch = stage2.dispatch_go
     original_problem = stage2.terms_problem
     in_dispatch = threading.local()
@@ -21918,7 +23249,7 @@ def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, 
     def admission(entry, model):
         problem = original_problem(entry, model)
         if model == "mimo-v2.6-pro" and getattr(in_dispatch, "active", False):
-            clock[0] += stage2.REVIEWER_MINUTES * 60 + 1
+            clock.advance(stage2.REVIEWER_MINUTES * 60 + 1)
             admission_finished.append(model)
         return problem
 
@@ -21970,18 +23301,32 @@ def test_a_deadline_stop_names_the_round_limit(world: World, monkeypatch) -> Non
     """Criterion 12 (DL-B-14): a call stopped by the round deadline names that limit, not 45 minutes."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 2 / 60)
-    world.script(
-        pi=[
-            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited", "sleep": 0.5},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
-            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P"), "sleep": 10},
-        ]
+    # Planted fault: the simulated expiry reports the reviewer limit, or no limit at all.
+    clock = FakeClock(monkeypatch, UTC_START)
+
+    def model_of(command: list[str]) -> str | None:
+        # None for the discovery commands: they carry no `--model` and stay on the stand-in.
+        return command[command.index("--model") + 1].split("/", 1)[1] if "--model" in command else None
+
+    def plan_for(model: str, plan: dict) -> tuple:
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and model_of(command) == model, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            plan_for("deepseek-v4.1-flash", {"exit": 1, "stderr": "Rate limited"}),
+            plan_for("mimo-v2.6-flash", {"stdout": rows(1, "M")}),
+            plan_for("mimo-v2.6-pro", {"duration": 30.0, "stdout": rows(1, "P")}),
+        ],
     )
     assert world.run("review-loop") == 0
     text = world.record().read_text(encoding="utf-8")
     stop = next(line for line in text.splitlines() if line.startswith("mimo-v2.6-pro failed:"))
     assert "was stopped by the round time limit of" in stop and "seconds were left for this call" in stop
     assert "reviewer time limit" not in stop
+    (mimo_pro,) = [row for row in programs.waits() if model_of(row["command"]) == "mimo-v2.6-pro"]
+    assert mimo_pro["outcome"] == "timeout" and mimo_pro["timeout"] > 0, "the overstay was not simulated"
 
 
 def test_activation_copies_only_the_allowed_definition_fields(tmp_path: Path) -> None:
@@ -23490,6 +24835,13 @@ def test_the_stand_in_log_survives_parallel_members(world: World) -> None:
 # verify-stages-new-files (bead coding-harness-fdz): new files are in the index when make verify runs
 # ---------------------------------------------------------------------------
 
+# Covers the new tool so the implement preflight does not refuse it; the modified
+# `src/app.py` has no linked test and takes the attempt to the full fallback.
+NEW_TOOL_TEST = (
+    "from pathlib import Path\n\n\ndef test_new_tool():\n"
+    '    assert (Path(__file__).resolve().parent.parent / "scripts" / "new_tool.py").name == "new_tool.py"\n'
+)
+
 
 @pytest.mark.parametrize("verb", ["implement", "repair"])
 def test_make_verify_sees_the_attempts_new_files_in_git(
@@ -23507,11 +24859,17 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
 
     monkeypatch.setattr(stage2, "launch", record)
     if verb == "implement":
+        # The uncovered `src/app.py` modification sends this covered attempt to the full fallback,
+        # whose `make verify` is the run the intent-to-add entry must precede.
         world.script(
             claude=[
                 {
                     "stdout": "implemented",
-                    "plant": {"scripts/new_tool.py": "VALUE = 1\n", "src/app.py": "value = 2\n"},
+                    "plant": {
+                        "scripts/new_tool.py": "VALUE = 1\n",
+                        "tests/test_new_tool.py": NEW_TOOL_TEST,
+                        "src/app.py": "value = 2\n",
+                    },
                     "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
                 }
             ],
@@ -23628,10 +24986,16 @@ def test_intent_to_add_keeps_git_pathspecs_as_bytes(world: World, monkeypatch: p
 def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
     # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
     # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.
+    # The covered new tool keeps the preflight silent; the uncovered `src/app.py` modification takes each
+    # attempt to the full fallback, whose red `make verify` is what the cleanup must recover from.
     red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
     step = {
         "stdout": "implemented",
-        "plant": {"scripts/new_tool.py": "VALUE = 1\n"},
+        "plant": {
+            "scripts/new_tool.py": "VALUE = 1\n",
+            "tests/test_new_tool.py": NEW_TOOL_TEST,
+            "src/app.py": "value = 2\n",
+        },
         "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
     }
     world.script(claude=[step] * 3, make=[red] * 3)
@@ -23678,6 +25042,280 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
         assert any("`make verify` exited 1" in problem for problem in problems)
     elif verification == "timeout":
         assert any("`make verify` did not finish" in problem for problem in problems)
+
+
+def test_git_error_text_keeps_every_non_empty_line_after_a_long_path() -> None:
+    """Dropping any diagnostic line can hide git's reason, even after an unbounded path."""
+    path = "/tmp/" + "d" * 5000 + "/.git/index.lock"
+    fatal = f"fatal: Unable to create '{path}': File exists."
+    reason = "Another git process seems to be running."
+    message = f"{fatal}\n\n{reason}\n"
+    assert stage2.git_error_text(message) == f"{fatal} {reason}"
+    assert stage2.git_error_text("warning: noisy prelude\n" + message) == (f"warning: noisy prelude {fatal} {reason}")
+    assert stage2.git_error_text("error: failed operation\n\nfatal: later reason\n") == (
+        "error: failed operation fatal: later reason"
+    )
+    assert stage2.git_error_text("error: failed operation\nexplanation on a later line\n") == (
+        "error: failed operation explanation on a later line"
+    )
+    assert stage2.git_error_text("  short  ") == "short"
+    assert stage2.git_error_text("\n  \n") == ""
+    assert stage2.git_error_text("") == ""
+    assert stage2.git_error_text("x" * 5000) == "x" * 5000
+
+
+def test_merge_base_keeps_git_diagnostic_in_c_locale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed merge-base must explain the actual git failure, including every diagnostic line."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    observed = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: bad object HEAD\nhint: check the reference\n"
+
+    def fail_git(command, **kwargs):
+        assert command == [stage2.GIT, "-C", str(tmp_path), "merge-base", "HEAD", "origin/main"]
+        observed.update(kwargs.get("env", {}))
+        return subprocess.CompletedProcess(command, 128, "", diagnostic)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2._merge_base(tmp_path)
+    assert "warning: noisy prelude fatal: bad object HEAD hint: check the reference" in str(failure.value), (
+        "merge-base discarded git's explanation"
+    )
+    assert observed.get("LC_ALL") == "C", "merge-base must request English git diagnostics"
+    assert observed.get("GIT_TEST_SENTINEL") == "inherited", "merge-base lost the inherited environment"
+
+
+@pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])
+@pytest.mark.parametrize("explicit_env", [False, True])
+def test_git_errors_use_c_locale_and_keep_reason_after_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper: str, explicit_env: bool
+) -> None:
+    """A localized fatal line after a warning must not disappear from diagnostics."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"} if explicit_env else None
+    observed = {}
+
+    def fail_git(command, **kwargs):
+        env = kwargs["env"]
+        observed.update(os.environ if env is None else env)
+        prefix = "fatal:" if observed.get("LC_ALL") == "C" else "Schwerwiegend:"
+        stderr = f"warning: noisy prelude\n{prefix} Unable to create '/tmp/repo/.git/index.lock': File exists.\n"
+        if not kwargs.get("text", False):
+            stderr = stderr.encode()
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        getattr(stage2, helper)(tmp_path, "status", env=supplied)
+    assert "index.lock" in str(failure.value), "Git's reason must survive a leading warning in any caller locale"
+    assert "warning: noisy prelude fatal:" in str(failure.value)
+    assert observed["LC_ALL"] == "C"
+    if supplied is None:
+        assert observed["GIT_TEST_SENTINEL"] == "inherited"
+    else:
+        assert observed["GIT_INDEX_FILE"] == "private-index"
+        assert supplied["LC_ALL"] == "de_DE.UTF-8", "Do not mutate the caller's environment"
+
+
+def test_every_git_launch_of_the_runner_goes_through_run_git() -> None:
+    """Decision Q-8: one helper starts git, so no launch can lose git's diagnostic or the C locale (F6-4, F6-5).
+
+    Modelled on the source check that counts launches naming GIT: a command list whose first element
+    is GIT may stand only inside `run_git`, and there is no exemption.
+    """
+    tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
+    helpers = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_git"]
+    assert len(helpers) == 1, "scripts/stage2.py must define exactly one module-level run_git"
+    inside = {id(node) for node in ast.walk(helpers[0])}
+
+    def names_git(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.List | ast.Tuple)
+            and bool(node.elts)
+            and isinstance(node.elts[0], ast.Name)
+            and node.elts[0].id == "GIT"
+        )
+
+    bypass = sorted(node.lineno for node in ast.walk(tree) if names_git(node) and id(node) not in inside)
+    assert bypass == [], f"a git launch bypasses run_git at line(s) {bypass}"
+    own = [node for node in ast.walk(helpers[0]) if names_git(node)]
+    assert len(own) == 1, "run_git must build exactly one git command"
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+    ]
+    # Seven launch sites at 00d83c67: show, merge-base, archive, merge-base --is-ancestor, cat-file -e,
+    # and the two wrappers `_git_output` and `_git_bytes`.
+    assert len(calls) >= 7, f"fewer run_git calls than the seven launch sites this check was written against: {calls}"
+    # Handled failures must name both a nonzero code and its expected diagnostic,
+    # at direct launches and at wrapper calls; a bare tuple of codes cannot establish absence.
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
+        if not (isinstance(call.func, ast.Name) and call.func.id in {"run_git", "_git_output", "_git_bytes"}):
+            continue
+        for keyword in call.keywords:
+            if keyword.arg != "allow":
+                continue
+            value = keyword.value
+            if isinstance(value, ast.Name):
+                assert value.id == "allow", f"line {call.lineno} forwards an unknown handled-failure declaration"
+                continue
+            assert isinstance(value, ast.Dict) and value.keys, (
+                f"line {call.lineno} handles Git failure with bare exit codes instead of diagnostic patterns"
+            )
+            for code, pattern in zip(value.keys, value.values, strict=True):
+                assert isinstance(code, ast.Constant) and type(code.value) is int and code.value != 0
+                assert not isinstance(pattern, ast.Constant) or isinstance(pattern.value, str), (
+                    f"line {call.lineno} needs an expected diagnostic pattern for each handled Git failure"
+                )
+
+    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+        if function.name == "run_git":
+            continue
+        for assignment in (node for node in ast.walk(function) if isinstance(node, ast.Assign)):
+            call = assignment.value
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "run_git"):
+                continue
+            names = {target.id for target in assignment.targets if isinstance(target, ast.Name)}
+            reads_status = any(
+                isinstance(node, ast.Attribute)
+                and node.attr == "returncode"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in names
+                for node in ast.walk(function)
+            )
+            if reads_status:
+                assert any(keyword.arg == "allow" for keyword in call.keywords), (
+                    f"{function.name}:{call.lineno} handles Git status without explicit allowed exit codes"
+                )
+                for raised in (node for node in ast.walk(function) if isinstance(node, ast.Raise) and node.exc):
+                    assert any(
+                        isinstance(node, ast.Attribute)
+                        and node.attr == "diagnostic"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id in names
+                        for node in ast.walk(raised.exc)
+                    ), f"{function.name}:{raised.lineno} builds a Git failure without its diagnostic"
+
+    for guarded in (node for node in ast.walk(tree) if isinstance(node, ast.Try)):
+        calls_git = any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+            for statement in guarded.body
+            for node in ast.walk(statement)
+        )
+        if not calls_git:
+            continue
+        for handler in guarded.handlers:
+            if not (isinstance(handler.type, ast.Name) and handler.type.id == "Refused"):
+                continue
+            for raised in (node for node in ast.walk(handler) if isinstance(node, ast.Raise) and node.exc):
+                assert handler.name and any(
+                    isinstance(node, ast.Name) and node.id == handler.name for node in ast.walk(raised.exc)
+                ), f"line {raised.lineno} replaces a Git failure without carrying its diagnostic"
+
+
+@pytest.mark.parametrize("text", [False, True])
+def test_run_git_forces_c_locale_and_keeps_every_diagnostic_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: bool
+) -> None:
+    """The one launch helper forces LC_ALL=C and keeps every non-empty line of git's diagnostic (Q-8)."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"}
+    observed: dict[str, object] = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: unable to read tree HEAD\nhint: a later line\n"
+
+    def fail_git(command, **kwargs):
+        observed.update(kwargs)
+        observed["command"] = command
+        return subprocess.CompletedProcess(
+            command, 128, "" if text else b"", diagnostic if text else diagnostic.encode()
+        )
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.run_git(tmp_path, "archive", "HEAD", env=supplied, text=text)
+    assert observed["command"] == [stage2.GIT, "-C", str(tmp_path), "archive", "HEAD"]
+    assert observed["env"]["LC_ALL"] == "C" and observed["env"]["GIT_INDEX_FILE"] == "private-index"
+    assert supplied["LC_ALL"] == "de_DE.UTF-8", "run_git must not mutate the caller's environment"
+    assert observed["timeout"] == stage2.GIT_SECONDS and observed["check"] is False
+    assert "128" in str(failure.value)
+    assert "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line" in str(failure.value)
+
+
+@pytest.mark.parametrize("allow", [None, {1: r""}, {128: r"fatal: expected absence"}])
+@pytest.mark.parametrize("exit_code", [0, 1, 128])
+@pytest.mark.parametrize("diagnostic", ["", "fatal: expected absence", "fatal: expected absence\nhint: recover\n"])
+def test_run_git_accepts_only_explicit_exit_codes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allow: dict[int, str] | None,
+    exit_code: int,
+    diagnostic: str,
+) -> None:
+    """A handled status needs both its code and its complete expected diagnostic."""
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"payload", diagnostic.encode()),
+    )
+    accepted = exit_code == 0 or (
+        allow is not None
+        and exit_code in allow
+        and re.fullmatch(allow[exit_code], stage2.git_error_text(diagnostic)) is not None
+    )
+    if accepted:
+        done = stage2.run_git(tmp_path, "diff", allow=allow)
+        assert done.returncode == exit_code and done.stdout == b"payload"
+        assert done.diagnostic == stage2.git_error_text(diagnostic)
+    else:
+        try:
+            stage2.run_git(tmp_path, "diff", allow=allow)
+        except stage2.Refused as error:
+            message = str(error)
+        else:
+            pytest.fail(f"Git exit {exit_code} must fail closed unless its whole diagnostic is expected")
+        assert str(exit_code) in message
+        for line in diagnostic.splitlines():
+            if line:
+                assert line in message, f"Git failure discarded a diagnostic line: {line}"
+
+
+def test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6-5: a failing `git archive` names git's whole reason, and git runs in the C locale."""
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    (root / "README.md").write_text("x\n")
+    env = {"PATH": os.environ.get("PATH", ""), "LC_ALL": "de_DE.UTF-8", "GIT_TEST_SENTINEL": "supplied"}
+    observed: dict[str, str] = {}
+    mirrors: list[Path] = []
+    real_mkdtemp = stage2.tempfile.mkdtemp
+
+    def mkdtemp(*args, **kwargs):
+        made = real_mkdtemp(*args, dir=tmp_path, **{k: v for k, v in kwargs.items() if k != "dir"})
+        mirrors.append(Path(made))
+        return made
+
+    def fail_git(command, **kwargs):
+        assert command[:4] == [stage2.GIT, "-C", str(root), "archive"]
+        observed.update(kwargs["env"])
+        stderr = b"fatal: unable to read tree HEAD\n\nhint: run git fsck\n"
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.tempfile, "mkdtemp", mkdtemp)
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.trusted_registry(root, env)
+    message = str(failure.value)
+    assert "fatal: unable to read tree HEAD hint: run git fsck" in message, "git archive lost git's explanation"
+    assert "128" in message, "the exit code stays in the diagnostic"
+    assert observed.get("LC_ALL") == "C", "git archive must run in the C locale"
+    assert observed.get("GIT_TEST_SENTINEL") == "supplied", "git archive lost the supplied environment"
+    assert env["LC_ALL"] == "de_DE.UTF-8", "the caller's environment is not mutated"
+    assert mirrors and not any(path.exists() for path in mirrors), "the mirror is removed on failure"
 
 
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
@@ -24461,36 +26099,43 @@ def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     def interrupt(process, *args, **kwargs):
         if not processes:
             processes.append(process)
-            end = time.monotonic() + 2
-            while not heartbeat.exists() and time.monotonic() < end:
-                time.sleep(0.01)
+            # Readiness, not a race: the descendant is running before the interruption is injected.
+            for _ in range(1500):  # watchdog only: bounds a wedged start, never a verdict
+                if heartbeat.exists() and pidfile.exists():
+                    break
+                time.sleep(0.02)
+            assert heartbeat.exists() and pidfile.exists(), "the launched group never started its descendant"
             raise interruption()
         return original(process, *args, **kwargs)
 
     def verb(*_args):
+        # The descendant's natural lifetime (30 s of heartbeats) and the leader's sleep far
+        # outlast the watchdog below, so a pass can never come from natural completion.
         child = (
             "import os, time; from pathlib import Path; "
             f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
-            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(150)]"
+            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(1500)]"
         )
-        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(3)"
+        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(30)"
         stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
 
     monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
     monkeypatch.setattr(stage2, "explore", verb)
-    start = time.monotonic()
     try:
         if interruption is KeyboardInterrupt:
             with pytest.raises(KeyboardInterrupt):
                 world.run("explore")
         else:
             assert world.run("explore") == 143
-        time.sleep(0.1)
-        first = heartbeat.read_text()
-        time.sleep(0.15)
-        assert heartbeat.read_text() == first, "descendant survived main's interrupt handler"
+        # Liveness evidence, not elapsed time: the descendant's pid must disappear. The poll is a
+        # watchdog that bounds the reap; the descendant's own 30 s lifetime outlasts it.
+        descendant = int(pidfile.read_text())
+        for _ in range(300):
+            if not _child_alive(descendant):
+                break
+            time.sleep(0.02)
+        assert not _child_alive(descendant), "descendant survived main's interrupt handler"
         assert processes[0].poll() is not None, "group leader survived the interrupt"
-        assert time.monotonic() - start < 2, "Popen cleanup waited for natural child completion"
     finally:
         for process in processes:
             with contextlib.suppress(ProcessLookupError):
@@ -24843,7 +26488,7 @@ def test_a_signal_during_process_creation_leaves_no_child(
         else:
             assert world.run("explore") == 143
         assert children
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 5  # watchdog only: bounds a wedged reap, never a verdict
         while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
             time.sleep(0.01)
         assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
@@ -24912,7 +26557,7 @@ def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: P
     assert done.returncode == 0, done.stderr
     grandchild = int(out.read_text())
     try:
-        deadline = time.monotonic() + 2.0
+        deadline = time.monotonic() + 10.0  # watchdog only: bounds a wedged reap, never a verdict
         alive = True
         while alive and time.monotonic() < deadline:
             try:
@@ -24949,6 +26594,35 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
     assert nested == os.getpid(), "the runner's child did not nest in its admission"
+
+
+@pytest.mark.parametrize("shape", ["inline", "block-list", "duplicate-field"])
+def test_research_publication_preserves_all_producers(shape):
+    import yaml
+
+    source = (
+        b'---\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n'
+        b"date: 2026-11-04\nupdated: 2026-11-04\n---\n# Research\n\nEarlier work.\n"
+    )
+    if shape == "block-list":
+        source = source.replace(
+            b'produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}',
+            b'produced_by:\n- kind: llm-session\n  name: codex\n  version: "gpt-6.1-sol, 2026-11-04"',
+        )
+    elif shape == "duplicate-field":
+        source = source.replace(
+            b"date: 2026-11-04",
+            b'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\ndate: 2026-11-04',
+            1,
+        )
+    corrected = stage2.research_publication(source, producer="pi", day="2026-11-05")
+    records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    assert records == [
+        {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-05"},
+    ], "a new publication must extend earlier producer/model attribution"
+    assert stage2.research_publication(corrected, producer="pi", day="2026-11-05") == corrected
+    assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
 
 
 # ---------------------------------------------------------------------------
@@ -25022,6 +26696,22 @@ def targeted_mode(monkeypatch: pytest.MonkeyPatch) -> LocalCommands:
 
 
 RED_PYTEST = (1, "FAILED tests/test_fix.py::test_fix - AssertionError\n1 failed in 0.1s\n")
+
+
+def gate_red_then_green(commands: LocalCommands, red: str, reds: int = 1) -> None:
+    """Answer the first `reds` gate launches red with `red`, every later launch green.
+
+    A document check runs one launch per declared gate, so a red count of one makes the
+    first gate of the registry order fail and the attempt retry from a clean slate.
+    """
+    state = {"seen": 0}
+
+    def outcome(_command: list[str]) -> tuple[int, str]:
+        state["seen"] += 1
+        return (1, red) if state["seen"] <= reds else (0, "")
+
+    commands.outcomes["gate"] = outcome
+
 
 # A committed test with an unchanged, failing sibling: it links to `scripts/helper.py` by its path.
 LINKED_TEST = (
@@ -25706,27 +27396,62 @@ def test_targeted_repair_preserves_preparation_and_answer_proofs(
 
 
 def test_targeted_mode_is_repair_only(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 10. Planted fault: implement checkpoints after targeted checks alone, or a draft loses its
-    document check or its admission."""
+    """Criterion 10 (repair-targeted-check). Planted fault: a verb takes the targeted route without naming
+    it at its call site, or the draft's document check returns to the admitted shell runner."""
     for function in (stage2.run_attempts, stage2.verify_attempt):
         name = "verify_mode" if function is stage2.run_attempts else "mode"
         assert inspect.signature(function).parameters[name].default == "full"
-    commands = targeted_mode(monkeypatch)
-    successful_implementation(world)
-    assert world.run("implement") == 0
-    (make,) = commands.of("make")
-    assert make["command"] == ["make", "verify"] and make["pass_fds"], "implement left the admitted full check"
-    assert commands.of("gate") == [], "implement ran the repair's targeted gates"
-    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-    world.plan.write_text(PLAN_CARD, encoding="utf-8")
-    stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
-    (docs,) = world.calls("bash")
-    assert docs["argv"][-2:] == ["--job", "docs"] and verify_lock.LOCK_ENV in docs["env"]
-    assert commands.of("gate") == []
-    # `repair` alone asks for the targeted mode, and by default it does.
+    # Exactly the two work verbs name the targeted mode at their call sites; every other caller keeps
+    # the admitted full check as its default (bead coding-harness-0swp).
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
     assert "REPAIR_VERIFY_MODE" not in source
-    assert source.count('verify_mode="targeted"') == 1
+    assert source.count('verify_mode="targeted"') == 2
+    # A covered implement runs the targeted check, never the document-only draft subset:
+    commands = targeted_mode(monkeypatch)
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+    )
+    assert world.run("implement") == 0
+    assert commands.of("pytest") and commands.of("gate"), "the targeted route did not run"
+    assert commands.of("make") == [], "a covered implement ran the admitted full check"
+    # The draft's document check stays out of the admitted shell runner:
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    _problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert world.calls("bash") == [], "the draft's document check went through bash again"
+    assert commands.of("make") == []
+    assert "document checks only" in scope and "result: green" in scope
+
+
+def test_passing_full_fallback_repair_keeps_scope_only_in_plan(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 8: plant unsafe coverage and exercise the successful full-fallback repair branch."""
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+
+    def unreadable(_repo: str, **_kwargs) -> None:
+        raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+    monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+    assert world.run("repair") == 0
+    assert len(commands.of("make")) == 1, "the repair did not exercise full fallback"
+    time_lines = [
+        line for line in world.plan.read_text(encoding="utf-8").splitlines() if "measured by the runner" in line
+    ]
+    assert len(time_lines) == 1
+    assert "· accepted · full `make verify` ran (result: green)" in time_lines[0]
+    assert "the link inventory could not be read" in time_lines[0] and "planted inventory fault" in time_lines[0]
+    lines = world.text().splitlines()
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    assert len(audits) == 1
+    after_audit = "\n".join(lines[audits[-1] + 1 :])
+    assert "full `make verify`" not in after_audit, "the passing repair left a separate scope note after its audit line"
+    assert "planted inventory fault" not in world.text(), "the scope reason leaked out of the plan time line"
 
 
 @pytest.mark.parametrize("mode", ["targeted", "fallback", "fallback-launch-failure"])
@@ -25761,7 +27486,11 @@ def test_repair_records_verification_scope_and_outcome(
     assert world.run("repair") == 0
     body = git(world.root, "log", "-1", "--format=%B")
     text = world.text()
-    assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" in text
+    # The passing attempt's scope stands in its time line, not as a block in findings.md (Q-6).
+    assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" not in text
+    plan_lines = world.plan.read_text(encoding="utf-8").splitlines()
+    time_line = [line for line in plan_lines if "measured by the runner" in line]
+    assert time_line and "· accepted · " in time_line[-1] and "result: " in time_line[-1]
     if mode == "targeted":
         assert "targeted verification, not the full `make verify`; result: green" in body
         assert "`tests/test_fix.py`" in body and "a fresh full `make verify` is still required before phase 6" in body
@@ -26047,6 +27776,607 @@ def test_targeted_inventory_uses_bounded_sanitized_git(
         assert chosen.tests == ["tests/test_seed.py"]
 
 
+# ---------------------------------------------------------------------------
+# Targeted implement routes and the draft's document check
+# (spec targeted-check-more-verbs, criteria 1-9 and 13, bead coding-harness-0swp)
+# ---------------------------------------------------------------------------
+
+# A covered implement step: the modified `src/app.py` is licensed by the planted
+# `tests/test_fix.py`, so the attempt's delta has safely selectable coverage.
+COVERED_IMPLEMENT = {
+    "stdout": "implemented",
+    "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
+    "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+}
+
+# Licenses a planted `scripts/new_mid.py` that imports `scripts/helper.py`: the
+# selection reaches the test over the attempt's own import edge.
+NEW_MID_TEST = (
+    "from pathlib import Path\n\n\ndef test_new_mid():\n"
+    '    assert (Path(__file__).resolve().parent.parent / "scripts" / "new_mid.py").name == "new_mid.py"\n'
+)
+
+
+@pytest.mark.parametrize("route", ["initial", "retry", "fallback"])
+def test_implement_routes_use_targeted_postchecks(world: World, monkeypatch: pytest.MonkeyPatch, route: str) -> None:
+    """Criterion 1. Planted fault: a covered attempt on the initial, retry or stage-1 fallback
+    route launches full verification instead of the targeted check."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    commands = targeted_mode(monkeypatch)
+    if route == "retry":
+        # Cheap runs are the odd pytest calls, the targeted ones the even: attempt 1's
+        # targeted check is red, so the covered retry route must still stay targeted.
+        commands.outcomes["pytest"] = lambda _command: RED_PYTEST if len(commands.of("pytest")) == 2 else None
+        # The retry must change the code again: an attempt that leaves no model work is rejected.
+        again = {**COVERED_IMPLEMENT, "plant": {**COVERED_IMPLEMENT["plant"], "src/app.py": "value = 2\n# retried\n"}}
+        world.script(claude=[dict(COVERED_IMPLEMENT), again])
+    else:
+        world.script(claude=[dict(COVERED_IMPLEMENT)])
+    if route == "fallback":
+        assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    else:
+        assert world.run("implement") == 0
+    assert commands.of("make") == [], f"the {route} route launched the full check"
+    assert commands.of("gate"), "the targeted route ran no gate"
+    assert ["tests/test_fix.py"] in pytest_targets(commands)
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+
+
+def test_draft_refuses_registry_without_document_gates(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An otherwise valid registry without document gates must never produce a green draft."""
+    commands = targeted_mode(monkeypatch)
+    registry = world.root / "decisions" / "gates.yaml"
+    data = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    for gate in data["gates"]:
+        gate.pop("subsets", None)
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", registry)
+    assert ci_gates.validate_schema() == []
+    assert ci_gates.gates() and stage2.document_gates() == []
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems, "a draft with no document gates must fail its post-run check"
+    assert "no locally runnable document gates" in " ".join(problems), problems
+    assert "result: green" not in scope, scope
+    assert not commands.of("gate") and not commands.of("make") and not commands.of("pytest")
+
+
+def test_draft_document_projection_runs_unadmitted(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2. Planted fault: the draft's document check waits for the verify admission,
+    leaks one of its ownership markers into a gate's environment, runs pytest, or leaves the
+    registry's document subset."""
+    commands = targeted_mode(monkeypatch)
+    entered: list[list[str]] = []
+    real_hold = verify_lock.hold_admission
+
+    @contextlib.contextmanager
+    def spy(command: list[str]):
+        entered.append(list(command))
+        with real_hold(command) as owned:
+            yield owned
+
+    monkeypatch.setattr(verify_lock, "hold_admission", spy)
+    markers = (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    )
+    for name in markers:
+        monkeypatch.setenv(name, "outer-admission-marker")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems == [], problems
+    assert entered == [], "the document check waited for the machine admission"
+    expected = [gate_command(world, gate) for gate in stage2.document_gates()]
+    assert expected, "the document subset selected no gate"
+    assert [record["command"] for record in commands.of("gate")] == expected
+    for record in commands.of("gate"):
+        for name in markers:
+            assert name not in record["env"], (record["kind"], name)
+        assert record["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
+    assert commands.of("pytest") == [] and commands.of("make") == []
+    assert "document checks only, no tests ran; result: green" in scope
+    assert "not the full `make verify`" in scope
+    assert "a fresh full `make verify` is still required before phase 6" in scope
+
+
+@pytest.mark.parametrize(
+    "guard",
+    ["tool-tamper", "derived-order", "draft-card", "draft-time-heading", "draft-missing-spec"],
+)
+def test_extended_targeted_routes_preserve_acceptance_guards(
+    world: World, monkeypatch: pytest.MonkeyPatch, guard: str
+) -> None:
+    """Criterion 3. Planted fault: a targeted implement route bypasses the tool-integrity guard or
+    the derived preparation order, or the draft loses its card, time-heading or artefact guards."""
+    commands = targeted_mode(monkeypatch)
+    if guard == "tool-tamper":
+        # The tool state is read before the model runs; a program the attempt then overwrites
+        # fails the targeted route before any local command starts.
+        baseline = git(world.root, "rev-parse", "HEAD")
+        before = stage2.tool_state(world.root)
+        (world.root / ".venv" / "bin" / "python3").write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+        problems = stage2.verify_attempt(
+            world.root, world.plan, None, None, before, mode="targeted", against=baseline, new_file_guard=True
+        )
+        assert len(problems) == 1 and "`.venv/bin/python3`" in problems[0], problems
+        assert "is not what the runner saw before the call" in problems[0]
+        assert commands.records == [], "a tampered tool set still launched checks"
+        return
+    if guard == "derived-order":
+        world.script(claude=[dict(COVERED_IMPLEMENT)])
+        assert world.run("implement") == 0
+        assert "derived" in commands.order and "gate" in commands.order
+        assert commands.order.index("derived") < commands.order.index("gate"), commands.order
+        assert commands.order.index("pytest") < commands.order.index("gate"), commands.order
+        return
+    if guard == "draft-card":
+        world.plan.write_text(
+            "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n",
+            encoding="utf-8",
+        )
+        needle = stage2.CARD_PROBLEM
+    elif guard == "draft-time-heading":
+        world.plan.write_text(PLAN_CARD.replace("\n\n## Time used", ""), encoding="utf-8")
+        needle = "has no `## Time used` heading"
+    else:
+        (world.plan.parent / "spec.md").unlink()
+        world.plan.write_text(PLAN_CARD, encoding="utf-8")
+        needle = "spec.md is missing after the draft"
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert any(needle in problem for problem in problems), problems
+    assert "result: red" in scope
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["chain", "cycle", "rename", "no-cross-snapshot-fabrication", "retained-retry"],
+)
+def test_targeted_selection_follows_import_chains_per_snapshot(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 4. Planted fault: a transitive importer's whole test file is missed, a cycle does
+    not terminate, a renamed or deleted endpoint loses its test, a chain is fabricated across the
+    two snapshots, or a retry loses an earlier attempt's retained edit."""
+    if case == "retained-retry":
+        repair_world(world)
+        first = repair_step(
+            plant={
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                "scripts/new_mid.py": "import helper\nVALUE = 1\n",
+                "tests/test_new_mid.py": NEW_MID_TEST,
+            }
+        )
+        second = {
+            "stdout": "L1-1: fixed — tests/test_fix.py::test_fix",
+            "append": {
+                "plans/changes/demo/plan.md": "2026-10-12 10:10–10:12, 2 min\n",
+                "plans/changes/demo/research.md": "second repair note\n",
+            },
+        }
+        script_repair(world, [first, second], make=[{"stdout": "green\n"}])
+        commands = targeted_mode(monkeypatch)
+        commands.outcomes["pytest"] = lambda _command: RED_PYTEST if len(commands.of("pytest")) == 2 else None
+        assert world.run("repair") == 0
+        runs = pytest_targets(commands)
+        assert len(runs) == 4, runs
+        assert runs[3] == ["tests/test_fix.py", "tests/test_new_mid.py"], runs
+        assert commands.of("make") == []
+        assert loop_status(world) == "fixed — tests/test_fix.py::test_fix"
+        return
+    if case in ("chain", "rename"):
+        (world.root / "scripts" / "mid.py").write_text("import helper\nVALUE = 1\n", encoding="utf-8")
+        (world.root / "tests").mkdir(exist_ok=True)
+        name = "test_old_name.py" if case == "rename" else "test_chain.py"
+        (world.root / "tests" / name).write_text("def test_old():\n    assert 'scripts/mid.py'\n", encoding="utf-8")
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "a chain to helper")
+        if case == "rename":
+            git(world.root, "mv", "tests/test_old_name.py", "tests/test_new_name.py")
+    elif case == "cycle":
+        (world.root / "scripts" / "cyc_a.py").write_text("import cyc_b\n", encoding="utf-8")
+        (world.root / "scripts" / "cyc_b.py").write_text("import cyc_a\nimport helper\n", encoding="utf-8")
+        (world.root / "tests").mkdir(exist_ok=True)
+        (world.root / "tests" / "test_cycle.py").write_text(
+            "def test_cycle():\n    assert 'scripts/cyc_b.py'\n", encoding="utf-8"
+        )
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "an import cycle")
+    else:
+        (world.root / "scripts" / "mid.py").write_text("X = 1\n", encoding="utf-8")
+        (world.root / "tests").mkdir(exist_ok=True)
+        (world.root / "tests" / "test_gone.py").write_text(
+            "def test_gone():\n    assert 'scripts/mid.py'\n", encoding="utf-8"
+        )
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "a test that will be deleted")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "scripts" / "helper.py").write_text("VALUE = 3\n", encoding="utf-8")
+    if case == "no-cross-snapshot-fabrication":
+        # The baseline test of `mid.py` is gone; the attempt's `mid.py` now imports `helper.py`.
+        # The baseline chain test_gone -> mid never licenses the attempt's helper: each snapshot
+        # closes over itself, so helper stands uncovered and the full fallback explains why.
+        (world.root / "tests" / "test_gone.py").unlink()
+        (world.root / "scripts" / "mid.py").write_text("import helper\nX = 2\n", encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    chosen = stage2.targeted_selection(world.root, env, baseline)
+    if case == "no-cross-snapshot-fabrication":
+        assert chosen.fallback is not None and "has no linked test" in chosen.fallback, chosen.fallback
+        assert chosen.tests == []
+        return
+    expected = {
+        "chain": "tests/test_chain.py",
+        "cycle": "tests/test_cycle.py",
+        "rename": "tests/test_new_name.py",
+    }[case]
+    assert chosen.fallback is None, chosen.fallback
+    assert chosen.tests == [expected]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "before-tests",
+        "baseline-only-test",
+        "mixed-delta",
+        "untracked-test-satisfies",
+        "existing-uncovered-fallback",
+        "covered-shell-fallback",
+        "unreadable-inventory-fallback",
+    ],
+)
+def test_implement_refuses_uncovered_new_code_before_tests_or_fallback(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 5. Planted fault: new production code without a reachable test reaches pytest, the
+    admitted fallback or the checkpoint; a baseline-only, a deleted or a shell-licensed delta dodges
+    the refusal; or an unreadable inventory is asserted as empty."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    commands = targeted_mode(monkeypatch)
+    plan_append = {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}
+    refusal = {"before-tests", "baseline-only-test", "mixed-delta"}
+    if case == "before-tests":
+        # A touched test file means the cheap pytest would run; the guard must refuse first.
+        step = {
+            "stdout": "implemented",
+            "plant": {
+                "scripts/new_tool.py": "VALUE = 1\n",
+                "tests/test_other.py": "def test_other():\n    assert True\n",
+            },
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step] * 3)
+    elif case == "baseline-only-test":
+        (world.root / "tests").mkdir(exist_ok=True)
+        (world.root / "tests" / "test_gone.py").write_text(
+            "def test_gone():\n    assert 'scripts/new_tool.py'\n", encoding="utf-8"
+        )
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "a test that will be deleted")
+        # The commit moved HEAD: the attempt's baseline is the head that holds the test.
+        baseline = git(world.root, "rev-parse", "HEAD")
+        step = {
+            "stdout": "implemented",
+            "plant": {"scripts/new_tool.py": "VALUE = 1\n"},
+            "delete": ["tests/test_gone.py"],
+            "append": dict(plan_append),
+        }
+        # The retries find the test already gone (a failed attempt's edits stay), and a delete of
+        # an absent file would end the stand-in itself: they only repeat the plan line.
+        retry = {"stdout": "implemented", "append": dict(plan_append)}
+        world.script(claude=[step, retry, retry])
+    elif case == "mixed-delta":
+        step = {
+            "stdout": "implemented",
+            "plant": {"scripts/new_tool.py": "VALUE = 1\n", "scripts/ci_gates.py": "X = 1\n"},
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step] * 3)
+    elif case == "untracked-test-satisfies":
+        step = {
+            "stdout": "implemented",
+            "plant": {"scripts/new_tool.py": "VALUE = 1\n", "tests/test_new_tool.py": NEW_TOOL_TEST},
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step])
+    elif case == "existing-uncovered-fallback":
+        step = {"stdout": "implemented", "plant": {"src/app.py": "value = 2\n"}, "append": dict(plan_append)}
+        world.script(claude=[step], make=[{"stdout": "green\n"}])
+    elif case == "covered-shell-fallback":
+        step = {
+            "stdout": "implemented",
+            "plant": {
+                "scripts/tool.sh": "#!/bin/sh\n",
+                "tests/test_shell_link.py": "def test_shell_link():\n    assert 'scripts/tool.sh'\n",
+            },
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step], make=[{"stdout": "green\n"}])
+    else:
+
+        def unreadable(_repo: str, **_kwargs) -> None:
+            raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+        monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+        world.script(claude=[dict(COVERED_IMPLEMENT)], make=[{"stdout": "green\n"}])
+    if case in refusal:
+        assert world.run("implement") == 1
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert commands.of("pytest") == [], "the refusal came after the cheap tests"
+        assert commands.of("gate") == [] and commands.of("make") == [], "the refusal admitted a fallback"
+        text = world.text()
+        assert "new production code without a reachable test" in text
+        assert "`scripts/new_tool.py`" in text
+        assert "add a test that reaches this file" in text
+        return
+    assert world.run("implement") == 0
+    if case == "untracked-test-satisfies":
+        assert commands.of("make") == []
+        assert ["tests/test_new_tool.py"] in pytest_targets(commands)
+        assert git(world.root, "rev-parse", "HEAD") != baseline
+    elif case == "existing-uncovered-fallback":
+        assert len(commands.of("make")) == 1
+        assert commands.of("gate") == []
+        assert "has no linked test" in world.plan.read_text(encoding="utf-8")
+    elif case == "covered-shell-fallback":
+        assert len(commands.of("make")) == 1
+        scope = world.plan.read_text(encoding="utf-8")
+        assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in scope
+    else:
+        assert len(commands.of("make")) == 1
+        assert "planted inventory fault" in world.plan.read_text(encoding="utf-8")
+        assert "new production code without a reachable test" not in world.text()
+        assert git(world.root, "rev-parse", "HEAD") != baseline
+
+
+@pytest.mark.parametrize("boundary", ["shared-infrastructure", "stage2-test-file", "unsafe-inventory"])
+def test_implement_preserves_full_fallback_boundaries(
+    world: World, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    """Criterion 6. Planted fault: an implement route takes the targeted check where the existing
+    boundaries demand the admitted full fallback - shared infrastructure, the whole
+    `tests/test_stage2.py` in the selection, or an inventory that cannot be read."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["make"] = (0, "green\n")
+    plan_append = {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}
+    if boundary == "shared-infrastructure":
+        step = {
+            "stdout": "implemented",
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                "scripts/ci_gates.py": "X = 1\n",
+            },
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step])
+    elif boundary == "stage2-test-file":
+        seed_tests(world)
+        (world.root / "tests" / "test_stage2.py").write_text(
+            "def test_link():\n    assert 'scripts/helper.py'\n", encoding="utf-8"
+        )
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "a stage2 test file linked to helper")
+        baseline = git(world.root, "rev-parse", "HEAD")
+        step = {
+            "stdout": "implemented",
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                "scripts/helper.py": "VALUE = 3\n",
+            },
+            "append": dict(plan_append),
+        }
+        world.script(claude=[step])
+    else:
+
+        def unreadable(_repo: str, **_kwargs) -> None:
+            raise stage2.touch_map.CannotMeasure("planted inventory fault")
+
+        monkeypatch.setattr(stage2.touch_map, "WorktreeSnapshot", unreadable)
+        world.script(claude=[dict(COVERED_IMPLEMENT)])
+    assert world.run("implement") == 0
+    (make,) = commands.of("make")
+    assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert commands.of("gate") == [], "the full fallback also ran targeted gates"
+    # A passing attempt's scope stands in its time line in plan.md, not in findings.md (Q-6).
+    scope = world.plan.read_text(encoding="utf-8")
+    assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in scope
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+    if boundary == "shared-infrastructure":
+        assert "shared execution infrastructure" in scope
+    elif boundary == "stage2-test-file":
+        assert "tests/test_stage2.py" in scope
+        assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
+    else:
+        assert "planted inventory fault" in scope
+
+
+@pytest.mark.parametrize("fault", ["red-pytest", "red-gate", "timeout", "launch-error"])
+def test_extended_targeted_failures_never_checkpoint(world: World, monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
+    """Criterion 7. Planted fault: a red, timed-out or unstartable required targeted check is
+    overridden by the admitted full check instead of failing the attempt, or the attempt still
+    checkpoints."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    commands = targeted_mode(monkeypatch)
+    if fault == "red-pytest":
+        commands.outcomes["pytest"] = RED_PYTEST
+    elif fault == "red-gate":
+        commands.outcomes["gate"] = (1, "gate red\n")
+    elif fault == "timeout":
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.StepTimedOut("whole linked test file exceeded five minutes")
+            if len(commands.of("pytest")) % 2 == 0
+            else None
+        )
+    else:
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.CallFailed("pytest could not be started: planted launch fault")
+            if len(commands.of("pytest")) % 2 == 0
+            else None
+        )
+    world.script(claude=[dict(COVERED_IMPLEMENT)] * 3)
+    assert world.run("implement") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert commands.of("make") == [], "the runner fell back to the full check to override the targeted red"
+    text = world.text()
+    if fault == "red-pytest":
+        assert stage2.CHEAP_LABEL in text
+    else:
+        assert stage2.TARGETED_LABEL in text
+        assert "targeted verification, not the full `make verify`; result: red" in text
+
+
+@pytest.mark.parametrize("verb_case", ["implement", "fallback", "repair", "draft"])
+def test_all_targeted_verbs_record_actual_scope(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, verb_case: str
+) -> None:
+    """Criterion 8. Planted fault: the runner's evidence omits the selected tests and gates or a
+    full-fallback reason, the draft claims tests it did not run, or a targeted green is called full
+    green."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "scope-state"))
+    commands = targeted_mode(monkeypatch)
+    if verb_case == "implement":
+        world.script(claude=[dict(COVERED_IMPLEMENT)])
+        assert world.run("implement") == 0
+        verb = "implement"
+    elif verb_case == "fallback":
+        step = {
+            "stdout": "implemented",
+            "plant": {"src/app.py": "value = 2\n"},
+            "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+        }
+        world.script(claude=[step], make=[{"stdout": "green\n"}])
+        assert world.run("implement") == 0
+        verb = ""
+    elif verb_case == "repair":
+        repair_world(world)
+        assert world.run("repair") == 0
+        verb = "repair"
+    else:
+        world.plan.write_text(PLAN_CARD, encoding="utf-8")
+        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+        problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+        assert problems == [], problems
+        assert commands.of("pytest") == [] and commands.of("make") == []
+        assert "document checks only, no tests ran; result: green" in scope
+        return
+    body = git(world.root, "log", "-1", "--format=%B")
+    text = world.text()
+    if not verb:
+        assert "full `make verify` ran (result: green) because the targeted coverage was not safe" in body
+        assert "has no linked test" in body
+    else:
+        assert stage2.SCOPE_COMMIT_HEADING in body and f"{stage2.SCOPE_LABEL}:" not in text
+        assert "· accepted · targeted verification" in world.plan.read_text(encoding="utf-8")
+        assert "targeted verification, not the full `make verify`; result: green" in body
+        assert "`tests/test_fix.py`" in body
+    assert "VERIFY GREEN" not in body and "full verification green" not in body.lower()
+
+
+def verification_doctrine_problems(workflow: str, review_loop: str, adr: str) -> list[str]:
+    """Criterion 13: the held texts keep the boundaries the extension must not drop."""
+    found: list[str] = []
+    repairing = flat(section(workflow, "### Repairing taken findings"))
+    for needle in (
+        "requires full `make verify` on fallback when targeted coverage is unsafe",
+        "requires a fresh full `make verify` before phase 6",
+        "a green targeted repair does not replace that check",
+    ):
+        if needle not in repairing:
+            found.append(f"docs/WORKFLOW.md lost '{needle}' from the repair section")
+    loop = flat(review_loop)
+    for needle in (
+        "the full `make verify` on any fallback of the runner's targeted selection",
+        "one full `make verify` on the final head before phase 6",
+    ):
+        if needle not in loop:
+            found.append(f"prompts/04b-review-loop.md lost '{needle}'")
+    if "Status: accepted" not in adr:
+        found.append("docs/adr/0025-targeted-check-after-repair.md lost its accepted status")
+    adopted = flat(adr)
+    for needle in (
+        "takes effect on merge",
+        "One fresh green full `make verify` on the head under review is required before phase 6",
+        "CI remains the full gate of the pull request",
+    ):
+        if needle not in adopted:
+            found.append(f"docs/adr/0025-targeted-check-after-repair.md lost '{needle}'")
+    return found
+
+
+def test_verification_doctrine_covers_extended_targeted_routes() -> None:
+    """Criterion 13. Planted fault: a held text drops the targeted fallback, the fresh full check
+    before phase 6, or the ADR's acceptance record. The orchestrator's bootstrap step owns extending
+    this test to the implement, draft and missing-test wording once it aligns the held instructions;
+    until then it pins the boundaries the current text already carries."""
+    texts = {
+        "workflow": WORKFLOW.read_text(encoding="utf-8"),
+        "review_loop": (PROMPTS / "04b-review-loop.md").read_text(encoding="utf-8"),
+        "adr": (REPO_ROOT / "docs" / "adr" / "0025-targeted-check-after-repair.md").read_text(encoding="utf-8"),
+    }
+    assert verification_doctrine_problems(**texts) == []
+    needles = {
+        "workflow": (
+            "requires full `make verify` on fallback when targeted coverage is unsafe",
+            "requires a fresh full `make verify` before phase 6",
+            "a green targeted repair does not replace that check",
+        ),
+        "review_loop": (
+            "the full `make verify` on any fallback of the runner's targeted selection",
+            "one full `make verify` on the final head before phase 6",
+        ),
+        "adr": (
+            "One fresh green full `make verify` on the head under review is required before phase 6",
+            "CI remains the full gate of the pull request",
+        ),
+    }
+    for name, group in needles.items():
+        for needle in group:
+            pattern = r"\s+".join(map(re.escape, needle.split()))
+            haystack = texts[name]
+            if name == "workflow":
+                whole = section(haystack, "### Repairing taken findings")
+                planted_section, count = re.subn(pattern, "", whole)
+                assert count >= 1, (name, needle)
+                planted = haystack.replace(whole, planted_section, 1)
+            else:
+                planted, count = re.subn(pattern, "", haystack)
+                assert count >= 1, (name, needle)
+            problems = verification_doctrine_problems(**{**texts, name: planted})
+            assert problems, (name, needle)
+    for before, after in (
+        ("Status: accepted", "Status: proposed"),
+        ("takes effect on merge", "takes effect on draft"),
+    ):
+        problems = verification_doctrine_problems(**{**texts, "adr": texts["adr"].replace(before, after, 1)})
+        assert problems, before
+
+
+def test_new_conftest_fixture_keeps_full_fallback(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """New automatically loaded fixtures retain the shared-test-configuration fallback."""
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["make"] = (0, "green\n")
+    step = dict(COVERED_IMPLEMENT)
+    step["plant"] = dict(
+        step["plant"],
+        **{"tests/conftest.py": "import pytest\n\n@pytest.fixture\ndef automatic_fixture():\n    return 42\n"},
+    )
+    world.script(claude=[step])
+    assert world.run("implement") == 0, world.text()
+    assert len(commands.of("make")) == 1
+    assert "shared test configuration" in world.plan.read_text(encoding="utf-8")
+    assert "new production code without a reachable test" not in world.text()
+
+
 def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -26070,3 +28400,64 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
     assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
     assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        "fatal: unable to read tree baseline\n\nhint: recover the baseline objects\n",
+        "fatal: path 'docs/adr/0007-existing-record.md' does not exist in 'baseline'\nfatal: corrupt tree\n",
+    ],
+)
+def test_draft_keep_refuses_unreadable_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostic: str
+) -> None:
+    """F6-7: an unreadable tree must never authorise an existing ADR as new."""
+    adr = Path("docs/adr/0007-existing-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# Existing ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 128, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.draft_keep(tmp_path, ctx, "baseline")
+    except stage2.Refused as error:
+        message = str(error)
+    else:
+        pytest.fail("An unreadable baseline must refuse the ADR lookup, never classify the ADR as new")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"The baseline lookup lost Git's diagnostic: {line}"
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "diagnostic", "is_new"),
+    [
+        (0, "", False),
+        (128, "fatal: path 'docs/adr/0007-record.md' does not exist in 'baseline'\n", True),
+        (128, "fatal: path 'docs/adr/0007-record.md' exists on disk, but not in 'baseline'\n", True),
+    ],
+)
+def test_draft_keep_accepts_only_established_adr_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_code: int, diagnostic: str, is_new: bool
+) -> None:
+    """A present ADR stays protected; Git's two missing-path diagnostics establish a new one."""
+    adr = Path("docs/adr/0007-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
+    assert (adr in keep) is is_new
+    assert new_adrs == ([adr.as_posix()] if is_new else [])
