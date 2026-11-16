@@ -135,7 +135,7 @@ cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
 rows are decided and recorded.
 
 **Repair.** The orchestrator decides taken or rejected and hands every taken
-row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-sol`),
+row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-terra`),
 then a fresh Codex attempt and Sonnet 5.5 after failed post-run checks,
 repairs them in one guarded call (ADR 0017). Codex may run tests and
 `make verify` in its configured sandbox but never commits; the phase-6
