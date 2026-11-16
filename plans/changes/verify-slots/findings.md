@@ -1403,8 +1403,133 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-5 | MAJOR | SPEC | base | scripts/verify_lock.py:646–650 | A stale legacy marker can bypass admission while an unrelated new check holds the shared compatibility lock. After an old supervisor dies and its inherited lock releases, its holder record remains; new admissions never replace that record. The exclusive probe fails against their shared lock, incorrectly validating the old marker. Reproduced with an unrelated shared holder and matching stale record. Legacy validation must establish an exclusive legacy admission before permitting reuse. [AC5] | Codex | taken — a test that a stale legacy marker cannot pass admission while an unrelated check holds the shared compatibility lock | — |
-| F6-6 | MAJOR | MAINT | base | scripts/verify_lock.py:1030–1038 | Surveying free slot 0 locks its descriptor, but refusal when opening slot 1 leaves that descriptor open and locked. Admission cleanup cannot release it because the survey never returned it. Reproduced: after refusal and `release()`, a contender remained blocked. With capacity one and a substituted leftover slot-1 file, correcting that file still leaves admission blocked until the refusing process exits. Close accumulated survey descriptors on every exceptional exit. [AC6] | Codex | taken — a test that a refusal opening slot 1 leaves no slot descriptor open or locked after the survey | — |
+| F6-5 | MAJOR | SPEC | base | scripts/verify_lock.py:646–650 | A stale legacy marker can bypass admission while an unrelated new check holds the shared compatibility lock. After an old supervisor dies and its inherited lock releases, its holder record remains; new admissions never replace that record. The exclusive probe fails against their shared lock, incorrectly validating the old marker. Reproduced with an unrelated shared holder and matching stale record. Legacy validation must establish an exclusive legacy admission before permitting reuse. [AC5] | Codex | fixed — tests/test_verify_lock.py::test_stale_legacy_marker_cannot_reuse_shared_compatibility_lock | — |
+| F6-6 | MAJOR | MAINT | base | scripts/verify_lock.py:1030–1038 | Surveying free slot 0 locks its descriptor, but refusal when opening slot 1 leaves that descriptor open and locked. Admission cleanup cannot release it because the survey never returned it. Reproduced: after refusal and `release()`, a contender remained blocked. With capacity one and a substituted leftover slot-1 file, correcting that file still leaves admission blocked until the refusing process exits. Close accumulated survey descriptors on every exceptional exit. [AC6] | Codex | fixed — tests/test_verify_lock.py::test_slot_survey_refusal_closes_previously_locked_descriptors | — |
 
 Phase 6 verdict: codex 01a1e377-c0dd-7f91-9740-d559c06927fe, 2026-11-16
 Reviewer session: codex 01a1e377-c0dd-7f91-9740-d559c06927fe — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1089 files, 4415 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/verify_lock.py` +29 -13
+> - `tests/test_verify_lock.py` +54 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 83 lines of this gate left out …]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ...................................................                      [100%]
+> =================================== FAILURES ===================================
+> _________________ test_local_checks_preserve_nested_admission __________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/86468/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/86468/pytest-of-mikypiky/pytest-1/popen-gw0/test_local_checks_preserve_nes0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c7885f0>
+>
+>     def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
+>         # the selected pytest path loses the inherited marker or the shared state root, so the local
+>         # check queues for its own admission instead of reusing its ancestor's.
+>         ready = world.state / "holder-ready-nested"
+>         holder = _real_holder(ready)
+>         try:
+>             _holder_acquired(ready)
+>             # The marker is honoured only for a descendant of the published holder (review row F6-2),
+>             # and this test process is not the sibling supervisor's descendant: the record is
+>             # republished naming this process, the way an ancestor's supervisor names itself, while
+>             # the sibling keeps the work lock genuinely held.
+>             holder_pid = os.getpid()
+>             record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+>             record.write_text(
+>                 json.dumps(
+>                     {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+>                 ),
+>                 encoding="utf-8",
+>             )
+>             monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+>             monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+> >           assert verify_lock.nested_holder_pid() == holder_pid
+> E           assert None == 87854
+> E            +  where None = <function nested_holder_pid at 0x108997a60>()
+> E            +    where <function nested_holder_pid at 0x108997a60> = verify_lock.nested_holder_pid
+>
+> tests/test_stage2.py:2477: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=87854) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/tests/test_stage2.py:22746: DeprecationWarning: This process (pid=87854) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_local_checks_preserve_nested_admission - as...
+> 1 failed, 6153 passed, 17 skipped, 5 warnings in 987.03s (0:16:27)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 46297 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-1-20261116T083144636647Z-a7369b38.md
+> ````
+
+Stage-2 call, 2026-11-16: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1089 files, 4417 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged

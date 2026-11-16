@@ -2460,12 +2460,11 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     holder = _real_holder(ready)
     try:
         _holder_acquired(ready)
-        # The marker is honoured only for a descendant of the published holder (review row F6-2),
-        # and this test process is not the sibling supervisor's descendant: the record is
-        # republished naming this process, the way an ancestor's supervisor names itself, while
-        # the sibling keeps the work lock genuinely held.
+        # The new holder owns slot 0 in this isolated state root. Publish the
+        # matching slot record and marker: a legacy record cannot validate its
+        # shared compatibility lock (review row F6-5).
         holder_pid = os.getpid()
-        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+        record = world.state / "coding-harness" / verify_lock.slot_holder_name(0)
         record.write_text(
             json.dumps(
                 {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
@@ -2474,12 +2473,14 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
         )
         monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
         monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+        monkeypatch.setenv(verify_lock.SLOT_ENV, "0")
         assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
         make_env = world.calls("make")[0]["env"]
         assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
         assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
+        assert make_env[verify_lock.SLOT_ENV] == "0", "the local check lost its slot marker"
         assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
         assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
         # and the draft's document gates keep the shared state root, while carrying none of the

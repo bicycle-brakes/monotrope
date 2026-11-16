@@ -586,13 +586,21 @@ def _describe_occupied(root: Path, occupied: list[tuple[int, dict | None]]) -> s
     return "; ".join(f"slot {index}: {_describe_holder(holder)}" for index, holder in occupied)
 
 
-def _probe_held_lock(lock: Path, reader: Callable[[], dict | None], pid: int, token: str) -> bool:
+def _probe_held_lock(
+    lock: Path,
+    reader: Callable[[], dict | None],
+    pid: int,
+    token: str,
+    *,
+    exclusive_holder: bool = False,
+) -> bool:
     """Whether `lock` is genuinely held for the marker (pid, token), read twice around the probe.
 
     The record is read again after the probe: a release unpublishes before it
     unlocks and a new admission publishes after it locks, so an unchanged
     record here means the lock seen held is still the marker's (review rows
-    L1-1, L1-12).
+    L1-1, L1-12). For legacy admission, a shared probe must fail: only an
+    exclusive holder validates that marker, not unrelated new shared holders.
     """
     try:
         fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -600,7 +608,8 @@ def _probe_held_lock(lock: Path, reader: Callable[[], dict | None], pid: int, to
         return False
     try:
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            probe = fcntl.LOCK_SH if exclusive_holder else fcntl.LOCK_EX
+            fcntl.flock(fd, probe | fcntl.LOCK_NB)
         except OSError:
             again = reader()
             return again is not None and _names(again, pid, token)
@@ -646,7 +655,7 @@ def _nested_relation() -> tuple[int, int | None] | None:
     holder = read_holder()
     if holder is None or not _names(holder, pid, token):
         return None
-    held = _probe_held_lock(state_root() / LOCK_NAME, read_holder, pid, token)
+    held = _probe_held_lock(state_root() / LOCK_NAME, read_holder, pid, token, exclusive_holder=True)
     return (pid, None) if held else None
 
 
@@ -1027,15 +1036,22 @@ class _Admission:
         )
         occupied: list[tuple[int, dict | None]] = []
         free: list[tuple[int, int]] = []
-        for index in indices:
-            fd = _open_lock_file(root / slot_lock_name(index))
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                os.close(fd)
-                occupied.append((index, read_slot_holder(root, index)))
-            else:
-                free.append((index, fd))
+        with contextlib.ExitStack() as cleanup:
+            free_cleanup = cleanup.enter_context(contextlib.ExitStack())
+            for index in indices:
+                fd = _open_lock_file(root / slot_lock_name(index))
+                with contextlib.ExitStack() as probe_cleanup:
+                    probe_cleanup.callback(os.close, fd)
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except OSError:
+                        occupied.append((index, read_slot_holder(root, index)))
+                    else:
+                        free.append((index, fd))
+                        free_cleanup.enter_context(probe_cleanup.pop_all())
+            # The caller owns the free descriptors only after the entire survey
+            # succeeds. A refusal at any later slot closes every earlier probe.
+            free_cleanup.pop_all()
         return occupied, free
 
     def _reserve_admission_locked(self) -> tuple[bool, list[tuple[int, dict | None]]]:

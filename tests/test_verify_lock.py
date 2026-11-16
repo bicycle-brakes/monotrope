@@ -2193,3 +2193,57 @@ def test_settings_refuse_invalid_workers_beyond_read_boundary(tmp_path: Path) ->
     (tmp_path / verify_lock.SETTINGS_NAME).write_text(document, encoding="utf-8")
     with pytest.raises(verify_lock.VerifyLockRefused, match="refusing admission"):
         verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
+
+
+def test_stale_legacy_marker_cannot_reuse_shared_compatibility_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A leftover legacy record cannot turn a new shared holder into legacy admission."""
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, TEST_TOKEN)
+    monkeypatch.delenv(verify_lock.SLOT_ENV, raising=False)
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    with fake_holder(state, hold=False):
+        descriptor = os.open(state / "coding-harness" / verify_lock.LOCK_NAME, os.O_RDWR)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            assert verify_lock.nested_holder_pid() is None, (
+                "a stale legacy marker reused an unrelated shared compatibility lock"
+            )
+            with verify_lock.hold_admission(["independent", "check"]) as owned:
+                assert owned is not None, "the stale legacy marker bypassed independent slot admission"
+        finally:
+            os.close(descriptor)
+
+
+def test_slot_survey_refusal_closes_previously_locked_descriptors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refusing substituted slot 1 must release the survey's already locked slot 0."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    state = verify_lock._prepare_state()
+    slot_zero = state.root / verify_lock.slot_lock_name(0)
+    slot_zero.touch(mode=0o600)
+    slot_one = state.root / verify_lock.slot_lock_name(1)
+    slot_one.symlink_to(slot_zero)
+    admission = verify_lock._Admission(state, ["refused", "survey"])
+    try:
+        with (
+            pytest.raises(verify_lock.VerifyLockRefused, match="substituted lock state"),
+            verify_lock._registry_lock(state),
+        ):
+            admission._survey_slots_locked()
+    finally:
+        admission.release()
+    slot_one.unlink()
+    slot_one.touch(mode=0o600)
+    contender = os.open(slot_zero, os.O_RDWR)
+    try:
+        try:
+            fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pytest.fail("refusing slot 1 leaked the survey's slot-0 descriptor and lock after release")
+    finally:
+        os.close(contender)
