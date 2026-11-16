@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -659,3 +659,15 @@ Reviewer session: codex 01a1e095-15b5-7392-b566-7209f80deb92 — a fresh session
 Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1084 files, 4382 commits, 12 rules.
 
 Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1098 files, 4406 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-16
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | diff reading | scripts/verify_run.py | If a tracked path cannot be measured, such as a FIFO, a run with protected gates refuses before executing any cheap gate. A blocking cheap failure therefore cannot produce its diagnostic, although the cheap pass must run and a blocking-red pass must not require a baseline. [Criteria 2, 5; Boundaries] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | diff reading | scripts/stage2.py | If a locally runnable document gate is declared as minutes-cost or marked `needs_admission: true`, the draft check selects and runs it without admission. The draft check must not launch a protected gate. [Criterion 10] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1e323-8740-7a61-9da1-18a476de7a6f, 2026-11-16
+Reviewer session: codex 01a1e323-8740-7a61-9da1-18a476de7a6f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
