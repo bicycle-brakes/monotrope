@@ -108,3 +108,75 @@ touched; the migration and the tree-wide check go to coding-harness-2i7x, to
 achieve that no new free-form header is written from now on, accepting that
 existing ones stay until 2i7x lands.
 — 2026-11-16
+
+## Q-5 · Existing producer records on a new draft
+
+context: |
+  Topic: earlier records in a document's `produced_by` when the runner
+  stamps a new draft.
+  Intention: the spec review (findings F-2 and F-12) left the spec's open
+  [DECISION] "Existing producer records" unanswered; the stamp cannot be
+  built before it is answered.
+  Today: the research publication keeps existing records and appends the
+  current run; earlier records can be false.
+  Repository change: the runner either keeps earlier records and adds the
+  actual current run, or writes only the current run.
+  Architecture change: none; the runner stays the one writer, only the
+  stored provenance differs.
+asked: 2026-11-16, conversation
+answer: "Behalten und ergänzen (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of earlier producer records in a header the runner stamps,
+facing records that may be false or unreadable, we decided to keep every
+readable earlier record and add the record of the run that actually
+produced the draft, and to make the check red on an unreadable earlier
+record instead of guessing it, to achieve that earlier contributions stay
+visible and producers are never collapsed, as decided on 2026-11-07 for
+coding-harness-2i7x, accepting that a readable but wrong earlier record
+stays until that migration corrects it.
+— 2026-11-16
+
+## Q-6 · Scope of the post-run check
+
+context: |
+  Topic: what the post-run check checks in the files a run touched.
+  Intention: the spec review (finding F-7) found two readings, the record
+  shape only or the full header contract of the full verify.
+  Today: the full header contract is checked only by the full verify.
+  Repository change: the post-run check applies either the record shape
+  only or the same header contract as the full verify.
+  Architecture change: none.
+asked: 2026-11-16, conversation
+answer: "Ganzer Kopf-Vertrag (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of the post-run check on the files a run touched, facing a
+record-shape check that the full verify would still refuse later, we
+decided that the post-run check applies the same header contract as the
+full verify, only earlier and only to the touched files, to achieve that a
+header the full verify refuses is refused at the run that wrote it,
+accepting that a touched file fails for any header fault, not only for its
+producer record.
+— 2026-11-16
+
+## Decided by the agent
+
+[DETAIL] **A redraft that changes a document's body resets a non-pending
+`review` to pending and names whose approval was reset; stamping that
+changes only the header leaves `review` as it is** (spec review finding
+F-9). Reason: measured on 2026-11-16 at origin/main aed8eaf0, all 623
+`review` headers under `plans/` are pending, so no approval is lost today;
+an approval given to other content does not cover changed content, and
+naming the reset keeps it visible to the maintainer.
+
+[DETAIL] **The post-run check judges only the producer records this run
+wrote, plus the well-formedness of the `produced_by` list; an earlier
+record that fails the census rule is reported, not refused, until
+coding-harness-2i7x migrates it** (spec review finding F-11). Reason: open
+lanes carry such records today, and refusing them would turn those lanes
+red, which the split in Q-4 set out to avoid. An earlier record that
+cannot be read at all stays red, as Q-5 decided; this detail covers only
+readable records in a legacy form.
