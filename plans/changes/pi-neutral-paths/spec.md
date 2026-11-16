@@ -3,14 +3,14 @@ title: "Spec — pi-neutral-paths"
 status: draft
 implementation_status: none
 date: 2026-10-29
-last_reviewed: 2026-10-29
+last_reviewed: 2026-11-16
 updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-29"}
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-terra, 2026-11-16"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, pi, privacy]
 class: bounded
@@ -28,19 +28,17 @@ out of the outgoing request without moving its tools' working directory
 
 ## Problem
 
-As read on 2026-10-29, Pi 1.2.0 adds the process working directory and its
-installation's absolute documentation paths to its system prompt. Disabling
-context discovery does not suppress either section. Repository seats and paid
-reviewers expose the checkout path; scratch-based online seats, free
-reviewers and probes still expose local scratch and installation paths
-(`research.md`, "What exists today").
+The offline measurement of pinned Pi 1.5.0 on 2026-11-16 found that
+all measured launch shapes send absolute installation documentation paths;
+repository-based shapes also send the worktree as the working directory
+(`research.md`, addendum 2026-11-16). The measurement rebuilt launch
+arguments by hand and did not cover the full interactive session or research
+attachment, so it does not establish their complete behavior.
 
-The leak check examines the runner's prompt before Pi adds these sections,
-so its clean result does not establish that the outgoing request is free of
-local paths. The same mechanism affects research, reviews, availability
-probes and interactive Pi sessions. Moving the actual working directory
-would disturb repository tools and the research read boundary
-(`research.md`, "What is unclear about it" and the 2026-10-29 addendum).
+The same measurement found that session context discovery includes a personal
+instruction file above the repository as well as the repository instructions.
+The leak check runs before Pi adds its own sections and thus does not measure
+the final request (`research.md`, 2026-10-29 and 2026-11-16 addenda).
 
 ## Terms
 
@@ -99,6 +97,12 @@ would disturb repository tools and the research read boundary
    repository-relative file reference.
    *Basis:* decisions.md#Q-2.
 
+7. If a home or worktree path remains in the rendered prompt after
+   neutralization, the launch stops before sending that request.
+   *Refuted by:* a request containing a planted home or worktree path reaches
+   the provider, or the launch reports success after the guard detects it.
+   *Basis:* decisions.md, maintainer's answers of 2026-11-16.
+
 ## Non-goals
 
 - Changing Claude Code or Codex transports, including GLM explore/implement
@@ -109,6 +113,8 @@ would disturb repository tools and the research read boundary
   tool permissions or discovery settings; catalog/version/help operations
   without model contact need no neutralization.
 - Providing a general content/secret filter or an operating-system sandbox.
+- Changing which personal or repository instruction files Pi discovers: the
+  measured personal-file content exposure is outside this path-only change.
 - Design phase 2b and an ADR draft: this is a bounded fix using the
   maintainer-selected extension hook, so neither is due.
 
@@ -119,9 +125,6 @@ would disturb repository tools and the research read boundary
   only their tests' launch combinations change.
 - `tools/pi/`, `model-endpoints.yaml`, `decisions/`, `docs/adr/` and
   `AGENTS.md`: no pin, policy or governance change is needed.
-- `scripts/stage2.py`: implementation waits for lane A's merge/release,
-  as recorded in `decisions.md`; an independent launch site is not a reason
-  to edit that shared file early.
 
 ## Definition of Done
 
@@ -131,7 +134,8 @@ would disturb repository tools and the research read boundary
   Every covered launch shape is exercised, including tool/error follow-ups
   and a second user turn for the session shape. Missing prerequisites fail
   instead of skipping; omitting the extension demonstrably exposes a planted
-  local identifier. The PR records the evidence and its commit.
+  local identifier, and a deliberately surviving home/worktree path prevents
+  delivery. The PR records the evidence and its commit.
 - Documents moved with the code: this change's `spec.md`, `plan.md` and
   `findings.md`; no ADR, model record or workflow document changes are owed.
 - The PR file list shows the protected areas untouched and non-goals unbuilt.
@@ -146,8 +150,7 @@ None open. The following reversible details are chosen here with reasons.
 - [DETAIL] Use `.` for the model-visible working directory: it conveys
   relative-path use without pretending that a new absolute tool root exists.
 - [DETAIL] Preserve Pi's generated tools and rules while dropping `<docs>`:
-  setting only a custom preamble would also omit tools/rules in Pi 1.2.0
-  (`dist/core/system-prompt.js:78–96`, read on 2026-10-29).
+  the contract must verify their preservation against pinned Pi 1.5.0.
 - [DETAIL] Measure the full payload using the existing offline contract
   transport, rather than making a hosted call: it observes what the provider
   receives without sending the very identifiers the test is meant to detect.
