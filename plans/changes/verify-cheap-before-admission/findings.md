@@ -959,3 +959,14 @@ Stage-2 call, 2026-11-17: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-17: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4514 commits, 12 rules.
 
 Runner restoration, 2026-11-17: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-17: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4515 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-17
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R1 | MAJOR | SPEC | base | scripts/verify_run.py:290 | A tracked or non-ignored untracked filename containing bytes that are not valid UTF-8 makes the snapshot’s `.encode()` raise `UnicodeEncodeError`. The error is not handled as an unmeasurable tree, so a run with protected gates crashes before any cheap gate executes. Such a tree must still receive the cheap pass and, if it is green, a fresh pass under admission. [Acceptance criterion 5.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1e6c2-5ded-7fb0-8646-88afc4ad54c7, 2026-11-17
+Reviewer session: codex 01a1e6c2-5ded-7fb0-8646-88afc4ad54c7 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
