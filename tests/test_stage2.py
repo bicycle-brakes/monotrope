@@ -12688,7 +12688,10 @@ def test_runner_clock_runtime_guard_fails_the_test_through_the_autouse_fixture(t
             [sys.executable, "-m", "pytest", "-p", "conftest", "-p", "no:cacheprovider", "-p", "no:xdist", "-rA", "-q"]
             + [str(test_file)],
             cwd=tmp_path,
-            env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "tests")},
+            # An outer run (make verify) passes its own plugins through PYTEST_ADDOPTS;
+            # this child has a different PYTHONPATH and must not inherit them.
+            env={key: value for key, value in os.environ.items() if key != "PYTEST_ADDOPTS"}
+            | {"PYTHONPATH": str(REPO_ROOT / "tests")},
             capture_output=True,
             text=True,
             timeout=120,
