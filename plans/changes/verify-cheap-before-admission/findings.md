@@ -666,8 +666,8 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | diff reading | scripts/verify_run.py | If a tracked path cannot be measured, such as a FIFO, a run with protected gates refuses before executing any cheap gate. A blocking cheap failure therefore cannot produce its diagnostic, although the cheap pass must run and a blocking-red pass must not require a baseline. [Criteria 2, 5; Boundaries] | Codex | taken — narrowed scope, decisions Q-7 | — |
-| F6-2 | MAJOR | SPEC | diff reading | scripts/stage2.py | If a locally runnable document gate is declared as minutes-cost or marked `needs_admission: true`, the draft check selects and runs it without admission. The draft check must not launch a protected gate. [Criterion 10] | Codex | taken — narrowed scope, decisions Q-7 | — |
+| F6-1 | MAJOR | SPEC | base | scripts/verify_run.py | If a tracked path cannot be measured, such as a FIFO, a run with protected gates refuses before executing any cheap gate. A blocking cheap failure therefore cannot produce its diagnostic, although the cheap pass must run and a blocking-red pass must not require a baseline. [Criteria 2, 5; Boundaries] | Codex | taken — narrowed scope, decisions Q-7 | — |
+| F6-2 | MAJOR | SPEC | base | scripts/stage2.py | If a locally runnable document gate is declared as minutes-cost or marked `needs_admission: true`, the draft check selects and runs it without admission. The draft check must not launch a protected gate. [Criterion 10] | Codex | taken — narrowed scope, decisions Q-7 | — |
 
 Phase 6 verdict: codex 01a1e323-8740-7a61-9da1-18a476de7a6f, 2026-11-16
 Reviewer session: codex 01a1e323-8740-7a61-9da1-18a476de7a6f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
