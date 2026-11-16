@@ -673,10 +673,10 @@ tracker or network call.
 |---|---|---|
 | 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0020) |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
-| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
-| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
-| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
@@ -936,7 +936,7 @@ for another repository is `templates/agents-mergeable-prs.md`.
 
 Since ADR 0007 (2026-09-30) a reviewer from another vendor reads a change
 before it merges — for **framework content only**: this repository's own tree,
-the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
+the class `framework` of `model-endpoints.yaml`. Codex (OpenAI; `gpt-6.1-terra` since 2026-11-15, `gpt-6.1-sol` before)
 drafts the spec, the design and the plan (2, 2b and 3, the `draft` verb) and
 reviews the code (6). **Since ADR 0016 (2026-10-12)** the spec review (2a) runs
 on Opus 5.5 through the `spec-review` verb — a fresh context, and a model other
@@ -959,7 +959,7 @@ every change of the night run — so GLM has left the reviewer roles.
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
 repaired the findings the orchestrator takes, of the loop (4b) and of phase 6;
-**since the merge of ADR 0017** Codex (`gpt-6.1-sol`) does, with Sonnet 5.5
+**since the merge of ADR 0017** Codex (`gpt-6.1-sol` until 2026-11-15, `gpt-6.1-terra` since) does, with Sonnet 5.5
 after two failed post-run checks, through the runner's `repair` verb — since the
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
@@ -1035,15 +1035,15 @@ admission and cost values live in `model-endpoints.yaml`.
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
 | 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online; the Go seats are open and filled per run with the maintainer's choice on a cost-against-intelligence recommendation, Q-18) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
-| 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
-| 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
-| 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
+| 2 Spec | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
+| 2b Design | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
+| 3 Plan | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
 | 4b Triage | none (a local command) | a local runner command for the orchestrator's already-made decision: it records one row's `Status` in this worktree's loop record and calls no model; a test-only `taken` is refused without `taken — not a test — <reason>`, and `Broke a test` stays the repair's proof mark |
-| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
-| 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
+| Repair after 4b and 6 | **gpt-6.1-terra** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
+| 6 Review | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
 The effort text in ADR 0016 and ADR 0017 awaits its separately agreed
 amendments; the table above carries the live setting.
@@ -1438,7 +1438,7 @@ repository presents, not what else the disk holds.
 
 ### The draft (phases 2, 2b and 3)
 
-`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-terra`, effort
 [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write `spec.md`, `design.md`
 and `plan.md` in one call (ADR 0016). The
 guards start with `implement`'s preflight: a `research.md` with its bead and
