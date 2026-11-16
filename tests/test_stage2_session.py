@@ -33,9 +33,14 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
 import stage2_session  # noqa: E402
+from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+
+# The stand-ins embed the shared log protocol at their render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
@@ -55,6 +60,10 @@ import sys
 import time
 from pathlib import Path
 
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
+
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
 # The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
@@ -63,7 +72,7 @@ if name == "pin-pi":
     name = "pi"
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
-previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+previous = read_records(log)
 steps = scenario.get(name, [])
 index = sum(1 for call in previous if call["name"] == name)
 step = steps[index] if index < len(steps) else {}
@@ -79,13 +88,11 @@ if step.get("sleep"):
     time.sleep(step["sleep"])
 
 record = {"name": name, "path": sys.argv[0], "argv": argv, "env": dict(os.environ), "cwd": os.getcwd()}
-with log.open("a") as handle:
-    handle.write(json.dumps(record) + "\\n")
+append_record(log, record)
 
 if step.get("exec_command") and len(argv) >= 2:
     done = subprocess.run(["/bin/sh", "-c", argv[1]], capture_output=True, text=True)
-    with log.open("a") as handle:
-        handle.write(json.dumps({"name": "sh", "stdout": done.stdout, "returncode": done.returncode}) + "\\n")
+    append_record(log, {"name": "sh", "stdout": done.stdout, "returncode": done.returncode})
 
 sys.stdout.write(step.get("stdout", ""))
 sys.stderr.write(step.get("stderr", ""))
@@ -129,8 +136,7 @@ class World:
         (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
-        log = self.bin / "calls.jsonl"
-        found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        found = read_records(self.bin / "calls.jsonl")
         return [call for call in found if name is None or call["name"] == name]
 
     def run(
@@ -264,7 +270,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     bin_dir.mkdir()
     for name in ("codex", "pi", "opencode", "osascript", "pin-pi"):
         program = bin_dir / name
-        program.write_text(LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
+        rendered = LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        program.write_text(rendered, encoding="utf-8")
         program.chmod(0o755)
     # The pinned install's shipped catalog, as `checked_session_model` reads it
     # beside the wrapper: a runner-owned stand-in file, never a user directory.
@@ -721,7 +729,9 @@ def test_a_missing_cli_or_terminal_refuses_as_a_prerequisite(world: World, capsy
     assert world.run() == 2
     assert "not on PATH" in capsys.readouterr().err and world.calls() == []
 
-    (world.bin / "codex").write_text(LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
+    rendered = LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable)
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    (world.bin / "codex").write_text(rendered, encoding="utf-8")
     (world.bin / "codex").chmod(0o755)
     (world.bin / "osascript").unlink()
     assert world.run() == 2

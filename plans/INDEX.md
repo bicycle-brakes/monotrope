@@ -595,6 +595,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
+| [`changes/flaky-swarm-leak-test/decisions.md`](changes/flaky-swarm-leak-test/decisions.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
+| [`changes/flaky-swarm-leak-test/findings.md`](changes/flaky-swarm-leak-test/findings.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
+| [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
+| [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
+| [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
