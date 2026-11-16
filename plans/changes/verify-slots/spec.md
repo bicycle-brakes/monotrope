@@ -42,9 +42,9 @@ worker count and shared computation).
 - The slot count is fixed in code; no configurable value exists, and the
   maintainer requires one central, easily changed place for it
   (research, "Meaning A"; `decisions.md#Q-2`).
-- Two simultaneous checks have not been measured on this implementation; the
-  recorded incident concerns three checks and cannot establish how two behave
-  (`decisions.md`, closing evidence note).
+- The 2026-11-16 trials at `e693604e` measured the three-slot default at
+  2.12–2.13 times a serial run; the maintainer chose that default knowing it
+  missed the earlier paired-trial threshold (`decisions.md#Q-7`, addendum).
 - The pytest worker count is a second, separate rule (half the logical cores,
   bounded by memory) copied into `scripts/verify_all.sh` and
   `scripts/stage2.py`; it knows nothing of the slot count, so more slots
@@ -145,15 +145,16 @@ worker count and shared computation).
     *Basis:* `decisions.md#Q-1` (the bound stays machine-wide across
     checkouts).
 
-11. Before the change counts as done, operation at two slots has recorded
+11. Before the change counts as done, operation at the default of three slots
+    with three simultaneous full checks of four workers each has recorded
     wall time and machine load beside a serial comparison on the same
     implementation.
     *Refuted by:* completion is claimed without revision, date,
     configuration, outcomes, per-run wall times, batch elapsed times and
-    sampled load for both trials, or a current-policy document still
+    sampled load for the serial and three-at-once trials, or a current-policy document still
     prescribes one slot.
     *Basis:* `decisions.md`, closing evidence note; `decisions.md#Q-2`;
-    `decisions.md#Q-3` (under the night load) and `decisions.md#Q-4`
+    `decisions.md#Q-9`, `decisions.md#Q-3` (under the night load) and `decisions.md#Q-4`
     (both runs within 1.6x a single run, no test red or flaky because of the
     parallelism).
 
@@ -196,6 +197,11 @@ worker count and shared computation).
     refusing an older record.
     *Basis:* `decisions.md#Q-6`, `decisions.md#Q-7` (the real-operation
     windows read these records).
+
+14. When a process holding an admission requests another, the request is
+    refused immediately with a diagnostic identifying the held slot.
+    *Refuted by:* the request waits, succeeds, or omits the held slot.
+    *Basis:* The boundary recorded below, maintainer 2026-11-11.
 
 ## Non-goals
 
@@ -241,7 +247,7 @@ stay historical; only current-policy statements change.
 - Moved in the same pull request: `docs/WORKFLOW.md`, `docs/orchestration.md`
   and `docs/how-it-works.md`, whose current capacity statements name the new
   default and its setting; no edit to dated measurements.
-- Special runs: serial and paired full-check trials, recorded with their
+- Special runs: serial and three-at-once full-check trials, recorded with their
   tested commit in `plans/changes/verify-slots/measurements.md` and the pull
   request body.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
@@ -252,35 +258,30 @@ stay historical; only current-policy statements change.
 
 ## Open decisions
 
-### [DECISION] Which configuration must the paired trial measure?
+### [DECISION] Does the earlier performance threshold block completion?
 
-Topic: The evidence required for the simultaneous verification trial.
-Intention: Make the completion evidence unambiguous after the default changed.
-Today: The spec asks for two slots; the recorded default is now three slots,
-and trials of different configurations are recorded at commit `e693604e`.
-Repository change: The spec and plan will name the required trial configuration.
-Architecture change: None; the existing configurable admission stays in place.
+Topic: Die Leistungsgrenze für den Abschlusstest.
+Intention: Der gewählte Standard und die frühere Grenze ergeben unterschiedliche Ergebnisse.
+Today: Drei gleichzeitige Prüfungen dauerten beim Test am Commit `e693604e`
+2,12- bis 2,13-mal so lange wie eine einzelne; die frühere Grenze war 1,6.
+Repository change: Die Spezifikation legt fest, ob diese Grenze den Abschluss verhindert.
+Architecture change: Keine; die einstellbare Zulassung bleibt bestehen.
 
-Goal in one sentence: Choose which simultaneous checks demonstrate the change.
+Goal in one sentence: Festlegen, wann der gemessene Standard als ausreichend gilt.
 Options:
 
-1. Measure two checks with two slots and six workers each: this measures the
-   originally requested two-slot setting, but not the shipped default.
-2. Measure two checks under the three-slot default, with four workers each:
-   this measures a pair under the shipped configuration, but leaves its third
-   slot unused.
-3. Measure three checks under the three-slot default, with four workers each:
-   this exercises the full default, but is not a paired trial.
+1. Die Grenze beibehalten: Der Abschluss wartet auf einen bestandenen Test;
+   die gewählte Einstellung kann bis dahin nicht abgeschlossen werden.
+2. Die Messung als Nachweis übernehmen: Der Abschluss scheitert nicht allein
+   am Zeitverhältnis; eine langsamere Prüfung wird damit akzeptiert.
 
-Recommendation: Option 1, because it retains the explicitly requested two-slot
-trial while the separately recorded trials inform the default.
-If you say "ok": The completion criterion will require a two-slot, two-check
-trial with six workers per check on the 12-core trial machine.
-What is lost: The required trial will not itself exercise the three-slot default.
-Downside you accept: Option 1 does not test the default; option 2 leaves one
-default slot idle; option 3 no longer tests the explicitly requested pair.
+Recommendation: Option 2, weil der Standard in Kenntnis des Ergebnisses gewählt wurde.
+If you say "ok": Das aufgezeichnete Zeitverhältnis allein blockiert den Abschluss nicht.
+What is lost: Die frühere Grenze garantiert dann keine Obergrenze für die Verlangsamung.
+Downside you accept: Option 1 verzögert den Abschluss; Option 2 akzeptiert die
+gemessene Verlangsamung ohne diese Obergrenze.
 
-Which option do you choose and which downside do you accept?
+Welche Option und welchen Nachteil akzeptierst du?
 
 The following reversible details are chosen visibly here, not answered on the
 maintainer's behalf:
