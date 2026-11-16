@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -179,3 +179,19 @@ result, provided no additional test turns red or flaky and free memory never
 falls below 25 percent, to achieve a choice that rests on daily use,
 accepting six days before the setting is final and a kit rule only in its
 own bead — 2026-11-15
+
+## Q-7 addendum · The default after the trials at the repaired head
+
+asked: 2026-11-16
+answer: "3 mal 4" — the repository default is 3 slots x 4 workers. (Maintainer, 2026-11-16, in the conversation; relayed verbatim by the orchestrator.)
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which slot and worker combination the repository default sets at the merge.
+  Intention: the trials at e693604e (measurements.md, "Trials on the repaired head") measured all three candidates on the same commit.
+  Today: 2 x 6 met Q-4 (1.53 x, 1.55 x the serial run); 3 x 4 missed it (2.12 x to 2.13 x); 4 x 3 missed it (about 3.2 x). Derived mean time to result for four queued runs: 2 x 6 about 1,950 s, 3 x 4 at least about 2,011 s, one slot about 2,104 s, 4 x 3 about 2,652 s. The orchestrator recommended 2 x 6.
+  Repository change: DEFAULT_SLOTS goes from 4 to 3 (the worker count derives to 4 on a 12-core machine); the slot count stays configurable in the machine-local file.
+  Architecture change: none.
+
+The maintainer chose 3 x 4 knowing that it misses Q-4 in the trial; the
+real-operation measurement of Q-7 continues from this default.
