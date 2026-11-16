@@ -17,7 +17,7 @@ do not exclude each other. Each admission reserves one slot — an exclusive
 `verify.slot-<n>.lock` — up to the machine's capacity, and
 `verify.slot-<n>.holder.json` publishes that slot's ownership (pid, command,
 start time). The capacity comes from `read_settings`, the one reader of the
-layered verify settings: the repository default (`DEFAULT_SLOTS`, four), which
+layered verify settings: the repository default (`DEFAULT_SLOTS`, three), which
 an optional machine-local `verify.toml` in the same root may override
 (`[verify]` with `slots` and `workers_per_run`, positive integers); the same
 reader derives the pytest workers per run (logical cores / slots, floored, at
@@ -161,7 +161,7 @@ SLOTS_KEY = "slots"
 WORKERS_KEY = "workers_per_run"
 # The bare capacity file of the first implementation; a present one refuses, never silently ignored.
 LEGACY_SLOTS_NAME = "verify.slots"
-DEFAULT_SLOTS = 4
+DEFAULT_SLOTS = 3
 WORKER_MEMORY_BYTES = 2 * 1024**3
 MAX_SLOTS = 256
 MAX_WORKERS = 1024

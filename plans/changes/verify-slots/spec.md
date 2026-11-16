@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -22,7 +22,7 @@ neighbours: []
 # Spec — `verify-slots`
 
 The goal in one sentence: several independent protected checks may run at
-once — four by the repository default — and the slot count and the pytest
+once — three by the repository default (`decisions.md`, Q-7 addendum) — and the slot count and the pytest
 workers per run are set in layers, read by one function, without a code
 change (bead `coding-harness-u1ha` — configurable verification capacity).
 Research: `research.md`. Decisions: `decisions.md` (Q-1 and Q-2 of
@@ -66,7 +66,7 @@ worker count).
 ## Acceptance criteria
 
 1. When independent protected checks contend and no machine settings file
-   is present, the repository default of slots (four) is available across
+   is present, the repository default of slots (three) is available across
    repositories and worktrees.
    *Refuted by:* an eligible check cannot reserve an idle slot below the
    default, or one more runs while every default slot is occupied.
@@ -160,7 +160,7 @@ worker count).
 12. When a verification run starts — through `scripts/verify_all.sh`, the
     admission or the runner's targeted pytest — one reading function
     (`read_settings` in `scripts/verify_lock.py`) supplies the slot count and
-    the pytest workers per run: the validated repository default (four
+    the pytest workers per run: the validated repository default (three
     slots; workers = logical cores / slots, floored, at least one, bounded
     by 2 GiB of memory per worker across all slots), overridden per value by
     the machine-local `verify.toml` (`[verify]` with `slots` and
@@ -256,7 +256,7 @@ answered on the maintainer's behalf:
 - [DETAIL] One optional machine-local `verify.toml` in the existing shared
   state root holds the overrides (`[verify]`, keys `slots` and
   `workers_per_run`, positive integers up to 256 and 1024); absence means
-  the repository default (`DEFAULT_SLOTS = 4` in `scripts/verify_lock.py`).
+  the repository default (`DEFAULT_SLOTS = 3` in `scripts/verify_lock.py`).
   It replaces the bare `verify.slots` file of the first implementation
   (2026-11-15): no criterion needs the old file, and none was in use on the
   machine, so it is not read as a fallback; a leftover one refuses with a
@@ -283,7 +283,7 @@ answered on the maintainer's behalf:
   *content* — a value that is not a positive integer within its bound — and
   such a slot count is valid content judged against a machine reading that
   may be absent or differ between machines (a hosted runner has fewer cores
-  than the maintainer's machine, where the repository default of four still
+  than the maintainer's machine, where the repository default of three still
   has to start); the admission's own log line never refuses. The bound of
   256 stays the refusal.
 - [DETAIL] Exclusion with older checkouts is preserved by keeping the

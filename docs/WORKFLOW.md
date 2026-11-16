@@ -566,15 +566,15 @@ and the schedule runs only the drift gates.
 configurable since bead coding-harness-u1ha). Before its gates, `verify_all.sh`
 hands the run to `scripts.verify_lock`: protected work of one user on one
 machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/` — shared
-across repositories and worktrees. The capacity defaults to four independent
+across repositories and worktrees. The capacity defaults to three independent
 admissions at once; each reserves one per-slot lock
 (`verify.slot-<n>.lock`) under the shared compatibility lock (`verify.lock`),
 which an older single-slot checkout still takes exclusively, so old and new
 implementations never overlap. **The verify settings come in layers, read by
 one function** (`read_settings` in `scripts/verify_lock.py`, decisions Q-6 of
-the change verify-slots, 2026-11-15): the repository default — four slots,
+the change verify-slots, 2026-11-15): the repository default — three slots (decisions Q-7 addendum, 2026-11-16),
 and pytest workers per run = logical cores / slots, floored, at least one,
-bounded by 2 GiB of memory per worker across all slots (three workers on a
+bounded by 2 GiB of memory per worker across all slots (four workers on a
 12-core machine) — then the one machine-wide file `verify.toml` in that state
 directory, which may override either value:
 

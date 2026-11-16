@@ -37,7 +37,7 @@ is recorded, so there is no Explore fallback to carry. At the drafted commit
 `templates/plan.md` and `scripts/validate_change_artefacts.py` do not exist:
 this plan follows the phase-3 prompt's form, and their gate is not claimed.
 
-1. Change `scripts/verify_lock.py`: declare the repository default of four
+1. Change `scripts/verify_lock.py`: declare the repository default of three
    slots (`DEFAULT_SLOTS`) and one reader, `read_settings`, of the layered
    settings: the default, then the machine-local `verify.toml` in the shared
    root (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/`), a `[verify]`
@@ -138,8 +138,9 @@ joining them; no edits between runs. Each batch is read against
 `decisions.md#Q-4` (every run within 1.6 times the serial run, no test red
 or flaky because of the parallelism). After the merge the configuration is
 chosen in real operation (`decisions.md#Q-7`): three windows of two days
-each — four slots x three workers (the repository default), then three x
-four, then two x six, the later two set in `verify.toml` — and the winner
+each — four slots x three workers, then three x four, then two x six, set
+in `verify.toml`; since the Q-7 addendum (2026-11-16) the repository default
+is three x four — and the winner
 is the shorter mean time from queueing to result, provided no additional
 test turns red or flaky and free memory never falls below 25 %. The
 enclosing runner's own verification stays on normal admission.
@@ -253,7 +254,7 @@ This addendum extends the plan without rewriting it (maintainer, 2026-11-14/15,
 
 - **Layered settings** (criteria 12 and 13). `read_settings` in
   `scripts/verify_lock.py` is the one reader of the slot count and the
-  pytest workers per run; the repository default is four slots, so three
+  pytest workers per run; the repository default is three slots (`decisions.md`, Q-7 addendum), so four
   workers on twelve logical cores. The machine-local `verify.toml` in the
   shared state root replaces `verify.slots`. `scripts/verify_all.sh` hands
   its machine readings to the reader instead of its half-the-cores rule;

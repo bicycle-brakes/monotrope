@@ -1631,12 +1631,12 @@ def _inherited(tmp_path: Path, name: str) -> tuple[str, str]:
 @pytest.mark.parametrize(
     ("system", "cores", "memory", "expected"),
     [
-        pytest.param("Darwin", "16", "68719476736", "4", id="macos-cores-over-default-slots"),
+        pytest.param("Darwin", "16", "68719476736", "5", id="macos-cores-over-default-slots"),
         pytest.param("Darwin", "16", "17179869184", "2", id="macos-memory-binds-first"),
-        pytest.param("Darwin", "15", "68719476736", "3", id="macos-odd-cores-floored"),
+        pytest.param("Darwin", "15", "68719476736", "5", id="macos-odd-cores-floored"),
         pytest.param("Darwin", "1", "8589934592", "1", id="macos-one-core-still-one"),
         pytest.param("Darwin", "8", "1073741824", "1", id="macos-under-2-gib-still-one"),
-        pytest.param("Linux", "16", "67108864", "4", id="linux-cores-over-default-slots"),
+        pytest.param("Linux", "16", "67108864", "5", id="linux-cores-over-default-slots"),
         pytest.param("Linux", "16", "16777216", "2", id="linux-memory-binds-first"),
         pytest.param("Linux", "3", "2097152", "1", id="linux-small-machine-still-one"),
     ],
@@ -1657,12 +1657,12 @@ def test_runner_derives_worker_default_from_machine_size(
 def test_runner_preserves_explicit_worker_value(tmp_path: Path, caller_value: str) -> None:
     """Criterion 2: a non-empty caller value reaches the gate verbatim — never
     rewritten to the machine's default, never validated, whatever the machine."""
-    # The control: this machine (16 cores, 64 GiB) derives 4 at four slots on its own, which
+    # The control: this machine (16 cores, 64 GiB) derives 5 at three slots on its own, which
     # differs from the caller's 8 — so the run below can tell pass-through
     # from an overwrite.
     control = _run_with_resources(tmp_path, "control", system="Darwin", cores="16", memory="68719476736")
     assert control.returncode == 0, f"exit {control.returncode}\n{control.stdout}\n{control.stderr}"
-    assert _inherited(tmp_path, "control") == ("4", "declared")
+    assert _inherited(tmp_path, "control") == ("5", "declared")
     done = _run_with_resources(
         tmp_path,
         "run",
@@ -1689,8 +1689,8 @@ def test_runner_defaults_empty_worker_value(tmp_path: Path) -> None:
     )
     for run in (unset_run, empty_run):
         assert run.returncode == 0, f"exit {run.returncode}\n{run.stdout}\n{run.stderr}"
-    assert _inherited(tmp_path, "unset") == ("4", "declared")
-    assert _inherited(tmp_path, "empty") == ("4", "declared")
+    assert _inherited(tmp_path, "unset") == ("5", "declared")
+    assert _inherited(tmp_path, "empty") == ("5", "declared")
 
 
 def test_runner_takes_workers_from_the_machine_settings_file(tmp_path: Path) -> None:
@@ -1722,10 +1722,10 @@ def test_runner_takes_workers_from_the_machine_settings_file(tmp_path: Path) -> 
     assert start["slots_source"] == f"machine file {settings}" and start["workers_source"] == start["slots_source"]
     assert "load_avg_end" in end and "pytest_peak_rss_bytes" in end, end
 
-    # slots alone: the workers follow them — 16 cores / 4 default slots would give 4, 3 slots give 5
-    again, _ = run("slots", "[verify]\nslots = 3\n")
+    # slots alone: the workers follow them — 16 cores / 3 default slots would give 5, 2 slots give 8
+    again, _ = run("slots", "[verify]\nslots = 2\n")
     assert again.returncode == 0, again.stderr
-    assert _inherited(tmp_path, "slots") == ("5", "declared")
+    assert _inherited(tmp_path, "slots") == ("8", "declared")
 
     # an unusable settings file refuses before any gate
     refused, _ = run("refused", "[verify]\nslots = 0\n")
@@ -1736,10 +1736,10 @@ def test_runner_takes_workers_from_the_machine_settings_file(tmp_path: Path) -> 
 @pytest.mark.parametrize(
     ("system", "cores", "memory", "expected"),
     [
-        pytest.param("Darwin", "16", None, "4", id="macos-cpu-reading-only"),
-        pytest.param("Darwin", None, "34359738368", "4", id="macos-memory-reading-only"),
-        pytest.param("Linux", "16", None, "4", id="linux-cpu-reading-only"),
-        pytest.param("Linux", None, "33554432", "4", id="linux-memory-reading-only"),
+        pytest.param("Darwin", "16", None, "5", id="macos-cpu-reading-only"),
+        pytest.param("Darwin", None, "34359738368", "5", id="macos-memory-reading-only"),
+        pytest.param("Linux", "16", None, "5", id="linux-cpu-reading-only"),
+        pytest.param("Linux", None, "33554432", "5", id="linux-memory-reading-only"),
         pytest.param("Darwin", None, None, "", id="macos-nothing-readable"),
         pytest.param("Linux", None, None, "", id="linux-nothing-readable"),
         pytest.param("SunOS", "8", "34359738368", "", id="unknown-platform-has-no-commands"),
@@ -1747,13 +1747,13 @@ def test_runner_takes_workers_from_the_machine_settings_file(tmp_path: Path) -> 
         pytest.param("Darwin", "0", "0", "", id="macos-zero-readings"),
         pytest.param("Darwin", "00", "0000", "", id="macos-multi-digit-zero-readings"),
         pytest.param("Linux", "0000", "00", "", id="linux-multi-digit-zero-readings"),
-        pytest.param("Darwin", "00", "34359738368", "4", id="macos-zero-cpu-memory-only"),
-        pytest.param("Linux", "00", "33554432", "4", id="linux-zero-cpu-memory-only"),
+        pytest.param("Darwin", "00", "34359738368", "5", id="macos-zero-cpu-memory-only"),
+        pytest.param("Linux", "00", "33554432", "5", id="linux-zero-cpu-memory-only"),
         pytest.param("Linux", "abc", "12.5", "", id="linux-malformed-readings"),
-        pytest.param("Darwin", "9223372036854775808", "34359738368", "4", id="macos-oversized-cpu"),
-        pytest.param("Linux", "9" * 100, "33554432", "4", id="linux-oversized-cpu"),
-        pytest.param("Darwin", "16", "9223372036854775808", "4", id="macos-oversized-bytes"),
-        pytest.param("Linux", "16", "18014398509481985", "4", id="linux-kib-conversion-overflows"),
+        pytest.param("Darwin", "9223372036854775808", "34359738368", "5", id="macos-oversized-cpu"),
+        pytest.param("Linux", "9" * 100, "33554432", "5", id="linux-oversized-cpu"),
+        pytest.param("Darwin", "16", "9223372036854775808", "5", id="macos-oversized-bytes"),
+        pytest.param("Linux", "16", "18014398509481985", "5", id="linux-kib-conversion-overflows"),
         pytest.param("Linux", None, "9" * 100, "", id="linux-oversized-memory-only"),
         pytest.param("Darwin", "9" * 100, "9" * 100, "", id="macos-both-readings-oversized"),
     ],
@@ -1810,7 +1810,7 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
         assert done.returncode == verdict, f"{scenario}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
         assert banner in done.stdout, done.stdout
         for gid in walked:
-            assert (tmp_path / f"{gid}.inherited").read_text(encoding="utf-8") == "4", scenario
+            assert (tmp_path / f"{gid}.inherited").read_text(encoding="utf-8") == "5", scenario
         gelaufen.extend(walked)
         if scenario == "blocking":
             assert "──   [gamma] not run" in done.stdout, "the stop did not name the gate it did not run"

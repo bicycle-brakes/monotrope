@@ -27456,9 +27456,9 @@ def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, mo
     readings = {"size": (16, 8 * 2147483648)}
     monkeypatch.setattr(verify_lock, "machine_size", lambda: readings["size"])
     env = stage2.targeted_pytest_env(tmp_path, {"PATH": "/usr/bin"})
-    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "16 GiB hold eight workers across the four default slots"
+    assert env["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "16 GiB hold eight workers across the three default slots"
     readings["size"] = (12, 24 * 2147483648)
-    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3", "12 cores / 4 slots"
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "4", "12 cores / 3 slots"
     chosen = stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
     assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
     settings = tmp_path / "state" / "coding-harness" / verify_lock.SETTINGS_NAME
@@ -27488,7 +27488,7 @@ def test_targeted_pytest_logs_the_values_in_force_and_their_sources(
     expected = verify_lock.read_settings(cores=12, memory_bytes=24 * 2147483648, env={}).describe()
     logged = capsys.readouterr().err.splitlines()
     assert logged == [f"{verify_lock.SETTINGS_LOG_PREFIX} {expected}"], logged
-    assert "slots 4 (repository default) · pytest workers per run 3 (repository default: 12 logical cores" in expected
+    assert "slots 3 (repository default) · pytest workers per run 4 (repository default: 12 logical cores" in expected
     stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
     caller = capsys.readouterr().err
     assert f"pytest workers per run 2 ({verify_lock.CALLER_WORKERS})" in caller, "a caller's value is logged as its own"

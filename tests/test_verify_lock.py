@@ -1587,7 +1587,7 @@ def test_slot_waiters_reserve_in_fifo_order(tmp_path: Path) -> None:
     or a free slot kept idle until every other holder has finished.
     """
     state = tmp_path / "state"
-    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is four
+    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is three
     log = tmp_path / "order.log"
     extra = lambda name, seconds: {"PROBE_LOG": str(log), "PROBE_NAME": name, "PROBE_SLEEP": seconds}  # noqa: E731
     holder_a = _supervised(state, ORDER_BODY, extra("holder-a", "30"))
@@ -1935,7 +1935,7 @@ def test_wait_logs_name_all_occupied_slots_without_tokens(tmp_path: Path) -> Non
     process id, command and start time belong.
     """
     state = tmp_path / "state"
-    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is four
+    _write_capacity(state, "2")  # two slots, as the scenario counts them; the default is three
     template = (
         "import os, time\nfrom pathlib import Path\n"
         "Path(os.environ['PROBE_STARTED']).write_text({name!r})\ntime.sleep({seconds})\n"
@@ -2052,26 +2052,26 @@ def test_layered_settings_default_override_and_sources(tmp_path: Path) -> None:
     a derived worker count not following an overriding slot count, a
     caller's value rewritten, or a source naming the wrong layer.
     """
-    assert type(verify_lock.DEFAULT_SLOTS) is int and verify_lock.DEFAULT_SLOTS == 4, "the default of this change"
+    assert type(verify_lock.DEFAULT_SLOTS) is int and verify_lock.DEFAULT_SLOTS == 3, "the default of this change"
     plain = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
-    assert (plain.slots, plain.workers) == (4, 3), plain
+    assert (plain.slots, plain.workers) == (3, 4), plain
     assert plain.slots_source == verify_lock.REPOSITORY_DEFAULT
-    assert plain.workers_source.startswith(verify_lock.REPOSITORY_DEFAULT) and "12 logical cores / 4 slots" in (
+    assert plain.workers_source.startswith(verify_lock.REPOSITORY_DEFAULT) and "12 logical cores / 3 slots" in (
         plain.workers_source
     )
 
     setting = tmp_path / verify_lock.SETTINGS_NAME
-    setting.write_text("[verify]\nslots = 3\n", encoding="utf-8")
+    setting.write_text("[verify]\nslots = 2\n", encoding="utf-8")
     slots_only = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
-    assert (slots_only.slots, slots_only.workers) == (3, 4), "workers must follow the overriding slot count"
+    assert (slots_only.slots, slots_only.workers) == (2, 6), "workers must follow the overriding slot count"
     assert str(setting) in slots_only.slots_source and str(setting) in slots_only.workers_source
 
     setting.write_text("[verify]\nworkers_per_run = 5\n", encoding="utf-8")
     workers_only = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
-    assert (workers_only.slots, workers_only.workers) == (4, 5)
+    assert (workers_only.slots, workers_only.workers) == (3, 5)
     assert workers_only.slots_source == verify_lock.REPOSITORY_DEFAULT
     assert workers_only.workers_source == f"machine file {setting}"
-    assert verify_lock.read_capacity(tmp_path) == 4
+    assert verify_lock.read_capacity(tmp_path) == 3
 
     setting.write_text("[verify]\nslots = 2\nworkers_per_run = 6\n", encoding="utf-8")
     both = verify_lock.read_settings(tmp_path, cores=12, memory_bytes=24 * GIB, env={})
@@ -2161,8 +2161,8 @@ def test_settings_command_logs_values_and_sources(tmp_path: Path) -> None:
     )
     assert done.returncode == 0, done.stderr
     workers, source = done.stdout.splitlines()
-    assert workers == "3" and "12 logical cores / 4 slots" in source
-    assert "slots 4 (repository default)" in done.stderr and "pytest workers per run 3" in done.stderr
+    assert workers == "4" and "12 logical cores / 3 slots" in source
+    assert "slots 3 (repository default)" in done.stderr and "pytest workers per run 4" in done.stderr
     unreadable = subprocess.run(
         [sys.executable, "-m", "scripts.verify_lock", "--settings", "--cores", "", "--memory-bytes", ""],
         cwd=REPO_ROOT,
