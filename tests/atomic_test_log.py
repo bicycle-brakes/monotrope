@@ -4,8 +4,10 @@ The stage-2 suites' stand-in processes append JSON records larger than one
 atomic write to the same log file while other processes and the pytest
 observers read it. Without a common lock a reader can see a torn last line and
 its `json.loads` raises; under the swarm runner such an exception inside a
-gate is converted fail-closed into a security refusal, which turned a green
-fixture red on main CI (bead coding-harness-yb1l). Every append and every
+gate is converted fail-closed into a security refusal. This is an inferred
+explanation for the main-CI fixture failures; their diagnostics were not read
+and the natural failure was not reproduced locally (bead coding-harness-yb1l).
+Every append and every
 snapshot read takes an advisory `fcntl.flock` on the data file itself, so
 writers and readers meet on the file's own identity across threads and
 processes, however a caller spells its path.

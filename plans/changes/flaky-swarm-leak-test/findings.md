@@ -848,7 +848,11 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-11 | MINOR | SPEC | base | tests/atomic_test_log.py:3 | The helper’s docstring states that a torn read caused the fixture failure on main CI. The spec says that causal chain is inferred: the CI diagnostics were not read, and the natural failure was not reproduced locally. The docstring therefore presents the historical failure as explained without evidence. [Non-goal: no conclusive explanation of the historical CI failures] | Codex | taken — not a test (false statement in a docstring) | — |
+| F6-11 | MINOR | SPEC | base | tests/atomic_test_log.py:3 | The helper’s docstring states that a torn read caused the fixture failure on main CI. The spec says that causal chain is inferred: the CI diagnostics were not read, and the natural failure was not reproduced locally. The docstring therefore presents the historical failure as explained without evidence. [Non-goal: no conclusive explanation of the historical CI failures] | Codex | fixed — not a test — corrected the docstring to identify the CI failure’s cause as inferred and the natural failure as unreproduced | — |
 
 Phase 6 verdict: codex 01a1e4bd-8291-7603-9fc3-9c8391b366ad, 2026-11-16
 Reviewer session: codex 01a1e4bd-8291-7603-9fc3-9c8391b366ad — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4445 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
