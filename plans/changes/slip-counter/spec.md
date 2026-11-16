@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -24,7 +24,7 @@ neighbours: []
 Derive missed-verification observations from the one local run history, with
 incomplete evidence visible beside the count (bead coding-harness-bxxt.7 —
 slip counter). Research: [research.md](research.md). Decisions:
-[decisions.md](decisions.md), Q-1 and Q-2.
+[decisions.md](decisions.md), Q-1 through Q-4.
 
 ## Problem
 
@@ -61,10 +61,11 @@ recorded interview, not a reconstruction of its code.
 
 1. When a completed red local full verification run has an earlier completed
    green targeted check with matching repository, change, checked-tree and
-   gate-configuration identities, the reader counts that full run once.
+   gate-configuration identities, the reader counts that full run once, even
+   when the full run started before the targeted check completed.
    *Refuted by:* a qualifying run counts zero, several green predecessors
    multiply it, or repeated identical records multiply it.
-   *Basis:* decisions.md#Q-1; research, ADR 0025 measurement rule.
+   *Basis:* decisions.md#Q-1, decisions.md#Q-4; research, ADR 0025 measurement rule.
 2. If a full run lacks that matching predecessor, it contributes no slip.
    *Refuted by:* targeted red, full green, full fallback masquerading as
    targeted, reversed completion order, another repository/change/tree or
@@ -79,8 +80,9 @@ recorded interview, not a reconstruction of its code.
 4. When the reader reports an interval, it shows the slip count and the
    number of incomplete runs excluded from counting beside each other.
    *Refuted by:* an identifiable interrupted or conflicting run disappears,
-   is counted twice as incomplete, or is represented by a bare zero slips.
-   *Basis:* decisions.md#Q-2.
+   is counted twice as incomplete, or is represented by a bare zero slips;
+   a red targeted or green full run with unknown comparison identity is omitted.
+   *Basis:* decisions.md#Q-2, decisions.md#Q-4.
 5. When the reader selects an interval and repository, optionally narrowed
    to one change, only selected runs enter its counts.
    *Refuted by:* another repository, an out-of-interval full run or an
@@ -92,7 +94,7 @@ recorded interview, not a reconstruction of its code.
    *Refuted by:* an incomplete run, malformed/unassignable row, unsupported
    evidence or missing history produces a complete-success exit or a
    purported complete zero; valid observations beside a diagnosed gap vanish.
-   *Basis:* decisions.md#Q-2; research, existing history reader contracts.
+   *Basis:* decisions.md#Q-2, decisions.md#Q-4; research, existing history reader contracts.
 7. While the counter is used, history reading and measurement failures leave
    verification outcomes and the existing duration history intact.
    *Refuted by:* reporting writes history, repeated reporting differs on
@@ -110,9 +112,11 @@ identifiable runs beside the observed slips. Unassignable damaged rows are
 diagnosed separately and make the report partial; do not invent run identities
 or counts from them. A wholly lost run leaves no evidence and cannot be
 reconstructed from this history. Missing history is unavailable, not zero.
-Legacy records without comparison evidence remain readable as durations and
-are not countable as slips. No equivalence between different trees is inferred
-beyond the one named below.
+Every identifiable in-scope run without complete comparison evidence is
+incomplete once, regardless of its kind or verdict, including red targeted
+checks and green full checks. Legacy records without comparison evidence remain
+readable as durations and are not countable as slips (decisions Q-4). No
+equivalence between different trees is inferred beyond the one named below.
 
 **Boundary — the change's bookkeeping is unseen (decisions Q-3).** The runner's
 time line, its call records and phase 6's committed rows and audit lines land
@@ -166,8 +170,8 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The three maintainer answers remain unchanged; Q-3 (2026-11-15)
-names the comparison tree's one exclusion.
+None open. The four maintainer answers remain unchanged; Q-3 names the
+comparison tree exclusion and Q-4 narrows countable evidence.
 
 [DETAIL] Count distinct red full-run identities, not distinct defects; this
 matches what the history can prove without interpreting test output. Conflicting
