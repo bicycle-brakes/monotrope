@@ -853,6 +853,39 @@ def test_slips_count_each_matching_red_full_run_once(
     assert code_again == 0 and out_again == out, out_again
 
 
+def test_slips_pair_overlapping_checks_by_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository, targeted_end="2026-11-13T10:00:00+00:00", full_utc="2026-11-13T09:30:00+00:00")
+    events[3]["utc"] = "2026-11-13T11:00:00+00:00"
+    # The full start is recorded before the targeted end in real overlapping runs.
+    _write_history(tmp_path / "state", [events[2], events[0], events[1], events[3]])
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+
+
+@pytest.mark.parametrize("field", ["tree_id", "change", "config_sha256"])
+@pytest.mark.parametrize("kind,verdict", [("targeted", "red"), ("full", "green")])
+def test_slips_mark_all_unknown_identities_incomplete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+    kind: str,
+    verdict: str,
+) -> None:
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    pair = events[:2] if kind == "targeted" else events[2:]
+    pair[0][field] = None
+    pair[1]["verdict"] = verdict
+    _write_history(tmp_path / "state", pair)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+    assert "evidence partial" in out, out
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -875,7 +908,7 @@ def test_slips_require_complete_matching_predecessor(
     """Mismatched identity, order, kind or verdict never establishes a slip.
 
     Fault this pins: a targeted red, a full green, a full fallback masquerading
-    as targeted, a reversed or overlapping completion order, another repository,
+    as targeted, a reversed completion order, another repository,
     change, tree or configuration, or an unknown identity counting as a slip.
     """
     repository = _measured_repo(tmp_path, monkeypatch)
@@ -901,7 +934,7 @@ def test_slips_require_complete_matching_predecessor(
     elif case == "reversed-order":
         events = _slip_events(repository, full_utc="2026-11-13T08:00:00+00:00")
     elif case == "same-instant":
-        events = _slip_events(repository, full_utc="2026-11-13T09:05:00+00:00")
+        events = _slip_events(repository, full_utc="2026-11-13T08:35:00+00:00")
     elif case == "other-tree":
         events = _slip_events(repository, tree="t2" * 20, full_tree=TREE)
     elif case == "other-change":
@@ -924,6 +957,8 @@ def test_slips_require_complete_matching_predecessor(
         # Both runs name their comparison tree as the explicit unknown: the green
         # predecessor counts nowhere, and the red full run cannot count against it.
         assert "incomplete/not countable runs: 2" in out and code == 1, (case, out)
+    elif case == "legacy-predecessor":
+        assert "incomplete/not countable runs: 1" in out and code == 1, (case, out)
     else:
         assert "incomplete/not countable runs: 0" in out and code == 0, (case, out)
 
@@ -1298,7 +1333,7 @@ def test_slips_are_read_only_and_preserve_duration_history(
     original = path.read_text(encoding="utf-8")
 
     code, out, _ = _slips(capsys)
-    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert code == 1 and "slips: 1; incomplete/not countable runs: 1" in out, out
     assert path.read_text(encoding="utf-8") == original, "reporting wrote to the history"
 
     code_again, out_again, _ = _slips(capsys)

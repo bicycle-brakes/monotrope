@@ -413,8 +413,8 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-5 | MAJOR | SPEC | base | scripts/verify_duration.py:701 | A targeted check that starts at 09:00 and finishes green at 10:00, followed by a matching full check that started at 09:30 and finishes red at 11:00, is counted as zero slips. The reader requires the targeted completion to precede the full **start**, although the spec requires the targeted check to complete earlier than the completed red full run. [AC 1, 2] | Codex | taken — narrowed scope, decisions Q-4 | — |
-| P6-6 | MAJOR | SPEC | base | scripts/verify_duration.py:814 | A completed red targeted check or green full check with an unknown tree, change or gate configuration is reported as countable evidence with exit 0. Such a run lacks comparison evidence and must appear once in the incomplete count, with a partial status. [AC 4, 6] | Codex | taken — narrowed scope, decisions Q-4 | — |
+| P6-5 | MAJOR | SPEC | base | scripts/verify_duration.py:701 | A targeted check that starts at 09:00 and finishes green at 10:00, followed by a matching full check that started at 09:30 and finishes red at 11:00, is counted as zero slips. The reader requires the targeted completion to precede the full **start**, although the spec requires the targeted check to complete earlier than the completed red full run. [AC 1, 2] | Codex | fixed — tests/test_verify_duration.py::test_slips_pair_overlapping_checks_by_completion | — |
+| P6-6 | MAJOR | SPEC | base | scripts/verify_duration.py:814 | A completed red targeted check or green full check with an unknown tree, change or gate configuration is reported as countable evidence with exit 0. Such a run lacks comparison evidence and must appear once in the incomplete count, with a partial status. [AC 4, 6] | Codex | fixed — tests/test_verify_duration.py::test_slips_mark_all_unknown_identities_incomplete | — |
 
 Phase 6 verdict: codex 01a1e510-ad75-7c80-9b17-28113a237b2d, 2026-11-16
 Reviewer session: codex 01a1e510-ad75-7c80-9b17-28113a237b2d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -440,3 +440,7 @@ Stage-2 call, 2026-11-16: spec-review · endpoint claude-code-plan · model clau
 | S-11 | MINOR | SPEC | base | spec.md Terms (no "targeted check" entry); AC 3; research "What 'slip' means" | [AMBIGUITY] "Targeted check" is not defined. Reading A: only the runner's targeted repair check (`run_targeted`, labelled "Runner targeted checks"), which today runs only in repair. Reading B: any check by which a runner attempt called its work green short of the full run, following the test-strategy definition research quotes ("A fault it finds that an attempt called green is counted as a slip"). That includes the attempt's cheap checks and, after bead coding-harness-0swp, the implement and draft modes. Under B, AC 3 must instrument more runner paths, and an implement attempt with green cheap checks followed by a red post-run `make verify` is a slip; under A it is not. | Opus | open | — |
 
 Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1103 files, 4478 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1103 files, 4482 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged

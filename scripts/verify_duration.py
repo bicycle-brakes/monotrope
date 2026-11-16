@@ -710,8 +710,8 @@ def _slip_predecessor_match(
 
     Repository, change, checked tree and gate configuration must all be present
     and equal — a missing field never matches another missing field — and the
-    completion must precede the full run's start, so overlapping checks do not
-    pair. Several qualifying predecessors still count the full run once.
+    completion must precede the full run's completion, including for overlapping
+    checks. Several qualifying predecessors still count the full run once.
     """
     for completion, place, named, content, basis in predecessors:
         if (
@@ -758,6 +758,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
     # Valid targeted greens of the whole available history, in file order: a
     # qualifying predecessor may lie before the asked interval.
     predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]] = []
+    full_candidates = []
     for run_id, run in runs.items():
         start = run["start"]
         moment = _instant(start.get("utc"))
@@ -803,25 +804,22 @@ def cmd_slips(args: argparse.Namespace) -> int:
             isinstance(value, str) and bool(value.strip())
             for value in (start.get("tree_id"), change, start.get("config_sha256"))
         )
+        if not identities_known or kind is None:
+            if in_selection:
+                uncountable += 1
+            continue
         if kind == "targeted":
-            stable = identities_known and end.get("tree_id") == start.get("tree_id")
+            stable = end.get("tree_id") == start.get("tree_id")
             if verdict == "green" and stable:
                 predecessors.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
             elif verdict == "green" and in_selection:
-                uncountable += 1  # green work whose comparison evidence cannot be trusted
-            # A red targeted run is a complete observation and never a predecessor.
+                uncountable += 1
             continue
-        if not in_selection:
-            continue
-        # A full verification run: kind full, and every legacy record, which
-        # predates comparison evidence.
-        comparable = kind == "full" and identities_known
-        if verdict != "red":
-            continue  # a green full run is a complete observation of zero slips
-        if not comparable:
-            uncountable += 1  # legacy or incomplete comparison evidence is not evidence of zero
-            continue
-        if _slip_predecessor_match(predecessors, moment, repository, change, start["tree_id"], start["config_sha256"]):
+        if in_selection and verdict == "red":
+            full_candidates.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
+
+    for completion, repository, change, tree, config in full_candidates:
+        if _slip_predecessor_match(predecessors, completion, repository, change, tree, config):
             slips += 1  # each qualifying red full-run identity counts once
 
     scope = f"change {args.change}" if args.change is not None else "change all"
