@@ -43,6 +43,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item: pytest.Item) -> None:
+    stand_in_log_guard.set_test_id(item.nodeid)
     stand_in_log_guard.take_violations()
     marker = item.get_closest_marker(MARKER)
     if marker is not None and not marker.kwargs.get("reason"):
@@ -77,7 +78,6 @@ def pytest_runtest_teardown():
         stand_in_log_guard.suspend(False)
 
 
-
 @pytest.fixture(autouse=True)
 def runner_clock_reads() -> Iterator[None]:
     """Fail a test during which runner code read a machine clock outside `clock_now`."""
@@ -96,3 +96,26 @@ def runner_clock_reads() -> Iterator[None]:
     new = runner_clock_guard.READS[start:]
     if new:
         pytest.fail("runner code read a machine clock outside clock_now: " + "; ".join(map(str, new)))
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node) -> None:
+    """Keep worker audits on the controller even when a worker's tests skipped."""
+    recorded = getattr(node, "workeroutput", {}).get("stand_in_log_violations", [])
+    collected = getattr(node.config, "_stand_in_log_violations", [])
+    node.config._stand_in_log_violations = collected + recorded
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    """A recorded raw access makes the session fail, whatever its test's outcome."""
+    recorded = stand_in_log_guard.session_violations()
+    if hasattr(session.config, "workeroutput"):
+        session.config.workeroutput["stand_in_log_violations"] = recorded
+    recorded += getattr(session.config, "_stand_in_log_violations", [])
+    if recorded:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        if reporter is not None:
+            reporter.write_sep("=", "stand-in log access violations")
+            for violation in recorded:
+                reporter.write_line(violation)

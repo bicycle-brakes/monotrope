@@ -37,8 +37,10 @@ _THIS_FILE = os.path.realpath(__file__)
 _STDLIB = str(Path(os.__file__).resolve().parent) + os.sep
 _PATH_METHODS = ("open", "read_text", "read_bytes", "write_text", "write_bytes")
 
-# Accesses recorded since the current test started; conftest clears and reads it.
+# The phase buffer may be drained; the session audit is append-only.
 VIOLATIONS: list[str] = []
+_session_violations: list[str] = []
+_test_id = "<outside a test>"
 _lock = threading.Lock()
 _state = {"installed": False, "suspended": False}
 _real: dict[str, object] = {}
@@ -104,6 +106,7 @@ def check(target, operation: str) -> None:
     )
     with _lock:
         VIOLATIONS.append(message)
+        _session_violations.append(f"{_test_id}: {message}")
     raise RawStandInLogAccess(message)
 
 
@@ -166,3 +169,16 @@ def take_violations() -> list[str]:
         taken = list(VIOLATIONS)
         VIOLATIONS.clear()
     return taken
+
+
+def set_test_id(nodeid: str) -> None:
+    """Attribute accesses, including those from threads and finalizers, to this test."""
+    global _test_id
+    with _lock:
+        _test_id = nodeid
+
+
+def session_violations() -> list[str]:
+    """Snapshot every recorded access without clearing the session audit."""
+    with _lock:
+        return list(_session_violations)

@@ -953,6 +953,24 @@ def _declared_log(folder: Path) -> Path:
 
 
 def test_runtime_check_refuses_raw_access_to_declared_logs(tmp_path: Path) -> None:
+    """Probe intentional refusals outside pytest's session audit in an isolated process."""
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; import test_atomic_test_log as tests; "
+            "tests.stand_in_log_guard.install(); tests._check_raw_access_forms(Path(sys.argv[1]))",
+            str(tmp_path),
+        ],
+        cwd=HERE,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
+def _check_raw_access_forms(tmp_path: Path) -> None:
     """Criterion 5 (flaky-swarm-leak-test, decisions.md#Q-5, finding F6-8). Planted fault: a raw access of a declared log runs.
 
     Each raw spelling, including both forms of phase-6 row F6-8 that the
@@ -1052,7 +1070,92 @@ def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) ->
     output = run.stdout + run.stderr
     assert run.returncode == 1, output
     assert "2 failed, 4 passed, 2 errors" in output, output
+    audit = output.split("stand-in log access violations", 1)[1]
+    for name in (
+        "test_swallowed_in_the_test",
+        "test_swallowed_in_a_thread",
+        "test_swallowed_in_a_finalizer[yield]",
+        "test_swallowed_in_a_finalizer[addfinalizer]",
+    ):
+        assert f"test_swallowed.py::{name}: raw" in audit, output
     for style in ("yield", "addfinalizer"):
         assert f"ERROR test_swallowed.py::test_swallowed_in_a_finalizer[{style}]" in output, output
     assert output.count("raw read_text of the declared stand-in log") >= 1, output
     assert output.count("raw open of the declared stand-in log") >= 1, output
+
+
+@pytest.mark.parametrize("drain", [False, True])
+@pytest.mark.parametrize("workers", [0, 2])
+@pytest.mark.parametrize("outcome", ["pass", "skip", "xfail", "error", "finalizer", "setup"])
+def test_runtime_check_keeps_every_access_until_session_finish(
+    tmp_path: Path, workers: int, outcome: str, drain: bool
+) -> None:
+    """F6-10: even skip/xfail and draining the phase buffer cannot erase an access."""
+    project = tmp_path / "project"
+    project.mkdir()
+    for name in ("conftest.py", "stand_in_log_guard.py", "runner_clock_guard.py", "atomic_test_log.py"):
+        (project / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8")
+    source = """
+import pytest
+import stand_in_log_guard
+from pathlib import Path
+
+
+def access():
+    try:
+        Path("@LOG@").read_text()
+    except stand_in_log_guard.RawStandInLogAccess:
+        pass
+    if DRAIN:
+        stand_in_log_guard.take_violations()
+
+
+@pytest.fixture
+def setup_access():
+    access()
+    pytest.skip("after setup access")
+
+
+@pytest.fixture
+def finalizer_access(request):
+    def finalize():
+        access()
+        pytest.skip("after finalizer access")
+    request.addfinalizer(finalize)
+
+
+def test_recorded(request):
+    if OUTCOME == "setup":
+        request.getfixturevalue("setup_access")
+    elif OUTCOME == "finalizer":
+        request.getfixturevalue("finalizer_access")
+    else:
+        access()
+        if OUTCOME == "skip":
+            pytest.skip("after access")
+        elif OUTCOME == "xfail":
+            pytest.xfail("after access")
+        elif OUTCOME == "error":
+            raise ValueError("after access")
+
+
+def test_clean():
+    pass
+"""
+    (project / "test_recorded.py").write_text(
+        f"OUTCOME = {outcome!r}\nDRAIN = {drain!r}\n" + _render(source), encoding="utf-8"
+    )
+    (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    run = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-n", str(workers), str(project)],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    output = run.stdout + run.stderr
+    assert run.returncode == 1, output
+    assert "stand-in log access violations" in output, output
+    assert "test_recorded.py::test_recorded" in output, output
+    assert "raw read_text" in output, output
+    assert "1 passed" in output or "2 passed" in output, output
