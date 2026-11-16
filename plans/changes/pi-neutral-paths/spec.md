@@ -103,6 +103,20 @@ the final request (`research.md`, 2026-10-29 and 2026-11-16 addenda).
    the provider, or the launch reports success after the guard detects it.
    *Basis:* decisions.md, maintainer's answers of 2026-11-16.
 
+8. When the interactive Pi session sends a request, no discovered context
+   file whose resolved location is outside the repository contributes its
+   path or content to the request.
+   *Refuted by:* a parent, global or symlink-escaped context file's unique
+   path or content reaches the offline provider on any session turn.
+   *Basis:* decisions.md, context-file addendum of 2026-11-16.
+
+9. When the interactive Pi session sends a request, discovered context files
+   within the repository remain available to the model.
+   *Refuted by:* a repository instruction file's unique content is missing
+   from the captured session request.
+   *Basis:* decisions.md, context-file addendum of 2026-11-16; existing
+   session behavior described in research.md.
+
 ## Non-goals
 
 - Changing Claude Code or Codex transports, including GLM explore/implement
@@ -110,11 +124,9 @@ the final request (`research.md`, 2026-10-29 and 2026-11-16 addenda).
 - Changing model admission, selection, availability receipts, review order,
   credentials, leak-check rules or research-capture storage.
 - Changing Pi's version, install location, wrapper, real working directory,
-  tool permissions or discovery settings; catalog/version/help operations
-  without model contact need no neutralization.
+  tool permissions or non-context discovery settings; catalog/version/help
+  operations without model contact need no neutralization.
 - Providing a general content/secret filter or an operating-system sandbox.
-- Changing which personal or repository instruction files Pi discovers: the
-  measured personal-file content exposure is outside this path-only change.
 - Design phase 2b and an ADR draft: this is a bounded fix using the
   maintainer-selected extension hook, so neither is due.
 
@@ -154,5 +166,7 @@ None open. The following reversible details are chosen here with reasons.
 - [DETAIL] Measure the full payload using the existing offline contract
   transport, rather than making a hosted call: it observes what the provider
   receives without sending the very identifiers the test is meant to detect.
+- [DETAIL] Resolve context-file paths before applying the repository boundary:
+  this prevents a symlink inside the worktree from admitting outside content.
 - [DETAIL] Allow two hours of phase-4 work, including repairs; stop and report
   unfinished work at that limit. Neither input artifact states an appetite.

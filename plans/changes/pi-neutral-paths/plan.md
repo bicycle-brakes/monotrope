@@ -18,8 +18,8 @@ tags: [plan, pi, privacy]
 # Plan — pi-neutral-paths
 
 ```text
-For you:     Pi model calls stop exposing local machine locations while repository tools keep their working directory.
-Done when:   Offline captures show neutral paths and a surviving home or worktree path stops delivery; make verify is green.
+For you:     Pi model calls stop exposing local machine locations and the session excludes outside context files while keeping repository instructions.
+Done when:   Offline captures show neutral paths, exclude outside context, retain repository instructions, and prove a surviving home or worktree path stops delivery; make verify is green.
 Appetite:    2 hours of phase 4, repairs included; stop at the limit.
 Not now:     Claude Code/Codex transports, Pi upgrades, model policy or moving the checkout/install.
 Pre-mortem:  suppose it failed: most likely because a later request reintroduces a local path through tool or project context.
@@ -45,8 +45,11 @@ Starts unless you say stop.
    verify the hook's actual failure behavior with the pinned Pi.
 3. Copy the extension to each launch's existing scratch/private directory and
    explicitly load it alongside role-specific extensions. Fail preparation if
-   the source cannot be copied. Preserve the actual cwd, context discovery,
-   admission, tool permissions and existing role extensions.
+   the source cannot be copied. Preserve the actual cwd, admission, tool permissions and existing role extensions. For the session,
+   filter Pi's context-file options to paths whose canonical resolved target
+   is inside the repository; refuse if the boundary cannot be established.
+   Keep in-repository context, including the root instructions, available.
+   Apply the filter on every run, including reloads and subsequent turns.
 4. Wire all builders, including the review builder in `scripts/stage2.py`;
    reconcile with its current contents and preserve existing changes.
 5. Capture each production builder's command at the existing dispatch seam,
@@ -55,8 +58,11 @@ Starts unless you say stop.
    argv, keeping all production extension/context/tool flags; submit two user
    turns and script a tool-result/error round trip. Assert allowed relative
    reads still return their sentinel, forbidden outside/symlink reads remain
-   blocked, and unrelated instructions/tools survive. Do not open Terminal or
-   contact a hosted provider. Promote `not yet written` ledger entries when
+   blocked, and unrelated instructions/tools survive. Plant distinct parent,
+   global, symlink-escape and repository context canaries; inspect their paths
+   and content in complete requests across repeated turns, with a control
+   proving outside discovery would otherwise reach the provider. Do not open
+   Terminal or contact a hosted provider. Promote `not yet written` ledger entries when
    each top-level test exists, record evidence, then run the verification.
 
 ## Files
@@ -83,7 +89,8 @@ Starts unless you say stop.
 - Change `tests/test_stage2_research_availability.py`: assert the same for
   research probes without changing their fixed input or admission.
 - Change `tests/test_stage2_session.py`: assert the session loads both private
-  copies while retaining policy confirmation, context files and real cwd.
+  copies while retaining policy confirmation, repository context and real cwd;
+  replace the assertion that unrestricted context discovery stays on.
 - Update `plans/changes/pi-neutral-paths/plan.md` ledger references and
   `plans/changes/pi-neutral-paths/findings.md` evidence as implementation and
   review progress; the runner alone writes time entries. No files are deleted.
@@ -102,6 +109,8 @@ Starts unless you say stop.
 - 6: not yet written tests/test_pi_contract.py::test_real_neutralization_preserves_instructions_and_tools — non-location instructions, tool declarations or relative references change
 
 - 7: not yet written tests/test_pi_contract.py::test_surviving_prompt_path_blocks_delivery — a planted home or worktree path reaches the provider or the launch succeeds
+- 8: not yet written tests/test_pi_contract.py::test_session_excludes_outside_context_files — a parent, global or symlink-escaped context path or content reaches the provider
+- 9: not yet written tests/test_pi_contract.py::test_session_retains_repository_context_files — repository instruction content is absent from the request
 
 ## Verification
 
@@ -109,7 +118,6 @@ Starts unless you say stop.
 python3 scripts/check_interview_minimums.py --change pi-neutral-paths
 python3 scripts/check_research_handoff.py --change pi-neutral-paths
 python3 scripts/check_criterion_ledger.py
-python3 scripts/validate_change_artefacts.py --check
 .venv/bin/python3 -m pytest tests/test_pi_contract.py tests/test_stage2.py tests/test_stage2_swarm.py tests/test_stage2_availability.py tests/test_stage2_research_availability.py tests/test_stage2_session.py -q
 make verify
 ```
@@ -122,8 +130,8 @@ This drafting call does not implement code, commit or run the full suite.
 
 No design document or ADR is due for class `bounded`. Leave the Pi pin/wrapper,
 path-lock and session-policy enforcement, capture storage, model declarations,
-governance, discovery flags and non-Pi transports untouched. Exploration used
-Stage 2, GLM 5.3 Flash on 2026-10-29; no Stage-1 fallback was recorded.
+governance, non-context discovery flags and non-Pi transports untouched.
+Exploration used Stage 2, GLM 5.3 Flash on 2026-10-29; no Stage-1 fallback was recorded.
 `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent in
 this worktree at draft time; use the phase-3 prompt's form and the available
 interview, handoff and criterion-ledger checks. The runner owns generated
@@ -147,3 +155,4 @@ Appetite: 2 hours of phase 4. Used by 2026-10-31 18:05 UTC: about 8300 s (2 h 18
 2026-11-01 09:30:09–10:10:17 UTC, 2408 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-01 10:10:24–10:50:39 UTC, 2416 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-16 14:20:59–14:22:48 UTC, 109 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-16 14:25:12–14:27:11 UTC, 119 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
