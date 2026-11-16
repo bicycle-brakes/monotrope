@@ -99,16 +99,17 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
    (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
    every merge command it recognises — a brake, not a lock: another spelling
    passes (`docs/WORKFLOW.md`).
-9. **One repeatable, uniform path — no special cases.** Every recurring
-   action (starting a model, writing an artifact header, running a check,
-   merging) has exactly one path, carried by code at one choke point, that
-   every caller takes the same way and that gives the same result on a
-   rerun. A second route for one caller, a hand-written variant of what a
-   tool produces, or a rule that holds only for some callers is a defect:
-   it is folded into the one path, never added beside it. Where a case
-   truly cannot take the path, it is named as a `Boundary` in the spec and
-   tracked, not handled ad hoc. The kit carries this principle
-   (`templates/agents-working-pace.md`) (maintainer, 2026-11-16).
+9. **One entry point and one writer per action — no side routes.** Every
+   recurring action (starting a model, writing an artifact header, running a
+   check, merging) has one entry point and one writer, carried by code at one
+   choke point. Variants the maintainer decided (fallback models, routing by
+   class, the text-only verify skip) are declared parameters inside that
+   path, never a second route beside it; no caller reaches around it, and
+   nothing a tool produces is written by hand instead. An existing side
+   route becomes a bead and is folded in by its own change, never in passing.
+   A rule of this kind takes hold through a check that goes red, not through
+   prose. The kit carries it (`templates/agents-working-pace.md`)
+   (maintainer, 2026-11-16).
 
 ## Communication and session continuity
 
