@@ -256,6 +256,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-16
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-13 19:41:09–21:38:56 UTC, 7067 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -266,3 +270,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-15 14:46:20–15:31:27 UTC, 2707 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_run.py` is shared execution infrastructure · measured by the runner
 2026-11-15 16:04:18–17:04:08 UTC, 3589 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_run.py` is shared execution infrastructure · measured by the runner
 2026-11-15 19:05:46–20:32:14 UTC, 5188 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-16 13:49:35–13:51:58 UTC, 143 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-16 13:52:05–13:53:22 UTC, 76 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-16 13:53:29–15:54:31 UTC, 7262 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/ci_gates.py` is shared execution infrastructure · measured by the runner

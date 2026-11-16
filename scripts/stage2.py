@@ -10449,6 +10449,8 @@ def verify_draft(
         return [f"the document gates could not be selected ({error})"], owed, not_completed
     if not gates:
         return ["no locally runnable document gates were selected; the draft check cannot run"], owed, not_completed
+    deferred = [gate for gate in gates if gate["admission"]]
+    gates = [gate for gate in gates if not gate["admission"]]
     problems, notes = run_gates(root, env, key, gates)
     if not problems:
         owed = answer_is_owed(root, ctx.change)
@@ -10468,6 +10470,8 @@ def verify_draft(
     # artefact guards have spoken: a draft they refuse is never reported as green (bead
     # coding-harness-0swp, criterion 8).
     scope = document_scope_text(gates, "red" if problems else "green", notes)
+    if deferred:
+        scope += "; deferred to full check: " + ", ".join(f"`{gate['id']}`" for gate in deferred)
     return problems, owed, scope
 
 

@@ -624,27 +624,6 @@ def test_unmeasurable_inputs_refuse_reuse(checkout: SimpleNamespace, gate_script
     assert result.exit_code == 2, (result, out, err)
     assert "ist leer" in err, err
 
-    # An unreadable tree entry refuses the measurement before any gate runs.
-    write_gates(
-        checkout.root,
-        [
-            _gate("cheap", f"python3 {gate_script} cheap 0"),
-            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
-        ],
-    )
-    victim = checkout.root / "tracked.txt"
-    victim.write_text("readable\n", encoding="utf-8")
-    _git(checkout.root, "add", ".")
-    _git(checkout.root, "commit", "--quiet", "-m", "tracked")
-    victim.unlink()
-    os.mkfifo(victim)
-    result, out, err = run_scheduler(checkout.root)
-    assert result.exit_code == 2, (result, out, err)
-    assert "cannot be measured" in err, err
-    assert _read_log() == [], "no gate may run on an unmeasurable tree"
-    victim.unlink()
-    victim.write_text("readable\n", encoding="utf-8")
-
     # A cheap gate that writes into the checkout makes its own baseline unstable: refuse, never accept.
     writer = f"python3 {gate_script} cheap 0 0 {checkout.root}/side-file"
     write_gates(
@@ -1095,9 +1074,9 @@ def test_seconds_only_job_runs_on_an_unmeasurable_tree(checkout: SimpleNamespace
     assert result.exit_code == 0, (result, out, err)
     assert result.executed == ["docs-a"], result
     assert "cannot be measured" not in err, err
-    # The full job still refuses that tree before its protected work.
+    # The full job repeats cheap work under admission before protected work.
     result, out, err = run_scheduler(checkout.root)
-    assert result.exit_code == 2 and "cannot be measured" in err, (result, out, err)
+    assert result.exit_code == 0 and result.executed == ["docs-a", "heavy"], (result, out, err)
 
 
 def test_interpreter_default_comes_from_the_env_argument(checkout: SimpleNamespace, tmp_path: Path) -> None:
@@ -1349,3 +1328,43 @@ def test_a_signal_at_the_launch_boundary_still_ends_the_gate(tmp_path: Path, mon
     assert len(started) == 1
     assert not still_running, "the gate kept running after the interrupt"
     assert started[0].pid not in verify_run._LIVE_GROUPS, "the interrupted gate stayed registered"
+
+
+def test_unmeasurable_tree_runs_cheap_first_and_defers_the_rest(checkout: SimpleNamespace, gate_script: Path) -> None:
+    """A FIFO cannot suppress a cheap failure; green cheap work repeats under admission."""
+    victim = checkout.root / "tracked-fifo"
+    victim.write_text("tracked", encoding="utf-8")
+    _git(checkout.root, "add", ".")
+    _git(checkout.root, "commit", "--quiet", "-m", "track victim")
+    victim.unlink()
+    os.mkfifo(victim)
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 1"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code != 0 and result.executed == ["cheap"], (result, out, err)
+    assert not result.admission_requested
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 0"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    prior = len(_read_log())
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 0 and result.executed == ["cheap", "heavy"], (result, out, err)
+    assert [entry["gate"] for entry in _read_log()[prior:]] == ["cheap", "cheap", "heavy"]
+    assert result.admission_requested
+
+
+def test_only_declared_cheap_gates_run_before_admission() -> None:
+    """Unknown cost and an explicit exception are never declared cheap."""
+    assert ci_gates.declared_cheap({"cost": "seconds"})
+    assert ci_gates.declared_cheap({"cost": "seconds", "needs_admission": False})
+    for gate in ({}, {"cost": "unknown"}, {"cost": "minutes"}, {"cost": "seconds", "needs_admission": True}):
+        assert not ci_gates.declared_cheap(gate)

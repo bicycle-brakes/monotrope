@@ -2055,12 +2055,7 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
             "the membership count is not the count of locally executed commands"
         )
 
-    # A git that cannot name HEAD cannot give the run a measurable tree: a run
-    # with protected work refuses with a diagnostic instead of reporting nulls
-    # over unmeasured gates — its reused cheap results would rest on nothing.
-    # (A seconds-only selection reuses nothing and measures no tree, review row
-    # L2-3 of bead coding-harness-bxxt.6; here `plain-verify` is the protected
-    # gate, which changes no membership count.)
+    # An unmeasurable tree repeats cheap gates under admission before protected work.
     base = tmp_path / "git-unavailable"
     tree = _runner_tree_files(base / "tree")
     _write_gate_file(
@@ -2072,11 +2067,10 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
     )
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
     done = _run_runner(tree, home, [fake_git(base, answers="none")])
-    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-    assert "cannot be named" in done.stderr or "cannot be measured" in done.stderr, done.stderr
-    assert "VERIFY GREEN" not in done.stdout, done.stdout
-    ran = {gid for gid in ("docs-local", "plain-verify", "drift-only") if (base / f"{gid}.ran").exists()}
-    assert not ran, f"the run executed gates on a tree it could not measure: {sorted(ran)}"
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "cannot be measured" in done.stderr, done.stderr
+    assert done.stdout.count("── [docs-local] $") == 2, done.stdout
+    assert (base / "plain-verify.ran").exists()
 
     # Per reference: a git that knows HEAD but has no merge base (no origin/main)
     # keeps the candidate and leaves only the base null.

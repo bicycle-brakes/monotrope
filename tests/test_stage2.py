@@ -29080,3 +29080,19 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Protected document gates are named but never executed, even when all are deferred."""
+    commands = targeted_mode(monkeypatch)
+    original = stage2.document_gates()
+    assert len(original) >= 2
+    protected = [{**gate, "admission": True} for gate in original]
+    monkeypatch.setattr(stage2, "document_gates", lambda: protected)
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert not problems, problems
+    assert not commands.of("gate")
+    assert "deferred to full check" in scope
+    assert all(gate["id"] in scope for gate in protected)

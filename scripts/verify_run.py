@@ -17,9 +17,9 @@ The flow, over the gates `ci_gates.selection_at` selects:
      `needs_admission` exception) executes first, and every one of them
      executes even after another unprotected gate failed blocking-red — all
      cheap diagnostics together, before any waiting.
-  2. A tree snapshot brackets the cheap pass. Only a stable snapshot is a
-     baseline: an unstable or unreadable one refuses the run with a request
-     to rerun, and never lets unmeasured results stand for the tree.
+  2. A tree snapshot brackets the cheap pass when measurable. A changing tree
+     refuses the run; an unreadable tree requires another cheap pass under
+     admission before protected work.
   3. With a green cheap pass, *protected* work (declared `minutes`, or
      `seconds` explicitly marked `needs_admission: true`) enters ONE
      admission (`verify_lock.hold_admission`). An empty protected set never
@@ -776,13 +776,13 @@ def run_verification(
         cheap = [g for g in selection if not g["admission"]]
         protected = [g for g in selection if g["admission"]]
 
-        def measure(where: str) -> TreeSnapshot:
+        def measure(where: str) -> TreeSnapshot | None:
             try:
                 return tree_snapshot(wurzel)
             except SnapshotUnusable as exc:
                 complain(f"the tree state cannot be measured {where}: {exc}")
-                complain("rerun the check — unmeasured cheap results are never trusted as a baseline")
-                raise VerifyRunRefused(str(exc)) from exc
+                complain("unmeasured cheap results will be repeated under admission")
+                return None
 
         def reselect(failure: str) -> list[dict[str, Any]]:
             """The selection read again from the list as it stands now; a failure or an empty one refuses."""
@@ -829,11 +829,12 @@ def run_verification(
 
         # 2. A cheap blocking failure ends the run before any protected work,
         # and an empty protected set ends it here; neither relies on a baseline.
-        if (reds and not ci) or not protected or before is None:
+        if (reds and not ci) or not protected:
             return finish()
 
         after = measure("after the cheap pass")
-        unstable(before, after, "the tree changed during the cheap pass")
+        if before is not None and after is not None:
+            unstable(before, after, "the tree changed during the cheap pass")
 
         # 3. One admission for the whole protected set; an empty set never queues.
         admission_requested = True
@@ -851,7 +852,7 @@ def run_verification(
                 # reselected from the reloaded list and its complete
                 # unprotected set reruns inside the held admission.
                 current = measure("at the admission boundary")
-                if current.fingerprint != after.fingerprint:
+                if current is None or after is None or before is None or current.fingerprint != after.fingerprint:
                     # The refreshed baseline is measured before the reload, so the reloaded
                     # selection is the measured configuration's (row F6-2).
                     recheck_before = measure("before the refreshed cheap pass")
@@ -869,7 +870,10 @@ def run_verification(
                         context = verify_lock.admission_context()
                         return finish()
                     recheck_after = measure("after the refreshed cheap pass")
-                    unstable(recheck_before, recheck_after, "the tree changed again during the refreshed cheap pass")
+                    if recheck_before is not None and recheck_after is not None:
+                        unstable(
+                            recheck_before, recheck_after, "the tree changed again during the refreshed cheap pass"
+                        )
                 # 5. The protected set under the held admission; locally the
                 # first blocking failure stops it, `--ci` stays exhaustive.
                 protected_started = True

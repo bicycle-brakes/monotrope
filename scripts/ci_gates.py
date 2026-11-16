@@ -481,7 +481,7 @@ def _gates_aus(datei: Path) -> list[dict[str, Any]]:
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
                 "needs_admission": bool(g.get("needs_admission")),
-                "admission": g["cost"] == "minutes" or bool(g.get("needs_admission")),
+                "admission": not declared_cheap(g),
                 "subsets": list(g.get("subsets") or []),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
@@ -489,6 +489,11 @@ def _gates_aus(datei: Path) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def declared_cheap(gate: dict) -> bool:
+    """Only explicitly seconds-cost gates without the exception are cheap."""
+    return gate.get("cost") == "seconds" and gate.get("needs_admission") is not True
 
 
 def gates() -> list[dict[str, Any]]:
