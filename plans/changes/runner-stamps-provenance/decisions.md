@@ -77,3 +77,34 @@ status: answered
 
 In the context of the lane queue, facing the most frequent source of hand repairs, we decided to start this change as the next lane, before lane 10, to achieve fewer hand steps, accepting that lane 10 waits.
 — 2026-11-16
+
+## Q-4 · Scope: split the change
+
+context: |
+  Topic: the size of this change.
+  Intention: the first draft (2026-11-16) migrated "~50" headers and stamped
+  after `draft` only. The bead (coding-harness-f9sv) asks for a stamp after
+  explore, draft and repair, and for a post-run check of the files each run
+  touched. A count with the census rule on origin/main (2026-11-16) found
+  271 of 620 producer headers under plans/ failing, wrong program names
+  (`Claude Code`, `glm`, `stage2`) included. The migration method was
+  decided on 2026-11-07 in coding-harness-2i7x (producers read from each
+  file's history, never collapsed).
+  Today: one change holds stamp, check, migration and a tree-wide check.
+  Repository change: this change keeps the stamp and the per-run check;
+  the migration and the tree-wide check move to coding-harness-2i7x.
+  Architecture change: none.
+asked: 2026-11-16, conversation
+answer: "teilen"
+answered_by: maintainer
+status: answered
+
+In the context of a provenance change four times larger than first drafted,
+facing open lanes that a tree-wide check would turn red, we decided to split
+it: this change makes `scripts/stage2.py` stamp `produced_by` (program,
+model, publication date) after explore, draft and repair, and makes every
+verb's post-run check refuse a failing producer header in the files the run
+touched; the migration and the tree-wide check go to coding-harness-2i7x, to
+achieve that no new free-form header is written from now on, accepting that
+existing ones stay until 2i7x lands.
+— 2026-11-16
