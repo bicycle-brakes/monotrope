@@ -113,10 +113,10 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reviewer.md-claude-opus-5-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-gpt-6.1-sol]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-gpt-6.1-terra]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-gpt-6.1-sol]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-gpt-6.1-sol]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-gpt-6.1-terra]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-gpt-6.1-terra]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 5.5]": "bestand-dieses-repos",
@@ -185,7 +185,8 @@ REIST_NICHT: dict[str, str] = {
 # the drafting prompts' model lines now lead with the id `gpt-6.1-sol` where they named
 # `Opus 5.5`. One case is new: `test_no_remark_routes_the_spec_review_to_codex` reads
 # `model-endpoints.yaml`, which stays home — the same reason, `bestand-dieses-repos`.
-# The count stays at the cap; no raise.
+# The count stays at the cap; no raise. On 2026-11-15 the same three ids moved from `gpt-6.1-sol`
+# to `gpt-6.1-terra` (Codex switched model, maintainer's word): renamed again, not added.
 # 36 -> 37 on 2026-10-13 (plans/changes/ci-minutes): `tests.test_ci::test_one_version_is_the_interpreter_floor`
 # came along. It reads `pyproject.toml`, a file the kit does not carry: the missing file maps to
 # `braucht-die-vollstaendige-suite`. 37 -> 38 on 2026-10-13: `tests.test_ci::test_the_cloud_environment_builds_the_venv_with_the_floor`
