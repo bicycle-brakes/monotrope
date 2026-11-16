@@ -137,10 +137,18 @@ context: |
   of the three existing skips; treat an ambiguous single Hy4 row as no
   row; AC 4 and AC 5 become conditional on each admitted id.
 asked: 2026-11-16, conversation (spec review finding F-1)
-answer: null
-answered_by: null
-status: open
+answer: "Je ID datiert überspringen (Empfohlen)"
+answered_by: maintainer
+status: answered
 
-Open. The maintainer answered with a question, "was sagt der /advisor?",
-and has not chosen yet; the advisor view in the context above is a note
-for that choice, not a decision.
+In the context of admitting qwen4-max and hy4 to the paid ladder, facing
+an id whose dated reading or probe goes against it (training other than
+`Not used`, no or an ambiguous row on the Go page, an unmapped wire API,
+or a failed probe), we decided that such an id is declared in `modelle`
+with a dated skip (`uebersprungen`/`grund`), as `gpt-6-luna`,
+`claude-haiku-5-5` and `gemini-4-argon` are declared, and that the other
+id may ship alone, to achieve a change that can finish whatever the
+reading shows, accepting that two dated skips are a valid result and the
+ladder may gain no new member. The maintainer first asked for the
+advisor's view and then chose its recommendation.
+— 2026-11-16
