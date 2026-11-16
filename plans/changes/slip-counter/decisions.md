@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -67,6 +67,23 @@ context: |
   Recommendation: variant A; consequence: a change to those two files between the checks goes unseen, and a gate that reads them (for example the criterion ledger) could count one slip too many — a risk named in the spec.
 
 In the context of a prerequisite proof that showed the runner's own bookkeeping moving the tree between a targeted check and the later full one, facing a choice between stopping the change and leaving the change's two bookkeeping files out of the comparison, we decided to leave them out, to achieve a counter that can pair real runs, accepting that an edit to those two files between the checks goes unseen. — 2026-11-15
+
+## Q-4 · Narrow the slip-history reader instead of repairing its edge cases
+
+asked: 2026-11-16
+answer: "Eingrenzen (Empfohlen)" — the slip-history reader counts only runs with complete comparison evidence; every other run appears once as incomplete; the remaining edge cases become named Boundaries in the spec.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the slip-history reader in scripts/verify_duration.py pairs a green targeted check with a later red full run on the same tree and counts the pair as a slip.
+  Intention: the phase-6 re-check of 2026-11-16 (codex 01a1e510) found P6-5 (a targeted check that finishes after the full run started is not counted) and P6-6 (a run with an unknown tree, change or gate configuration is reported as countable evidence); the round before found P6-3 and P6-4; all four are the same mechanism, edge cases of the reader, so case repair ends.
+  Today: the reader tries to classify every run, and each repaired edge case is followed by the next one.
+  Repository change: the reader counts only runs with complete comparison evidence; every other run is reported once in the incomplete count; the spec names the remaining edge cases as Boundaries.
+  Architecture change: none; a reader without a writer, the run log stays the one local history.
+  Question: narrow the reader to runs with complete comparison evidence and name the rest as Boundaries, or keep repairing case by case?
+  Recommendation: narrow; consequence: some real slips with incomplete evidence show up only in the incomplete count, not as slips.
+
+In the context of a slip-history reader whose edge cases drew two findings in each of two phase-6 re-checks from one mechanism, facing a choice between repairing a fifth case and narrowing what the reader counts, we decided to count only runs with complete comparison evidence, report every other run once as incomplete and name the remaining edge cases as Boundaries, to achieve a reader whose count rests on evidence it can check, accepting that a slip with incomplete evidence appears only in the incomplete count. — 2026-11-16
 
 ## Decided by the agent
 
