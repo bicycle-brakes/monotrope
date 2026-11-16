@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-15
 created: 2026-11-15
 last_reviewed: 2026-11-15
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-xsta
@@ -214,3 +214,23 @@ to achieve that one model alone no longer ends a run,
 accepting one more call per failed stage and an amendment of ADR 0020 —
 2026-11-15
 
+## Q-8 · Where the answer-reading and repair rules live
+
+asked: 2026-11-16
+answer: "Nachtrag zu ADR 0020 (Empfohlen)"
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where the rules of Q-1 to Q-7 (one answer reader, one repair retry, per-model counts, the finder quorum, the hand-over of a single-call stage) are written down as architecture.
+  Intention: the runner's draft of 2026-11-16 (attempt 3, GLM 5.3) wrote a new ADR 0026 (docs/adr/0026-swarm-answer-reading-and-repair.md) instead of amending ADR 0020, the phase-1 research swarm ADR that Q-2, Q-5, Q-6 and Q-7 named as the place.
+  Today: ADR 0020 (docs/adr/0020-phase-1-research-swarm.md) governs the research swarm; the draft failed its post-run checks, and its output (the new ADR 0026, spec.md, design.md, plan.md, findings.md and a change to plans/INDEX.md) stands uncommitted in the worktree.
+  Repository change: the rules become an amendment to ADR 0020, not a new ADR; the uncommitted draft is superseded, and the draft is restarted through the runner.
+  Architecture change: yes, an amendment of ADR 0020 by the maintainer instead of a new ADR 0026.
+
+In the context of rules that change how the research swarm reads and
+repairs model answers,
+facing a draft that placed them in a new ADR 0026,
+we decided that they are an amendment to ADR 0020, that the uncommitted
+draft is superseded and that the draft restarts through the runner,
+to achieve one ADR that states the whole research swarm contract,
+accepting that the draft's work is discarded and redone — 2026-11-16
