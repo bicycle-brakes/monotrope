@@ -138,3 +138,8 @@ exactly as the maintainer gave it, after the question it answered.
   dropping the red Pi 1.2.0 work-in-progress code, and draft and implement
   through the runner?
   **Answer:** "Ja"
+
+### Addendum — 2026-11-16, context files stop at the repository boundary
+
+- **Question:** The measurement (docs/research/2026-11-16-pi-1-5-0-prompt-paths.md) shows that the interactive session, with context files on, sends the personal `~/AGENTS.md` outside the repository, content and path, to the online model. The 2026-11-16 draft keeps context discovery unchanged and removes only paths. Should the session stop context-file discovery at the repository boundary, so no file outside the repository reaches an online model, in this change?
+- **Maintainer, 2026-11-16, verbatim:** "Ja"
