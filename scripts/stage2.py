@@ -6324,15 +6324,6 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
         pass_fds = (descriptor,) if gate_env.get(verify_lock.LOCK_ENV) and descriptor is not None else ()
         gate_env = {**gate_env, "PYTHON": pinned, "PATH": gate_env_path(root, gate_env)}
         argv = _gate_argv(str(command), pinned)
-        # O188-2 at the call site: the program the runner itself starts is resolved without the
-        # worktree's `PATH` entries, as `make verify` was; only the gate's own children see the
-        # locked environment first, as the shell runner gave them.
-        found = shutil.which(argv[0], path=gate_env["PATH"]) if "/" not in argv[0] else None
-        if found is not None and root.resolve() in Path(found).resolve().parents:
-            safe = shutil.which(argv[0], path=runner_env(gate_env, root)["PATH"])
-            if safe is None:
-                raise CallFailed(f"{argv[0]} could not be started: found only inside the worktree")
-            argv = [safe, *argv[1:]]
         try:
             done = launch(
                 argv,

@@ -8047,10 +8047,8 @@ def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) ->
     assert env["PATH"] == str(outside)
 
 
-def test_a_make_planted_on_a_repository_path_entry_does_not_run(
-    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+def test_gate_command_uses_repository_path_entry(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A declared gate command uses the same PATH as shell verification."""
     marker = tmp_path / "planted-make-ran"
     planted = world.root / ".venv" / "bin"
     planted.mkdir(parents=True, exist_ok=True)
@@ -8061,8 +8059,7 @@ def test_a_make_planted_on_a_repository_path_entry_does_not_run(
     with world.plan.open("a", encoding="utf-8") as handle:
         handle.write("2026-10-07 10:00–10:05, 5 min\n")
     assert stage2.verify_attempt(world.root, world.plan) == []
-    assert not marker.exists(), "a make planted inside the worktree ran"
-    assert len(world.calls("make")) == 1
+    assert marker.exists(), "the gate did not use the worktree's PATH entry"
 
 
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
@@ -28882,6 +28879,40 @@ def test_scheduled_selection_errors_are_red(world: World, monkeypatch: pytest.Mo
     except (FileNotFoundError, ValueError) as caught:
         pytest.fail(f"a gate-list loader error must become an ordinary red check: {caught}")
     assert code != 0 and str(error) in out + err
+
+
+@pytest.mark.parametrize("global_ruff", [False, True])
+def test_full_verify_gate_uses_worktree_pinned_ruff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, global_ruff: bool
+) -> None:
+    """A bare gate command resolves the same pinned tool as the shell verification."""
+    root = tmp_path / "repo"
+    venv_bin = root / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python3").symlink_to(sys.executable)
+    marker = tmp_path / "called"
+    pinned = venv_bin / "ruff"
+    pinned.write_text(f"#!/bin/sh\necho pinned > {marker}\n", encoding="utf-8")
+    pinned.chmod(0o755)
+    global_bin = tmp_path / "global"
+    global_bin.mkdir()
+    if global_ruff:
+        other = global_bin / "ruff"
+        other.write_text(f"#!/bin/sh\necho global > {marker}\n", encoding="utf-8")
+        other.chmod(0o755)
+
+    def schedule(_root, **kwargs):
+        result = kwargs["executor"]({}, "ruff check scripts/", kwargs["env"])
+        assert result.returncode == 0
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        out, err, code = stage2._scheduled_verify(root, {"PATH": str(global_bin)}, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"the pinned gate command must start: {error}")
+    assert code == 0, out + err
+    assert marker.read_text(encoding="utf-8").strip() == "pinned"
 
 
 def test_scheduled_gate_timeout_is_remaining_allowance(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

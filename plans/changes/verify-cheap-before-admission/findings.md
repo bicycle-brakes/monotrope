@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -830,7 +830,132 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | SPEC | base | scripts/stage2.py:6325–6335 | Ein Gate mit dem gültigen Befehl `ruff check scripts/` verwendet beim Shell-Aufruf das gepinnte Ruff aus `.venv/bin`. Stage 2 verwirft dagegen diesen Fund, weil er im Worktree liegt: Fehlt ein globales Ruff, startet die Prüfung nicht; ist eines installiert, läuft möglicherweise eine andere Version. Beide vollständigen Prüfpfade müssen denselben Gate-Befehl mit derselben Umgebung ausführen. [Akzeptanzkriterien 10 und 11; Nichtziel: Gate-Befehle unverändert lassen.] | Codex | taken — in-spec code fault (criteria 10 and 11): the runner's full verify path must run a gate command with the same environment as `make verify`, the worktree's pinned `.venv/bin` tools first; a new mechanism, not a repeat of an earlier row | — |
+| R1 | MAJOR | SPEC | base | scripts/stage2.py:6325–6335 | Ein Gate mit dem gültigen Befehl `ruff check scripts/` verwendet beim Shell-Aufruf das gepinnte Ruff aus `.venv/bin`. Stage 2 verwirft dagegen diesen Fund, weil er im Worktree liegt: Fehlt ein globales Ruff, startet die Prüfung nicht; ist eines installiert, läuft möglicherweise eine andere Version. Beide vollständigen Prüfpfade müssen denselben Gate-Befehl mit derselben Umgebung ausführen. [Akzeptanzkriterien 10 und 11; Nichtziel: Gate-Befehle unverändert lassen.] | Codex | fixed — tests/test_stage2.py::test_full_verify_gate_uses_worktree_pinned_ruff | — |
 
 Phase 6 verdict: codex 01a1e551-b37a-7a10-8af0-e988a7463bec, 2026-11-16
 Reviewer session: codex 01a1e551-b37a-7a10-8af0-e988a7463bec — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4513 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +0 -9
+> - `tests/test_stage2.py` +34 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 83 lines of this gate left out …]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> .................................................                        [100%]
+> =================================== FAILURES ===================================
+> _________ test_a_make_planted_on_a_repository_path_entry_does_not_run __________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1562/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1562/popen-gw1/test_a_make_planted_on_a_repos0/state'))
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1562/popen-gw1/test_a_make_planted_on_a_repos0')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b265dc0>
+>
+>     def test_a_make_planted_on_a_repository_path_entry_does_not_run(
+>         world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+>         marker = tmp_path / "planted-make-ran"
+>         planted = world.root / ".venv" / "bin"
+>         planted.mkdir(parents=True, exist_ok=True)
+>         (planted / "make").write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n", encoding="utf-8")
+>         (planted / "make").chmod(0o755)
+>         monkeypatch.setenv("PATH", f"{planted}{os.pathsep}{os.environ['PATH']}")
+>         world.script(make=[{"stdout": "green\n"}])
+>         with world.plan.open("a", encoding="utf-8") as handle:
+>             handle.write("2026-10-07 10:00–10:05, 5 min\n")
+>         assert stage2.verify_attempt(world.root, world.plan) == []
+> >       assert not marker.exists(), "a make planted inside the worktree ran"
+> E       AssertionError: a make planted inside the worktree ran
+> E       assert not True
+> E        +  where True = exists()
+> E        +    where exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1562/popen-gw1/test_a_make_planted_on_a_repos0/planted-make-ran').exists
+>
+> tests/test_stage2.py:8064: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=75532) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/tests/test_stage2.py:24158: DeprecationWarning: This process (pid=75533) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_make_planted_on_a_repository_path_entry_does_not_run
+> 1 failed, 6367 passed, 17 skipped, 5 warnings in 552.02s (0:09:12)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47314 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-1-20261116T230255388169Z-dd4cdbaf.md
+> ````
+
+Stage-2 call, 2026-11-17: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4514 commits, 12 rules.
+
+Runner restoration, 2026-11-17: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
