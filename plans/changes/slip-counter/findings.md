@@ -413,8 +413,8 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-5 | MAJOR | SPEC | base | scripts/verify_duration.py:701 | A targeted check that starts at 09:00 and finishes green at 10:00, followed by a matching full check that started at 09:30 and finishes red at 11:00, is counted as zero slips. The reader requires the targeted completion to precede the full **start**, although the spec requires the targeted check to complete earlier than the completed red full run. [AC 1, 2] | Codex | open | — |
-| P6-6 | MAJOR | SPEC | base | scripts/verify_duration.py:814 | A completed red targeted check or green full check with an unknown tree, change or gate configuration is reported as countable evidence with exit 0. Such a run lacks comparison evidence and must appear once in the incomplete count, with a partial status. [AC 4, 6] | Codex | open | — |
+| P6-5 | MAJOR | SPEC | base | scripts/verify_duration.py:701 | A targeted check that starts at 09:00 and finishes green at 10:00, followed by a matching full check that started at 09:30 and finishes red at 11:00, is counted as zero slips. The reader requires the targeted completion to precede the full **start**, although the spec requires the targeted check to complete earlier than the completed red full run. [AC 1, 2] | Codex | taken — narrowed scope, decisions Q-4 | — |
+| P6-6 | MAJOR | SPEC | base | scripts/verify_duration.py:814 | A completed red targeted check or green full check with an unknown tree, change or gate configuration is reported as countable evidence with exit 0. Such a run lacks comparison evidence and must appear once in the incomplete count, with a partial status. [AC 4, 6] | Codex | taken — narrowed scope, decisions Q-4 | — |
 
 Phase 6 verdict: codex 01a1e510-ad75-7c80-9b17-28113a237b2d, 2026-11-16
 Reviewer session: codex 01a1e510-ad75-7c80-9b17-28113a237b2d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
