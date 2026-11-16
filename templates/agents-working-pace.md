@@ -7,6 +7,13 @@ docs/WORKFLOW.md (maintainer, 2026-10-26 and 2026-10-27).
 
 ## Working pace
 
+- **One entry point and one writer per action — no side routes.** Every
+  recurring action has one entry point and one writer, carried by code at
+  one choke point. Decided variants (fallback models, routing by class) are
+  declared parameters inside it, never a second route; no caller reaches
+  around it and nothing a tool produces is written by hand. An existing
+  side route becomes a tracked item, folded in by its own change; the rule
+  holds through a check that goes red (maintainer, 2026-11-16).
 - **One decision block a day.** Questions and merge requests for the
   maintainer are collected for one block at `<time, default 15:00>` local
   time, each with its context and a recommendation; work that does not

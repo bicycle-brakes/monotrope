@@ -21,6 +21,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
 import stage2_swarm as swarm  # noqa: E402
@@ -30,6 +31,9 @@ from test_stage2 import git as run_git  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
 
 world = stage2_world
+
+# The stand-ins embed the shared log protocol at their render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 GO = "opencode-go"
 CLAUDE = "claude-code-plan"
@@ -41,6 +45,10 @@ CANARY = "CANARY-PRIVATE-7731"
 STAND_IN = """#!@PYTHON@
 import json, os, sys
 from pathlib import Path
+
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
 
 here = Path(__file__).resolve().parent
 name = "pi" if Path(sys.argv[0]).name == "pin-pi" else Path(sys.argv[0]).name
@@ -69,8 +77,7 @@ record = {
     if os.path.isdir(os.environ.get("PI_CODING_AGENT_DIR", ""))
     else None,
 }
-with (here / "calls.jsonl").open("a") as handle:
-    handle.write(json.dumps(record) + "\\n")
+append_record(here / "calls.jsonl", record)
 step = scenario.get(model, {})
 key = os.environ.get("OPENCODE_API_KEY", "")
 sys.stdout.write(step.get("stdout", "OK").replace("@KEY@", key))
@@ -199,9 +206,10 @@ class Fixture:
         monkeypatch.setattr(availability, "catalog_bridge", bridge)
         for name in ("pin-pi", "claude"):
             program = w.bin / name
-            program.write_text(
-                STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-            )
+            rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+            rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+            rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+            program.write_text(rendered, encoding="utf-8")
             program.chmod(0o755)
         self.edit_declaration(lambda _data: None)
         self.script()
