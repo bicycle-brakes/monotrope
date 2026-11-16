@@ -618,6 +618,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/research.md`](changes/review-loop-deep-a/research.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/spec.md`](changes/review-loop-deep-a/spec.md) | draft | partial | 2026-10-25 | to be filed |
+| [`changes/runner-stamps-provenance/research.md`](changes/runner-stamps-provenance/research.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
