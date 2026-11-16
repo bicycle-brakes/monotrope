@@ -630,4 +630,5 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/verify-reuse/research.md`](changes/verify-reuse/research.md) | draft | none | 2026-11-16 | coding-harness-rzkh |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
