@@ -362,3 +362,16 @@ Stage-2 call, 2026-11-15: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1091 files, 4398 commits, 12 rules.
 
 Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/bd-1-3-4/plan.md, plans/changes/bd-1-3-4/spec.md — unchanged
+
+Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1091 files, 4413 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-16
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+
+Phase 6 verdict: codex 01a1e364-8864-7ae2-9697-ae575745159b, 2026-11-16
+Reviewer session: codex 01a1e364-8864-7ae2-9697-ae575745159b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
