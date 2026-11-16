@@ -18,8 +18,11 @@ from __future__ import annotations
 import ast
 import contextlib
 import copy
+import dataclasses
 import datetime as dt
 import fcntl
+import functools
+import importlib
 import inspect
 import json
 import multiprocessing
@@ -32,9 +35,11 @@ import subprocess
 import sys
 import threading
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import yaml
@@ -49,6 +54,7 @@ import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
+import runner_clock_guard  # noqa: E402
 import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
@@ -101,7 +107,6 @@ import fcntl
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 CATALOG = (
@@ -121,6 +126,16 @@ argv = sys.argv[1:]
 # scripted steps line up; the record's path is what says which program ran.
 alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
+# The real-time knobs are retired (spec runner-clock, criterion 4): a step that still asks for a
+# sleep or a barrier would be served without its wait, and a test of an unconsumed allowance would
+# pass vacuously. End loudly instead, like a scripted bash step (review row L2-3).
+RETIRED = {"sleep", "barrier", "barrier_dir", "barrier_seconds", "pi_version_sleep", "pi_refresh_sleep"}
+asked = RETIRED & set(scenario).union(
+    *(set(item) for steps_ in scenario.values() if isinstance(steps_, list) for item in steps_ if isinstance(item, dict))
+)
+if asked:
+    sys.stderr.write("stage2-stand-in: retired timing keys are not served: " + ", ".join(sorted(asked)) + "\\n")
+    sys.exit(97)
 # The world's gate list declares its document subset as a plain gate, `bash scripts/verify_all.sh
 # --job docs` (bead coding-harness-bxxt.6): the full check's scheduler launches it before the
 # protected `make verify`, and its steps are keyed `docs`, so no other bash call consumes them. The
@@ -192,7 +207,6 @@ for k in range(len(steps)):
 if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
-    time.sleep(scenario.get("pi_version_sleep", 0))
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     with (here / "versions.jsonl").open("a") as handle:
         handle.write(json.dumps({"name": name, "path": sys.argv[0], "cwd": os.getcwd()}) + "\\n")
@@ -217,7 +231,6 @@ if alias == "pi" and "update" in argv and "--models" in argv:
             )
             + "\\n"
         )
-    time.sleep(scenario.get("pi_refresh_sleep", 0))
     # Pi persists the fetched overlay in the agent directory's models-store.json
     # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
     # unless the scenario names the overlay itself or asks for no store.
@@ -304,18 +317,6 @@ record = {
 }
 with locked(False), log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
-barrier = step.get("barrier")
-if barrier:
-    # The swarm check: every member of a round waits here until all members of
-    # the round have arrived, so a serial runner holds the whole round past the
-    # deadline and the test reads the elapsed time.
-    wait_dir = Path(step.get("barrier_dir", scenario.get("barrier_dir", ".barrier")))
-    wait_dir.mkdir(exist_ok=True)
-    (wait_dir / (str(os.getpid()) + "-" + str(time.time_ns()) + ".arrived")).write_text("")
-    deadline = time.time() + step.get("barrier_seconds", scenario.get("barrier_seconds", 30))
-    while len(list(wait_dir.glob("*.arrived"))) < barrier and time.time() < deadline:
-        time.sleep(0.05)
-time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
@@ -600,6 +601,13 @@ def pin_the_ladder(target: Path) -> None:
         "include": [],
         "exclude": [],
         "input": "implementation-diff",
+    }
+    # The Z.ai subscription's real end date (bead coding-harness-dcu3) must not age the
+    # explore and implement tests into a refusal: they run on a synthetic far-future record.
+    zai = next(e for e in data["endpunkte"] if e["name"] == "glm-coding-plan")
+    zai["modelle_terms"] = {
+        model: {"gelesen": "2026-11-15", "valid_until": "2099-01-01", "quelle": "test world"}
+        for model in zai["modelle"]
     }
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
@@ -1086,9 +1094,10 @@ def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
         and isinstance(node.elts[0], ast.Name)
         and node.elts[0].id == "GIT"
     ]
-    # Seven since red-first-own-refs (bead coding-harness-wkxm): the proofs run in a private clone
-    # through `_git_output`, so the `worktree remove` and `prune` launches are gone.
-    assert len(named) >= 7, "fewer git launches name GIT than the seven this check was written against"
+    # Seven launches since red-first-own-refs (bead coding-harness-wkxm); since decisions.md#Q-8 they all
+    # call `run_git`, which builds the one command naming GIT. The seven launch sites are counted as
+    # `run_git` calls by test_every_git_launch_of_the_runner_goes_through_run_git.
+    assert len(named) == 1, f"one command list names GIT, the one inside run_git; found line(s) {named}"
 
 
 @pytest.mark.parametrize(
@@ -1217,12 +1226,16 @@ def test_the_answer_format_names_the_severity_as_free_text() -> None:
     assert "severity cell is free text" in stage2.ANSWER_FORMAT
 
 
-def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
+def test_the_remaining_time_never_outlives_the_round_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
     """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
+    # Planted fault: the exact fake-clock remaining budget or expiry is wrong.
+    clock = FakeClock(monkeypatch, UTC_START)
     assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
-    assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
+    deadline = clock.mono() + 30
+    assert 0 < stage2.remaining(deadline) <= 30, "the budget left overpaid or underpaid the deadline"
+    clock.run_past(deadline)
     with pytest.raises(stage2.CallFailed, match="round time limit"):
-        stage2.remaining(time.monotonic() - 10)
+        stage2.remaining(deadline)
 
 
 def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
@@ -1430,7 +1443,7 @@ def test_openai_codex_is_declared_as_decided() -> None:
     assert codex["residenz"] == "anbieter-erklaert"
     assert codex["abrechnung"] == "abonnement"
     assert codex["darf_sehen"] == ["framework"]
-    assert codex["modelle"] == ["gpt-6.1-sol"]
+    assert codex["modelle"] == ["gpt-6.1-terra"]
     remark = codex["bemerkung"]
     assert "Codex CLI" in remark and "United States" in remark
     assert "moved to `opencode-go`" in remark
@@ -2442,6 +2455,149 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
     assert world.calls("make") == []
 
 
+GENUINE_POPEN, GENUINE_KILLPG = subprocess.Popen, os.killpg
+FAKE_PID_BASE = 9_000_000  # above every operating-system pid range the suite meets
+
+
+class ScriptedProcess:
+    """One doubled program: a scripted duration and output, a fake pid, each recorded timeout.
+
+    The process exists only between the runner and the double: its pid belongs
+    to no operating-system group, so a group operation on it raises
+    `ProcessLookupError` (the interception lives in `ScriptedPrograms`). The
+    first `communicate(timeout)` advances the fake clock by the scripted
+    duration when the duration fits the handed allowance and raises
+    `subprocess.TimeoutExpired` when it does not; a stopped process drains at
+    once, so the bounded drain's argument is recorded without simulating a hang.
+    """
+
+    def __init__(self, double: ScriptedPrograms, command: list[str], plan: dict) -> None:
+        self.double = double
+        self.command = list(command)
+        self.args = list(command)
+        self.plan = plan
+        self.pid = FAKE_PID_BASE + len(double.launched)
+        self.stdout = None
+        self.stderr = None
+        self.returncode = None
+        self.stopped = False  # per instance: two doubled programs may share one plan
+        double.launched.append({"command": self.command, "pid": self.pid})
+        gate, gate_at = plan.get("gate"), plan.get("gate_at")
+        if gate is not None and gate_at is not None and len(double.launched) >= gate_at:
+            gate.set()  # the partner this gate waits for has now launched
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def __getattr__(self, name: str):
+        # Only the members `launch`'s timed branch uses are served; any other one is the double's
+        # limit, said as such, never a bare AttributeError read as a runner fault (review row L2-6).
+        raise AssertionError(f"the process double does not serve `{name}` for {self.__dict__.get('command')}")
+
+    def __enter__(self):
+        # The untimed path (`subprocess.run`) enters the process as a context; the double serves only `communicate`.
+        raise AssertionError(f"the process double serves no context manager (untimed run) for {self.command}")
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+    def communicate(self, timeout=None):
+        row = {"command": self.command, "pid": self.pid, "timeout": timeout, "outcome": "drained"}
+        gate = self.plan.get("gate")
+        if gate is not None and not gate.wait(30.0):
+            # Watchdog only: bounds a wedged round where the partner never launched.
+            raise AssertionError(f"the doubled program {self.command[0]} never met its launch gate")
+        self.double.communications.append(row)
+        if self.returncode is not None or self.stopped:
+            # The bounded cleanup drain: it ends at once and its timeout is still on record.
+            return self.plan.get("stdout", ""), self.plan.get("stderr", "")
+        duration = self.plan.get("duration", 0.0)
+        if timeout is not None and duration > timeout:
+            self.double.clock.advance(timeout)  # the wait that happened before the stop
+            self.stopped = True
+            row["outcome"] = "timeout"
+            raise subprocess.TimeoutExpired(self.args, timeout)
+        self.double.clock.advance(duration)
+        self.returncode = self.plan.get("exit", 0)
+        row["outcome"] = "completed"
+        return self.plan.get("stdout", ""), self.plan.get("stderr", "")
+
+
+class ScriptedPrograms:
+    """A process double at the runner's `Popen` boundary, moved by one fake clock.
+
+    A test lists the commands to double as `(matcher, plan)` pairs; every other
+    command runs for real through the genuine `Popen`, so git and the stand-in
+    programs keep working. While the double stands, the fake pids exist nowhere
+    in the operating system and group operations on them never reach
+    `os.killpg` — fake pids and intercepted group operations are used together.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, plans: list[tuple]) -> None:
+        self.clock = clock
+        self.plans = plans
+        self.launched: list[dict] = []
+        self.communications: list[dict] = []
+        # The genuine functions, captured at import: a second double installed while a first
+        # still stands must fall back to the operating system, not to the first double.
+        real_popen, real_killpg = GENUINE_POPEN, GENUINE_KILLPG
+        double = self
+
+        class Popen:
+            def __new__(cls, command, *args, **kwargs):
+                for matcher, plan in double.plans:
+                    if matcher(command):
+                        return ScriptedProcess(double, command, plan)
+                return real_popen(command, *args, **kwargs)
+
+        def killpg(group, signum):
+            if group >= FAKE_PID_BASE:
+                raise ProcessLookupError(f"no such process group: the doubled pid {group} exists nowhere")
+            return real_killpg(group, signum)
+
+        monkeypatch.setattr(subprocess, "Popen", Popen)
+        monkeypatch.setattr(os, "killpg", killpg)
+
+    def of(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled communications, optionally only those of one command."""
+        return [row for row in self.communications if command is None or row["command"] == command]
+
+    def waits(self, command: list[str] | None = None) -> list[dict]:
+        """The doubled programs' own waits: every first `communicate`, the cleanup drain left out.
+
+        A stopped program is drained a second time at the kill, and that
+        bounded cleanup has a communication row of its own (`outcome:
+        "drained"`, the `KILL_DRAIN_SECONDS` argument on record); the policy
+        verdicts read the wait rows alone.
+        """
+        return [row for row in self.of(command) if row["outcome"] != "drained"]
+
+
+def test_scripted_programs_fall_back_to_the_genuine_popen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: a second double falls back to the first, not to the operating system.
+
+    The first double scripts `true`; the second scripts nothing, so `true`
+    must run for real once the second stands, with a real pid and no doubled row.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    first = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["true"], {"duration": 1.0})])
+    ScriptedPrograms(monkeypatch, clock, [])
+    process = subprocess.Popen(["true"])
+    assert process.wait(timeout=30) == 0
+    assert process.pid < FAKE_PID_BASE, "the newer double routed an unlisted command through the older one"
+    assert first.launched == [], "the older double ran a command the newer one does not list"
+
+
+def test_scripted_process_names_an_unserved_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Planted fault: an unserved call on the double surfaces as a bare AttributeError (review row L2-6)."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    ScriptedPrograms(monkeypatch, clock, [(lambda command: command == ["doubled"], {"duration": 1.0})])
+    with pytest.raises(AssertionError, match="no context manager.*doubled"):
+        subprocess.run(["doubled"], check=False)
+    with pytest.raises(AssertionError, match="does not serve `wait`.*doubled"):
+        subprocess.Popen(["doubled"]).wait()
+
+
 def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
     """A genuine admission holder on the world's state root: a supervised probe child.
 
@@ -2483,43 +2639,40 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
     # step limit — a short passing check times out after queueing — or the limit dropped, so
     # a hung executing check escapes its group cleanup.
-    # The allowance is shared with the cheap document gate that runs before the queue (two process
-    # starts of the stand-in chain), so it holds the executing seconds with room to spare; a queue
-    # wait of 2.5 s charged against it would still push the check over.
-    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 3.5)
-    ready = world.state / "holder-ready"
-    holder = _real_holder(ready)
-    try:
-        _holder_acquired(ready)
-        problems: list[str] = []
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 2.0)
+    clock = FakeClock(monkeypatch, UTC_START)
+    admissions: list[str] = []
 
-        def attempt() -> None:
-            problems.extend(stage2.verify_attempt(world.root, world.plan))
+    def queueing_admission(_command):
+        # The queueing is simulated at the clock, never waited out: no holder process, no thread.
+        admissions.append("queued")
+        clock.advance(10 * 60.0)
+        return contextlib.nullcontext(None)
 
-        world.script(make=[{"stdout": "green", "sleep": 1.5}])
-        queued = threading.Thread(target=attempt)
-        queued.start()
-        # Release only once the check has registered in the queue, then keep it there for 2.5 real seconds:
-        # charged to the allowance, that wait plus the 1.5-second check would exceed the 3.5-second limit.
-        queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
-        limit = time.monotonic() + 60
-        while time.monotonic() < limit and not (queue.is_dir() and any(queue.iterdir())):
-            time.sleep(0.02)
-        assert queue.is_dir() and any(queue.iterdir()), "the check never queued for the admission"
-        time.sleep(2.5)
-        holder.terminate()
-        holder.wait(timeout=30)
-        queued.join(timeout=90)
-        assert problems == [], f"the admission wait consumed the step limit: {problems}"
-        assert len(world.calls("make")) == 1
-    finally:
-        if holder.poll() is None:
-            holder.kill()
-            holder.wait(timeout=10)
+    monkeypatch.setattr(verify_lock, "hold_admission", queueing_admission)
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 1.0, "stdout": "green\n"})],
+    )
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert admissions == ["queued"], "the verification ran without its admission"
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "the admission wait consumed the step limit"
+    assert make["outcome"] == "completed", "a timely check failed because it queued"
 
-    # and the limit still binds the executing check: a hung make ends inside it
-    world.script(make=[{"stdout": "too late", "sleep": 30}])
+    # and the limit still binds the executing check: an over-budget make ends in a repairable diagnostic
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [(lambda command: command == ["make", "verify"], {"duration": 30.0, "stdout": "too late"})],
+    )
     problems = stage2.verify_attempt(world.root, world.plan)
+    (make,) = programs.waits(["make", "verify"])
+    assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
+    assert make["outcome"] == "timeout"
+    (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
 
 
@@ -2527,47 +2680,49 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     # Criterion 5 of the machine lock (the runner half). Planted fault: either post-run path or
     # the selected pytest path loses the inherited marker or the shared state root, so the local
     # check queues for its own admission instead of reusing its ancestor's.
-    ready = world.state / "holder-ready-nested"
-    holder = _real_holder(ready)
+    # The holder record and the environment stand in for the ancestor's admission: the marker is
+    # honoured only for a descendant of the published holder (review row F6-2), and this process
+    # names itself the way an ancestor's supervisor would. A real child keeps its inheritance end
+    # to end in test_a_runner_check_hands_its_child_the_admission_token.
+    holder_pid = os.getpid()
+    record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
+    record.parent.mkdir(parents=True, exist_ok=True)
+    held = {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
+    record.write_text(json.dumps(held), encoding="utf-8")
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+
+    # The planted fault must turn red, not hang: an ordinary admission would queue against the
+    # descriptor this test holds below and poll with no deadline, so it refuses at once (review row L2-1).
+    def queued_for_its_own(*_args, **_kwargs):
+        raise AssertionError("the local check queued for its own admission instead of inheriting")
+
+    monkeypatch.setattr(verify_lock, "_Admission", queued_for_its_own)
+    # The admission is genuinely held by an open descriptor of this process: no thread, no sleep.
+    lock_fd = os.open(record.parent / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        _holder_acquired(ready)
-        # The marker is honoured only for a descendant of the published holder (review row F6-2),
-        # and this test process is not the sibling supervisor's descendant: the record is
-        # republished naming this process, the way an ancestor's supervisor names itself, while
-        # the sibling keeps the work lock genuinely held.
-        holder_pid = os.getpid()
-        record = world.state / "coding-harness" / verify_lock.HOLDER_NAME
-        record.write_text(
-            json.dumps(
-                {"pid": holder_pid, "token": "ancestor-token", "command": ["ancestor"], "start": "2026-10-30T00:00:00"}
-            ),
-            encoding="utf-8",
-        )
-        monkeypatch.setenv(verify_lock.LOCK_ENV, str(holder_pid))
-        monkeypatch.setenv(verify_lock.TOKEN_ENV, "ancestor-token")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
         assert verify_lock.nested_holder_pid() == holder_pid
         world.script(make=[{"stdout": "green"}, {"stdout": "green"}])
         assert stage2.verify_attempt(world.root, world.plan) == []
-        make_env = world.calls("make")[0]["env"]
-        assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
-        assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
-        assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
-        assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
-        # and the draft's document gates keep the shared state root, while carrying none of the
-        # admission's ownership: a document check queues for no admission of its own (0swp).
-        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
-        world.plan.write_text(PLAN_CARD, encoding="utf-8")
-        commands = LocalCommands(monkeypatch)
-        problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
-        assert problems == [], problems
-        gate_env = commands.of("gate")[0]["env"]
-        assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
-        assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
-        assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
     finally:
-        if holder.poll() is None:
-            holder.terminate()
-            holder.wait(timeout=10)
+        os.close(lock_fd)
+    make_env = world.calls("make")[0]["env"]
+    assert make_env[verify_lock.LOCK_ENV] == str(holder_pid), "the local check lost its inherited marker"
+    assert make_env[verify_lock.TOKEN_ENV] == "ancestor-token", "the local check lost the admission token"
+    assert make_env["XDG_STATE_HOME"] == str(world.state), "the local check lost the shared state root"
+    assert make_env[verify_lock.FLOOR_ENV] == "0", "the local check lost the floor override"
+    # and the draft's document gates keep the shared state root, while carrying none of the
+    # admission's ownership: a document check queues for no admission of its own (0swp).
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    commands = LocalCommands(monkeypatch)
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert problems == [], problems
+    gate_env = commands.of("gate")[0]["env"]
+    assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
+    assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
+    assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
 
 
 def _gate_launch(command: list[str]) -> str | None:
@@ -4115,7 +4270,7 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
     (call,) = world.calls("codex")
     argv = call["argv"]
     assert argv[:2] == ["exec", "--json"]
-    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["draft"]}"' in argv
     assert 'sandbox_mode="workspace-write"' in argv
     assert 'sandbox_mode="read-only"' not in argv
@@ -4262,13 +4417,13 @@ def test_each_draft_attempt_has_its_audit_line_and_reason(world: World, monkeypa
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, \d+ rules"
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · "
+        rf"^Stage-2 call, {day}: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · "
         rf"leak check clean over {count}\.$",
         text,
         re.M,
     )
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol"
+        rf"^Stage-2 call, {day}: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra"
         rf" · reason the first draft attempt failed · leak check clean over {count}\.$",
         text,
         re.M,
@@ -5023,6 +5178,17 @@ def test_draft_statement_precheck_ignores_other_changes(world: World) -> None:
     passing_draft(world)
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 1
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [{"codex": [{"sleep": 1.5}]}, {"codex": [{"barrier": "b"}]}, {"pi_version_sleep": 1}, {"pi_refresh_sleep": 1}],
+)
+def test_the_stand_in_refuses_retired_timing_keys(world, scenario):
+    # Planted fault: a scripted sleep or barrier is accepted and silently does nothing (review row L2-3).
+    world.script(**scenario)
+    out = subprocess.run([str(world.bin / "codex"), "exec"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert out.returncode == 97 and "retired timing keys" in out.stderr, "a retired timing key was silently served"
 
 
 def test_a_bash_call_beside_the_document_check_runs_the_real_bash(world):
@@ -6736,6 +6902,32 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
         stage2.checkpoint(tmp_path, "demo", "base")
 
 
+@pytest.mark.parametrize("exit_code", [1, 128])
+def test_checkpoint_git_failure_keeps_every_diagnostic_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, exit_code: int
+) -> None:
+    """F6-6: ancestry failures must carry the complete Git reason through checkpoint's error."""
+    monkeypatch.setattr(stage2, "_held_prefixes", lambda _root: ())
+    monkeypatch.setattr(stage2, "changed_paths", lambda _root: set())
+    monkeypatch.setattr(stage2, "uncommittable", lambda *_args: [])
+    monkeypatch.setattr(stage2, "_git_output", lambda _root, *args: "1" if args[0] == "rev-list" else "")
+    diagnostic = "fatal: could not read baseline object\n\nhint: restore the missing object\n"
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.checkpoint(tmp_path, "demo", "base")
+    except stage2.CallFailed as error:
+        message = str(error)
+    else:
+        pytest.fail("a failed ancestry command must refuse the checkpoint")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"checkpoint discarded Git's diagnostic: {line}"
+
+
 @pytest.mark.parametrize("verb", ["explore", "implement"])
 def test_a_change_name_after_the_stage2_off_flag_is_named_as_eaten(
     world: World, verb: str, capsys: pytest.CaptureFixture[str]
@@ -6908,7 +7100,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
         {"pi_version": f"{stage2.PI_VERSION} (dev)"},
         {"pi_version": ""},
         {"pi_version": stage2.PI_VERSION, "pi_version_exit": 1},
-        {"pi_version": stage2.PI_VERSION, "pi_version_sleep": 30},
+        "too-slow",
         "absent",
     ],
     ids=["newer", "suffix", "silent", "non-zero", "too-slow", "absent"],
@@ -6922,13 +7114,25 @@ def test_a_pi_off_the_pin_is_refused(
         "the runner's pin must be the manifest's, not a literal of its own"
     )
     monkeypatch.setattr(stage2, "PI_VERSION_SECONDS", 0.5)
+    programs = None
     steps = {"pi": [{"stdout": rows(1)}] * 3}
     if fault == "absent":
         (world.bin / "pin-pi").unlink()
         world.script(**steps)
+    elif fault == "too-slow":
+        # A probe past the pin limit is stopped at the injected expiry, never waited out on the
+        # machine: the doubled communicate raises what a hung wrapper would have caused.
+        clock = FakeClock(monkeypatch, UTC_START)
+        version_argv = [str(stage2.PI_WRAPPER), "--version"]
+        plans = [(lambda command: command == version_argv, {"duration": 30.0})]
+        programs = ScriptedPrograms(monkeypatch, clock, plans)
+        world.script(**steps)
     else:
         world.script(**steps, **fault)
     assert world.run(verb) == 2, "a Pi off the pin must refuse with exit 2"
+    if programs is not None:
+        (handed,) = programs.waits([str(stage2.PI_WRAPPER), "--version"])
+        assert handed["timeout"] == 0.5 and handed["outcome"] == "timeout", handed
     assert world.calls() == [], "a call started"
     assert not world.record().exists()
     assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
@@ -7112,17 +7316,26 @@ def test_verify_step_limit_is_45_minutes() -> None:
     assert stage2.VERIFY_SECONDS == 45 * 60
 
 
-def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
+def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """R-20: the runner's own steps are bounded, and the abort names the limit."""
+    # Planted fault: the timeout translation loses the execution-limit diagnostic, or the
+    # bounded kill drain after the stop lost its bound.
+    clock = FakeClock(monkeypatch, UTC_START)
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda seen: seen == command, {"duration": 30.0})])
     minutes = stage2.VERIFY_SECONDS // 60
     with pytest.raises(stage2.CallFailed, match=f"after {minutes} minutes"):
         stage2.launch(
-            [sys.executable, "-c", "import time; time.sleep(30)"],
+            command,
             tmp_path,
             {**os.environ},
             timeout=0.2,
             limit=f"the runner's step limit after {minutes} minutes",
         )
+    handed = programs.of(command)
+    assert handed[0]["timeout"] == 0.2, "the step was handed more than its allowance"
+    assert handed[0]["outcome"] == "timeout", "the overstay was not simulated at the allowance"
+    assert handed[1]["timeout"] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
 
 
 def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(
@@ -7212,28 +7425,97 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     assert len(problems) == 1 and "did not finish" in problems[0] and f"{minutes} minutes" in problems[0]
 
 
-def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
-    """O188-4: a grandchild of the stopped step does not survive."""
-    pidfile = tmp_path / "grandchild.pid"
-    started = time.monotonic()
-    with pytest.raises(stage2.CallFailed, match="stopped by"):
-        stage2.launch(
-            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
-            tmp_path,
-            {**os.environ},
-            timeout=1,
-            limit="the test limit",
-        )
-    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
-    pid = int(pidfile.read_text())
-    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
+def _complete_pid(pidfile: Path) -> int | None:
+    """The PID a child recorded, or None while the record is missing or incomplete.
+
+    Readiness is a newline-terminated integer, never the file's existence: a child descheduled
+    between creating the file and writing its PID leaves an empty or partial record.
+    """
+    try:
+        record = pidfile.read_text()
+    except FileNotFoundError:
+        return None
+    if not record.endswith("\n") or not record[:-1].isdecimal():
+        return None
+    return int(record)
+
+
+def _await_complete_pid(pidfile: Path, rounds: int) -> int | None:
+    for _ in range(rounds):  # watchdog only: bounds a wedged start, never a verdict
+        pid = _complete_pid(pidfile)
+        if pid is not None:
+            return pid
         time.sleep(0.02)
-    os.kill(pid, 9)
-    pytest.fail("the grandchild of the timed-out step is still running")
+    return None
+
+
+def _kill_known(pid: int | None) -> None:
+    if pid is not None:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [("", None), ("12", None), ("12\n", 12), ("1x\n", None), ("\n", None)],
+    ids=["created-empty", "partial-no-newline", "complete", "garbled", "newline-only"],
+)
+def test_a_pid_record_is_ready_only_when_complete(tmp_path: Path, record: str, expected: int | None) -> None:
+    """F6-3: a created but empty or partial PID file is not readiness."""
+    pidfile = tmp_path / "child.pid"
+    assert _complete_pid(pidfile) is None, "a missing record read as ready"
+    pidfile.write_text(record)
+    assert _complete_pid(pidfile) == expected
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-4: a grandchild of the stopped step does not survive."""
+    # Planted fault: a timed-out group's descendant survives, or the post-kill drain is unbounded.
+    pidfile = tmp_path / "grandchild.pid"
+    handed: list[float | None] = []  # every timeout a communicate was given, the drain's included
+    known: list[int] = []  # the grandchild's PID once complete, so cleanup can always reach it
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the grandchild's complete PID is held before the expiry is injected.
+                pid = _await_complete_pid(pidfile, 200)
+                assert pid is not None, "the timed step never wrote its grandchild's complete pid"
+                known.append(pid)
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    # The record is written to a temporary file and renamed into place: the name appears only complete.
+    staged = f"{pidfile}.tmp"
+    try:
+        with pytest.raises(stage2.CallFailed, match="stopped by"):
+            stage2.launch(
+                ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {staged} && mv {staged} {pidfile}; wait"],
+                tmp_path,
+                {**os.environ},
+                timeout=1,
+                limit="the test limit",
+            )
+        assert handed[0] == 1, "the step was handed more than its allowance"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the kill's drain is unbounded"
+        (pid,) = known
+        for _ in range(100):  # watchdog only: the kill is delivered at once, the exit is reaped a moment later
+            if not _child_alive(pid):
+                return
+            time.sleep(0.02)
+        pytest.fail("the grandchild of the timed-out step is still running")
+    finally:
+        # cleanup: every known PID is killed; a missing or already dead one is tolerated
+        _kill_known(known[0] if known else _complete_pid(pidfile))
 
 
 def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
@@ -7922,7 +8204,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
     for call in world.calls("codex"):
         argv = call["argv"]
         assert argv[:3] == ["exec", "resume", "T1"]
-        assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+        assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
         assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in argv
         assert 'sandbox_mode="read-only"' in argv
         assert "--ephemeral" not in argv and "-s" not in argv
@@ -8457,7 +8739,7 @@ def test_the_review_prompts_give_both_paths() -> None:
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
     assert review_prompt_problems(spec_review, review) == []
     assert review_prompt_problems(
-        spec_review.replace("python3 scripts/stage2.py spec-review <change>", "codex exec -m gpt-6.1-sol"), review
+        spec_review.replace("python3 scripts/stage2.py spec-review <change>", "codex exec -m gpt-6.1-terra"), review
     )
     assert review_prompt_problems(spec_review.replace("Opus 5.5", "Haiku 4.5"), review)
     assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
@@ -8673,10 +8955,27 @@ def test_a_call_over_the_time_limit_is_stopped(
     """Criterion 4/15: a member that outlasts the limit is stopped; stopping every member fails the attempt."""
     assert stage2.REVIEWER_MINUTES == 45
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
-    world.script(pi=[{"stdout": "too late", "sleep": 30}, {"stdout": "too late", "sleep": 30}])
-    started = time.monotonic()
+    # Planted fault: simulated expiry fails to stop a reviewer, or a stop consumes the round.
+    clock = FakeClock(monkeypatch, UTC_START)
+    launched_both = threading.Event()  # no member's clock advance runs before both have launched
+
+    def reviewer_plan(plan: dict) -> tuple:
+        # Only the reviewer calls are doubled (`--print`); the discovery refresh and listing keep
+        # running on the stand-in so the round reaches its members with a real refreshed store.
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and "--print" in command, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            reviewer_plan({"duration": 30.0, "stdout": "too late", "gate": launched_both, "gate_at": 2}),
+        ],
+    )
     assert world.run("review-loop") == 1
-    assert time.monotonic() - started < 15
+    handed = programs.waits()
+    assert len(handed) == 2, "a stopped member was replaced past the shared expiry"
+    assert all(row["outcome"] == "timeout" for row in handed), handed
+    assert all(abs(row["timeout"] - stage2.REVIEWER_MINUTES * 60) < 1e-9 for row in handed), handed
     assert not world.record().exists()
     # Since DL-B-14 the stop names the round's one deadline, which a single member's call shares.
     assert "stopped by the round time limit of" in capsys.readouterr().err
@@ -8793,30 +9092,36 @@ def test_a_restart_reason_cannot_create_rounds_or_state(world: World) -> None:
     assert stage2.restarted_fresh(None, text)
 
 
-def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
+def test_both_swarms_run_in_parallel_as_one_round(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 2: each swarm's members start together and merge into one round with one id series."""
-    barrier = str(world.root / ".barrier")
-    world.script(
-        pi=[
-            {
-                "model": "acme-v1-free",
-                "stdout": rows(1, "A"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "beacon-2-free",
-                "stdout": rows(1, "B"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    # Planted fault: one member waits for another to finish before entering - sequential swarm.
+    # Concurrency is proven with a launch gate inside run_reviewer itself: every member blocks
+    # until all members are inside, so only truly concurrent members answer within the watchdog.
+    free = ["acme-v1-free", "beacon-2-free"]
+    flash = ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+
+    def gate_answers(members: list[str], answers: dict[str, str]) -> dict:
+        inside: list[str] = []
+        all_inside = threading.Event()
+        record: dict = {}
+
+        def probe(_ctx, member, _prompt, _key, **_kwargs):
+            inside.append(member)
+            if len(inside) == len(members):
+                all_inside.set()
+            together = all_inside.wait(30.0)  # watchdog only: bounds a wedged round, never a verdict
+            if together:
+                record.setdefault("seen_together", sorted(inside))
+            else:
+                inside.remove(member)  # a stale entry must not complete a later member's snapshot
+            return answers[member]
+
+        monkeypatch.setattr(stage2, "run_reviewer", probe)
+        return record
+
+    seen = gate_answers(free, {free[0]: rows(1, "A"), free[1]: rows(1, "B")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the free swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(free), "the free swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 1") == 1, "the swarm round got more than one heading"
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
@@ -8824,29 +9129,9 @@ def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
     assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the id series collided or skipped a member"
     assert [cells[6] for cells in rows_] == list(TEST_FREE), "a row carries the wrong member"
     decide_record(world, status=FIXED)
-    shutil.rmtree(world.root / ".barrier")
-    (world.bin / "calls.jsonl").unlink()
-    world.script(
-        pi=[
-            {
-                "model": "deepseek-v4.1-flash",
-                "stdout": rows(1, "D"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-            {
-                "model": "mimo-v2.6-flash",
-                "stdout": rows(1, "M"),
-                "barrier": 2,
-                "barrier_dir": barrier,
-                "barrier_seconds": 20,
-            },
-        ]
-    )
-    started = time.monotonic()
+    seen = gate_answers(flash, {flash[0]: rows(1, "D"), flash[1]: rows(1, "M")})
     assert world.run("review-loop") == 0
-    assert time.monotonic() - started < 15, "the Flash swarm ran its members one after the other"
+    assert seen.get("seen_together") == sorted(flash), "the Flash swarm ran its members one after the other"
     text = world.record().read_text(encoding="utf-8")
     assert text.count("## Round 2") == 1, "the Flash swarm ran as sequential rounds"
     assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
@@ -9015,15 +9300,14 @@ def test_no_second_call_after_the_round_deadline(world: World, monkeypatch, caps
     """Criterion 5. Planted fault: a second call starts after the deadline."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def malformed_at_the_deadline(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", malformed_at_the_deadline)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the expired deadline still started an asked-again call"
@@ -9101,15 +9385,14 @@ def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, mon
 
 def test_a_round_failed_past_the_deadline_names_the_skipped_retry(world: World, monkeypatch) -> None:
     """Plant expiry after the first answers: the no-round audit must retain the reason."""
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls = []
 
     def expire(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.MalformedAnswer(MALFORMED_ANSWER) for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expire)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FREE)]
@@ -9184,14 +9467,30 @@ def test_free_discovery_forces_live_refresh_before_listing(
     assert "not filled" in capsys.readouterr().err
     assert [call.get("kind") for call in world.calls("pi")] == ["refresh"], "the listing ran after a failed refresh"
     assert world.reviews("pi") == [] and not world.record().exists()
+    # The refresh that never ends is stopped at the discovery limit by the injected expiry, not by
+    # a real second of waiting: the clock moves only at the doubled communicate.
+    real_discovery_seconds = stage2.PI_DISCOVERY_SECONDS
     monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", 0.4)
-    (world.bin / "calls.jsonl").unlink()
-    world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_sleep=30)
+    clock = FakeClock(monkeypatch, UTC_START)
+    refresh_argv = [str(stage2.PI_WRAPPER), "update", "--models"]
+    programs = ScriptedPrograms(monkeypatch, clock, [(lambda command: command == refresh_argv, {"duration": 30.0})])
+    world.script(pi=[{"stdout": rows(1)}] * 2)
     capsys.readouterr()
+    logged_before = len(world.calls("pi"))
     assert world.run("review-loop") == 2
     assert "no stale cache is listed" in capsys.readouterr().err
-    assert [call.get("kind") for call in world.calls("pi")] == ["refresh"]
-    assert world.reviews("pi") == []
+    # The listing is not doubled: had it run, the genuine stand-in would have logged it.
+    assert world.calls("pi")[logged_before:] == [], "a discovery command ran after the simulated timeout"
+    handed = programs.waits(refresh_argv)
+    assert len(handed) == 1, "the listing ran after a simulated refresh timeout"
+    assert handed[0]["timeout"] == 0.4 and handed[0]["outcome"] == "timeout", handed
+    (drain,) = [row for row in programs.of(refresh_argv) if row["outcome"] == "drained"]
+    assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
+    assert len(programs.launched) == 1, "the doubled refresh was launched more than once"
+    assert world.reviews("pi") == [] and not world.record().exists()
+    # The double ends here: the scenarios below run the genuine stand-in programs at the real limit.
+    programs.plans.clear()
+    monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", real_discovery_seconds)
     # The listing's own agent directory: an invalid catalog id forces the separate agent whose
     # settings are the refresh file's byte copy, and the copy must parse to the same JSON
     # (pi-no-compaction, criterion 1).
@@ -11329,10 +11628,10 @@ def test_repair_uses_codex_at_max_effort(world: World) -> None:
     assert world.calls("claude") == []
     (call,) = world.calls("codex")
     argv = call["argv"]
-    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-terra"
     assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["repair"]}"' in argv
     assert "resume" not in argv, "a repair attempt resumed a thread"
-    assert "route codex · endpoint openai-codex · model gpt-6.1-sol" in world.text()
+    assert "route codex · endpoint openai-codex · model gpt-6.1-terra" in world.text()
 
 
 def test_codex_repair_uses_workspace_write_without_bypass(world: World) -> None:
@@ -11803,7 +12102,7 @@ def test_repair_routes_glm_5_3_then_its_repair_then_sonnet(world: World) -> None
     assert world.run("repair") == 0
     calls = repair_calls(world)
     models = [call["argv"][call["argv"].index("-m" if call["name"] == "codex" else "--model") + 1] for call in calls]
-    assert models == ["gpt-6.1-sol", "gpt-6.1-sol", "claude-sonnet-5-5"]
+    assert models == ["gpt-6.1-terra", "gpt-6.1-terra", "claude-sonnet-5-5"]
     assert not any("glm" in " ".join(call["argv"][:-1]) for call in calls if call["name"] == "codex")
     assert not any("glm" in " ".join(call["argv"]) for call in calls if call["name"] == "claude")
     assert "Attempt 1 (codex):" in prompt_of(calls[2]) and "Attempt 2 (codex-repair):" in prompt_of(calls[2])
@@ -11911,7 +12210,7 @@ def test_repair_leak_blocks_each_route_without_fallback(
 @pytest.mark.parametrize(
     ("missing", "options", "calls_before"),
     [
-        ("gpt-6.1-sol", (), 0),
+        ("gpt-6.1-terra", (), 0),
         ("claude-sonnet-5-5", ("--stage2-off", "r"), 0),
         ("claude-sonnet-5-5", (), 2),
     ],
@@ -11939,8 +12238,8 @@ def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) 
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, \d+ rules"
     for attempt, route, endpoint, model, reason in (
-        (1, "codex", "openai-codex", "gpt-6.1-sol", ""),
-        (2, "codex-repair", "openai-codex", "gpt-6.1-sol", " · reason first Codex post-run check failed"),
+        (1, "codex", "openai-codex", "gpt-6.1-terra", ""),
+        (2, "codex-repair", "openai-codex", "gpt-6.1-terra", " · reason first Codex post-run check failed"),
         (3, "stage-1", "claude-code-plan", "claude-sonnet-5-5", " · reason two Codex post-run checks failed"),
     ):
         assert re.search(
@@ -12136,12 +12435,24 @@ def runner_entries(plan: Path) -> list[str]:
 
 
 class FakeClock:
-    """Wall and monotonic readings that move only when a test moves them; no sleep, no machine speed."""
+    """Wall, monotonic and local-date readings that move only when a test moves them; no sleep, no machine speed.
+
+    The fake replaces the runner's one clock boundary, `stage2.clock_now`, so
+    the adapters (`utc_now`, `monotonic_now`, `today`, `terms_today`) and every
+    read behind them follow it: measured spans, `remaining`, the round
+    deadlines and the document stamps. The three domains are separate values.
+    The local date stays the machine's real calendar unless a test sets
+    `local_date`, because the gates that compare a stamp against today keep
+    their own clock.
+    """
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, start: dt.datetime, wall_drift: float = 0.0) -> None:
         self.start, self.now, self.wall_drift = start, 0.0, wall_drift
-        monkeypatch.setattr(stage2, "utc_now", self.wall)
-        monkeypatch.setattr(stage2, "monotonic_now", self.mono)
+        self.local_date: dt.date | None = None
+        monkeypatch.setattr(stage2, "clock_now", self.reading)
+
+    def reading(self) -> stage2.ClockReading:
+        return stage2.ClockReading(monotonic=self.mono(), utc=self.wall(), local_date=self.local())
 
     def wall(self) -> dt.datetime:
         # The drift appears once time has passed: a wall clock stepped by the system, which a span must ignore.
@@ -12150,6 +12461,18 @@ class FakeClock:
 
     def mono(self) -> float:
         return 1000.0 + self.now
+
+    def local(self) -> dt.date:
+        return self.local_date if self.local_date is not None else dt.date.today()
+
+    def advance(self, seconds: float) -> None:
+        """Move every domain of the fake on by `seconds`, at the boundary the test names."""
+        self.now += seconds
+
+    def run_past(self, deadline: float) -> None:
+        """Move the fake just past a deadline the runner computed from this same fake."""
+        if self.mono() <= deadline:
+            self.now += deadline - self.mono() + 1.0
 
     def after(self, seconds: float, real):
         """`real` wrapped so that calling it moves the clock by `seconds`."""
@@ -12162,6 +12485,647 @@ class FakeClock:
 
 
 UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
+
+
+# ---------------------------------------------------------------------------
+# The runner's one clock boundary (spec runner-clock, criteria 1, 2 and 5)
+# ---------------------------------------------------------------------------
+
+# The clock sets are shared with the runtime guard (`tests/runner_clock_guard.py`),
+# so the static and the runtime check ban one set. The static guard below is the
+# cheap advisory reading of the source; the runtime guard is the choke point
+# (decisions.md Q-2, spec Boundary).
+TIME_CLOCK_ATTRS = runner_clock_guard.TIME_CLOCK_ATTRS
+TIME_CONVERSION_ATTRS = runner_clock_guard.TIME_CONVERSION_ATTRS
+DATETIME_CLOCK_ATTRS = runner_clock_guard.DATETIME_CLOCK_ATTRS
+CLOCK_MODULES = runner_clock_guard.CLOCK_MODULES
+TIME_NON_CLOCK_ATTRS = runner_clock_guard.TIME_NON_CLOCK_ATTRS
+DATETIME_NON_CLOCK_ATTRS = runner_clock_guard.DATETIME_NON_CLOCK_ATTRS
+
+
+def clock_guard_violations(source: str, boundary: str = "clock_now") -> list[str]:
+    """The raw clock acquisitions `source` makes outside the one boundary function.
+
+    The guard is structural rather than a list of spellings:
+
+    - *Bindings.* Every name a module-level or nested binding gives the `time`
+      or `datetime` module, or a chain rooted in it, is resolved: `import`,
+      `import … as`, `from … import` (a star import binds every public name the
+      module has), plain, multiple-target and positional tuple assignment,
+      annotated assignment and the walrus. Bindings join, so a later rebinding
+      never launders an earlier alias, and chains resolve to a fixpoint.
+    - *References, not only calls.* A clock function is banned wherever it is
+      named - called, handed on, stored or imported - because a bare reference
+      passes the accessor to a call the guard cannot see. A star import from a
+      clock module is banned for the same reason. The conversions in
+      `TIME_CONVERSION_ATTRS` count when called without their instant as plain
+      positional arguments (a starred, double-starred or keyword argument, or a
+      literal `None`, does not count as the instant), or when handed on bare.
+    - *Module escape.* The modules themselves may be used only by direct
+      attribute access: a clock module named on its own (`clock = time`,
+      `f(time)`, `getattr(time, name)`, a default value) is a violation.
+    - *One exempt function object.* Only the body of the single module-level
+      `def <boundary>` is exempt, nested functions included. A second
+      module-level definition or binding of that name is itself a violation and
+      gets no exemption; the exemption is tied to one definition, not to a name.
+
+    What no static reading of one module can see - a clock reached through
+    `importlib`, `__import__` or `sys.modules`, a `datetime` class handed in as
+    an argument, or a clock read inside another module - is the spec's named
+    boundary of this guard. Pure construction, parsing and formatting
+    (`datetime.fromisoformat`, `strptime`, `timedelta`, the `UTC` constant, an
+    explicit `gmtime(0)`) are not acquisitions.
+    """
+    tree = ast.parse(source)
+    violations: list[str] = []
+    exempt: set[int] = set()
+    boundary_defs = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == boundary and boundary
+    ]
+    if boundary_defs:
+        exempt.update(id(inner) for inner in ast.walk(boundary_defs[0]))
+    for extra in boundary_defs[1:]:
+        violations.append(f"a second definition of {boundary} at line {extra.lineno}")
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+        for target in targets:
+            if boundary and isinstance(target, ast.Name) and target.id == boundary:
+                violations.append(f"a rebinding of {boundary} at line {node.lineno}")
+
+    roots = _clock_roots(tree)
+    attribute_values = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+    call_funcs = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+
+    def chains_of(node: ast.AST) -> set[str]:
+        """Every dotted chain a name or attribute can stand for, when rooted in a tracked name."""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.NamedExpr):
+            node = node.value  # `(d := dt.date).today()` reads through the walrus
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(node.id, set())}
+
+    def banned(chain: str, call: ast.Call | None) -> bool:
+        pieces = chain.split(".")
+        if len(pieces) < 2:
+            return False  # the module itself; its escape is judged separately
+        head, tail = pieces[0], pieces[-1]
+        if head == "time" and tail in TIME_CLOCK_ATTRS:
+            return True
+        if head == "time" and tail in TIME_CONVERSION_ATTRS:
+            # Handed on bare, the call it feeds is unseen; called, only a missing instant reads now.
+            # The instant counts as given only as plain positional arguments: a starred or
+            # double-starred argument can expand to nothing (`localtime(**{})` reads now),
+            # the conversions take no keywords, so a keyword is never the instant, and a
+            # literal `None` is the documented request for the current time.
+            plain = [
+                arg
+                for arg in (call.args if call else [])
+                if not isinstance(arg, ast.Starred) and not (isinstance(arg, ast.Constant) and arg.value is None)
+            ]
+            return (
+                call is None
+                or len(plain) != len(call.args)
+                or bool(call.keywords)
+                or len(plain) < TIME_CONVERSION_ATTRS[tail]
+            )
+        return head == "datetime" and tail in DATETIME_CLOCK_ATTRS
+
+    for node in ast.walk(tree):
+        if id(node) in exempt:
+            continue
+        line = getattr(node, "lineno", "?")
+        if isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    violations.append(f"from {node.module} import * at line {line}")
+                elif banned(f"{node.module}.{alias.name}", None):
+                    violations.append(f"{node.module}.{alias.name} imported at line {line}")
+            continue
+        if not isinstance(node, ast.Name | ast.Attribute) or id(node) in attribute_values:
+            continue  # an inner link of a longer chain is judged as part of the whole chain
+        if isinstance(node.ctx, ast.Store | ast.Del):
+            continue
+        chains = chains_of(node)
+        if isinstance(node, ast.Name) and chains & set(CLOCK_MODULES):
+            violations.append(f"the {node.id} module escapes at line {line}")
+        call = call_funcs.get(id(node))
+        violations.extend(f"{chain} at line {line}" for chain in sorted(chains) if banned(chain, call))
+    return violations
+
+
+def _clock_roots(tree: ast.AST) -> dict[str, set[str]]:
+    """Every chain each local name can stand for: the clock modules and anything bound from them."""
+    roots: dict[str, set[str]] = {}
+
+    def add(name: str, chains: set[str]) -> bool:
+        known = roots.setdefault(name, set())
+        grown = not chains <= known
+        known.update(chains)
+        return grown
+
+    def resolve(value: ast.AST) -> set[str]:
+        parts: list[str] = []
+        while isinstance(value, ast.Attribute):
+            parts.append(value.attr)
+            value = value.value
+        if not isinstance(value, ast.Name):
+            return set()
+        return {".".join([root, *reversed(parts)]) for root in roots.get(value.id, set())}
+
+    def bind(target: ast.AST, value: ast.AST) -> bool:
+        if isinstance(target, ast.Name):
+            chains = resolve(value)
+            return add(target.id, chains) if chains else False
+        if not (isinstance(target, ast.Tuple | ast.List) and isinstance(value, ast.Tuple | ast.List)):
+            return False
+        if len(target.elts) != len(value.elts):
+            return False
+        # Every position binds; a short-circuit would drop the bindings after the first.
+        results = [bind(inner, item) for inner, item in zip(target.elts, value.elts, strict=True)]
+        return True in results
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in CLOCK_MODULES:
+                    add(alias.asname or alias.name, {alias.name})
+        elif isinstance(node, ast.ImportFrom) and node.module in CLOCK_MODULES:
+            for alias in node.names:
+                if alias.name == "*":
+                    public = [name for name in dir(importlib.import_module(node.module)) if not name.startswith("_")]
+                    for name in public:
+                        add(name, {f"{node.module}.{name}"})
+                else:
+                    add(alias.asname or alias.name, {f"{node.module}.{alias.name}"})
+    grown = True
+    while grown:  # chains of chains: `clock = time` then `tick = clock.monotonic`
+        grown = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                results = [bind(target, node.value) for target in node.targets]
+                grown = True in results or grown
+            elif isinstance(node, ast.AnnAssign | ast.NamedExpr) and node.value is not None:
+                grown = bind(node.target, node.value) or grown
+    return roots
+
+
+def test_runner_clock_is_the_only_time_source() -> None:
+    """Spec criterion 1. Planted fault: a runner time/date read sits outside the clock boundary.
+
+    The guard reads the runner module as source, so it sees what an alias
+    hides; the boundary exemption is proven necessary, not vacuous, by
+    running the same guard once without it.
+    """
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^def clock_now\(", source), "the module defines no clock boundary"
+    assert clock_guard_violations(source) == [], "a raw clock read bypasses stage2.clock_now"
+    boundary = [
+        node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "clock_now"
+    ]
+    assert len(boundary) == 1, "the module must define exactly one clock boundary"
+    body_lines = range(boundary[0].lineno, (boundary[0].end_lineno or boundary[0].lineno) + 1)
+    without_boundary = clock_guard_violations(source, boundary="")
+    assert without_boundary, "the exemption is vacuous: the boundary body reads no clock"
+    lines = [int(re.search(r"at line (\d+)$", finding).group(1)) for finding in without_boundary]
+    assert all(line in body_lines for line in lines), without_boundary
+
+
+def test_runner_clock_guard_sets_classify_the_installed_modules() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: a clock-reading `time` or `datetime` callable is in no set.
+
+    The banned sets are a declared complete set, so completeness is measured,
+    not assumed: every public callable of the installed `time` module and every
+    public class method of `datetime.date`, `datetime.datetime` and
+    `datetime.time` must be classified as a clock read, a no-argument
+    conversion or a non-reading callable. A new interpreter's clock function
+    fails here until it is classified (review row L2-2).
+    """
+    time_sets = (TIME_CLOCK_ATTRS, set(TIME_CONVERSION_ATTRS), TIME_NON_CLOCK_ATTRS)
+    assert all(
+        not (a & b)
+        for a, b in [(time_sets[0], time_sets[1]), (time_sets[0], time_sets[2]), (time_sets[1], time_sets[2])]
+    )
+    installed = {name for name in dir(time) if not name.startswith("_") and callable(getattr(time, name))}
+    assert installed - set().union(*time_sets) == set(), "an installed time callable is unclassified"
+    assert not DATETIME_CLOCK_ATTRS & DATETIME_NON_CLOCK_ATTRS
+    for cls in (dt.date, dt.datetime, dt.time):
+        methods = {
+            name
+            for name in dir(cls)
+            if not name.startswith("_")
+            and type(inspect.getattr_static(cls, name)).__name__ in {"classmethod", "classmethod_descriptor"}
+        }
+        unclassified = methods - DATETIME_CLOCK_ATTRS - DATETIME_NON_CLOCK_ATTRS
+        assert unclassified == set(), f"a {cls.__name__} class method is unclassified: {sorted(unclassified)}"
+
+
+@pytest.mark.parametrize(
+    ("planted", "snippet"),
+    [
+        ("plain-read", "def later():\n    return time.monotonic()\n"),
+        ("wall-clock", "def later():\n    return time.time()\n"),
+        ("sleep", "def wait():\n    time.sleep(0.1)\n"),
+        ("aliased-module", "import time as t\ndef later():\n    return t.monotonic()\n"),
+        ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n"),
+        ("assigned-module", "import time\nclock = time\ndef later():\n    return clock.monotonic()\n"),
+        ("assigned-function", "import time\ntick = time.monotonic\ndef later():\n    return tick()\n"),
+        ("nanosecond", "def later():\n    return time.monotonic_ns()\n"),
+        ("cpu-clock", "def later():\n    return time.process_time()\n"),
+        ("localtime-no-argument", "def later():\n    return time.localtime()\n"),
+        ("gmtime-no-argument", "def later():\n    return time.gmtime()\n"),
+        ("ctime-no-argument", "def later():\n    return time.ctime()\n"),
+        ("datetime-now", "import datetime as dt\ndef later():\n    return dt.datetime.now(dt.UTC)\n"),
+        ("datetime-utcnow", "import datetime as dt\ndef later():\n    return dt.datetime.utcnow()\n"),
+        ("datetime-today", "import datetime as dt\ndef later():\n    return dt.datetime.today()\n"),
+        ("date-today", "import datetime as dt\ndef later():\n    return dt.date.today()\n"),
+        ("from-datetime-import", "from datetime import datetime\ndef later():\n    return datetime.now()\n"),
+        ("nested-bypass", "def outer():\n    def inner():\n        return time.time()\n    return inner\n"),
+        ("module-level-read", "import time\nSTARTED = time.time()\n"),
+        (
+            "class-method-boundary",
+            "import time\nclass S:\n    @staticmethod\n    def clock_now():\n        return time.time()\n",
+        ),
+        (
+            "nested-boundary-redefinition",
+            "def outer():\n    def clock_now():\n        return time.time()\n    return clock_now\n",
+        ),
+        ("annotated-module-alias", "clock: object = time\ndef later():\n    return clock.monotonic()\n"),
+        ("annotated-class-alias", "import datetime as dt\nD: type = dt.datetime\ndef later():\n    return D.now()\n"),
+        ("walrus-class-alias", "import datetime as dt\ndef later():\n    return (d := dt.date).today()\n"),
+        ("tuple-class-alias", "import datetime as dt\nD, n = dt.date, 1\ndef later():\n    return D.today()\n"),
+        ("multi-target-class-alias", "import datetime as dt\nA = D = dt.date\ndef later():\n    return D.today()\n"),
+        (
+            "chained-class-alias",
+            "import datetime as dt\nmod = dt\ncls = mod.datetime\ndef later():\n    return cls.utcnow()\n",
+        ),
+        (
+            "rebinding-keeps-alias",
+            "import datetime as dt\ndef a():\n    D = 1\ndef b():\n    D = dt.date\n    return D.today()\n",
+        ),
+        ("module-escape-getattr", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n"),
+        ("module-escape-default", "def later(clock=time):\n    return clock\n"),
+        ("clock-gettime", "def later():\n    return time.clock_gettime(time.CLOCK_MONOTONIC)\n"),
+        ("clock-gettime-ns", "def later():\n    return time.clock_gettime_ns(time.CLOCK_REALTIME)\n"),
+        ("star-import-time", "from time import *\ndef later():\n    return monotonic()\n"),
+        ("star-import-datetime", "from datetime import *\ndef later():\n    return date.today()\n"),
+        ("imported-function-handed-on", "from time import monotonic\ndef later(run):\n    return run(monotonic)\n"),
+        ("bare-reference-handed-on", "def later(run):\n    return run(time.perf_counter)\n"),
+        ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n"),
+        ("asctime-no-argument", "def later():\n    return time.asctime()\n"),
+        ("localtime-double-starred", "def later():\n    return time.localtime(**{})\n"),
+        ("localtime-starred", "def later():\n    return time.localtime(*())\n"),
+        ("strftime-starred-instant", "def later(rest):\n    return time.strftime('%H', *rest)\n"),
+        ("gmtime-keyword", "def later():\n    return time.gmtime(seconds=0)\n"),
+        ("localtime-none-instant", "def later():\n    return time.localtime(None)\n"),
+        ("ctime-none-instant", "def later():\n    return time.ctime(None)\n"),
+        (
+            "second-boundary-definition",
+            "def clock_now():\n    return 0\ndef clock_now():\n    return time.time()\n",
+        ),
+        ("boundary-rebinding", "def clock_now():\n    return time.time()\nclock_now = print\n"),
+    ],
+)
+def test_runner_clock_guard_rejects_bypasses(planted: str, snippet: str) -> None:
+    """Spec criterion 2. Planted fault: a direct or aliased acquisition outside the boundary is accepted.
+
+    Every snippet imports `time` or `datetime` in the way the real module
+    would and hides the read in the shape a bypass would take; the guard must
+    name each one, with no caller or line exemption to add.
+    """
+    source = "import time\n" + snippet
+    violations = clock_guard_violations(source)
+    assert violations, f"the guard accepted the {planted} bypass"
+    assert all("line" in finding for finding in violations), violations
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet"),
+    [
+        (
+            "boundary-body",
+            "def clock_now():\n    return R(time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        ),
+        (
+            "boundary-nested-body",
+            "def clock_now():\n    def read():\n        return time.monotonic()\n    return read()\n",
+        ),
+        ("boundary-caller", "def adapter():\n    return clock_now().utc.date()\n"),
+        ("pure-parse", "def read(value: str):\n    return dt.date.fromisoformat(value)\n"),
+        (
+            "pure-construction",
+            "def made():\n    return dt.datetime(2026, 1, 1, tzinfo=dt.UTC) + dt.timedelta(seconds=1)\n",
+        ),
+        ("pure-format", "def shown(value):\n    return value.isoformat(timespec='seconds')\n"),
+        (
+            "explicit-conversion",
+            "def shown(struct):\n    return time.strftime('%H', struct) and time.gmtime(0)\n",
+        ),
+        ("other-module", "def section(path):\n    return time_records.section_text(path)\n"),
+        ("untracked-name", "def kept(today):\n    return today\n"),
+        ("strftime-with-instant", "def shown(struct):\n    return time.strftime('%H', struct)\n"),
+        ("class-alias-construction", "D = dt.datetime\ndef made():\n    return D(2026, 1, 1)\n"),
+        ("date-class-annotation", "def kept(value: dt.date) -> dt.date:\n    return value\n"),
+    ],
+)
+def test_runner_clock_guard_accepts_the_boundary(tolerated: str, snippet: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the guard rejects the designated backend or a pure date operation.
+
+    The boundary body may acquire, its callers may consume the reading, and
+    parsing, construction, formatting and explicit-argument conversions stay
+    free; a module whose name merely begins like `time` is not the clock.
+    """
+    source = "import datetime as dt\nimport time\nimport time_records\nR = tuple\n" + snippet
+    assert clock_guard_violations(source) == [], f"the guard rejected {tolerated}"
+
+
+RUNNER_FILE = str(REPO_ROOT / "scripts" / "stage2.py")
+
+
+def run_as_runner(snippet: str, entry: str | None = None) -> Any:
+    """Execute `snippet` as code of the runner file; call its `entry` if named, else hand back the namespace.
+
+    Compiled with the runner's own filename, the snippet's frames are runner
+    frames to the runtime guard, exactly as a line added to `scripts/stage2.py` would be.
+    """
+    namespace: dict[str, Any] = {"__name__": "stage2", "time": time, "dt": dt}
+    exec(compile(snippet, RUNNER_FILE, "exec"), namespace)
+    return namespace[entry]() if entry else namespace
+
+
+def as_module(namespace: dict[str, Any]) -> types.ModuleType:
+    """The executed snippet as the module object the bound-reference scan reads."""
+    module = types.ModuleType("stage2")
+    vars(module).update(namespace)
+    return module
+
+
+RUNTIME_BYPASSES = [
+    ("plain-read", "def later():\n    return time.monotonic()\n", "later"),
+    ("dunder-call", "def later():\n    return time.monotonic.__call__()\n", "later"),
+    ("default-at-import", "def clock_now(cached=time.monotonic()):\n    return cached\n", None),
+    ("keyword-default-at-import", "def clock_now(*, cached=dt.date.today()):\n    return cached\n", None),
+    ("module-level-read", "STARTED = time.time()\n", None),
+    ("aliased-function", "from time import monotonic as tick\ndef later():\n    return tick()\n", "later"),
+    ("aliased-class", "from datetime import datetime as D\ndef later():\n    return D.now(dt.UTC)\n", "later"),
+    ("getattr-name", "def later():\n    return getattr(time, 'mono' + 'tonic')()\n", "later"),
+    ("vars-lookup", "def later():\n    return vars(time)['perf_counter_ns']()\n", "later"),
+    (
+        "partial",
+        "import functools\n_tick = functools.partial(time.perf_counter)\ndef later():\n    return _tick()\n",
+        "later",
+    ),
+    ("date-today-dunder", "def later():\n    return dt.date.today.__call__()\n", "later"),
+    ("datetime-today", "def later():\n    return dt.datetime.today()\n", "later"),
+    ("datetime-utcnow", "def later():\n    return dt.datetime.utcnow()\n", "later"),
+    ("subclass-now", "class D(dt.datetime):\n    pass\ndef later():\n    return D.now()\n", "later"),
+    ("runtime-none-instant", "def later(instant=None):\n    return time.localtime(instant)\n", "later"),
+    ("strftime-no-instant", "def later():\n    return time.strftime('%H')\n", "later"),
+    ("clock-gettime", "def later():\n    return time.clock_gettime_ns(time.CLOCK_MONOTONIC)\n", "later"),
+    ("sleep", "def later():\n    return time.sleep(0)\n", "later"),
+    (
+        "nested-boundary-name",
+        "def later():\n    def clock_now():\n        return time.time()\n    return clock_now()\n",
+        "later",
+    ),
+    (
+        "class-boundary-name",
+        "class S:\n    @staticmethod\n    def clock_now():\n        return time.time()\ndef later():\n    return S.clock_now()\n",
+        "later",
+    ),
+    (
+        "dataclass-default-factory",
+        "import dataclasses\n@dataclasses.dataclass\nclass C:\n    t: float = dataclasses.field(default_factory=time.monotonic)\n"
+        "def later():\n    return C()\n",
+        "later",
+    ),
+    (
+        "swallowed",
+        "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n",
+        "later",
+    ),
+]
+
+
+@pytest.mark.parametrize(("planted", "snippet", "entry"), RUNTIME_BYPASSES, ids=[row[0] for row in RUNTIME_BYPASSES])
+def test_runner_clock_runtime_guard_catches_bypasses(planted: str, snippet: str, entry: str | None) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: a clock read from runner code outside clock_now passes at run time.
+
+    The static guard missed `time.monotonic.__call__()` and a default read at
+    import (phase-6 rows F6-1 and F6-2); here every shape reaches a wrapper
+    and is judged by the runner frame that made the call. A read the runner
+    swallows still stands in the record the autouse fixture checks.
+    """
+    held: list[str] = []
+    with runner_clock_guard.capture() as reads:
+        try:
+            namespace = run_as_runner(snippet, None)
+            held = runner_clock_guard.bound_reference_violations(as_module(namespace))
+            if entry:
+                namespace[entry]()
+        except runner_clock_guard.RunnerClockRead:
+            raised = True
+        else:
+            raised = False
+    assert reads or held, f"the runtime guard let the {planted} bypass read the clock"
+    assert raised or held or planted == "swallowed", f"the {planted} read was recorded but not refused"
+    assert all(read.filename == RUNNER_FILE for read in reads), reads
+
+
+RUNTIME_TOLERATED = [
+    (
+        "boundary-body",
+        "def clock_now():\n    return (time.monotonic(), dt.datetime.now(dt.UTC), dt.date.today())\n",
+        "clock_now",
+    ),
+    (
+        "explicit-conversion",
+        "def later():\n    return time.strftime('%H', time.gmtime(0)), time.localtime(0)\n",
+        "later",
+    ),
+    (
+        "pure-construction",
+        "def later():\n    return dt.datetime.fromtimestamp(0, dt.UTC), dt.date(2026, 1, 1)\n",
+        "later",
+    ),
+    ("standard-library", "import logging\ndef later():\n    return logging.makeLogRecord({}).created\n", "later"),
+]
+
+
+@pytest.mark.parametrize(
+    ("tolerated", "snippet", "entry"), RUNTIME_TOLERATED, ids=[row[0] for row in RUNTIME_TOLERATED]
+)
+def test_runner_clock_runtime_guard_accepts_the_boundary(tolerated: str, snippet: str, entry: str) -> None:
+    """Spec criterion 2, the green side. Planted fault: the runtime guard refuses the boundary, a pure conversion or the standard library.
+
+    `clock_now` may acquire, a conversion handed its instant reads nothing,
+    and a standard-library frame (logging stamps its record with
+    `time.time()`) stays free even when runner code called it.
+    """
+    with runner_clock_guard.capture() as reads:
+        namespace = run_as_runner(snippet, None)
+        assert runner_clock_guard.bound_reference_violations(as_module(namespace)) == []
+        namespace[entry]()
+    assert reads == [], f"the runtime guard refused {tolerated}: {reads}"
+
+
+def test_runner_clock_runtime_guard_admits_the_real_boundary_and_other_callers() -> None:
+    """Spec criterion 2. Planted fault: the guard is inert, or it refuses the runner's own clock_now, a test or another file.
+
+    The wrappers must sit where every alias resolves - on the `time` module and
+    in the `datetime` types, a subclass included - and the runner must have
+    been imported after them, so no import-time read went unseen.
+    """
+    assert runner_clock_guard.installation_problems() == []
+    assert runner_clock_guard.import_time_reads() == [], "a runner clock read happened at import"
+    with runner_clock_guard.capture() as reads:
+        reading = stage2.clock_now()
+        time.monotonic()
+        dt.date.today()
+        exec(compile("import time\ntime.time()\n", str(REPO_ROOT / "scripts" / "stage2_go.py"), "exec"), {})
+    assert reading.local_date and reads == [], reads
+
+
+def test_runner_clock_runtime_guard_finds_references_bound_before_install() -> None:
+    """Spec criterion 2 and its Boundary. Planted fault: an original clock reference bound before the guard escapes it.
+
+    A module that bound an original at import would read the clock past
+    every wrapper; the scan finds one in each place a binding can hide, and
+    the real runner holds none.
+    """
+    originals = runner_clock_guard.ORIGINALS
+    monotonic = originals["time.monotonic"]
+    bound_now = originals["datetime.now"].__get__(None, dt.datetime)
+    planted = types.ModuleType("planted_runner")
+
+    def with_default(clock=monotonic):
+        return clock
+
+    def with_keyword(*, clock=bound_now):
+        return clock
+
+    def with_closure():
+        return monotonic
+
+    planted_class = type("Holder", (), {"clock": originals["time.time"], "__module__": "planted_runner"})
+    for function in (with_default, with_keyword, with_closure):
+        function.__module__ = "planted_runner"
+        setattr(planted, function.__name__, function)
+    planted.alias = monotonic
+    planted.dunder = monotonic.__call__
+    planted.partial = functools.partial(originals["time.perf_counter"])
+    planted.listed = [originals["date.today"]]
+    planted.held_wrapper = time.monotonic
+    planted.held_bound = dt.datetime.now
+    planted.Fields = dataclasses.make_dataclass(
+        "Fields", [("t", float, dataclasses.field(default_factory=time.perf_counter))]
+    )
+    planted.Fields.__module__ = "planted_runner"
+    planted.Holder = planted_class
+    found = runner_clock_guard.bound_reference_violations(planted)
+    for where in (
+        "global alias",
+        "global dunder",
+        "global partial",
+        "global listed",
+        "function with_default default 0",
+        "function with_keyword keyword default clock",
+        "function with_closure closure monotonic",
+        "class Holder.clock",
+        "global held_wrapper holds the clock callable time.monotonic",
+        "global held_bound holds the clock callable datetime.now",
+        "class Fields.__dataclass_fields__",
+    ):
+        assert any(where in finding for finding in found), f"the scan missed {where}: {found}"
+    assert runner_clock_guard.bound_reference_violations(stage2) == []
+
+
+def test_runner_clock_runtime_guard_fails_the_test_through_the_autouse_fixture(tmp_path: Path) -> None:
+    """Spec criterion 2 (decisions.md Q-2). Planted fault: the autouse fixture lets a swallowed runner read pass.
+
+    The planted tests above take their records out of the session; this one
+    runs a separate pytest session with the real `tests/conftest.py`, so the
+    fixture itself must fail a test whose runner code swallowed the refusal,
+    at run time and at import, and leave a clean test green.
+    """
+    swallowed = "def later():\n    try:\n        return time.time()\n    except Exception:\n        return 0\n"
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(
+        "import time\n"
+        f"RUNNER = {RUNNER_FILE!r}\n"
+        f"SWALLOWED = {swallowed!r}\n"
+        "def run():\n"
+        "    namespace = {'time': time}\n"
+        "    exec(compile(SWALLOWED, RUNNER, 'exec'), namespace)\n"
+        "    return namespace['later']()\n"
+        "def test_swallowed_read():\n"
+        "    run()\n"
+        "def test_clean():\n"
+        "    time.time()\n",
+        encoding="utf-8",
+    )
+    importing = tmp_path / "test_import_probe.py"
+    importing.write_text(
+        "import time\n"
+        f"exec(compile({swallowed + 'later()\n'!r}, {RUNNER_FILE!r}, 'exec'), {{'time': time}})\n"
+        "def test_after_import():\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+
+    def session(test_file: Path) -> str:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-p", "conftest", "-p", "no:cacheprovider", "-p", "no:xdist", "-rA", "-q"]
+            + [str(test_file)],
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "tests")},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        return output
+
+    output = session(probe)
+    assert re.search(r"ERROR .*test_probe.py::test_swallowed_read", output), output
+    assert re.search(r"PASSED .*test_probe.py::test_clean", output), output
+    output = session(importing)
+    assert re.search(r"ERROR .*test_import_probe.py::test_after_import", output), output
+    assert "outside clock_now at import" in output, output
+
+
+def test_runner_clock_preserves_time_domains(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 5. Planted fault: a wall jump changes a measured duration, or local and UTC dates swap.
+
+    One fake boundary carries three separate values. A duration follows the
+    monotonic value alone, the wall may step meanwhile, terms read the UTC
+    date, and a document stamp reads the local one.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+    clock.local_date = dt.date(2026, 11, 13)
+    assert stage2.today() == "2026-11-13"
+    assert stage2.utc_now() == UTC_START and stage2.monotonic_now() == 1000.0
+    assert stage2.terms_today() == UTC_START.date(), "terms must read the UTC date, not the local one"
+    clock.advance(45)
+    clock.wall_drift = 30.0  # a wall-clock step mid-span, the thing a duration must ignore
+    assert stage2.monotonic_now() == 1045.0, "a wall jump bent the measured duration"
+    assert stage2.utc_now() == UTC_START + dt.timedelta(seconds=75), "the wall clock did not step"
+    assert stage2.terms_today() == UTC_START.date(), "the stepped wall changed the terms date"
+    target = world.plan
+    stage2.stamp_updated(target)
+    assert updated_of(target) == dt.date(2026, 11, 13), "a stamp took the UTC date instead of the local one"
+    clock.advance(1)
+    assert stage2.today() == "2026-11-13", "the local date followed the UTC field"
 
 
 def test_runner_accepts_attempt_without_model_time_entry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -18775,17 +19739,17 @@ def routing_rows(text: str) -> dict[str, tuple[str, str]]:
 
 STAGE2_ROUTING = {
     "1 Explore": "GLM 5.3 Flash",
-    "2 Spec": "gpt-6.1-sol",
-    "2b Design": "gpt-6.1-sol",
+    "2 Spec": "gpt-6.1-terra",
+    "2b Design": "gpt-6.1-terra",
     "2a Spec review": "Opus 5.5",
-    "3 Plan": "gpt-6.1-sol",
+    "3 Plan": "gpt-6.1-terra",
     "4 Implement": "GLM 5.3 Flash",
     "4b Review loop": "the swarms, then the ladder",
     "4b Triage": "none (a local command)",
-    "6 Review": "gpt-6.1-sol",
+    "6 Review": "gpt-6.1-terra",
 }
 
-# Sol's effort lives once per verb in `CODEX_EFFORTS`; every active instruction links its verb's
+# Codex's effort lives once per verb in `CODEX_EFFORTS`; every active instruction links its verb's
 # entry instead of naming a value of its own (bead coding-harness-yzk, spec criteria 4-6).
 SOL_ROUTING_VERBS = {"2 Spec": "draft", "2b Design": "draft", "3 Plan": "draft", "6 Review": "review"}
 SOL_EFFORT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md", "06-review.md")
@@ -18799,11 +19763,11 @@ def effort_reference(verb: str) -> str:
     return f'[`CODEX_EFFORTS["{verb}"]`](../scripts/stage2.py)'
 
 
-SOL_MODEL = re.compile(r"gpt-6\.1-sol|\bSol\b|\bCodex\b")
+SOL_MODEL = re.compile(r"gpt-6\.1-(?:sol|terra)|\bSol\b|\bTerra\b|\bCodex\b")
 
 
 def sol_clauses(text: str) -> list[str]:
-    """Read every Sol mention up to the next model, sentence, row or paragraph (Q-5)."""
+    """Read every Codex mention up to the next model, sentence, row or paragraph (Q-5)."""
     clauses = []
     for paragraph in re.split(r"\n\s*\n|\n(?=\|)|(?<=[.!?])\s+", text):
         mentions = list(SOL_MODEL.finditer(paragraph))
@@ -18816,7 +19780,7 @@ def sol_clauses(text: str) -> list[str]:
 
 
 def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str) -> list[str]:
-    """Check each Sol effort independently; another mention cannot supply its reference.
+    """Check each Codex effort independently; another mention cannot supply its reference.
 
     `verb` is the runner verb the instruction serves, or the set of verbs an unpinned instruction
     names (`instruction_verbs`); only those verbs' entries satisfy it. An empty set means the
@@ -18831,9 +19795,9 @@ def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str
             continue
         checked = True
         if (literal := EFFORT_LITERAL.search(clause)) is not None:
-            found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
+            found.append(f"{where} sets Codex's effort independently ({literal.group(0)})")
         if not verbs:
-            found.append(f"{where} gives Sol an effort but names no runner verb (draft, repair or review)")
+            found.append(f"{where} gives Codex an effort but names no runner verb (draft, repair or review)")
             continue
         references = [effort_reference(key) for key in verbs]
         if not any(reference in clause for reference in references):
@@ -18856,7 +19820,7 @@ def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
     names several, an entry of any of them satisfies it, and an entry of a verb it does not name
     stays red. A sentence that names no verb serves the verb of the `###` subsection it stands in
     (`### Repairing taken findings (repair)` repairs). An instruction with no verb in either place
-    cannot be attributed and is reported, so a Sol effort always says which runner verb it follows.
+    cannot be attributed and is reported, so a Codex effort always says which runner verb it follows.
     """
     if unit.startswith("|"):
         label = (stage2.split_row(unit.splitlines()[0]) or [""])[0].lower()
@@ -18869,7 +19833,7 @@ def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
 
 
 def sol_section_problems(text: str, where: str) -> list[str]:
-    """Every Sol effort clause of a doctrine section, checked against the verb of its own instruction."""
+    """Every Codex effort clause of a doctrine section, checked against the verb of its own instruction."""
     found = []
     heading = ""
     for block in re.split(r"\n\s*\n|\n(?=\|)", text):
@@ -18897,7 +19861,7 @@ def sol_texts(doc: str, text: str) -> tuple[str, dict[str, str]]:
 
 
 def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
-    """Every active Sol effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
+    """Every active Codex effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
     found = []
     # New prose, unpinned rows and later mentions in existing rows are active instructions too,
     # each checked against the verb of its own context.
@@ -18909,8 +19873,8 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
         if row is None:
             found.append(f"section 4 has no routing row {phase}")
         else:
-            found += sol_effort_clause_problems("gpt-6.1-sol " + row[1], verb, f"section 4 routes {phase}")
-    for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Sol clause to §4
+            found += sol_effort_clause_problems("gpt-6.1-terra " + row[1], verb, f"section 4 routes {phase}")
+    for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Codex clause to §4
         stage_1 = rows_3.get(phase)
         if stage_1 is None:
             found.append(f"section 3 has no routing row {phase}")
@@ -18918,10 +19882,10 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
             found += sol_effort_clause_problems(stage_1[1], "draft", f"section 3 routes {phase}")
     line = next((row for row in section(workflow, "## 4 · ").splitlines() if row.startswith(REPAIR_ROW_LABEL)), "")
     cells = stage2.split_row(line) or []
-    if len(cells) != 3 or cells[1] != "**gpt-6.1-sol**":
-        found.append("section 4 has no repair row for gpt-6.1-sol")
+    if len(cells) != 3 or cells[1] != "**gpt-6.1-terra**":
+        found.append("section 4 has no repair row for gpt-6.1-terra")
     else:
-        found += sol_effort_clause_problems("gpt-6.1-sol " + cells[2], "repair", "section 4 routes the repair")
+        found += sol_effort_clause_problems("gpt-6.1-terra " + cells[2], "repair", "section 4 routes the repair")
     draft = section(workflow, "### The draft (phases 2, 2b and 3)")
     prose = flat(draft.partition("A drafted change runs in this order:")[0])
     found += sol_effort_clause_problems(prose, "draft", "the draft prose")
@@ -18938,21 +19902,21 @@ def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
 SOL_EFFORT_PLACES = (
     (
         "workflow",
-        "the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
     ),
     (
         "workflow",
-        "the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
     ),
     (
         "workflow",
-        "an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        "an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-terra` at effort "
         + effort_reference("draft")
         + " writes it instead",
         "draft",
@@ -18962,11 +19926,11 @@ SOL_EFFORT_PLACES = (
     ("workflow", "effort " + effort_reference("draft") + ", drafted in the same call as 2 and 2b", "draft"),
     ("workflow", "sandbox, effort " + effort_reference("repair") + "; one fresh Codex attempt", "repair"),
     ("workflow", "effort " + effort_reference("review") + ", through the Codex CLI", "review"),
-    ("workflow", "(`gpt-6.1-sol`, effort " + effort_reference("draft") + ") write", "draft"),
-    ("02-spec.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("02b-design.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("03-plan.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
-    ("06-review.md", "gpt-6.1-sol at effort " + effort_reference("review") + ", started by", "review"),
+    ("workflow", "(`gpt-6.1-terra`, effort " + effort_reference("draft") + ") write", "draft"),
+    ("02-spec.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("02b-design.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("03-plan.md", "(`gpt-6.1-terra`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("06-review.md", "gpt-6.1-terra at effort " + effort_reference("review") + ", started by", "review"),
 )
 
 
@@ -18987,7 +19951,7 @@ def routing_problems(workflow: str) -> list[str]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
         elif phase in SOL_ROUTING_VERBS:
             found += sol_effort_clause_problems(
-                "gpt-6.1-sol " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
+                "gpt-6.1-terra " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
             )
         elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
@@ -19012,22 +19976,22 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         assert needle in four["4b Review loop"][1], needle
     assert four["2a Spec review"][0] == "Opus 5.5"
     for phase in ("2 Spec", "2b Design", "3 Plan", "6 Review"):
-        assert four[phase][0] == "gpt-6.1-sol", phase
+        assert four[phase][0] == "gpt-6.1-terra", phase
     for old, new in (
-        ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
+        ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-terra** |"),
         ("| 4b Review loop | **the swarms, then the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
-        ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 6 Review | **gpt-6.1-terra** |", "| 6 Review | **Opus 5.5** |"),
         ("| 4b Triage | none (a local command) |", "| 4b Triage | misspelled-model |"),
         (
-            f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
+            f"| 2 Spec | **gpt-6.1-terra** | effort {effort_reference('draft')}, one call",
             f"| 2 Spec | **Opus 5.5** | effort {effort_reference('draft')}, one call",
         ),
         (
-            f"| 2b Design | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 2b Design | **gpt-6.1-terra** | effort {effort_reference('draft')}, drafted",
             f"| 2b Design | **GLM 5.3 Flash** | effort {effort_reference('draft')}, drafted",
         ),
         (
-            f"| 3 Plan | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 3 Plan | **gpt-6.1-terra** | effort {effort_reference('draft')}, drafted",
             f"| 3 Plan | **Sonnet 5.5** | effort {effort_reference('draft')}, drafted",
         ),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
@@ -19064,7 +20028,7 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
 def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
     # Criterion 4 beyond the pinned places (loop L3-1). Planted faults: a new sentence in the repair
     # prose, a sentence naming its verb under another verb's heading, and an unpinned routing row
-    # each link another verb's entry; a Sol effort naming no verb at all cannot be attributed.
+    # each link another verb's entry; a Codex effort naming no verb at all cannot be attributed.
     workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
     assert sol_effort_problems(workflow, prompts) == []
     repair_heading = "### Repairing taken findings (repair)"
@@ -19090,15 +20054,15 @@ def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None
             prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('repair')}."),
         ),
         (
-            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('draft')}"),
-            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('review')}"),
+            unpinned_row(f"; `gpt-6.1-terra` re-checks at effort {effort_reference('draft')}"),
+            unpinned_row(f"; `gpt-6.1-terra` re-checks at effort {effort_reference('review')}"),
         ),
     ):
         assert wrong != workflow and right != workflow
         assert sol_effort_problems(wrong, prompts), "another verb's entry passes in an unpinned instruction"
         assert sol_effort_problems(right, prompts) == [], "the instruction's own entry is rejected"
     unattributed = prose(neutral, f"Codex runs at effort {effort_reference('draft')}.")
-    assert sol_effort_problems(unattributed, prompts), "a Sol effort naming no verb passes"
+    assert sol_effort_problems(unattributed, prompts), "a Codex effort naming no verb passes"
 
 
 @pytest.mark.parametrize(
@@ -19178,34 +20142,34 @@ def test_sol_effort_changes_propagate_without_other_edits(
 
 
 def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
-    # Criterion 6. Planted faults: a valid non-Sol effort is rejected, or it masks a wrong Sol reference.
+    # Criterion 6. Planted faults: a valid non-Codex effort is rejected, or it masks a wrong Codex reference.
     workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
     assert sol_effort_problems(workflow, prompts) == []
     line = next(row for row in workflow.splitlines() if row.startswith(REPAIR_ROW_LABEL))
     assert "Sonnet 5.5 at effort `medium`" in line, "the row does not mix another model's effort in"
     mixed = workflow.replace(line, line[:-2] + "; Sonnet 5.5 drafts by hand at effort `medium` |", 1)
     assert sol_effort_problems(mixed, prompts) == [], "another model's effort is rejected"
-    for model in ("`gpt-6.1-sol`", "Sol", "Codex"):
+    for model in ("`gpt-6.1-terra`", "`gpt-6.1-sol`", "Sol", "Terra", "Codex"):
         later = f"; {model} repairs at effort `high`"
         planted = mixed.replace(
             "; Sonnet 5.5 drafts by hand at effort `medium` |",
             "; Sonnet 5.5 drafts by hand at effort `medium`" + later + " |",
             1,
         )
-        assert sol_effort_problems(planted, prompts), "a later independent Sol effort passes"
+        assert sol_effort_problems(planted, prompts), "a later independent Codex effort passes"
         valid = planted.replace(later, f"; {model} repairs at effort {effort_reference('repair')}", 1)
-        assert sol_effort_problems(valid, prompts) == [], "a later central Sol reference is rejected"
+        assert sol_effort_problems(valid, prompts) == [], "a later central Codex reference is rejected"
         wrong_later = valid.replace(
             f"; {model} repairs at effort {effort_reference('repair')}",
             f"; {model} repairs at effort {effort_reference('review')}",
             1,
         )
-        assert sol_effort_problems(wrong_later, prompts), "a later wrong Sol reference passes"
+        assert sol_effort_problems(wrong_later, prompts), "a later wrong Codex reference passes"
         prose = f"\n\n{model} reviews at effort `high`.\n\n"
         planted = workflow.replace(
             "### The draft (phases 2, 2b and 3)", prose + "### The draft (phases 2, 2b and 3)", 1
         )
-        assert sol_effort_problems(planted, prompts), "new prose with an independent Sol effort passes"
+        assert sol_effort_problems(planted, prompts), "new prose with an independent Codex effort passes"
     for name, text in prompts.items():
         planted = re.sub(
             r"(^\*\*Model:\*\*.*?)(?=^\*\*[A-Z])", r"\1Codex runs at effort `high`.\n", text, count=1, flags=re.M | re.S
@@ -19213,10 +20177,71 @@ def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
         assert planted != text, name
         assert sol_effort_problems(workflow, {**prompts, name: planted}), name
     wrong = workflow.replace(line, line.replace(effort_reference("repair"), effort_reference("review"), 1), 1)
-    assert sol_effort_problems(wrong, prompts), "a wrong Sol reference passes"
+    assert sol_effort_problems(wrong, prompts), "a wrong Codex reference passes"
     planted = prompts["02b-design.md"].replace(effort_reference("draft"), effort_reference("review"), 1)
     assert "Opus 5.5 at effort `xhigh`" in flat(planted), "the planted prompt holds no other model's effort"
-    assert sol_effort_problems(workflow, {**prompts, "02b-design.md": planted}), "a wrong Sol reference is masked"
+    assert sol_effort_problems(workflow, {**prompts, "02b-design.md": planted}), "a wrong Codex reference is masked"
+
+
+CODEX_MODEL_ID = re.compile(r"gpt-6\.1-[a-z0-9][a-z0-9.-]*[a-z0-9]")
+ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+LIVE_PROSE_FILES = ("docs/WORKFLOW.md", "AGENTS.md", "model-endpoints.yaml")
+LIVE_PROSE_DIRS = ("scripts", "prompts", "templates")
+
+
+def live_prose_texts() -> dict[str, str]:
+    """The surfaces that state the current Codex model: scripts, prompts, templates and the doctrine."""
+    paths = [REPO_ROOT / name for name in LIVE_PROSE_FILES]
+    for folder in LIVE_PROSE_DIRS:
+        paths += sorted(path for path in (REPO_ROOT / folder).rglob("*") if path.is_file())
+    texts = {}
+    for path in paths:
+        try:
+            texts[path.relative_to(REPO_ROOT).as_posix()] = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, FileNotFoundError):
+            continue
+    return texts
+
+
+def stale_codex_model_mentions(texts: dict[str, str], current: str) -> list[str]:
+    """Every `gpt-6.1-*` id other than `current` that is not dated history.
+
+    A mention is history when its own line names a date, or when it sits in a comment block
+    (contiguous `#` lines) that names one; anything else states the model as current.
+    """
+    found = []
+    for name, text in texts.items():
+        lines = text.splitlines()
+        for number, line in enumerate(lines):
+            stale = [model for model in CODEX_MODEL_ID.findall(line) if model != current]
+            if not stale or ISO_DATE.search(line):
+                continue
+            if line.lstrip().startswith("#"):
+                first = last = number
+                while first > 0 and lines[first - 1].lstrip().startswith("#"):
+                    first -= 1
+                while last + 1 < len(lines) and lines[last + 1].lstrip().startswith("#"):
+                    last += 1
+                if any(ISO_DATE.search(row) for row in lines[first : last + 1]):
+                    continue
+            found.append(f"{name}:{number + 1} names {', '.join(stale)} as current, not {current}")
+    return found
+
+
+def test_live_prose_names_only_the_current_codex_model() -> None:
+    # A switch of `stage2.CODEX` must reach every unpinned sentence; a dated history line may keep the old id.
+    current = stage2.CODEX[1]
+    texts = live_prose_texts()
+    assert {"docs/WORKFLOW.md", "prompts/04-implement.md", "scripts/stage2.py"} <= set(texts)
+    assert stale_codex_model_mentions(texts, current) == []
+    for name, needle in (
+        ("prompts/04-implement.md", f"Codex (`{current}`)"),
+        ("prompts/02a-spec-review.md", f"(`{current}`)"),
+        ("docs/WORKFLOW.md", f"Codex (`{current}`, effort"),
+    ):
+        assert needle in texts[name], name
+        planted = {**texts, name: texts[name].replace(needle, needle.replace(current, "gpt-6.1-sol"), 1)}
+        assert stale_codex_model_mentions(planted, current), f"a reverted gpt-6.1-sol in {name} passes"
 
 
 DRAFT_ORDER_NEEDLES = (
@@ -19300,7 +20325,7 @@ def test_the_drafting_prompts_name_the_draft_verb() -> None:
     # Criterion 34. Planted fault: a drafting prompt's Model line without `stage2.py draft <change>`.
     for name in ("02-spec.md", "02b-design.md", "03-plan.md"):
         line = model_line((PROMPTS / name).read_text(encoding="utf-8"))
-        assert "Codex (`gpt-6.1-sol`)" in line, name
+        assert "Codex (`gpt-6.1-terra`)" in line, name
         assert "python3 scripts/stage2.py draft <change>" in line, name
         assert "GLM 5.3 after two failed attempts" in line, name
         planted = line.replace("python3 scripts/stage2.py draft <change>", "the model writes them by hand", 1)
@@ -19515,13 +20540,13 @@ def review_prompt_problems(spec_review: str, review: str) -> list[str]:
     """Criterion 34: 2a's Model line is Opus 5.5 through the runner and no Codex; 6 keeps its verb and verdict."""
     found = []
     model = model_line(spec_review)
-    if "gpt-6.1-sol" in model or "Codex" in model:
+    if "gpt-6.1-terra" in model or "Codex" in model:
         found.append("02a-spec-review.md's Model line still routes the spec review to Codex")
     for needle in ("Opus 5.5", "stage2.py spec-review <change>", "scripts/stage2.py"):
         if needle not in model:
             found.append(f"02a-spec-review.md's Model line lacks {needle}")
     one = flat(review)
-    if "gpt-6.1-sol" not in one or "scripts/stage2.py" not in one:
+    if "gpt-6.1-terra" not in one or "scripts/stage2.py" not in one:
         found.append("06-review.md lacks the Codex model or the runner")
     if "stage2.py review <change>" not in one:
         found.append("06-review.md does not name the verb review")
@@ -19817,7 +20842,7 @@ def test_the_prompts_name_the_ladder_and_the_limit() -> None:
     assert "free_stage" in one and "flash_swarm" in one, "04b does not name the configurable rule"
     for name in ("02a", "06"):
         one = flat(texts[name])
-        assert "gpt-6.1-sol" in one, name
+        assert "gpt-6.1-terra" in one, name
         assert "until a round is clean" in one, name
         assert "three rounds" not in one and "round 3 only when round 2 wrote" not in one, name
         assert "deepseek-v4.1-flash" not in one and "mimo-v2.6" not in one, name
@@ -20092,7 +21117,7 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
         found.append("section 4 does not say thirteen verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
-    if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
+    if "| Repair after 4b and 6 | **gpt-6.1-terra** |" not in workflow:
         found.append("the routing table has no repair row")
     if "### Repairing taken findings (repair)" not in workflow:
         found.append("the repair subsection is missing")
@@ -20123,7 +21148,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     )
     assert repair_doctrine_problems(
         workflow.replace(
-            "| Repair after 4b and 6 | **gpt-6.1-sol** |", "| Repair after 4b and 6 | **Sonnet 5.5** |", 1
+            "| Repair after 4b and 6 | **gpt-6.1-terra** |", "| Repair after 4b and 6 | **Sonnet 5.5** |", 1
         ),
         agents,
     )
@@ -20159,7 +21184,7 @@ def repair_prompt_problems(loop: str, implement: str) -> list[str]:
     for needle in ("taken — not a test — <reason>", "Broke a test"):
         if needle not in one:
             found.append(f"04b lacks '{needle}'")
-    for needle in ("red first", "gpt-6.1-sol", "fixed — tests/<path>::<function>", "fixed — not a test — <reason>"):
+    for needle in ("red first", "gpt-6.1-terra", "fixed — tests/<path>::<function>", "fixed — not a test — <reason>"):
         if needle not in four:
             found.append(f"04 lacks '{needle}'")
     return found
@@ -20591,15 +21616,14 @@ def test_an_expired_round_starts_no_replacement_and_consumes_no_stage(world: Wor
     """O196-1: a failed swarm at the deadline cannot buy a fresh second for every remaining rung."""
     _flash_round_world(world)
     before = world.record().read_text(encoding="utf-8")
-    clock = [0.0]
+    clock = FakeClock(monkeypatch, UTC_START)
     calls: list[list[str]] = []
 
     def expired(_ctx, members, _prompts, _key, **options):
         calls.append(list(members))
-        clock[0] = options["deadline"] + 1
+        clock.run_past(options["deadline"])
         return {member: stage2.CallFailed("the round time limit expired") for member in members}
 
-    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stage2, "run_swarm", expired)
     assert world.run("review-loop") == 1
     assert calls == [list(TEST_FLASH)], "the exhausted deadline still launched a replacement"
@@ -22418,7 +23442,11 @@ def test_a_terminated_runner_kills_its_running_programs(world: World, monkeypatc
 
     def terminate() -> None:
         os.kill(os.getpid(), signal_.SIGTERM)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, terminate)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -22443,7 +23471,11 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 
     def hang_up() -> None:
         os.kill(os.getpid(), signum)
-        time.sleep(5)
+        # Watchdog: give the runner's handler its bounded moment to end the group; the verdict is
+        # the liveness poll below, not this wait.
+        end = time.monotonic() + 10
+        while _child_alive(started["pid"]) and time.monotonic() < end:
+            time.sleep(0.05)
 
     verb, started = _interrupting_verb(tmp_path, hang_up)
     monkeypatch.setattr(stage2, "explore", verb)
@@ -22458,11 +23490,45 @@ def test_a_hangup_or_quit_kills_the_running_programs_like_sigterm(
 def test_a_timeout_does_not_wait_for_an_escaped_descendant(monkeypatch, tmp_path: Path) -> None:
     """Criterion 7 (DL-B-6): after the kill, the drain waits at most KILL_DRAIN_SECONDS."""
     monkeypatch.setattr(stage2, "KILL_DRAIN_SECONDS", 0.5)
-    escape = "import subprocess, time; subprocess.Popen(['sleep', '8'], start_new_session=True); time.sleep(100)"
-    start = time.monotonic()
-    with pytest.raises(stage2.StepTimedOut):
-        stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
-    assert time.monotonic() - start < 5
+    pidfile = tmp_path / "escapee.pid"
+    escape = (
+        "import pathlib, subprocess, time; "
+        "child = subprocess.Popen(['sleep', '30'], start_new_session=True); "
+        f"staged = pathlib.Path({str(pidfile) + '.tmp'!r}); staged.write_text(str(child.pid) + chr(10)); "
+        f"staged.replace({str(pidfile)!r}); time.sleep(100)"
+    )  # written to a temporary file and renamed into place: the record appears only complete
+    handed: list[float | None] = []
+    real_popen = subprocess.Popen
+
+    def popen(command, *args, **kwargs):
+        process = real_popen(command, *args, **kwargs)
+        real_communicate = process.communicate
+
+        def communicate(timeout=None):
+            nonlocal escapee
+            handed.append(timeout)
+            if len(handed) == 1:
+                # Readiness, not a race: the escapee's complete PID is held before the expiry is injected.
+                escapee = _await_complete_pid(pidfile, 500)
+                assert escapee is not None, "the stopped step never registered its escapee's complete pid"
+                raise subprocess.TimeoutExpired(command, timeout)
+            return real_communicate(timeout=timeout)  # the bounded drain on the really killed group
+
+        process.communicate = communicate  # type: ignore[method-assign]
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    escapee: int | None = None
+    try:
+        with pytest.raises(stage2.StepTimedOut):
+            stage2.launch([sys.executable, "-c", escape], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=1, limit="1 s")
+        assert escapee is not None
+        assert _child_alive(escapee), "the drain waited for the escaped descendant to die"
+        assert handed[0] == 1, "the step was stopped before its allowance ran out"
+        assert handed[1] == stage2.KILL_DRAIN_SECONDS, "the drain after the kill is unbounded"
+    finally:
+        # cleanup: the escapee outlives its step by design; a PID recorded after a failed wait is still killed
+        _kill_known(escapee if escapee is not None else _complete_pid(pidfile))
 
 
 def test_a_catalog_id_with_a_pipe_is_dropped_and_named(world: World) -> None:
@@ -22532,18 +23598,23 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
     """Criterion 9 (DL-B-10): a rung whose launch the deadline prevented writes no call line and is not consumed."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 3 / 60)
+    clock = FakeClock(monkeypatch, UTC_START)
     original = stage2.checked_prompt
+    burned: list[str] = []
 
     def slow(ctx, endpoint, prompt, admission=None):
-        if endpoint[1] == "mimo-v2.6-pro":
-            time.sleep(2.5)
+        # Once: only the replacement attempt's prompt check burns the shared round budget; a
+        # later round starts a fresh one and its call must not inherit the planted overspend.
+        if endpoint[1] == "mimo-v2.6-pro" and not burned:
+            burned.append(endpoint[1])
+            clock.advance(stage2.REVIEWER_MINUTES * 60)
         return original(ctx, endpoint, prompt, admission)
 
     monkeypatch.setattr(stage2, "checked_prompt", slow)
     world.script(
         pi=[
             {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited"},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M"), "sleep": 1},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
         ]
     )
     assert world.run("review-loop") == 0
@@ -22560,11 +23631,8 @@ def test_a_replacement_the_deadline_stopped_is_not_consumed(world: World, monkey
 
 def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, monkeypatch) -> None:
     """Criterion 9: the final admission read can exhaust the deadline without consuming a rung."""
-    from types import SimpleNamespace
-
     _flash_next(world)
-    clock = [time.monotonic()]
-    monkeypatch.setattr(stage2, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    clock = FakeClock(monkeypatch, UTC_START)
     original_dispatch = stage2.dispatch_go
     original_problem = stage2.terms_problem
     in_dispatch = threading.local()
@@ -22580,7 +23648,7 @@ def test_a_replacement_admitted_after_the_deadline_is_not_started(world: World, 
     def admission(entry, model):
         problem = original_problem(entry, model)
         if model == "mimo-v2.6-pro" and getattr(in_dispatch, "active", False):
-            clock[0] += stage2.REVIEWER_MINUTES * 60 + 1
+            clock.advance(stage2.REVIEWER_MINUTES * 60 + 1)
             admission_finished.append(model)
         return problem
 
@@ -22632,18 +23700,32 @@ def test_a_deadline_stop_names_the_round_limit(world: World, monkeypatch) -> Non
     """Criterion 12 (DL-B-14): a call stopped by the round deadline names that limit, not 45 minutes."""
     _flash_next(world)
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 2 / 60)
-    world.script(
-        pi=[
-            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Rate limited", "sleep": 0.5},
-            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
-            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P"), "sleep": 10},
-        ]
+    # Planted fault: the simulated expiry reports the reviewer limit, or no limit at all.
+    clock = FakeClock(monkeypatch, UTC_START)
+
+    def model_of(command: list[str]) -> str | None:
+        # None for the discovery commands: they carry no `--model` and stay on the stand-in.
+        return command[command.index("--model") + 1].split("/", 1)[1] if "--model" in command else None
+
+    def plan_for(model: str, plan: dict) -> tuple:
+        return (lambda command: command[0] == str(stage2.PI_WRAPPER) and model_of(command) == model, plan)
+
+    programs = ScriptedPrograms(
+        monkeypatch,
+        clock,
+        [
+            plan_for("deepseek-v4.1-flash", {"exit": 1, "stderr": "Rate limited"}),
+            plan_for("mimo-v2.6-flash", {"stdout": rows(1, "M")}),
+            plan_for("mimo-v2.6-pro", {"duration": 30.0, "stdout": rows(1, "P")}),
+        ],
     )
     assert world.run("review-loop") == 0
     text = world.record().read_text(encoding="utf-8")
     stop = next(line for line in text.splitlines() if line.startswith("mimo-v2.6-pro failed:"))
     assert "was stopped by the round time limit of" in stop and "seconds were left for this call" in stop
     assert "reviewer time limit" not in stop
+    (mimo_pro,) = [row for row in programs.waits() if model_of(row["command"]) == "mimo-v2.6-pro"]
+    assert mimo_pro["outcome"] == "timeout" and mimo_pro["timeout"] > 0, "the overstay was not simulated"
 
 
 def test_activation_copies_only_the_allowed_definition_fields(tmp_path: Path) -> None:
@@ -24361,6 +25443,280 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
         assert any("`make verify` did not finish" in problem for problem in problems)
 
 
+def test_git_error_text_keeps_every_non_empty_line_after_a_long_path() -> None:
+    """Dropping any diagnostic line can hide git's reason, even after an unbounded path."""
+    path = "/tmp/" + "d" * 5000 + "/.git/index.lock"
+    fatal = f"fatal: Unable to create '{path}': File exists."
+    reason = "Another git process seems to be running."
+    message = f"{fatal}\n\n{reason}\n"
+    assert stage2.git_error_text(message) == f"{fatal} {reason}"
+    assert stage2.git_error_text("warning: noisy prelude\n" + message) == (f"warning: noisy prelude {fatal} {reason}")
+    assert stage2.git_error_text("error: failed operation\n\nfatal: later reason\n") == (
+        "error: failed operation fatal: later reason"
+    )
+    assert stage2.git_error_text("error: failed operation\nexplanation on a later line\n") == (
+        "error: failed operation explanation on a later line"
+    )
+    assert stage2.git_error_text("  short  ") == "short"
+    assert stage2.git_error_text("\n  \n") == ""
+    assert stage2.git_error_text("") == ""
+    assert stage2.git_error_text("x" * 5000) == "x" * 5000
+
+
+def test_merge_base_keeps_git_diagnostic_in_c_locale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed merge-base must explain the actual git failure, including every diagnostic line."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    observed = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: bad object HEAD\nhint: check the reference\n"
+
+    def fail_git(command, **kwargs):
+        assert command == [stage2.GIT, "-C", str(tmp_path), "merge-base", "HEAD", "origin/main"]
+        observed.update(kwargs.get("env", {}))
+        return subprocess.CompletedProcess(command, 128, "", diagnostic)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2._merge_base(tmp_path)
+    assert "warning: noisy prelude fatal: bad object HEAD hint: check the reference" in str(failure.value), (
+        "merge-base discarded git's explanation"
+    )
+    assert observed.get("LC_ALL") == "C", "merge-base must request English git diagnostics"
+    assert observed.get("GIT_TEST_SENTINEL") == "inherited", "merge-base lost the inherited environment"
+
+
+@pytest.mark.parametrize("helper", ["_git_output", "_git_bytes"])
+@pytest.mark.parametrize("explicit_env", [False, True])
+def test_git_errors_use_c_locale_and_keep_reason_after_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper: str, explicit_env: bool
+) -> None:
+    """A localized fatal line after a warning must not disappear from diagnostics."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("GIT_TEST_SENTINEL", "inherited")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"} if explicit_env else None
+    observed = {}
+
+    def fail_git(command, **kwargs):
+        env = kwargs["env"]
+        observed.update(os.environ if env is None else env)
+        prefix = "fatal:" if observed.get("LC_ALL") == "C" else "Schwerwiegend:"
+        stderr = f"warning: noisy prelude\n{prefix} Unable to create '/tmp/repo/.git/index.lock': File exists.\n"
+        if not kwargs.get("text", False):
+            stderr = stderr.encode()
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        getattr(stage2, helper)(tmp_path, "status", env=supplied)
+    assert "index.lock" in str(failure.value), "Git's reason must survive a leading warning in any caller locale"
+    assert "warning: noisy prelude fatal:" in str(failure.value)
+    assert observed["LC_ALL"] == "C"
+    if supplied is None:
+        assert observed["GIT_TEST_SENTINEL"] == "inherited"
+    else:
+        assert observed["GIT_INDEX_FILE"] == "private-index"
+        assert supplied["LC_ALL"] == "de_DE.UTF-8", "Do not mutate the caller's environment"
+
+
+def test_every_git_launch_of_the_runner_goes_through_run_git() -> None:
+    """Decision Q-8: one helper starts git, so no launch can lose git's diagnostic or the C locale (F6-4, F6-5).
+
+    Modelled on the source check that counts launches naming GIT: a command list whose first element
+    is GIT may stand only inside `run_git`, and there is no exemption.
+    """
+    tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
+    helpers = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_git"]
+    assert len(helpers) == 1, "scripts/stage2.py must define exactly one module-level run_git"
+    inside = {id(node) for node in ast.walk(helpers[0])}
+
+    def names_git(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.List | ast.Tuple)
+            and bool(node.elts)
+            and isinstance(node.elts[0], ast.Name)
+            and node.elts[0].id == "GIT"
+        )
+
+    bypass = sorted(node.lineno for node in ast.walk(tree) if names_git(node) and id(node) not in inside)
+    assert bypass == [], f"a git launch bypasses run_git at line(s) {bypass}"
+    own = [node for node in ast.walk(helpers[0]) if names_git(node)]
+    assert len(own) == 1, "run_git must build exactly one git command"
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+    ]
+    # Seven launch sites at 00d83c67: show, merge-base, archive, merge-base --is-ancestor, cat-file -e,
+    # and the two wrappers `_git_output` and `_git_bytes`.
+    assert len(calls) >= 7, f"fewer run_git calls than the seven launch sites this check was written against: {calls}"
+    # Handled failures must name both a nonzero code and its expected diagnostic,
+    # at direct launches and at wrapper calls; a bare tuple of codes cannot establish absence.
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
+        if not (isinstance(call.func, ast.Name) and call.func.id in {"run_git", "_git_output", "_git_bytes"}):
+            continue
+        for keyword in call.keywords:
+            if keyword.arg != "allow":
+                continue
+            value = keyword.value
+            if isinstance(value, ast.Name):
+                assert value.id == "allow", f"line {call.lineno} forwards an unknown handled-failure declaration"
+                continue
+            assert isinstance(value, ast.Dict) and value.keys, (
+                f"line {call.lineno} handles Git failure with bare exit codes instead of diagnostic patterns"
+            )
+            for code, pattern in zip(value.keys, value.values, strict=True):
+                assert isinstance(code, ast.Constant) and type(code.value) is int and code.value != 0
+                assert not isinstance(pattern, ast.Constant) or isinstance(pattern.value, str), (
+                    f"line {call.lineno} needs an expected diagnostic pattern for each handled Git failure"
+                )
+
+    for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
+        if function.name == "run_git":
+            continue
+        for assignment in (node for node in ast.walk(function) if isinstance(node, ast.Assign)):
+            call = assignment.value
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "run_git"):
+                continue
+            names = {target.id for target in assignment.targets if isinstance(target, ast.Name)}
+            reads_status = any(
+                isinstance(node, ast.Attribute)
+                and node.attr == "returncode"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in names
+                for node in ast.walk(function)
+            )
+            if reads_status:
+                assert any(keyword.arg == "allow" for keyword in call.keywords), (
+                    f"{function.name}:{call.lineno} handles Git status without explicit allowed exit codes"
+                )
+                for raised in (node for node in ast.walk(function) if isinstance(node, ast.Raise) and node.exc):
+                    assert any(
+                        isinstance(node, ast.Attribute)
+                        and node.attr == "diagnostic"
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id in names
+                        for node in ast.walk(raised.exc)
+                    ), f"{function.name}:{raised.lineno} builds a Git failure without its diagnostic"
+
+    for guarded in (node for node in ast.walk(tree) if isinstance(node, ast.Try)):
+        calls_git = any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_git"
+            for statement in guarded.body
+            for node in ast.walk(statement)
+        )
+        if not calls_git:
+            continue
+        for handler in guarded.handlers:
+            if not (isinstance(handler.type, ast.Name) and handler.type.id == "Refused"):
+                continue
+            for raised in (node for node in ast.walk(handler) if isinstance(node, ast.Raise) and node.exc):
+                assert handler.name and any(
+                    isinstance(node, ast.Name) and node.id == handler.name for node in ast.walk(raised.exc)
+                ), f"line {raised.lineno} replaces a Git failure without carrying its diagnostic"
+
+
+@pytest.mark.parametrize("text", [False, True])
+def test_run_git_forces_c_locale_and_keeps_every_diagnostic_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: bool
+) -> None:
+    """The one launch helper forces LC_ALL=C and keeps every non-empty line of git's diagnostic (Q-8)."""
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    supplied = {"LC_ALL": "de_DE.UTF-8", "GIT_INDEX_FILE": "private-index"}
+    observed: dict[str, object] = {}
+    diagnostic = "warning: noisy prelude\n\nfatal: unable to read tree HEAD\nhint: a later line\n"
+
+    def fail_git(command, **kwargs):
+        observed.update(kwargs)
+        observed["command"] = command
+        return subprocess.CompletedProcess(
+            command, 128, "" if text else b"", diagnostic if text else diagnostic.encode()
+        )
+
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.run_git(tmp_path, "archive", "HEAD", env=supplied, text=text)
+    assert observed["command"] == [stage2.GIT, "-C", str(tmp_path), "archive", "HEAD"]
+    assert observed["env"]["LC_ALL"] == "C" and observed["env"]["GIT_INDEX_FILE"] == "private-index"
+    assert supplied["LC_ALL"] == "de_DE.UTF-8", "run_git must not mutate the caller's environment"
+    assert observed["timeout"] == stage2.GIT_SECONDS and observed["check"] is False
+    assert "128" in str(failure.value)
+    assert "warning: noisy prelude fatal: unable to read tree HEAD hint: a later line" in str(failure.value)
+
+
+@pytest.mark.parametrize("allow", [None, {1: r""}, {128: r"fatal: expected absence"}])
+@pytest.mark.parametrize("exit_code", [0, 1, 128])
+@pytest.mark.parametrize("diagnostic", ["", "fatal: expected absence", "fatal: expected absence\nhint: recover\n"])
+def test_run_git_accepts_only_explicit_exit_codes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allow: dict[int, str] | None,
+    exit_code: int,
+    diagnostic: str,
+) -> None:
+    """A handled status needs both its code and its complete expected diagnostic."""
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"payload", diagnostic.encode()),
+    )
+    accepted = exit_code == 0 or (
+        allow is not None
+        and exit_code in allow
+        and re.fullmatch(allow[exit_code], stage2.git_error_text(diagnostic)) is not None
+    )
+    if accepted:
+        done = stage2.run_git(tmp_path, "diff", allow=allow)
+        assert done.returncode == exit_code and done.stdout == b"payload"
+        assert done.diagnostic == stage2.git_error_text(diagnostic)
+    else:
+        try:
+            stage2.run_git(tmp_path, "diff", allow=allow)
+        except stage2.Refused as error:
+            message = str(error)
+        else:
+            pytest.fail(f"Git exit {exit_code} must fail closed unless its whole diagnostic is expected")
+        assert str(exit_code) in message
+        for line in diagnostic.splitlines():
+            if line:
+                assert line in message, f"Git failure discarded a diagnostic line: {line}"
+
+
+def test_trusted_registry_keeps_git_archive_diagnostic_in_c_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F6-5: a failing `git archive` names git's whole reason, and git runs in the C locale."""
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    (root / "README.md").write_text("x\n")
+    env = {"PATH": os.environ.get("PATH", ""), "LC_ALL": "de_DE.UTF-8", "GIT_TEST_SENTINEL": "supplied"}
+    observed: dict[str, str] = {}
+    mirrors: list[Path] = []
+    real_mkdtemp = stage2.tempfile.mkdtemp
+
+    def mkdtemp(*args, **kwargs):
+        made = real_mkdtemp(*args, dir=tmp_path, **{k: v for k, v in kwargs.items() if k != "dir"})
+        mirrors.append(Path(made))
+        return made
+
+    def fail_git(command, **kwargs):
+        assert command[:4] == [stage2.GIT, "-C", str(root), "archive"]
+        observed.update(kwargs["env"])
+        stderr = b"fatal: unable to read tree HEAD\n\nhint: run git fsck\n"
+        return subprocess.CompletedProcess(command, 128, b"", stderr)
+
+    monkeypatch.setattr(stage2.tempfile, "mkdtemp", mkdtemp)
+    monkeypatch.setattr(stage2.subprocess, "run", fail_git)
+    with pytest.raises(stage2.Refused) as failure:
+        stage2.trusted_registry(root, env)
+    message = str(failure.value)
+    assert "fatal: unable to read tree HEAD hint: run git fsck" in message, "git archive lost git's explanation"
+    assert "128" in message, "the exit code stays in the diagnostic"
+    assert observed.get("LC_ALL") == "C", "git archive must run in the C locale"
+    assert observed.get("GIT_TEST_SENTINEL") == "supplied", "git archive lost the supplied environment"
+    assert env["LC_ALL"] == "de_DE.UTF-8", "the caller's environment is not mutated"
+    assert mirrors and not any(path.exists() for path in mirrors), "the mirror is removed on failure"
+
+
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -25142,36 +26498,43 @@ def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     def interrupt(process, *args, **kwargs):
         if not processes:
             processes.append(process)
-            end = time.monotonic() + 2
-            while not heartbeat.exists() and time.monotonic() < end:
-                time.sleep(0.01)
+            # Readiness, not a race: the descendant is running before the interruption is injected.
+            for _ in range(1500):  # watchdog only: bounds a wedged start, never a verdict
+                if heartbeat.exists() and pidfile.exists():
+                    break
+                time.sleep(0.02)
+            assert heartbeat.exists() and pidfile.exists(), "the launched group never started its descendant"
             raise interruption()
         return original(process, *args, **kwargs)
 
     def verb(*_args):
+        # The descendant's natural lifetime (30 s of heartbeats) and the leader's sleep far
+        # outlast the watchdog below, so a pass can never come from natural completion.
         child = (
             "import os, time; from pathlib import Path; "
             f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
-            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(150)]"
+            f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(1500)]"
         )
-        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(3)"
+        parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(30)"
         stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
 
     monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
     monkeypatch.setattr(stage2, "explore", verb)
-    start = time.monotonic()
     try:
         if interruption is KeyboardInterrupt:
             with pytest.raises(KeyboardInterrupt):
                 world.run("explore")
         else:
             assert world.run("explore") == 143
-        time.sleep(0.1)
-        first = heartbeat.read_text()
-        time.sleep(0.15)
-        assert heartbeat.read_text() == first, "descendant survived main's interrupt handler"
+        # Liveness evidence, not elapsed time: the descendant's pid must disappear. The poll is a
+        # watchdog that bounds the reap; the descendant's own 30 s lifetime outlasts it.
+        descendant = int(pidfile.read_text())
+        for _ in range(300):
+            if not _child_alive(descendant):
+                break
+            time.sleep(0.02)
+        assert not _child_alive(descendant), "descendant survived main's interrupt handler"
         assert processes[0].poll() is not None, "group leader survived the interrupt"
-        assert time.monotonic() - start < 2, "Popen cleanup waited for natural child completion"
     finally:
         for process in processes:
             with contextlib.suppress(ProcessLookupError):
@@ -25524,7 +26887,7 @@ def test_a_signal_during_process_creation_leaves_no_child(
         else:
             assert world.run("explore") == 143
         assert children
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 5  # watchdog only: bounds a wedged reap, never a verdict
         while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
             time.sleep(0.01)
         assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
@@ -25593,7 +26956,7 @@ def test_a_timed_launch_ends_a_lingering_grandchild_before_returning(tmp_path: P
     assert done.returncode == 0, done.stderr
     grandchild = int(out.read_text())
     try:
-        deadline = time.monotonic() + 2.0
+        deadline = time.monotonic() + 10.0  # watchdog only: bounds a wedged reap, never a verdict
         alive = True
         while alive and time.monotonic() < deadline:
             try:
@@ -27656,3 +29019,64 @@ def test_scheduled_shell_builtins_keep_gate_verdicts(
         evidence = stage2.verify_evidence_text(stdout, stderr, None)
         assert "shell-builtin" in evidence and command in evidence, evidence
         assert "The gates that blocked" in evidence, evidence
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        "fatal: unable to read tree baseline\n\nhint: recover the baseline objects\n",
+        "fatal: path 'docs/adr/0007-existing-record.md' does not exist in 'baseline'\nfatal: corrupt tree\n",
+    ],
+)
+def test_draft_keep_refuses_unreadable_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostic: str
+) -> None:
+    """F6-7: an unreadable tree must never authorise an existing ADR as new."""
+    adr = Path("docs/adr/0007-existing-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# Existing ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 128, b"", diagnostic.encode()),
+    )
+    try:
+        stage2.draft_keep(tmp_path, ctx, "baseline")
+    except stage2.Refused as error:
+        message = str(error)
+    else:
+        pytest.fail("An unreadable baseline must refuse the ADR lookup, never classify the ADR as new")
+    for line in diagnostic.splitlines():
+        if line:
+            assert line in message, f"The baseline lookup lost Git's diagnostic: {line}"
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "diagnostic", "is_new"),
+    [
+        (0, "", False),
+        (128, "fatal: path 'docs/adr/0007-record.md' does not exist in 'baseline'\n", True),
+        (128, "fatal: path 'docs/adr/0007-record.md' exists on disk, but not in 'baseline'\n", True),
+    ],
+)
+def test_draft_keep_accepts_only_established_adr_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_code: int, diagnostic: str, is_new: bool
+) -> None:
+    """A present ADR stays protected; Git's two missing-path diagnostics establish a new one."""
+    adr = Path("docs/adr/0007-record.md")
+    (tmp_path / adr).parent.mkdir(parents=True)
+    (tmp_path / adr).write_text("# ADR\n")
+    ctx = stage2.Context(tmp_path, "demo", tmp_path / "plans/changes/demo", "demo-1")
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {adr})
+    monkeypatch.setattr(stage2, "_git_output", lambda *_args, **_kwargs: "baseline\n")
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, exit_code, b"", diagnostic.encode()),
+    )
+    keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
+    assert (adr in keep) is is_new
+    assert new_adrs == ([adr.as_posix()] if is_new else [])

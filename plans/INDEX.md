@@ -563,6 +563,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/research.md`](changes/review-loop-deep-a/research.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/spec.md`](changes/review-loop-deep-a/spec.md) | draft | partial | 2026-10-25 | to be filed |
+| [`changes/runner-clock/decisions.md`](changes/runner-clock/decisions.md) | draft | none | 2026-11-14 | coding-harness-pph3 |
+| [`changes/runner-clock/findings.md`](changes/runner-clock/findings.md) | draft | none | 2026-11-14 | coding-harness-pph3 |
+| [`changes/runner-clock/plan.md`](changes/runner-clock/plan.md) | draft | partial | 2026-11-14 | coding-harness-pph3 |
+| [`changes/runner-clock/research.md`](changes/runner-clock/research.md) | draft | none | 2026-11-14 | coding-harness-pph3 |
+| [`changes/runner-clock/spec.md`](changes/runner-clock/spec.md) | draft | partial | 2026-11-14 | coding-harness-pph3 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
@@ -621,4 +626,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-step-limit/plan.md`](changes/verify-step-limit/plan.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/research.md`](changes/verify-step-limit/research.md) | draft | none | 2026-11-11 | coding-harness-xkvr |
 | [`changes/verify-step-limit/spec.md`](changes/verify-step-limit/spec.md) | draft | partial | 2026-11-11 | coding-harness-xkvr |
+| [`changes/verify-tmp-cleanup/decisions.md`](changes/verify-tmp-cleanup/decisions.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/findings.md`](changes/verify-tmp-cleanup/findings.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/plan.md`](changes/verify-tmp-cleanup/plan.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/research.md`](changes/verify-tmp-cleanup/research.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
+| [`changes/verify-tmp-cleanup/spec.md`](changes/verify-tmp-cleanup/spec.md) | draft | none | 2026-11-12 | coding-harness-bxxt.3 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |

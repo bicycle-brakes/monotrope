@@ -455,6 +455,13 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
             if live.get("anfragen_5h") is not None:
                 synthetic["anfragen_5h"] = live["anfragen_5h"]
             go["modelle_terms"][seat["model"]] = admissible_terms(**synthetic)
+    # The Z.ai subscription's real end date (bead coding-harness-dcu3) must not age the
+    # single-explorer tests into a refusal: they run on a synthetic far-future record.
+    zai = next(entry for entry in data["endpunkte"] if entry["name"] == "glm-coding-plan")
+    zai["modelle_terms"] = {
+        model: {"gelesen": "2026-11-15", "valid_until": "2099-01-01", "quelle": "synthetic subscription terms"}
+        for model in zai["modelle"]
+    }
     # The real entry has no address record until the orchestrator's bootstrap;
     # the swarm world's Go launches read this synthetic one instead (plan step 8).
     go["adresse"] = {

@@ -21,6 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import stage2  # noqa: E402
 from test_stage2 import (  # noqa: E402
     KEY,
+    UTC_START,
+    FakeClock,
+    ScriptedPrograms,
     World,
     _beside_docs_gate,
     formatted_attempt,  # noqa: E402
@@ -41,6 +44,22 @@ RESTORED = (
 )
 NOTICE = "The attempt edited findings.md; the runner restored it before the post-run checks"
 CHEAP = "Runner cheap checks before post-run verification"
+
+
+def overstaying_cheap_pytest(monkeypatch: pytest.MonkeyPatch) -> ScriptedPrograms:
+    """The cheap pytest doubled at the `Popen` boundary to outlast `TOOL_SECONDS` on the fake clock.
+
+    Spec criterion 4 of the runner clock: a budget expires through the clock seam, never by a real
+    child sleeping past it, so the timeout costs no wall time.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+
+    def cheap_pytest(command: list[str]) -> bool:
+        return command[:3] == [".venv/bin/python3", "-m", "pytest"] or (
+            command[0].endswith("/.venv/bin/python3") and command[1:3] == ["-m", "pytest"]
+        )
+
+    return ScriptedPrograms(monkeypatch, clock, [(cheap_pytest, {"duration": stage2.TOOL_SECONDS + 1.0})])
 
 
 def one_test_step(**more: object) -> dict:
@@ -436,15 +455,16 @@ def test_unstartable_or_timed_out_cheap_checks_never_pass(world: World, case: st
         venv_pytest(world)
     if case == "missing":
         (world.root / ".venv" / "bin" / "python3").unlink()
-    if case == "timeout":
-        monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    programs = overstaying_cheap_pytest(monkeypatch) if case == "timeout" else None
     baseline = git(world.root, "rev-parse", "HEAD")
     world.script(
         claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
-        python3=[{"sleep": 2}] * 3 if case == "timeout" else [{}] * 3,
+        python3=[{}] * 3,
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 1
+    if programs is not None:
+        assert [row["outcome"] for row in programs.waits()] == ["timeout"] * 3, "the overstay was not simulated"
     assert world.calls("make") == [], "an unstartable or over-bound cheap check still reached `make verify`"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     expected = {
@@ -486,13 +506,14 @@ def test_a_timed_out_cheap_pytest_names_its_selected_tests(world: World, monkeyp
     """Row L1-10. Planted fault: the timeout diagnostic named only the command, not what it ran."""
     venv_ruff(world)
     venv_pytest(world)
-    monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    programs = overstaying_cheap_pytest(monkeypatch)
     world.script(
         claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
-        python3=[{"sleep": 2}] * 3,
+        python3=[{}] * 3,
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 1
+    assert [row["outcome"] for row in programs.waits()] == ["timeout"] * 3, "the overstay was not simulated"
     assert "did not finish" in world.text()
     assert "selected tests: tests/test_new.py" in world.text()
 

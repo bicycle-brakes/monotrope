@@ -123,6 +123,18 @@ endpunkte:
     modelle:
       - glm-5.3
       - glm-5.3-flash
+    # The subscription's end, not a retention or training reading: the runner warns
+    # seven UTC days ahead and refuses every call after `valid_until`
+    # (`stage2.SUBSCRIPTION_TERMS_ENDPOINTS`, bead coding-harness-dcu3).
+    modelle_terms:
+      glm-5.3:
+        gelesen: "2026-11-15"
+        valid_until: "2026-12-08"
+        quelle: "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day of the Z.ai subscription"
+      glm-5.3-flash:
+        gelesen: "2026-11-15"
+        valid_until: "2026-12-08"
+        quelle: "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day of the Z.ai subscription"
     bemerkung: >-
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. No review phase routes to it since 2026-10-07 (ADR 0011): the
@@ -146,8 +158,9 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # gpt-6.1-terra replaced gpt-6.1-sol on 2026-11-15 (maintainer's word).
     modelle:
-      - gpt-6.1-sol
+      - gpt-6.1-terra
     bemerkung: >-
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.
