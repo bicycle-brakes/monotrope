@@ -797,7 +797,9 @@ def test_resume_does_not_copy_out_of_bounds_tail(sworld: SwarmWorld, monkeypatch
 
 def test_spec_covers_private_brief_normalization():
     # L5-4: the private model input's normalization must be declared in the accepted contract.
-    spec = (Path(__file__).resolve().parent.parent / "plans/changes/archive/2026-11-16-explore-provenance/spec.md").read_text()
+    spec = (
+        Path(__file__).resolve().parent.parent / "plans/changes/archive/2026-11-16-explore-provenance/spec.md"
+    ).read_text()
     assert "0000-00-00" in spec, "the spec must declare the brief's sentinel date"
     assert "private brief" in spec, "the spec must declare the changed model input"
     assert "No change to model selection, prompts," not in spec, "the prompt non-goal must allow this normalization"
