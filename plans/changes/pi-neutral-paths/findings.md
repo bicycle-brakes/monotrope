@@ -629,3 +629,5 @@ Stage-2 call, 2026-11-16: implement · attempt 1 · route flash · endpoint glm-
 > ```
 
 Stage-2 call, 2026-11-16: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1106 files, 4488 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash attempts 1 and 2 failed their post-run checks; Sonnet continues from the saved attempt (night run 2026-11-16-a) · leak check clean over 1105 files, 4504 commits, 12 rules.

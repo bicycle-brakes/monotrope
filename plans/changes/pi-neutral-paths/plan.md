@@ -137,6 +137,10 @@ this worktree at draft time; use the phase-3 prompt's form and the available
 interview, handoff and criterion-ledger checks. The runner owns generated
 index updates and the final `make verify` gate.
 
+## Runner route — 2026-11-16
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash attempts 1 and 2 failed their post-run checks; Sonnet continues from the saved attempt (night run 2026-11-16-a).
+
 ## Time used
 
 2026-10-30 22:28:29–23:27:54 UTC, 3564 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
