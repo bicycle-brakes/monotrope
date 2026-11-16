@@ -46,6 +46,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import atomic_test_log  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_decision_continuity  # noqa: E402
 import check_frontmatter_current  # noqa: E402
@@ -60,7 +61,11 @@ import stage2_runs  # noqa: E402
 import time_records  # noqa: E402
 import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
+from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+
+# The stand-ins embed the shared log protocol at their render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 
 @pytest.fixture(autouse=True)
@@ -97,11 +102,14 @@ REAL_BASH = shutil.which("bash") or "/bin/bash"
 
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
-import fcntl
 import json
 import os
 import sys
 from pathlib import Path
+
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
 
 CATALOG = (
     "provider model context input output\\n"
@@ -142,14 +150,6 @@ if alias == "bash":
 log = here / "calls.jsonl"
 
 
-def locked(shared):
-    # Parallel members append records larger than one atomic write; every read and append of the log
-    # takes this lock, so no member reads half a line (2026-10-25: JSONDecodeError under the full suite).
-    handle = (here / "calls.lock").open("a")
-    fcntl.flock(handle, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
-    return handle
-
-
 def agent_settings_text():
     # The launch's runner-written agent settings, read while the file exists: the scratch
     # directory is cleaned up before the test reads the log.
@@ -158,8 +158,7 @@ def agent_settings_text():
     return path.read_text() if path and path.is_file() else None
 
 
-with locked(True):
-    previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+previous = read_records(log)
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
@@ -195,29 +194,25 @@ if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
-    with (here / "versions.jsonl").open("a") as handle:
-        handle.write(json.dumps({"name": name, "path": sys.argv[0], "cwd": os.getcwd()}) + "\\n")
+    append_record(here / "versions.jsonl", {"name": name, "path": sys.argv[0], "cwd": os.getcwd()})
     raise SystemExit(scenario.get("pi_version_exit", 0))
 if alias == "pi" and "update" in argv and "--models" in argv:
     # The forced catalog refresh: logged with its scratch environment, never a
     # scripted step.
-    with locked(False), log.open("a") as handle:
-        handle.write(
-            json.dumps(
-                {
-                    "name": alias,
-                    "kind": "refresh",
-                    "path": sys.argv[0],
-                    "argv": argv,
-                    "home": os.environ.get("HOME", ""),
-                    "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
-                    "agent_settings": agent_settings_text(),
-                    "cwd": os.getcwd(),
-                    "stdin": os.read(0, 100).decode(),
-                }
-            )
-            + "\\n"
-        )
+    append_record(
+        log,
+        {
+            "name": alias,
+            "kind": "refresh",
+            "path": sys.argv[0],
+            "argv": argv,
+            "home": os.environ.get("HOME", ""),
+            "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+            "agent_settings": agent_settings_text(),
+            "cwd": os.getcwd(),
+            "stdin": os.read(0, 100).decode(),
+        },
+    )
     # Pi persists the fetched overlay in the agent directory's models-store.json
     # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
     # unless the scenario names the overlay itself or asks for no store.
@@ -246,23 +241,20 @@ if alias == "pi" and "update" in argv and "--models" in argv:
 if alias == "pi" and "--list-models" in argv:
     # The catalog listing: logged like the refresh, fed from the scenario's
     # catalog so a test can plant a new model or a different provider.
-    with locked(False), log.open("a") as handle:
-        handle.write(
-            json.dumps(
-                {
-                    "name": alias,
-                    "kind": "list",
-                    "path": sys.argv[0],
-                    "argv": argv,
-                    "home": os.environ.get("HOME", ""),
-                    "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
-                    "agent_settings": agent_settings_text(),
-                    "cwd": os.getcwd(),
-                    "stdin": os.read(0, 100).decode(),
-                }
-            )
-            + "\\n"
-        )
+    append_record(
+        log,
+        {
+            "name": alias,
+            "kind": "list",
+            "path": sys.argv[0],
+            "argv": argv,
+            "home": os.environ.get("HOME", ""),
+            "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+            "agent_settings": agent_settings_text(),
+            "cwd": os.getcwd(),
+            "stdin": os.read(0, 100).decode(),
+        },
+    )
     sys.stdout.write(scenario.get("pi_catalog", CATALOG))
     raise SystemExit(scenario.get("pi_list_exit", 0))
 
@@ -302,8 +294,7 @@ record = {
     "marker_paths": found,
     "findings": findings.read_text() if findings.exists() else None,
 }
-with locked(False), log.open("a") as handle:
-    handle.write(json.dumps(record) + "\\n")
+append_record(log, record)
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).parent.mkdir(parents=True, exist_ok=True)
@@ -311,8 +302,7 @@ for relative, text in step.get("plant", {}).items():
 for relative in step.get("delete", []):
     Path(relative).unlink()
 for relative, text in step.get("append", {}).items():
-    with Path(relative).open("a") as handle:
-        handle.write(text.replace("@KEY@", key))
+    text_append(Path(relative), text.replace("@KEY@", key))
 
 sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
@@ -362,13 +352,12 @@ class World:
 
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
-        since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
+        since = len(read_records(log))
         scenario = {**steps, "_since": since, "_bash": REAL_BASH}
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
-        log = self.bin / "calls.jsonl"
-        found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        found = read_records(self.bin / "calls.jsonl")
         return [call for call in found if name is None or call["name"] == name]
 
     def reviews(self, name: str = "pi") -> list[dict]:
@@ -377,8 +366,7 @@ class World:
 
     def versions(self) -> list[dict]:
         """The `pi --version` checks: which path answered them (the wrapper, or a PATH pi that must stay silent)."""
-        log = self.bin / "versions.jsonl"
-        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return read_records(self.bin / "versions.jsonl")
 
     def run(self, verb: str, change: str | None = "demo", *options: str) -> int:
         argv = [verb] if change is None else [verb, change]
@@ -686,9 +674,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # `sh` key, and a red or inspected launch uses `LocalCommands`.
     for name in ("bash", "sh", "codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
-        program.write_text(
-            STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-        )
+        rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        program.write_text(rendered, encoding="utf-8")
         program.chmod(0o755)
     # The runner's one path to Pi is patched to the wrapper stand-in: its records
     # carry the program path, so a call that bypasses the wrapper cannot hide.
@@ -808,13 +797,22 @@ def test_the_runner_finds_only_stand_ins(world: World) -> None:
     assert Path(shutil.which("codex") or "").parent == world.bin
 
 
-def test_a_stand_in_contacts_nothing() -> None:
-    tree = ast.parse(STAND_IN.replace("@PYTHON@", "python3").replace("@PI@", "1.1.0"))
-    imported = {
+def _top_level_imports(source: str) -> set[str]:
+    tree = ast.parse(source)
+    return {
         alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
     } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-    # `fcntl` locks the stand-in's own call log against parallel members; it opens no connection.
-    assert imported <= {"fcntl", "json", "os", "sys", "time", "pathlib"}
+
+
+def test_a_stand_in_contacts_nothing() -> None:
+    rendered = STAND_IN.replace("@PYTHON@", "python3").replace("@PI@", "1.1.0")
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    # The embedded log protocol brings its own imports; they are held to the
+    # standard library without a contact module by
+    # tests/test_atomic_test_log.py::test_stand_ins_stay_visible_and_contact_free,
+    # so a new helper import does not turn this test red (loop row L2-5).
+    allowed = {"json", "os", "sys", "time", "pathlib"} | _top_level_imports(ATOMIC_LOG_SOURCE)
+    assert _top_level_imports(rendered) <= allowed
 
 
 @pytest.mark.usefixtures("world")
@@ -2120,10 +2118,9 @@ if name == "make":
     assert "changes/demo/findings.md" in index, "audit artefact missing from index"
     assert "updated: {day.isoformat()}" in Path("plans/changes/demo/plan.md").read_text()
 """
-    (world.bin / "make").write_text(
-        STAND_IN.replace("@PYTHON@", sys.executable).replace("record = {", checks + "\nrecord = {"),
-        encoding="utf-8",
-    )
+    rendered = STAND_IN.replace("@PYTHON@", sys.executable).replace("record = {", checks + "\nrecord = {")
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    (world.bin / "make").write_text(rendered, encoding="utf-8")
 
 
 def test_first_implement_refreshes_derived_files_without_a_model_repair(
@@ -5955,9 +5952,10 @@ def venv_ruff(world: World, executable: bool = True) -> None:
     the system refuses to run it.
     """
     stand_in = world.bin / "ruff.stand-in"
-    stand_in.write_text(
-        STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-    )
+    rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+    rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    stand_in.write_text(rendered, encoding="utf-8")
     stand_in.chmod(0o755)
     ruff = world.root / ".venv" / "bin" / "ruff"
     ruff.parent.mkdir(parents=True, exist_ok=True)
@@ -5983,9 +5981,10 @@ def venv_pytest(world: World, executable: bool = True) -> None:
     With `executable=False` the path holds a plain file of mode 0644: the system refuses to run it.
     """
     stand_in = world.bin / "python3.stand-in"
-    stand_in.write_text(
-        STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-    )
+    rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+    rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    stand_in.write_text(rendered, encoding="utf-8")
     stand_in.chmod(0o755)
     python = world.root / ".venv" / "bin" / "python3"
     python.parent.mkdir(parents=True, exist_ok=True)
