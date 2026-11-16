@@ -560,3 +560,72 @@ Notice: the data terms of mimo-v2.6-pro expire on 2026-11-06 (5 days left).
 Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1104 files, 4443 commits, 12 rules.
 
 Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1104 files, 4446 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1105 files, 4458 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/pi-neutral-paths/plan.md` +14 -14
+> - `scripts/stage2.py` +19 -1
+> - `scripts/stage2_availability.py` +18 -1
+> - `scripts/stage2_pi_neutral_paths.mjs` +304 -0
+> - `scripts/stage2_research_run.py` +18 -1
+> - `scripts/stage2_session.py` +57 -17
+> - `tests/test_pi_contract.py` +632 -14
+> - `tests/test_stage2.py` +58 -0
+> - `tests/test_stage2_availability.py` +27 -0
+> - `tests/test_stage2_repository_pathlock.py` +13 -3
+> - `tests/test_stage2_research_availability.py` +30 -0
+> - `tests/test_stage2_session.py` +48 -8
+> - `tests/test_stage2_swarm.py` +41 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2_session.py`, `tests/test_pi_contract.py`, `tests/test_stage2.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_pi_contract.py:2299:17: SIM105 Use `contextlib.suppress(json.JSONDecodeError)` instead of `try`-`except`-`pass`
+>      |
+> 2297 |               text = line.strip()
+> 2298 |               if text.startswith("{"):
+> 2299 | /                 try:
+> 2300 | |                     events.append(json.loads(text))
+> 2301 | |                 except json.JSONDecodeError:
+> 2302 | |                     pass
+>      | |________________________^ SIM105
+> 2303 |           return events
+>      |
+>      = help: Replace with `contextlib.suppress(json.JSONDecodeError)`
+>
+> tests/test_pi_contract.py:2342:22: ARG001 Unused function argument: `installed_pi`
+>      |
+> 2341 | @pytest.fixture(scope="module")
+> 2342 | def neutral_reviewer(installed_pi) -> types.SimpleNamespace:
+>      |                      ^^^^^^^^^^^^ ARG001
+> 2343 |     """One treated reviewer-shaped capture and its extension-omitted control.
+>      |
+>
+> tests/test_pi_contract.py:2675:21: ARG001 Unused function argument: `installed_pi`
+>      |
+> 2674 | @pytest.fixture(scope="module")
+> 2675 | def neutral_session(installed_pi) -> types.SimpleNamespace:
+>      |                     ^^^^^^^^^^^^ ARG001
+> 2676 |     """The interactive session's captures with outside context canaries planted.
+>      |
+>
+> tests/test_pi_contract.py:2725:5: F841 Local variable `control` is assigned to but never used
+>      |
+> 2723 |     control_standin = StandIn(list(script))
+> 2724 |     control_env = contract_launch_env(scratch, {"opencode-go": {"baseUrl": control_standin.url}})
+> 2725 |     control = drive_rpc_session(
+>      |     ^^^^^^^ F841
+> 2726 |         policy_only_rpc_argv(rpc_session_argv(project, policy, neutral)), project, control_env, prompts
+> 2727 |     )
+>      |
+>      = help: Remove assignment to unused variable `control`
+>
+> Found 4 errors.
+> No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-11-16: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1106 files, 4488 commits, 12 rules.
