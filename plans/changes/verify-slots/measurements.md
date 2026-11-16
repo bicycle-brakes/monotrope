@@ -208,6 +208,22 @@ seconds; pytest s is pytest's closing line. Every run: exit 0, 6152 passed,
 | Quad, 4 x 3 | e693604e | 2 | 2,635 | 2,260 | 6,333 | 30.1 / 96.0 | 45 | green; 3.15 x — outside 1.6 |
 | Quad, 4 x 3 | e693604e | 3 | 2,646 | 2,287 | 6,333 | 30.1 / 96.0 | 45 | green; 3.17 x — outside 1.6 |
 | Quad, 4 x 3 | e693604e | 4 | 2,639 | 2,267 | 6,333 | 30.1 / 96.0 | 45 | green; 3.16 x — outside 1.6 |
+| Serial, capacity one (12 workers), same-session baseline, second session | e693604e | 1 | 841 | 511 | 1,867 | 11.4 / 20.2 | 45 | green; baseline for the triple |
+| Triple, 3 x 4 | e693604e | 1 | 1,785 | 1,400 | 5,845 | 16.8 / 30.1 | 51 | green; 2.12 x serial — **outside 1.6** |
+| Triple, 3 x 4 | e693604e | 2 | 1,794 | 1,405 | 5,845 | 16.8 / 30.1 | 51 | green; 2.13 x — outside 1.6 |
+| Triple, 3 x 4 | e693604e | 3 | 1,787 | 1,421 | 5,845 | 16.8 / 30.1 | 51 | green; 2.12 x — outside 1.6 |
+
+The serial baseline and the triple ran in a second session on 2026-11-16
+(08:55-09:39Z), at the maintainer's request to measure 3 x 4. Batch times:
+serial 848.4 s, triple 1,800.8 s; every run exit 0, 6152 passed, 17
+skipped, admission wait 0.00 s (isolated state as above); load lighter than
+the first session. Raw files: the trials state folder, serial2/ and triple/.
+
+Derived, not measured, not load-controlled: mean time to result for four
+queued runs is about 2,104 s with one slot, about 1,950 s with 2 x 6, at
+least about 2,011 s with 3 x 4 (the fourth run alone with four workers is
+not measured and set at the twelve-worker serial time, so the true mean is
+likely higher) and about 2,652 s with 4 x 3. Only 2 x 6 meets Q-4.
 
 Batch elapsed: serial 2,421.5 s (06:07:31–06:47:52Z), paired 1,300.0 s
 (06:48:06–07:09:46Z), quad 2,651.5 s (07:09:54–07:54:05Z). Samples: 476,
