@@ -589,6 +589,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/plan.md`](changes/archive/2026-11-16-verify-tmp-cleanup/plan.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/research.md`](changes/archive/2026-11-16-verify-tmp-cleanup/research.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/spec.md`](changes/archive/2026-11-16-verify-tmp-cleanup/spec.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
+| [`changes/bd-1-3-4/decisions.md`](changes/bd-1-3-4/decisions.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
+| [`changes/bd-1-3-4/findings.md`](changes/bd-1-3-4/findings.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
+| [`changes/bd-1-3-4/plan.md`](changes/bd-1-3-4/plan.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
+| [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
+| [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
