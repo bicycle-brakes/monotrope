@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -444,3 +444,15 @@ Stage-2 call, 2026-11-16: draft · attempt 1 · route codex · endpoint openai-c
 Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1103 files, 4482 commits, 12 rules.
 
 Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-17: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1113 files, 4513 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-17
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-1 | BLOCKER | SPEC | Phase 2a | spec.md, Begriffe „Slip“ und „Interval“ | [AMBIGUITY] Die Repository-Identität bleibt ungeklärt: Bei einem grünen gezielten Check in einem Worktree und einem roten vollständigen Lauf desselben Stands in einem anderen Worktree ergeben sich je nach Identität des einzelnen Worktrees oder des gemeinsamen Git-Repositories unterschiedliche Zählungen. Die offene Phase-2a-Zeile S-1 ist in der aktuellen Spezifikation nicht aufgelöst. [AC 1, 2, 5] | Codex | open | — |
+| R-2 | MAJOR | SPEC | Implementierung | scripts/verify_duration.py, cmd_slips | Ein roter gezielter Check, dessen geprüfter Baum sich während des Laufs ändert, wird als vollständig behandelt: Die Stabilitätsprüfung erhöht den Zähler nur bei grünem Ergebnis. Der Bericht kann dadurch mit null unzählbaren Läufen und Exit 0 enden, obwohl diesem Lauf eine stabile Vergleichsidentität fehlt. [AC 4, 6; Boundary] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1e69e-d684-7af1-bb39-40d094b08386, 2026-11-17
+Reviewer session: codex 01a1e69e-d684-7af1-bb39-40d094b08386 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
