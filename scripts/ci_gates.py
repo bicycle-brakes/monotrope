@@ -602,8 +602,8 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
 
 def _git(*args: str, cwd: Path = REPO_ROOT) -> str | None:
     try:
-        erg = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        erg = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=10.0)
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
     return erg.stdout.strip() or None
 

@@ -815,7 +815,11 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | SPEC | base | scripts/ci_gates.py:603; scripts/verify_run.py:728 | If `git rev-parse HEAD` hangs while the run report is being built, `report_at()` waits indefinitely because `_git()` has no timeout. No cheap gate runs, and the scheduler never reaches its bounded tree measurement. An unavailable Git measurement must allow the cheap pass to run first. [Acceptance criterion 5] | Codex | taken — criterion 5 (a git call that times out counts as moved); fix at the one git helper | — |
+| R1 | MAJOR | SPEC | base | scripts/ci_gates.py:603; scripts/verify_run.py:728 | If `git rev-parse HEAD` hangs while the run report is being built, `report_at()` waits indefinitely because `_git()` has no timeout. No cheap gate runs, and the scheduler never reaches its bounded tree measurement. An unavailable Git measurement must allow the cheap pass to run first. [Acceptance criterion 5] | Codex | fixed — tests/test_verify_before_admission.py::test_git_timeout_in_report_allows_cheap_pass_before_admission | — |
 
 Phase 6 verdict: codex 01a1e51e-47bd-74b1-a24c-ff1f3b65ded6, 2026-11-16
 Reviewer session: codex 01a1e51e-47bd-74b1-a24c-ff1f3b65ded6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4462 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged

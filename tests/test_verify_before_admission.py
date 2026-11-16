@@ -1368,3 +1368,41 @@ def test_only_declared_cheap_gates_run_before_admission() -> None:
     assert ci_gates.declared_cheap({"cost": "seconds", "needs_admission": False})
     for gate in ({}, {"cost": "unknown"}, {"cost": "minutes"}, {"cost": "seconds", "needs_admission": True}):
         assert not ci_gates.declared_cheap(gate)
+
+
+def test_git_timeout_in_report_allows_cheap_pass_before_admission(
+    checkout: SimpleNamespace, gate_script: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wedged Git measurement cannot prevent cheap diagnostics or be reused."""
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 1"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    real_run = subprocess.run
+
+    def timed_out_git(command: object, *args: object, **kwargs: object):
+        if isinstance(command, list) and command[:1] == ["git"]:
+            assert kwargs.get("timeout") is not None, "Git measurement must have a timeout"
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", timed_out_git)
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code != 0 and result.executed == ["cheap"], (result, out, err)
+    assert not result.admission_requested
+
+    write_gates(
+        checkout.root,
+        [
+            _gate("cheap", f"python3 {gate_script} cheap 0"),
+            _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+        ],
+    )
+    prior = len(_read_log())
+    result, out, err = run_scheduler(checkout.root)
+    assert result.exit_code == 0, (result, out, err)
+    assert [entry["gate"] for entry in _read_log()[prior:]] == ["cheap", "cheap", "heavy"]
+    assert result.admission_requested
