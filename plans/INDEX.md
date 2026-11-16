@@ -7,6 +7,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/admit-qwen4-hy4/decisions.md`](changes/admit-qwen4-hy4/decisions.md) | draft | none | 2026-11-16 | coding-harness-x0ph |
 | [`changes/admit-qwen4-hy4/research.md`](changes/admit-qwen4-hy4/research.md) | draft | none | 2026-11-16 | coding-harness-x0ph |
 | [`changes/adr-repair-check/decisions.md`](changes/adr-repair-check/decisions.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/adr-repair-check/research.md`](changes/adr-repair-check/research.md) | draft | none | 2026-11-08 | coding-harness-firy |
