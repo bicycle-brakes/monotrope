@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -193,6 +193,25 @@ tracker access can leave the worktree-only read boundary; index regeneration
 and the full check belong to the orchestrating runner. Implementation proofs
 and `make verify` have not run for this unimplemented change.
 
+## Amendment 2026-11-16 — declared-cheap choke point (decisions.md#Q-7)
+
+10. **Attempt — one classification.** In `scripts/ci_gates.py` add one
+    predicate `declared_cheap(gate)`: true only for `cost == "seconds"` without
+    `needs_admission: true` (missing or unknown cost is not cheap); derive
+    `admission` from it. `scripts/verify_run.py` and `scripts/stage2.py`'s
+    `document_gates` consume only that field; the draft check names deferred
+    document gates in its scope line and does not refuse when every document
+    gate is deferred. In `scripts/verify_run.py` an unmeasurable snapshot counts
+    as a moved tree (cheap pass first, full cheap rerun inside the admission),
+    at every measurement point. Update `docs/WORKFLOW.md` and the module
+    docstring. Proofs, red before green: an unmeasurable tree (tracked FIFO)
+    runs cheap gates first and reruns them admitted; a cheap red on it ends
+    without admission; a minutes or marked document gate is never launched by
+    the draft check; the predicate table. Existing tests that pinned the
+    refusal (`test_unmeasurable_inputs_refuse_reuse`,
+    `test_seconds_only_job_runs_on_an_unmeasurable_tree`,
+    `tests/test_ci.py::test_runner_report_matches_selected_job`) are amended.
+
 ## Criterion ledger
 
 - 1: tests/test_verify_before_admission.py::test_admission_metadata_is_validated_and_cost_derived — invalid booleans pass or false exempts minutes
@@ -201,7 +220,10 @@ and `make verify` have not run for this unimplemented change.
 - 3: tests/test_verify_before_admission.py::test_seconds_only_jobs_never_request_admission — docs/drift queues despite no protected gates
 - 4: tests/test_verify_before_admission.py::test_unchanged_tree_reuses_cheap_results — an unchanged cheap command runs twice
 - 4: tests/test_verify_before_admission.py::test_changed_tree_refreshes_selection_and_rechecks — content/index/HEAD/config changes reuse stale cheap results
-- 5: tests/test_verify_before_admission.py::test_unmeasurable_inputs_refuse_reuse — failed selection or unstable/unreadable snapshots produce green
+- 1: tests/test_verify_before_admission.py::test_only_declared_cheap_gates_run_before_admission — a missing/unknown cost or a marked seconds gate counts as cheap
+- 5: tests/test_verify_before_admission.py::test_unmeasurable_inputs_refuse_reuse — failed selection or unstable snapshots produce green, or unreadable-tree cheap results are reused
+- 5: tests/test_verify_before_admission.py::test_unmeasurable_tree_runs_cheap_first_and_defers_the_rest — an unmeasurable tree refuses before cheap gates or reuses their results
+- 10: tests/test_stage2.py::test_draft_defers_document_gates_not_declared_cheap — a minutes or marked document gate runs in the draft check
 - 6: tests/test_verify_before_admission.py::test_enforcement_and_ci_exhaustiveness_survive_partitioning — nonblocking red blocks or CI misses a selected gate
 - 6: tests/test_ci.py::test_every_gate_step_runs_even_after_a_failing_gate — generated hosted steps lose their always-run conditions
 - 7: tests/test_verify_before_admission.py::test_nested_refused_and_interrupted_protected_work — forged ownership passes, nesting deadlocks or a descendant outlives admission

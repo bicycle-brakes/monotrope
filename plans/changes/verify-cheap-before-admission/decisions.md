@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -110,3 +110,18 @@ context: |
   Architecture change: none; ADR 0025's amendment already holds the draft rule.
 
 In the context of a criterion that still routed the draft's document check through the before-admission scheduler, facing a choice between amending the criterion to the merged design of bead coding-harness-0swp and changing the code back, we decided to amend criterion 10 so the draft runs only the local document gates outside the verify admission, each bounded by TOOL_SECONDS, to achieve one rule shared with ADR 0025, accepting that the draft's gates do not share the full check's execution allowance. — 2026-11-15
+
+## Q-7 · Addendum 2026-11-16 — only declared-cheap gates run before admission
+
+asked: 2026-11-16
+answer: "Ja"
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the phase-6 re-check at cf2e055f left two MAJOR rows open: a tracked path the tree comparison cannot measure (a FIFO) refuses the run before any cheap gate runs, and a document gate declared minutes-cost or marked `needs_admission: true` runs in the draft check without admission.
+  Intention: close both rows with one rule at the place gates are classified, not case by case.
+  Today: protection is derived as `cost == minutes` or `needs_admission`; the draft's document selection ignores it, and an unmeasurable tree refuses before the cheap pass.
+  Repository change: one classification decides "cheap" — declared `cost: seconds` without `needs_admission: true`; every other gate, and every gate whose cost or baseline cannot be established, is deferred to the admitted phase, never refused before the cheap gates run and never run without admission.
+  Architecture change: none.
+
+The maintainer answered "Ja" to the recommendation to narrow the scope at the gate-declaration choke point: the cheap phase runs only gates explicitly declared cheap; anything else is deferred to the admitted phase. Spec criteria 1, 5 and 10 and the Boundaries are amended accordingly; the remaining cases are named Boundaries with follow-up beads proposed. — 2026-11-16

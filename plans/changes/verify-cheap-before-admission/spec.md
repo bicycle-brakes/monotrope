@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-15
+updated: 2026-11-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -56,10 +56,13 @@ different contents of an already dirty file (research, “Draft gap resolution�
 ## Acceptance criteria
 
 1. When a gate is selected, its admission requirement comes only from its
-   declared cost and optional boolean shared-state exception in the one gate list.
+   declared cost and optional boolean shared-state exception in the one gate list,
+   decided in one place: a gate is cheap only when explicitly declared `seconds`
+   without `needs_admission: true`; every other gate is protected (Q-7).
    *Refuted by:* a gate-ID allowlist, an invalid exception value being accepted,
-   a minutes gate bypassing admission, or an unmarked seconds gate requesting it.
-   *Basis:* decisions.md#Q-1.
+   a minutes gate bypassing admission, an unmarked seconds gate requesting it,
+   or a gate with a missing or unknown cost counting as cheap.
+   *Basis:* decisions.md#Q-1; decisions.md#Q-7.
 2. When a local run has unprotected gates, every one executes before that run
    requests admission, even after another unprotected gate fails.
    *Refuted by:* queue registration before the last such gate, a missing cheap
@@ -79,12 +82,18 @@ different contents of an already dirty file (research, “Draft gap resolution�
    dirty file being missed, stale gate configuration being used, or a protected
    gate executing after the fresh pass turns blocking red.
    *Basis:* decisions.md#Q-2.
-5. If selection or tree comparison cannot be measured reliably, the run fails
-   with a diagnostic before relying on unmeasured cheap results.
+5. If selection cannot be measured reliably, or a tree changes during a cheap
+   pass, the run fails with a diagnostic before relying on unmeasured cheap
+   results. A tree that cannot be measured (an unreadable entry such as a FIFO,
+   a git call that fails or times out) counts as moved: the cheap pass still
+   runs first, a blocking cheap red ends the run with its diagnostics, and a
+   green cheap pass runs again in full inside the admission before any
+   protected gate.
    *Refuted by:* an empty/failed selection reporting green, unreadable inputs
-   being treated as unchanged, or a tree changing during a cheap pass being
-   accepted as a stable baseline.
-   *Basis:* decisions.md#Q-2; research, “Draft gap resolution”.
+   being treated as unchanged, a tree changing during a cheap pass being
+   accepted as a stable baseline, an unmeasurable tree refusing before the
+   cheap gates run, or a cheap result measured on such a tree being reused.
+   *Basis:* decisions.md#Q-2; decisions.md#Q-7; research, “Draft gap resolution”.
 6. When gates fail, existing enforcement and selection rules still determine
    the verdict: only `block` is fatal, the local protected phase stops at its
    first blocking failure, and `--ci` remains exhaustive.
@@ -123,8 +132,10 @@ different contents of an already dirty file (research, “Draft gap resolution�
     gates/preparation, changing its selected gate set, losing its execution
     bound or timeout diagnostic, or charging admission wait to that bound; or
     the draft check requesting any admission, running the verify selection or
-    a protected gate, or launching a gate without the per-gate tool limit.
-    *Basis:* decisions.md#Q-1; decisions.md#Q-4; decisions.md#Q-6; ADR 0025,
+    a protected gate, or launching a gate without the per-gate tool limit. A
+    document gate not declared cheap is deferred to the admitted full check
+    and named as deferred in the draft's scope line (Q-7).
+    *Basis:* decisions.md#Q-1; decisions.md#Q-4; decisions.md#Q-6; decisions.md#Q-7; ADR 0025,
     implement and draft amendment, point 4 (bead coding-harness-0swp);
     research, outer runner and limits.
 11. When the kit transfers the full check into a recipient repository, the same
@@ -157,6 +168,21 @@ different contents of an already dirty file (research, “Draft gap resolution�
   (2026-11-14): 0.07 to 0.19 s per snapshot over 1,066 paths. A recipient
   with a large non-ignored untracked tree ignores it or pays that cost (loop
   row L2-8).
+- **Unmeasurable tree (Q-7).** When the tree cannot be measured, nothing
+  detects an edit between the refreshed cheap pass inside the admission and
+  the protected gates — the same exposure the whole-run admission had before
+  this change. This also supersedes the reasoning of rejected loop row L3-5:
+  a slow git no longer refuses the run, it costs a second cheap pass.
+  Follow-up proposed: detect edits during admitted work without a content
+  snapshot.
+- **Targeted check (Q-7).** Implement and repair's targeted check selects its
+  gates by path (it includes the minutes-cost `leerprobe` kit probe) and runs
+  them outside the admission; its selection is a non-goal of this change and
+  keeps that behavior. Follow-up proposed: apply the declared-cheap rule to the
+  targeted check (a non-cheap selected gate routes to the admitted full check).
+- **Draft document check (Q-7).** A deferred document gate is not run by the
+  draft at all; it runs only in the admitted full check before phase 6.
+  Follow-up proposed: none unless a document gate is ever declared minutes.
 
 ## Protected areas
 
