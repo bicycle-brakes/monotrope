@@ -33,8 +33,9 @@ trial runs on the branch exited red for the content reason below, and no
 trial ran at capacity one on the branch. No figure here is a comparison on
 the same implementation: each ratio below sets a branch run beside a `main`
 run of another revision, under a night load that differed between them.
-Criterion 11 is therefore not met by this file yet; the trials on the
-repaired head (last section) are owed.
+These earlier figures alone do not meet criterion 11; the trials on the
+repaired head (last section, measured 2026-11-16) supply the same-commit
+comparison.
 
 **Measured** means read from those files. **Derived** means computed here
 from measured figures; the derivation is shown. Execution seconds are the
@@ -176,14 +177,50 @@ at capacity one on the branch itself (the worker curve on `main` stands in
 for it), and the six trial runs are red for the content reason above, so no
 green paired run is recorded yet.
 
-## Trials on the repaired head — owed, not yet run
+## Trials on the repaired head — measured 2026-11-16 at `e693604e`
 
-Empty on purpose. The orchestrator runs these trials on the repaired head
-and fills the rows; until then nothing in this section is measured. Each
-trial records the tested commit, and a batch row per run.
+All three trials ran on 2026-11-16 (06:07–07:54 UTC) at commit `e693604e`
+(clean tree), on the same Mac mini (12 logical cores, 24 GiB), Python
+3.12.15 from the worktree's locked `.venv`, **under the night load**: other
+lanes' checks and runner calls ran beside them, and the load varied strongly
+(see the load column). Method (plan.md, row L5-3): each child `make verify`
+started with the five inherited admission markers (and the inherited worker
+settings) removed, so it took an admission of its own, against a temporary
+state base (`XDG_STATE_HOME`) whose `verify.toml` set the trial's `slots` and
+`workers_per_run`; so the trial runs never waited for, and never blocked,
+the other lanes' admission (admission wait 0.00 s in every run). Memory floor
+25 % (default). A batch's children were started together and joined; the
+serial trial ran two runs one after the other. Load sampled every five
+seconds (`os.getloadavg()`, pytest process count and summed RSS from `ps`,
+free memory from `memory_pressure -Q`). Raw files:
+`~/.local/state/coding-harness/night/2026-11-16-trials/{serial,paired,quad}/`
+(`summary.txt`, `load.csv`, `verify-*.log`). Wall s is the runner's execution
+seconds; pytest s is pytest's closing line. Every run: exit 0, 6152 passed,
+17 skipped; no test red or flaky.
 
 | Trial | Commit | Run | Wall s | pytest s | Peak pytest RSS MiB | Load (1-min mean / max) | Free memory min % | Verdict |
 |---|---|---|---|---|---|---|---|---|
-| Serial, capacity one | | | | | | | | |
-| Paired, 2 x 6 | | | | | | | | |
-| Quad, 4 x 3 | | | | | | | | |
+| Serial, capacity one (12 workers) | e693604e | 1 | 1,576 | 1,061 | 4,178 (batch) | 109.5 / 167.8 | 44 (batch) | green; baseline under heavy load |
+| Serial, capacity one (12 workers) | e693604e | 2 | 836 | 517 | 4,178 (batch) | 20.7 / 53.1 | 44 (batch) | green; baseline |
+| Paired, 2 x 6 | e693604e | 1 | 1,281 | 939 | 4,122 | 17.3 / 32.0 | 52 | green; 1.53 x serial run 2 — within 1.6 |
+| Paired, 2 x 6 | e693604e | 2 | 1,294 | 966 | 4,122 | 17.3 / 32.0 | 52 | green; 1.55 x serial run 2 — within 1.6 |
+| Quad, 4 x 3 | e693604e | 1 | 2,629 | 2,251 | 6,333 | 30.1 / 96.0 | 45 | green; 3.15 x serial run 2 — **outside 1.6** |
+| Quad, 4 x 3 | e693604e | 2 | 2,635 | 2,260 | 6,333 | 30.1 / 96.0 | 45 | green; 3.15 x — outside 1.6 |
+| Quad, 4 x 3 | e693604e | 3 | 2,646 | 2,287 | 6,333 | 30.1 / 96.0 | 45 | green; 3.17 x — outside 1.6 |
+| Quad, 4 x 3 | e693604e | 4 | 2,639 | 2,267 | 6,333 | 30.1 / 96.0 | 45 | green; 3.16 x — outside 1.6 |
+
+Batch elapsed: serial 2,421.5 s (06:07:31–06:47:52Z), paired 1,300.0 s
+(06:48:06–07:09:46Z), quad 2,651.5 s (07:09:54–07:54:05Z). Samples: 476,
+257, 523. Peak RSS and free memory are per batch, not per run.
+
+**Derived — reading against `decisions.md#Q-4`.** The serial runs differ by
+almost two under different load (1,576 s at load 109.5, 836 s at 20.7); the
+ratios above use the faster run 2, whose load is closest to the paired
+batch's (17.3). Paired: both runs within 1.6 times serial and green — Q-4
+met. Quad: green, but every run about 3.2 times serial run 2 (and 1.67 times
+even the slow run 1) — Q-4 not met at four slots on this machine under this
+load. Throughput: two runs took 2,421.5 s serially (1,672 s if both had run
+like run 2) and 1,300.0 s paired — 1.86 x against the measured serial batch,
+1.29 x against twice run 2. Four quad runs took 2,651.5 s, 663 s per run
+against 836 s per serial run 2 (1.26 x), at a latency of 44 minutes per run.
+The load differed between batches; these ratios are not load-controlled.
