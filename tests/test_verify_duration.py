@@ -741,7 +741,7 @@ def test_history_records_settings_load_and_peak_rss(
     assert ended["pytest_peak_rss_bytes"] == 5 * 1024**3 and ended["load_avg_end"] == [10.12, 9.0, 8.5]
     code, out, _ = _run(capsys, "report", "--run", run_id.strip())
     assert code == 0 and "pytest peak RSS: 5.00 GiB" in out and "10.12 / 9.0 / 8.5" in out, out
-    assert "slots: 4 (repository default)" in out
+    assert "slots: 3 (repository default)" in out
 
     code, other, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
     code, _, _ = _run(capsys, "end", "--run", other.strip(), "--start", "1", "--end", "2", "--verdict", "green")
