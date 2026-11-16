@@ -40,6 +40,10 @@ answer: "pro Fall"
 answered_by: maintainer
 status: answered
 
+
+In the context of hand-written artifact headers, facing a free-form `produced_by` that keeps failing the census rule, we decided to make the rule red per case at the header's own check, to achieve that this header can no longer be written wrongly, accepting that other hand-written fields need their own checks.
+— 2026-11-16
+
 ## Q-2 · What happens to the existing free-form headers
 
 context: |
@@ -54,6 +58,10 @@ answer: "migrieren"
 answered_by: maintainer
 status: answered
 
+
+In the context of 50 existing free-form headers, facing a new red check, we decided to migrate every header once, archived ones included, to achieve one rule without exemptions, accepting a large one-time diff.
+— 2026-11-16
+
 ## Q-3 · Order
 
 context: |
@@ -66,3 +74,6 @@ asked: 2026-11-16, conversation
 answer: "ja" (to: start it as the next lane, before lane 10)
 answered_by: maintainer
 status: answered
+
+In the context of the lane queue, facing the most frequent source of hand repairs, we decided to start this change as the next lane, before lane 10, to achieve fewer hand steps, accepting that lane 10 waits.
+— 2026-11-16
