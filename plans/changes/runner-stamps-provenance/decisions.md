@@ -214,6 +214,33 @@ day and no single model, to achieve a true record of who published,
 accepting that the member models are not named in the header.
 — 2026-11-16
 
+## Q-9 · Park the change for the night or let the runner continue
+
+context: |
+  Topic: whether this change pauses for the night or the runner goes on
+  with the spec.
+  Intention: the spec review left 17 rows open (F-1 to F-17), among them
+  the BLOCKER F-1; the maintainer had answered F-11 and F-14 (Q-7, Q-8),
+  and F-12 and F-13 still need the maintainer.
+  Today: the spec review's findings stand in `findings.md`; the answers
+  so far are recorded in Q-7 and Q-8.
+  Repository change: either the change is parked until the maintainer
+  has answered F-12 and F-13, or the runner works the answered rows into
+  the spec now and leaves F-12 and F-13 open.
+  Architecture change: none.
+asked: 2026-11-16, conversation
+answer: "Weiterlaufen lassen"
+answered_by: maintainer
+status: answered
+
+In the context of a spec review with 17 open rows, a BLOCKER among them,
+facing two rows (F-12, F-13) that only the maintainer can answer, we
+decided that the change is not parked and the runner works the answered
+rows into the spec, while F-12 and F-13 stay open for the maintainer, to
+achieve progress overnight on what is already settled, accepting that the
+spec stays open on F-12 and F-13 until the maintainer answers them.
+— 2026-11-16
+
 ## Decided by the agent
 
 [DETAIL] **A redraft that changes a document's body resets a non-pending
