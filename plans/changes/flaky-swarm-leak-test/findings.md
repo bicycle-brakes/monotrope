@@ -787,7 +787,57 @@ Stage-2 call, 2026-11-15: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-10 | MAJOR | SPEC | base | tests/conftest.py:43–45 | A test that catches `RawStandInLogAccess` and then calls `pytest.skip()` leaves the suite green. Reproduced with the installed hooks: `1 skipped`, exit 0, no remaining violations. `_fail_on_recorded_access` clears the recorded access but refuses to fail whenever another exception exists, including pytest’s skip exception. The forbidden access must still fail the suite when its refusal was swallowed. [Acceptance criterion 5] | Codex | taken — second finding of one mechanism (F6-9, F6-10: a refusal swallowed by the test itself): close it at the choke point, not per case — every recorded access is kept for the whole session and pytest_sessionfinish fails the session (non-zero exit, naming the test ids) whenever any access was recorded, whatever the test's own outcome (pass, skip, xfail, error, finalizer) | — |
+| F6-10 | MAJOR | SPEC | base | tests/conftest.py:43–45 | A test that catches `RawStandInLogAccess` and then calls `pytest.skip()` leaves the suite green. Reproduced with the installed hooks: `1 skipped`, exit 0, no remaining violations. `_fail_on_recorded_access` clears the recorded access but refuses to fail whenever another exception exists, including pytest’s skip exception. The forbidden access must still fail the suite when its refusal was swallowed. [Acceptance criterion 5] | Codex | fixed — orchestrator hand edit 2762b60a: tests/test_atomic_test_log.py::test_runtime_check_keeps_every_access_until_session_finish (red by hand on the baseline: with tests/conftest.py and tests/stand_in_log_guard.py from 4147b97d, 25 failed with assertion failures; with the fix 40 passed) | no |
 
 Phase 6 verdict: codex 01a1e09e-fd4a-7da0-8652-376b88744376, 2026-11-15
 Reviewer session: codex 01a1e09e-fd4a-7da0-8652-376b88744376 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1067 files, 4384 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/flaky-swarm-leak-test/plan.md` +34 -0
+> - `plans/changes/flaky-swarm-leak-test/spec.md` +7 -3
+> - `tests/conftest.py` +24 -0
+> - `tests/stand_in_log_guard.py` +17 -1
+> - `tests/test_atomic_test_log.py` +103 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - F6-10: tests/test_atomic_test_log.py::test_runtime_check_keeps_every_access_until_session_finish: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-1-20261115T191422445979Z-5e895b65.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 1067 files, 4394 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-2-20261115T191422445979Z-5e895b65.md
+> ```
+
+Stage-2 call, 2026-11-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1067 files, 4396 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/flaky-swarm-leak-test/plan.md, plans/changes/flaky-swarm-leak-test/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `tests/conftest.py` is shared test configuration
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/flaky-swarm-leak-test/stage2/attempts/flaky-swarm-leak-test/attempt-3-20261115T191422445979Z-5e895b65.md
+> ```
