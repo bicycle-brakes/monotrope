@@ -159,3 +159,32 @@ Still owed from earlier in the day:
   its gate.
 - The lane results above were read from git logs and `findings.md` on
   2026-11-16. Lane 6's newest R1 row was read only in part.
+
+## Addendum — 2026-11-16, the sub-agent's result after the handover was written
+
+- The answers are recorded in `decisions.md`:
+  - "Nachtrag zu ADR 0020 (Empfohlen)" for the swarm answer reader
+    (bead coding-harness-xsta), commit `6f051c74`.
+  - "Weiterlaufen lassen" for provenance stamping (bead coding-harness-f9sv),
+    commit `f058b4b6`.
+  - Both commits are pushed, and the tracker notes are pushed.
+- **Why the swarm-answer-reader draft did not commit (read in its
+  uncommitted `findings.md`):**
+  - All three attempts failed their post-run checks: Codex, the Codex
+    repair, and GLM 5.3.
+  - The cause is the gate `research-handoff`, which ends with exit 3,
+    "not measured". It reads each `answer:` value as YAML.
+  - Four earlier answer lines carry an unquoted `: `, so YAML cannot read
+    them: Q-4 to Q-7, lines 117, 138, 161 and 198 of
+    `plans/changes/swarm-answer-reader/decisions.md`.
+  - `check_question_context.py` accepts the same lines. Two readers of one
+    file disagree, which is a house rule 9 case (one reader per format) worth
+    its own bead.
+  - Attempt 2 tried to quote them and was rolled back, because a draft may
+    not change `decisions.md`.
+  - A redraft fails the same way until the four values are quoted.
+- **Needed from the maintainer (added):**
+  - May the four answer values be put in double quotes, text unchanged?
+    Recommendation: yes. It changes no answer, and it unblocks the redraft.
+  - After that, the superseded runner output in that worktree is cleared
+    and the draft restarts through the runner.
