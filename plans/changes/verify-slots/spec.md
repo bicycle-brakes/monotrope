@@ -252,8 +252,38 @@ stay historical; only current-policy statements change.
 
 ## Open decisions
 
-None open. The following reversible details are chosen visibly here, not
-answered on the maintainer's behalf:
+### [DECISION] Which configuration must the paired trial measure?
+
+Topic: The evidence required for the simultaneous verification trial.
+Intention: Make the completion evidence unambiguous after the default changed.
+Today: The spec asks for two slots; the recorded default is now three slots,
+and trials of different configurations are recorded at commit `e693604e`.
+Repository change: The spec and plan will name the required trial configuration.
+Architecture change: None; the existing configurable admission stays in place.
+
+Goal in one sentence: Choose which simultaneous checks demonstrate the change.
+Options:
+
+1. Measure two checks with two slots and six workers each: this measures the
+   originally requested two-slot setting, but not the shipped default.
+2. Measure two checks under the three-slot default, with four workers each:
+   this measures a pair under the shipped configuration, but leaves its third
+   slot unused.
+3. Measure three checks under the three-slot default, with four workers each:
+   this exercises the full default, but is not a paired trial.
+
+Recommendation: Option 1, because it retains the explicitly requested two-slot
+trial while the separately recorded trials inform the default.
+If you say "ok": The completion criterion will require a two-slot, two-check
+trial with six workers per check on the 12-core trial machine.
+What is lost: The required trial will not itself exercise the three-slot default.
+Downside you accept: Option 1 does not test the default; option 2 leaves one
+default slot idle; option 3 no longer tests the explicitly requested pair.
+
+Which option do you choose and which downside do you accept?
+
+The following reversible details are chosen visibly here, not answered on the
+maintainer's behalf:
 
 - [DETAIL] One optional machine-local `verify.toml` in the existing shared
   state root holds the overrides (`[verify]`, keys `slots` and
