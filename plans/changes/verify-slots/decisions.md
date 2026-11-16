@@ -218,3 +218,21 @@ slots and workers and that verify_all.sh reads its answer instead of
 computing nproc itself, to achieve one worker count for every entry point,
 accepting that the shell runner depends on the Python function for its
 worker count — 2026-11-16
+
+## Q-9 · Which trial evidences completion
+
+context: |
+  Topic: the completion trial named in spec.md.
+  Intention: the spec still asked for a two-slot paired trial, written before
+  the maintainer chose three slots of four workers as the default (Q-7).
+  Today: trials of 2x6, 3x4 and 4x3 are recorded at commit e693604e
+  (3x4: three simultaneous full runs at 2.12x one run's duration).
+  Repository change: the completion criterion in spec.md and plan.md.
+  Architecture change: none.
+asked: 2026-11-16, conversation
+answer: "3 gleichzeitig, 3×4 (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of the completion evidence for simultaneous verify runs, facing a criterion written before the three-slot default, we decided that three simultaneous full runs under the shipped default of three slots and four workers evidence completion, citing the 3x4 trial recorded at commit e693604e, to achieve that the trial measures exactly the configuration that ships, accepting that no two-run paired trial is required.
+— 2026-11-16
