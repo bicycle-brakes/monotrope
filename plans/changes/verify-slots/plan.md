@@ -18,7 +18,7 @@ tags: [plan, verification]
 # Plan — `verify-slots`
 
 ```text
-For you:     Four full checks can share the machine at once; slots and workers per run are one adjustable setting.
+For you:     Three full checks can share the machine by default; slots and workers per run are adjustable and computed consistently.
 Done when:   The capacity regressions and the existing lock tests pass, make verify is green, and serial-versus-paired wall time and load are recorded.
 Appetite:    Four hours of phase 4, repairs and both trials included; a stop, not an estimate.
 Not now:     Worker tuning, swarm slots, automatic tuning, the general harness configuration.
@@ -80,11 +80,12 @@ this plan follows the phase-3 prompt's form, and their gate is not claimed.
    gates) inherits both descriptors, and propagate the slot marker through
    `inherit_env`. Foreign-call environment filtering, the targeted checks
    outside admission and all timeouts stay untouched. Change
-   `scripts/verify_all.sh` only where its comment states one admission;
-   entry, `--held` delegation and gate commands stay as they are.
+   `scripts/verify_all.sh` to obtain machine readings and worker settings
+   from the shared Python function after admission; entry, `--held`
+   delegation and gate commands stay as they are.
 5. Change `tests/test_verify_lock.py`: add the ledger's new multi-process
    tests over isolated shared state roots, using separate working
-   directories, events or pipes and bounded waits. Cover: the default two
+   directories, events or pipes and bounded waits. Cover: the default three
    across trees, configured one and three, a live decrease draining,
    malformed settings, occupied higher indices, slot-specific nesting and
    context, peer-safe release, the memory gate on each slot, the wait
@@ -98,9 +99,8 @@ this plan follows the phase-3 prompt's form, and their gate is not claimed.
    the timeout and targeted-repair boundaries asserted. Change
    `tests/test_ci.py`: adapt fixture ownership records and add real shell
    contention at two slots, preserving gate verdicts, nested reuse and CI
-   placement. `tests/test_verify_duration.py` needs no edits: the duration
-   context resolves through `admission_context()`, and its slot-specific
-   resolution is covered by a new lock test.
+   placement. `tests/test_verify_duration.py` covers the duration history,
+   including settings, sampled process-tree memory, and unknown readings.
 7. Change `docs/WORKFLOW.md`, `docs/orchestration.md` and
    `docs/how-it-works.md`: replace the current one-slot prescriptions with
    the configured default, the setting's shared path and format, its safe
@@ -112,6 +112,29 @@ this plan follows the phase-3 prompt's form, and their gate is not claimed.
    the trials below; update this `plan.md` only to mark written ledger
    entries and record time used. The runner regenerates `plans/INDEX.md`
    and owns derived stamps, verification and commits.
+
+## Remaining repair — shared worker computation (2026-11-16)
+
+The orchestrator sends the repair attempt the following scope for the open
+phase-6 finding: in `scripts/verify_lock.py`, make `machine_size` the one
+source of CPU and memory readings and `read_settings` the one computation;
+on Linux prefer the process CPU affinity when available, with a safe fallback
+when it cannot be read. Keep the existing per-slot memory bound, unknown
+reading behaviour, settings precedence, caller override, and post-admission
+reread. In `scripts/verify_all.sh`, remove the independent machine probes
+and call `--settings` without supplying shell-derived readings. In
+`scripts/stage2.py`, use the same reader for targeted pytest and preserve the
+caller override. Update `tests/test_verify_lock.py`, `tests/test_ci.py` and
+`tests/test_stage2.py`: exercise the same six-CPU allocation on a 24-core
+Linux machine through shell and targeted runner, expecting two workers with
+three slots and sufficient memory; also cover unavailable affinity, memory
+bounds, overrides and a changed capacity while queued. Update existing shell
+fixtures that stub `nproc` or `sysctl` to control the shared Python readings.
+Update `docs/WORKFLOW.md` and `docs/how-it-works.md` if they describe the old
+split readings; keep `docs/orchestration.md` aligned with the existing slot
+policy. `scripts/verify_duration.py` and `tests/test_verify_duration.py`
+remain responsible for history; alter them only if the shared settings
+interface requires it. No held path is assigned to the attempt.
 
 ## Verification and measurement
 
@@ -157,9 +180,10 @@ four hours include the trials; do not claim unrun measurements.
 
 Do not touch the `Makefile`, `decisions/gates.yaml`, generated CI,
 `provenance.yaml`, ADRs, `AGENTS.md`, prompts, templates, interview
-answers, model routing, worker sizing, research-swarm code, or the future
-central configuration. The existing kit already ships
-`scripts/verify_lock.py`; no new mechanism file is added.
+answers, model routing, research-swarm code, or the future
+central configuration. Worker sizing changes only as criterion 12 requires.
+The existing kit already ships `scripts/verify_lock.py`; no new mechanism
+file is added.
 
 Draft validation, 2026-11-10: the ledger's four existing tests are defined
 in the tree and every not-yet-written entry names a function no file
@@ -189,6 +213,7 @@ rows stand in `findings.md`.
 - 8: tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — the wait is included in execution.
 - 9: tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens — a holder disappears from the progress logs or a token is exposed.
 - 10: tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
+- 12: not yet written tests/test_ci.py::test_shell_and_targeted_runner_share_effective_cpu_allocation — separate readings yield different worker counts for the same restricted CPU allocation.
 - 12: tests/test_verify_lock.py::test_layered_settings_default_override_and_sources — a layer is ignored, workers do not follow an overriding slot count, or a source names the wrong layer.
 - 12: tests/test_verify_lock.py::test_workers_follow_slots_and_memory_bound — the old half-the-cores rule, a per-run memory bound, or a guessed count with nothing readable.
 - 12: tests/test_verify_lock.py::test_settings_command_logs_values_and_sources — a run's log does not name the values in force and their sources.
@@ -298,3 +323,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-16 08:31:51–08:52:02 UTC, 1211 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-11-16 08:52:10–09:45:53 UTC, 3224 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure · measured by the runner
 2026-11-16 14:44:23–15:54:40 UTC, 4218 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure · measured by the runner
+2026-11-16 16:33:42–16:36:11 UTC, 149 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

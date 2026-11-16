@@ -26,8 +26,8 @@ once — three by the repository default (`decisions.md`, Q-7 addendum) — and 
 workers per run are set in layers, read by one function, without a code
 change (bead `coding-harness-u1ha` — configurable verification capacity).
 Research: `research.md`. Decisions: `decisions.md` (Q-1 and Q-2 of
-2026-11-09; Q-3 to Q-7 of 2026-11-14/15, which raise the default and add the
-worker count).
+2026-11-09; Q-3 to Q-8 of 2026-11-14–16, which settle the default,
+worker count and shared computation).
 
 ## Problem
 
@@ -160,7 +160,8 @@ worker count).
 12. When a verification run starts — through `scripts/verify_all.sh`, the
     admission or the runner's targeted pytest — one reading function
     (`read_settings` in `scripts/verify_lock.py`) supplies the slot count and
-    the pytest workers per run: the validated repository default (three
+    the pytest workers per run using the same effective machine readings for
+    every entry point: the validated repository default (three
     slots; workers = logical cores / slots, floored, at least one, bounded
     by 2 GiB of memory per worker across all slots), overridden per value by
     the machine-local `verify.toml` (`[verify]` with `slots` and
@@ -177,10 +178,12 @@ worker count).
     *Refuted by:* a caller of its own rule (a copied half-the-cores formula),
     workers that do not follow an overriding slot count, a caller's value
     rewritten, a runner-started full check whose worker count differs from a
-    shell-started one, a run whose log does not name the values and
+    shell-started one under the same settings, CPU allocation and caller
+    override, including a Linux process restricted to six CPUs on a
+    24-core machine, a run whose log does not name the values and
     their sources, or the two paths printing the line through separate
     wordings.
-    *Basis:* `decisions.md#Q-6`.
+    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-8`.
 
 13. When a run of `scripts/verify_all.sh` is recorded in the verify history,
     its start record names the slots and workers in force with their
@@ -227,10 +230,9 @@ coding-harness-42em (each admission an explicit handle).
 `AGENTS.md`, prompts, templates and model routing stay unchanged: the change
 adjusts admission capacity, not governance, gate commands or foreign calls.
 The existing memory thresholds stay as they are. The pytest worker sizing
-changes only as `decisions.md#Q-6` states (criterion 12): its machine
-readings in `scripts/verify_all.sh` keep their tested rules, and only the
-formula moves into the one reader. Historical measurements stay
-historical; only current-policy statements change.
+changes only as `decisions.md#Q-6` and Q-8 state (criterion 12): the shared
+reader supplies both the readings and the formula. Historical measurements
+stay historical; only current-policy statements change.
 
 ## Definition of Done
 
@@ -265,13 +267,11 @@ answered on the maintainer's behalf:
   admission coordination; a decrease drains existing reservations without
   cancelling them. Reason: one file, no code change, no per-checkout
   copies, keys that move unchanged into bead `coding-harness-twvx`.
-- [DETAIL] `scripts/verify_all.sh` keeps its machine readings (`sysctl`,
-  `nproc`, `/proc/meminfo`, with their validation) and hands them to the
-  reader; the runner's targeted pytest uses Python's own readings
-  (`machine_size`). Reason: the tested reading rules of bead
-  coding-harness-l7sc stay where they are; the formula exists once. The
-  runner's full check needs no worker variable: `verify_all.sh` derives it
-  itself, so the allow-list that drops the variable no longer matters.
+- [DETAIL] The shared Python reader obtains machine readings for all entry
+  points, using the process's effective CPU allocation where available and
+  the existing safe fallback when a reading is unavailable. Reason: Q-8
+  removes conflicting shell and Python readings; caller overrides and the
+  memory bound remain in force.
 - [DETAIL] An explicit `workers_per_run` in the machine file is not bounded
   by memory. Reason: an operator's stated value wins, as a caller's
   environment value does.
