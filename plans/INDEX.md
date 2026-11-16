@@ -608,6 +608,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/pi-neutral-paths/decisions.md`](changes/pi-neutral-paths/decisions.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/findings.md`](changes/pi-neutral-paths/findings.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/plan.md`](changes/pi-neutral-paths/plan.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/research.md`](changes/pi-neutral-paths/research.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
+| [`changes/pi-neutral-paths/spec.md`](changes/pi-neutral-paths/spec.md) | draft | none | 2026-10-29 | coding-harness-xul8 |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
