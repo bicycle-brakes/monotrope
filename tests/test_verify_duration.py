@@ -768,4 +768,23 @@ def test_pytest_tree_rss_sums_pytest_trees_below_the_runner() -> None:
         (200, 1, 9999, "python3 -m pytest elsewhere"),
     ]
     assert verify_duration.pytest_tree_rss(rows, 100) == (30 + 1000 + 2000 + 3000) * 1024
-    assert verify_duration.pytest_tree_rss(rows, 999) == 0
+    assert verify_duration.pytest_tree_rss(rows, 999) is None
+
+
+def test_sampler_leaves_peak_unknown_without_pytest_sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A successful process listing without pytest is not a memory measurement."""
+    from argparse import Namespace
+
+    out = tmp_path / "peak"
+    calls = iter([None, ProcessLookupError()])
+
+    def kill(_pid: int, _signal: int) -> None:
+        result = next(calls)
+        if result is not None:
+            raise result
+
+    monkeypatch.setattr(verify_duration.os, "kill", kill)
+    monkeypatch.setattr(verify_duration, "_process_rows", lambda: [(101, 100, 10, "ruff")])
+    monkeypatch.setattr(verify_duration.time, "sleep", lambda _seconds: None)
+    assert verify_duration.cmd_sample(Namespace(pid=100, out=str(out), every=5)) == 0
+    assert verify_duration._peak_rss(str(out)) is None

@@ -1540,8 +1540,12 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:208 | If `ps` succeeds but no pytest process is present at any five-second sample—for example, a short pytest run falls between samples—the sampler records a peak of zero. No pytest memory was measured, so the end record must report the peak as unknown. [Acceptance criterion 13] | Codex | taken — in spec, repaired without asking | — |
-| F6-2 | MINOR | SPEC | base | scripts/verify_lock.py:477 | When a caller sets `PYTEST_XDIST_AUTO_NUM_WORKERS=04`, the value is passed through unchanged but the settings log reports `4`; a nonnumeric value is reported as `xdist auto`. The log must identify the caller’s actual value. [Acceptance criterion 12] | Codex | taken — in spec, repaired without asking | — |
+| F6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:208 | If `ps` succeeds but no pytest process is present at any five-second sample—for example, a short pytest run falls between samples—the sampler records a peak of zero. No pytest memory was measured, so the end record must report the peak as unknown. [Acceptance criterion 13] | Codex | fixed — tests/test_verify_duration.py::test_sampler_leaves_peak_unknown_without_pytest_sample | — |
+| F6-2 | MINOR | SPEC | base | scripts/verify_lock.py:477 | When a caller sets `PYTEST_XDIST_AUTO_NUM_WORKERS=04`, the value is passed through unchanged but the settings log reports `4`; a nonnumeric value is reported as `xdist auto`. The log must identify the caller’s actual value. [Acceptance criterion 12] | Codex | fixed — tests/test_verify_lock.py::test_settings_log_preserves_caller_worker_value | — |
 
 Phase 6 verdict: codex 01a1e4cf-a9cc-7423-8f5c-bc9c9b9f3f8c, 2026-11-16
 Reviewer session: codex 01a1e4cf-a9cc-7423-8f5c-bc9c9b9f3f8c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1104 files, 4450 commits, 12 rules.
+
+Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged

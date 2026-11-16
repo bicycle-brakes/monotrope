@@ -145,7 +145,7 @@ def _load_average() -> list[float] | None:
         return None
 
 
-def pytest_tree_rss(rows: list[tuple[int, int, int, str]], root: int) -> int:
+def pytest_tree_rss(rows: list[tuple[int, int, int, str]], root: int) -> int | None:
     """The summed resident set, in bytes, of every pytest process tree below `root`.
 
     `rows` are `(pid, ppid, rss_kib, command)` as `ps` lists them. A pytest
@@ -174,7 +174,7 @@ def pytest_tree_rss(rows: list[tuple[int, int, int, str]], root: int) -> int:
         if "pytest" in info.get(pid, (0, ""))[1] and pid not in counted:
             counted.add(pid)
             counted.update(below(pid))
-    return sum(info[pid][0] for pid in counted if pid in info) * 1024
+    return sum(info[pid][0] for pid in counted if pid in info) * 1024 if counted else None
 
 
 def _process_rows() -> list[tuple[int, int, int, str]] | None:
@@ -219,7 +219,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
         rows = _process_rows()
         if rows is not None:
             current = pytest_tree_rss(rows, args.pid)
-            if current > peak:
+            if current is not None and current > peak:
                 peak = current
                 fresh = out.with_name(f".{out.name}.{os.getpid()}")
                 fresh.write_text(str(peak), encoding="utf-8")

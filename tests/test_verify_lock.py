@@ -2247,3 +2247,11 @@ def test_slot_survey_refusal_closes_previously_locked_descriptors(
             pytest.fail("refusing slot 1 leaked the survey's slot-0 descriptor and lock after release")
     finally:
         os.close(contender)
+
+
+def test_settings_log_preserves_caller_worker_value(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The settings log names the caller's value exactly, including nonnumeric values."""
+    for value in ("04", "not-a-number"):
+        settings = verify_lock.read_settings(tmp_path, cores=12, env={verify_lock.WORKERS_ENV: value})
+        verify_lock.log_settings(settings)
+        assert f"pytest workers per run {value} ({verify_lock.CALLER_WORKERS})" in capsys.readouterr().err

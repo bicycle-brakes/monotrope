@@ -308,10 +308,15 @@ class VerifySettings:
     workers: int | None
     workers_source: str
     warning: str | None = None
+    caller_workers: str | None = None
 
     def describe(self) -> str:
         """The one log line every run prints: values and sources, no machine-private path beyond the state root."""
-        workers = "xdist auto (no machine reading)" if self.workers is None else str(self.workers)
+        workers = (
+            self.caller_workers
+            if self.caller_workers is not None
+            else ("xdist auto (no machine reading)" if self.workers is None else str(self.workers))
+        )
         line = f"slots {self.slots} ({self.slots_source}) · pytest workers per run {workers} ({self.workers_source})"
         return line if self.warning is None else f"{line} · warning: {self.warning}"
 
@@ -468,7 +473,7 @@ def read_settings(
     if caller:
         source = environment.get(WORKERS_SOURCE_ENV) or CALLER_WORKERS
         warning = oversubscription_warning(slots, slots_source, ceiling)
-        return VerifySettings(slots, slots_source, _caller_workers(caller), source, warning)
+        return VerifySettings(slots, slots_source, _caller_workers(caller), source, warning, caller)
     if WORKERS_KEY in overrides:
         workers, workers_source = overrides[WORKERS_KEY], machine
     else:
