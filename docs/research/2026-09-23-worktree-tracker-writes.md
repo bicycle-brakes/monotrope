@@ -4,7 +4,7 @@ category: research
 status: accepted
 created: 2026-09-23
 last_reviewed: 2026-09-23
-updated: 2026-09-29
+updated: 2026-11-15
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -34,7 +34,9 @@ A throwaway repository with its own tracker and its own remote. The real
 tracker was only read.
 
 - The binary is `~/.local/bin/bd-1.3.0`, the version `tools/beads/VERSION`
-  pins. Embedded Dolt mode is the default, as in this repository.
+  pinned on 2026-09-23. Embedded Dolt mode is the default, as in this repository.
+  (Dated 2026-11-15: the pin moved to 1.3.4 in change bd-1-3-4; these five
+  checks were measured on 1.3.0 only and have not been repeated on 1.3.4.)
 - The layout is a bare git repository `remote.git` and a main checkout
   `probe-main`, initialised with `bd init --prefix m34-probe-repo`. The
   prefix is deliberately long and hyphenated, which is the shape that broke
@@ -122,7 +124,7 @@ tracker in a temporary directory cannot use `bd worktree create`.
 ## Reproduce
 
 The commands are in the order used on 2026-09-23. `$R` is a scratch
-directory **outside** `/tmp`, and `bd` is the pinned 1.3.0 binary.
+directory **outside** `/tmp`, and `bd` is the 1.3.0 binary, the pin on that date.
 
 ```bash
 git init -q --bare $R/remote.git && git init -q -b main $R/probe-main
