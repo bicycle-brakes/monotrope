@@ -823,3 +823,14 @@ Reviewer session: codex 01a1e51e-47bd-74b1-a24c-ff1f3b65ded6 — a fresh session
 Stage-2 call, 2026-11-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4462 commits, 12 rules.
 
 Runner restoration, 2026-11-16: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1106 files, 4488 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-16
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R1 | MAJOR | SPEC | base | scripts/stage2.py:6325–6335 | Ein Gate mit dem gültigen Befehl `ruff check scripts/` verwendet beim Shell-Aufruf das gepinnte Ruff aus `.venv/bin`. Stage 2 verwirft dagegen diesen Fund, weil er im Worktree liegt: Fehlt ein globales Ruff, startet die Prüfung nicht; ist eines installiert, läuft möglicherweise eine andere Version. Beide vollständigen Prüfpfade müssen denselben Gate-Befehl mit derselben Umgebung ausführen. [Akzeptanzkriterien 10 und 11; Nichtziel: Gate-Befehle unverändert lassen.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1e551-b37a-7a10-8af0-e988a7463bec, 2026-11-16
+Reviewer session: codex 01a1e551-b37a-7a10-8af0-e988a7463bec — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
