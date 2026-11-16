@@ -7,6 +7,13 @@ docs/WORKFLOW.md (maintainer, 2026-10-26 and 2026-10-27).
 
 ## Working pace
 
+- **One repeatable, uniform path — no special cases.** Every recurring
+  action has exactly one path, carried by code at one choke point, that
+  every caller takes the same way and that gives the same result on a
+  rerun. A second route, a hand-written variant of what a tool produces,
+  or a rule that holds only for some callers is folded into the one path,
+  never added beside it; a case that truly cannot take it is named as a
+  boundary and tracked (maintainer, 2026-11-16).
 - **One decision block a day.** Questions and merge requests for the
   maintainer are collected for one block at `<time, default 15:00>` local
   time, each with its context and a recommendation; work that does not

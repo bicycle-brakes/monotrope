@@ -99,6 +99,16 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
    (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
    every merge command it recognises — a brake, not a lock: another spelling
    passes (`docs/WORKFLOW.md`).
+9. **One repeatable, uniform path — no special cases.** Every recurring
+   action (starting a model, writing an artifact header, running a check,
+   merging) has exactly one path, carried by code at one choke point, that
+   every caller takes the same way and that gives the same result on a
+   rerun. A second route for one caller, a hand-written variant of what a
+   tool produces, or a rule that holds only for some callers is a defect:
+   it is folded into the one path, never added beside it. Where a case
+   truly cannot take the path, it is named as a `Boundary` in the spec and
+   tracked, not handled ad hoc. The kit carries this principle
+   (`templates/agents-working-pace.md`) (maintainer, 2026-11-16).
 
 ## Communication and session continuity
 
