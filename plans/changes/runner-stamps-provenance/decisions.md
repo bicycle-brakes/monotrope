@@ -100,8 +100,8 @@ answered_by: maintainer
 status: answered
 
 In the context of a provenance change four times larger than first drafted,
-facing open lanes that a tree-wide check would turn red, we decided to split
-it: this change makes `scripts/stage2.py` stamp `produced_by` (program,
+facing open lanes that a tree-wide check would turn red, we decided to split it,
+so that this change makes `scripts/stage2.py` stamp `produced_by` (program,
 model, publication date) after explore, draft and repair, and makes every
 verb's post-run check refuse a failing producer header in the files the run
 touched; the migration and the tree-wide check go to coding-harness-2i7x, to
