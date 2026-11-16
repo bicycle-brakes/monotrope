@@ -1396,3 +1396,15 @@ Stage-2 call, 2026-11-15: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1089 files, 4393 commits, 12 rules.
 
 Runner restoration, 2026-11-15: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+
+Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 1089 files, 4414 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-16
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-5 | MAJOR | SPEC | base | scripts/verify_lock.py:646–650 | A stale legacy marker can bypass admission while an unrelated new check holds the shared compatibility lock. After an old supervisor dies and its inherited lock releases, its holder record remains; new admissions never replace that record. The exclusive probe fails against their shared lock, incorrectly validating the old marker. Reproduced with an unrelated shared holder and matching stale record. Legacy validation must establish an exclusive legacy admission before permitting reuse. [AC5] | Codex | taken — a test that a stale legacy marker cannot pass admission while an unrelated check holds the shared compatibility lock | — |
+| F6-6 | MAJOR | MAINT | base | scripts/verify_lock.py:1030–1038 | Surveying free slot 0 locks its descriptor, but refusal when opening slot 1 leaves that descriptor open and locked. Admission cleanup cannot release it because the survey never returned it. Reproduced: after refusal and `release()`, a contender remained blocked. With capacity one and a substituted leftover slot-1 file, correcting that file still leaves admission blocked until the refusing process exits. Close accumulated survey descriptors on every exceptional exit. [AC6] | Codex | taken — a test that a refusal opening slot 1 leaves no slot descriptor open or locked after the survey | — |
+
+Phase 6 verdict: codex 01a1e377-c0dd-7f91-9740-d559c06927fe, 2026-11-16
+Reviewer session: codex 01a1e377-c0dd-7f91-9740-d559c06927fe — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
