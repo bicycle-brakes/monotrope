@@ -90,3 +90,57 @@ out of this change and handle them in their own bead
 (coding-harness-wmy1), to achieve a bounded data change here, accepting
 that their trial waits for that ADR amendment.
 — 2026-11-16
+
+## Q-4 · Retention above 0 days
+
+context: |
+  Topic: which retention value admits a model to the paid ladder.
+  Intention: the spec review (finding F-2) found AC 2 fixes training at
+  `Not used` but names no rule for retention; the machine rule admits any
+  non-empty value, while the `opencode-go` remark records that the
+  maintainer admitted the 30-day ids by word.
+  Today: Q-1's "ja" came before either id's terms were read.
+  Repository change: an id with retention above 0 days is admitted when
+  its training reads `Not used`, or the build stops for a question.
+  Architecture change: none.
+asked: 2026-11-16, conversation (spec review finding F-2)
+answer: "Ja, wenn Training 'Not used' (Empfohlen)"
+answered_by: maintainer
+status: answered
+
+In the context of admitting qwen4-max and hy4 to the paid ladder, facing
+retention terms that may read above 0 days, we decided that retention
+above 0 days, for example 30 days, is admissible when training reads
+`Not used`, to achieve that the build does not stop for a question on
+retention alone, accepting that admitted providers may keep request data
+for the stated period.
+— 2026-11-16
+
+## Q-5 · An id whose reading or probe fails
+
+context: |
+  Topic: what happens when the dated terms reading or the probe goes
+  against qwen4-max or hy4.
+  Intention: the spec review (finding F-1) found AC 4 and AC 5 have no
+  condition, so one failing id leaves the change unfinishable (reading A),
+  while the house precedent declares such an id with a dated skip
+  (reading B), as `gpt-6-luna`, `claude-haiku-5-5` and `gemini-4-argon`
+  are declared.
+  Today: undecided; the maintainer asked for the advisor's view.
+  Repository change: all or nothing, a dated per-id skip, or shipping the
+  other id alone.
+  Architecture change: none.
+  Advisor view (2026-11-16, not a decision): recommend a dated per-id skip
+  like the three existing ones; check first that a skipped id cannot be
+  seated in the research swarm through `modelle_terms`
+  (`scripts/stage2_availability.py`, near line 1174) and read the `grund`
+  of the three existing skips; treat an ambiguous single Hy4 row as no
+  row; AC 4 and AC 5 become conditional on each admitted id.
+asked: 2026-11-16, conversation (spec review finding F-1)
+answer: null
+answered_by: null
+status: open
+
+Open. The maintainer answered with a question, "was sagt der /advisor?",
+and has not chosen yet; the advisor view in the context above is a note
+for that choice, not a decision.
