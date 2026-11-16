@@ -711,12 +711,12 @@ def test_history_records_settings_load_and_peak_rss(
     a missing sampler file recorded as zero, or old records without the fields becoming unreadable.
     """
     state = tmp_path / "state"
-    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "3")
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "4")
     monkeypatch.setenv(verify_lock.WORKERS_SOURCE_ENV, "repository default: 12 logical cores / 3 slots")
     code, run_id, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
     assert code == 0
     started = _history(state)[-1]
-    assert (started["workers"], started["slots"], started["slots_source"]) == ("3", 4, "repository default")
+    assert (started["workers"], started["slots"], started["slots_source"]) == ("4", 3, "repository default")
     assert started["workers_source"] == "repository default: 12 logical cores / 3 slots"
 
     peak = tmp_path / "peak"
