@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -78,15 +78,14 @@ worker count and shared computation).
    the value.
    *Refuted by:* settings of one or three are ignored, different working
    directories select different values, or a lowered capacity grants new
-   reservations before existing ones drain below it.
+   reservations before existing ones drain below it, or a raised capacity is not used by the first eligible waiter at its next 0.25-second poll.
    *Basis:* `decisions.md#Q-2`.
 
-3. If a present capacity setting is invalid or cannot be safely read,
-   independent admission refuses with a diagnostic before any protected work.
+3. If the machine settings are invalid or cannot be safely read, every entry point, including independent admission, nested shell verification and runner targeted and cheap pytest, refuses before work with the reader’s diagnostic naming the file; none falls back or reuses an ancestor’s settings.
    *Refuted by:* an empty, zero, negative, fractional, nonnumeric,
    substituted or unreadable setting, an unknown key or table, or a leftover
    bare `verify.slots` file silently selects a fallback, hangs, or lets work
-   start.
+   start; a zero-byte file, comments alone, or an empty `[verify]` table is also invalid, as is an invalid `workers_per_run` beside valid `slots`.
    *Basis:* `decisions.md#Q-2` (one declared, validated value),
    `decisions.md#Q-6`.
 
@@ -133,7 +132,7 @@ worker count and shared computation).
    *Refuted by:* the initial or five-minute progress logs disappear, one
    holder overwrites another's record, or a log prints a token instead of
    the holder's slot, process id, command and start time — or an explicit
-   unavailable value.
+   unavailable value; a legacy exclusive holder blocks a waiter without its published holder being named, or without stating that none is published.
    *Basis:* `decisions.md#Q-1` (existing operator visibility retained).
 
 10. When an older single-slot checkout shares the machine state, its
@@ -145,56 +144,44 @@ worker count and shared computation).
     *Basis:* `decisions.md#Q-1` (the bound stays machine-wide across
     checkouts).
 
-11. Before the change counts as done, operation at the default of three slots
-    with three simultaneous full checks of four workers each has recorded
-    wall time and machine load beside a serial comparison on the same
-    implementation.
-    *Refuted by:* completion is claimed without revision, date,
-    configuration, outcomes, per-run wall times, batch elapsed times and
-    sampled load for the serial and three-at-once trials, or a current-policy document still
-    prescribes one slot.
-    *Basis:* `decisions.md`, closing evidence note; `decisions.md#Q-2`;
-    `decisions.md#Q-9`, `decisions.md#Q-3` (under the night load) and `decisions.md#Q-4`
-    (both runs within 1.6x a single run, no test red or flaky because of the
-    parallelism).
+11. Before the change counts as done, serial and three simultaneous full checks at three slots and four workers have recorded their revision, date, configuration, outcomes, per-run wall times, batch elapsed times and sampled load.
+    *Refuted by:* missing evidence in `measurements.md` or a one-slot prescription in `docs/WORKFLOW.md`, `docs/orchestration.md` or `docs/how-it-works.md`.
+    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`, `decisions.md#Q-11`.
+
+    The trial at `e693604e` is the completion evidence even though three slots were set by the machine file; the 2.12–2.13x result is recorded, not a three-slot gate. Q-4's 1.6x threshold applies to two slots only. The context of ADR 0025 is dated rationale and remains untouched.
 
 12. When a verification run starts — through `scripts/verify_all.sh`, the
-    admission or the runner's targeted pytest — one reading function
+    admission or any runner xdist pytest (including targeted and cheap checks) — one reading function
     (`read_settings` in `scripts/verify_lock.py`) supplies the slot count and
     the pytest workers per run using the same effective machine readings for
     every entry point: the validated repository default (three
     slots; workers = logical cores / slots, floored, at least one, bounded
-    by 2 GiB of memory per worker across all slots), overridden per value by
+    by 2 GiB of total physical memory per worker across all slots, with at least one even if the bound is zero; cgroup memory limits are not read), overridden per value by
     the machine-local `verify.toml` (`[verify]` with `slots` and
     `workers_per_run`), and for the workers by a caller's non-empty
     `PYTEST_XDIST_AUTO_NUM_WORKERS`, which passes verbatim. Every run logs
     the values in force and where each came from, on the operator's stderr
     as one `[verify-settings]` line printed by one helper
     (`log_settings`): `scripts/verify_all.sh` through `--settings`, the
-    runner's targeted pytest before it launches; the admission's own line
+    runner's targeted and cheap pytest before each launch; the admission's own line
     names the slot, the capacity and its source. Only the shell runner's
     full check also writes the values into the duration history; the
-    targeted pytest writes no history record. A slot count above the logical
-    cores adds a warning to both lines and never refuses.
+    targeted pytest writes no history record. A slot count above the effective cores adds a warning to both lines naming the workers in force and never refuses. An admitted run reads settings after reservation; targeted and cheap pytest read them at launch.
     *Refuted by:* a caller of its own rule (a copied half-the-cores formula),
     workers that do not follow an overriding slot count, a caller's value
     rewritten, a runner-started full check whose worker count differs from a
     shell-started one under the same settings, CPU allocation and caller
-    override, including a Linux process restricted to six CPUs on a
-    24-core machine, a run whose log does not name the values and
+    override, including a Linux process whose affinity permits six of 24 CPUs getting anything other than two workers at three slots with sufficient memory, a run whose log does not name the values and
     their sources, or the two paths printing the line through separate
-    wordings.
+    wordings; 32 GiB total and 8 GiB available gives a bound other than five workers at three slots, or less than 6 GiB gives fewer than one.
     *Basis:* `decisions.md#Q-6`, `decisions.md#Q-8`.
 
 13. When a run of `scripts/verify_all.sh` is recorded in the verify history,
     its start record names the slots and workers in force with their
-    sources, and its end record the load average at the end and the peak
-    summed resident memory of its pytest process trees, sampled every five
-    seconds; a value that cannot be read is recorded as unknown, never as
-    zero, and records written before these fields stay readable.
+    sources, and its end record the 1-, 5- and 15-minute load averages and the peak
+    summed resident memory of its pytest process trees and minimum available system memory percentage, sampled every five seconds; each sample aggregate uses readable samples and is unknown when none are readable, including a run ending before its first sample, and older records stay readable.
     *Refuted by:* a record without the values or sources, a missing sample
-    recorded as a number, xdist workers left out of the peak, or the reader
-    refusing an older record.
+    recorded as a number, a readable sample discarded, the minimum free-memory percentage missing, any end load average missing, xdist workers left out of the peak, or the reader refusing an older record.
     *Basis:* `decisions.md#Q-6`, `decisions.md#Q-7` (the real-operation
     windows read these records).
 
@@ -206,7 +193,7 @@ worker count and shared computation).
 ## Non-goals
 
 - Research-swarm invocation slots, automatic worker-count tuning, priority
-  scheduling, continuous memory monitoring, new bypasses, or any change to
+  scheduling, memory monitoring that gates or acts during a run, new bypasses, or any change to
   which work needs admission (research, "Meaning B", "Protected areas").
 - The future general harness configuration (bead `coding-harness-twvx` —
   central configuration); this change supplies only the slot and worker
@@ -258,30 +245,7 @@ stay historical; only current-policy statements change.
 
 ## Open decisions
 
-### [DECISION] Does the earlier performance threshold block completion?
-
-Topic: Die Leistungsgrenze für den Abschlusstest.
-Intention: Der gewählte Standard und die frühere Grenze ergeben unterschiedliche Ergebnisse.
-Today: Drei gleichzeitige Prüfungen dauerten beim Test am Commit `e693604e`
-2,12- bis 2,13-mal so lange wie eine einzelne; die frühere Grenze war 1,6.
-Repository change: Die Spezifikation legt fest, ob diese Grenze den Abschluss verhindert.
-Architecture change: Keine; die einstellbare Zulassung bleibt bestehen.
-
-Goal in one sentence: Festlegen, wann der gemessene Standard als ausreichend gilt.
-Options:
-
-1. Die Grenze beibehalten: Der Abschluss wartet auf einen bestandenen Test;
-   die gewählte Einstellung kann bis dahin nicht abgeschlossen werden.
-2. Die Messung als Nachweis übernehmen: Der Abschluss scheitert nicht allein
-   am Zeitverhältnis; eine langsamere Prüfung wird damit akzeptiert.
-
-Recommendation: Option 2, weil der Standard in Kenntnis des Ergebnisses gewählt wurde.
-If you say "ok": Das aufgezeichnete Zeitverhältnis allein blockiert den Abschluss nicht.
-What is lost: Die frühere Grenze garantiert dann keine Obergrenze für die Verlangsamung.
-Downside you accept: Option 1 verzögert den Abschluss; Option 2 akzeptiert die
-gemessene Verlangsamung ohne diese Obergrenze.
-
-Welche Option und welchen Nachteil akzeptierst du?
+No maintainer decision is open; the performance threshold was answered in `decisions.md#Q-10`.
 
 The following reversible details are chosen visibly here, not answered on the
 maintainer's behalf:
@@ -299,24 +263,13 @@ maintainer's behalf:
   cancelling them. Reason: one file, no code change, no per-checkout
   copies, keys that move unchanged into bead `coding-harness-twvx`.
 - [DETAIL] The shared Python reader obtains machine readings for all entry
-  points, using the process's effective CPU allocation where available and
-  the existing safe fallback when a reading is unavailable. Reason: Q-8
+  points, using `os.sched_getaffinity` where available and `os.cpu_count` otherwise; a cgroup CPU quota is not read. Reason: Q-8
   removes conflicting shell and Python readings; caller overrides and the
   memory bound remain in force.
 - [DETAIL] An explicit `workers_per_run` in the machine file is not bounded
   by memory. Reason: an operator's stated value wins, as a caller's
   environment value does.
-- [DETAIL] A slot count above the logical cores (the shell's reading, else
-  Python's) warns, it does not refuse (review round 5, row L5-6): the
-  `[verify-settings]` line and the admission's reservation line carry
-  "slots N (source) exceed the M logical cores; each run gets one worker and
-  the machine is oversubscribed". Reason: `read_settings` refuses unusable
-  *content* — a value that is not a positive integer within its bound — and
-  such a slot count is valid content judged against a machine reading that
-  may be absent or differ between machines (a hosted runner has fewer cores
-  than the maintainer's machine, where the repository default of three still
-  has to start); the admission's own log line never refuses. The bound of
-  256 stays the refusal.
+- [DETAIL] A slot count above the effective CPU reading warns on both lines and names the workers in force, including explicit overrides; it does not refuse. Reason: a valid setting can exceed a particular machine's available CPUs.
 - [DETAIL] Exclusion with older checkouts is preserved by keeping the
   existing `verify.lock` as a compatibility lock the updated implementation
   takes shared; FIFO applies among the updated implementation's

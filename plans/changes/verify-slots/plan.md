@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -28,8 +28,7 @@ Starts unless you say stop.
 
 ## Approach and files
 
-Phase 2a still has unanswered ambiguities; this plan is provisional and
-phase 4 must not start on it until those findings are resolved.
+Phase 2a findings are incorporated in the spec; implementation remains partial and requires the repairs below.
 
 Bounded: no design phase and no ADR are due; implement from `spec.md`. The
 change extends the existing admission (`scripts/verify_lock.py`) to a
@@ -81,8 +80,7 @@ this plan follows the phase-3 prompt's form, and their gate is not claimed.
    helper so every admission-held local launch (the implement and draft
    `make verify` runs, the red-first probes and pytest runs, the docs
    gates) inherits both descriptors, and propagate the slot marker through
-   `inherit_env`. Foreign-call environment filtering, the targeted checks
-   outside admission and all timeouts stay untouched. Change
+   `inherit_env`. Foreign-call environment filtering and timeouts stay untouched; all runner xdist launches, including targeted and cheap checks outside admission, read and log the shared settings. Change
    `scripts/verify_all.sh` to obtain machine readings and worker settings
    from the shared Python function after admission; entry, `--held`
    delegation and gate commands stay as they are.
@@ -111,8 +109,8 @@ this plan follows the phase-3 prompt's form, and their gate is not claimed.
    memory policy; update the lane scheduling rule to spend the available
    configured capacity. Dated measurements stay as they are. None of these
    paths is held; the attempt edits them itself.
-8. Create `plans/changes/verify-slots/measurements.md` during phase 4 with
-   the trials below; update this `plan.md` only to mark written ledger
+8. Retain `plans/changes/verify-slots/measurements.md` with
+   the completed trials below; update this `plan.md` only to mark written ledger
    entries and record time used. The runner regenerates `plans/INDEX.md`
    and owns derived stamps, verification and commits.
 
@@ -126,8 +124,7 @@ when it cannot be read. Keep the existing per-slot memory bound, unknown
 reading behaviour, settings precedence, caller override, and post-admission
 reread. In `scripts/verify_all.sh`, remove the independent machine probes
 and call `--settings` without supplying shell-derived readings. In
-`scripts/stage2.py`, use the same reader for targeted pytest and preserve the
-caller override. Update `tests/test_verify_lock.py`, `tests/test_ci.py` and
+`scripts/stage2.py`, use the same reader for every xdist launch, including targeted and cheap pytest, log its settings and preserve the caller override. Refuse unusable settings in all paths, including nested shell and both runner paths; test empty files, invalid workers and legacy files. Re-read after reservation or at unadmitted launch. Use physical memory, affinity with CPU-count fallback, and warn with actual workers. Cover raised capacity at the next poll and legacy-holder diagnostics. Record all three end load averages and sample minimum free-memory percentage with peak pytest memory every five seconds; use readable samples or unknown if none. Update `tests/test_verify_lock.py`, `tests/test_ci.py` and
 `tests/test_stage2.py`: exercise the same six-CPU allocation on a 24-core
 Linux machine through shell and targeted runner, expecting two workers with
 three slots and sufficient memory; also cover unavailable affinity, memory
@@ -156,9 +153,7 @@ manufactures memory pressure. Corrected 2026-11-15 to the shipped design
 (review round 5, row L5-3): the trials run under the night load, beside the
 other lanes (`decisions.md#Q-3`), not in a quiet window. The maintainer chose
 three simultaneous full checks at three slots and four workers as completion
-evidence and cited the trial at `e693604e` (`decisions.md#Q-9`). Whether the
-earlier 1.6 threshold still blocks completion and which revision qualifies
-remain open phase-2a ambiguities; do not prescribe a new trial until resolved.
+evidence and cited the trial at `e693604e` (`decisions.md#Q-9`). The recorded 3 x 4 trial at `e693604e` closes criterion 11 even though the machine file set the capacity; its 2.12–2.13x ratio is evidence, not a gate. The 1.6x threshold applies to two slots only (Q-10 and Q-11).
 After the merge the configuration is
 chosen in real operation (`decisions.md#Q-7`): three windows of two days
 each — four slots x three workers, then three x four, then two x six, set
@@ -173,9 +168,7 @@ configuration, memory floor, hardware, background workload, each exit code,
 queue wait, execution and wall time per run, and the batch elapsed time.
 Sample `os.getloadavg()` every five seconds across each batch and record
 the one-minute series, its mean and maximum; a load that cannot be read is
-explicitly not measured and leaves the evidence incomplete. Keep both
-outcomes, including a slower paired result; a failure leaves completion
-pending. Reuse the existing duration records; never an ownership token. The
+explicitly not measured. Keep the recorded outcomes and do not require a repeat of the cited trial. Reuse the existing duration records; never an ownership token. The
 four hours include the trials; do not claim unrun measurements.
 
 Do not touch the `Makefile`, `decisions/gates.yaml`, generated CI,
@@ -187,12 +180,15 @@ file is added.
 
 Draft validation, 2026-11-16: the criterion ledger passes. The plans registry
 cannot read tracker state in this sandbox; the full suite was not run. The
-phase-2a rows in `findings.md` retain their open status until resolved.
+phase-2a rows in `findings.md` are incorporated in the spec.
 
 ## Criterion ledger
 
 - 1: tests/test_verify_lock.py::test_default_slots_share_capacity_across_trees — a check cannot enter below the default or one more overlaps every occupied default slot.
+- 2: not yet written tests/test_verify_lock.py::test_raised_capacity_wakes_waiter_at_next_poll — a waiter remains blocked after capacity rises.
 - 2: tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease — one/three are ignored or a decrease overlooks occupied higher slots.
+- 3: not yet written tests/test_stage2.py::test_invalid_settings_refuse_all_pytest_launches — invalid settings start targeted or cheap pytest.
+- 3: not yet written tests/test_ci.py::test_nested_verify_refuses_unusable_settings — nested verification uses stale settings.
 - 3: tests/test_verify_lock.py::test_invalid_or_unsafe_capacity_refuses_before_work — invalid, substituted or unreadable settings start work or hang.
 - 4: tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order — a later waiter overtakes or an idle slot waits for another holder to finish.
 - 5: tests/test_verify_lock.py::test_nested_entries_use_their_own_slot_and_context — full-capacity nesting queues or a peer's token, slot or context is resolved.
@@ -204,14 +200,17 @@ phase-2a rows in `findings.md` retain their open status until resolved.
 - 8: tests/test_stage2.py::test_slot_admission_descriptors_reach_local_checks — slot or compatibility ownership is lost across a local launch or reaches foreign calls.
 - 8: tests/test_stage2.py::test_verification_admission_is_outside_execution_timeout — the admission wait consumes checking time.
 - 8: tests/test_verify_duration.py::test_monotonic_execution_excludes_admission_wait — the wait is included in execution.
+- 9: not yet written tests/test_verify_lock.py::test_legacy_holder_wait_diagnostic — the blocker or its unavailable holder is omitted.
 - 9: tests/test_verify_lock.py::test_wait_logs_name_all_occupied_slots_without_tokens — a holder disappears from the progress logs or a token is exposed.
 - 10: tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
+- 12: not yet written tests/test_stage2.py::test_all_xdist_launches_use_shared_settings — cheap pytest bypasses the shared settings.
 - 12: not yet written tests/test_ci.py::test_shell_and_targeted_runner_share_effective_cpu_allocation — separate readings yield different worker counts for the same restricted CPU allocation.
 - 12: tests/test_verify_lock.py::test_layered_settings_default_override_and_sources — a layer is ignored, workers do not follow an overriding slot count, or a source names the wrong layer.
 - 12: tests/test_verify_lock.py::test_workers_follow_slots_and_memory_bound — the old half-the-cores rule, a per-run memory bound, or a guessed count with nothing readable.
 - 12: tests/test_verify_lock.py::test_settings_command_logs_values_and_sources — a run's log does not name the values in force and their sources.
 - 12: tests/test_ci.py::test_runner_takes_workers_from_the_machine_settings_file — a runner without a caller value (as the Stage-2 runner starts it) ignores the machine file or the slot-derived count.
 - 12: tests/test_stage2.py::test_targeted_pytest_uses_the_memory_derived_worker_bound — the runner's targeted pytest derives its own count instead of the one reader's.
+- 13: not yet written tests/test_verify_duration.py::test_history_records_free_memory_minimum_and_partial_samples — missing free-memory minimum, end load averages, or incorrect handling of partial or absent samples.
 - 13: tests/test_verify_duration.py::test_history_records_settings_load_and_peak_rss — the history lacks the values, sources, end load or peak, records a missing sample as a number, or refuses older records.
 - 13: tests/test_verify_duration.py::test_pytest_tree_rss_sums_pytest_trees_below_the_runner — xdist workers are left out, a process counts twice, or a foreign pytest counts.
 - 11: not a test — the phase-6 review reads `measurements.md` and the three updated current-policy documents against criterion 11; absent revision-bound serial-versus-three-at-once wall-time and load evidence, or a stale one-slot prescription, refutes it.
@@ -320,3 +319,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-16 16:33:42–16:36:11 UTC, 149 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 16:49:00–16:50:26 UTC, 86 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 16:51:38–16:54:08 UTC, 150 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-17 22:33:18–22:35:29 UTC, 131 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
