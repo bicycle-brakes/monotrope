@@ -451,8 +451,29 @@ Stage-2 call, 2026-11-17: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | BLOCKER | SPEC | base | spec.md, Begriffe „Slip“ und „Interval“ | [AMBIGUITY] Die Repository-Identität bleibt ungeklärt: Bei einem grünen gezielten Check in einem Worktree und einem roten vollständigen Lauf desselben Stands in einem anderen Worktree ergeben sich je nach Identität des einzelnen Worktrees oder des gemeinsamen Git-Repositories unterschiedliche Zählungen. Die offene Phase-2a-Zeile S-1 ist in der aktuellen Spezifikation nicht aufgelöst. [AC 1, 2, 5] | Codex | taken — maintainer answer B (decisions Q-5), spec Term "Repository" and its [DETAIL]: record the common Git directory with each new run and pair and select by it | — |
-| R-2 | MAJOR | SPEC | base | scripts/verify_duration.py, cmd_slips | Ein roter gezielter Check, dessen geprüfter Baum sich während des Laufs ändert, wird als vollständig behandelt: Die Stabilitätsprüfung erhöht den Zähler nur bei grünem Ergebnis. Der Bericht kann dadurch mit null unzählbaren Läufen und Exit 0 enden, obwohl diesem Lauf eine stabile Vergleichsidentität fehlt. [AC 4, 6; Boundary] | Codex | taken — maintainer answer A (decisions Q-6), spec Term "Valid run" and its Boundary: one validity check at a single choke point that every run passes, green or red, before it may count | — |
+| R-1 | BLOCKER | SPEC | base | spec.md, Begriffe „Slip“ und „Interval“ | [AMBIGUITY] Die Repository-Identität bleibt ungeklärt: Bei einem grünen gezielten Check in einem Worktree und einem roten vollständigen Lauf desselben Stands in einem anderen Worktree ergeben sich je nach Identität des einzelnen Worktrees oder des gemeinsamen Git-Repositories unterschiedliche Zählungen. Die offene Phase-2a-Zeile S-1 ist in der aktuellen Spezifikation nicht aufgelöst. [AC 1, 2, 5] | Codex | fixed — tests/test_verify_duration.py::test_slips_pair_worktrees_by_recorded_common_git_dir | — |
+| R-2 | MAJOR | SPEC | base | scripts/verify_duration.py, cmd_slips | Ein roter gezielter Check, dessen geprüfter Baum sich während des Laufs ändert, wird als vollständig behandelt: Die Stabilitätsprüfung erhöht den Zähler nur bei grünem Ergebnis. Der Bericht kann dadurch mit null unzählbaren Läufen und Exit 0 enden, obwohl diesem Lauf eine stabile Vergleichsidentität fehlt. [AC 4, 6; Boundary] | Codex | fixed — tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run | — |
 
 Phase 6 verdict: codex 01a1e69e-d684-7af1-bb39-40d094b08386, 2026-11-17
 Reviewer session: codex 01a1e69e-d684-7af1-bb39-40d094b08386 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4547 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/verify_duration.py` +23 -30
+> - `tests/test_verify_duration.py` +52 -7
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - R-2: tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run: the call of `tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run` failed with AttributeError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-1-20261117T222437014248Z-5d422325.md
+> ```
+
+Stage-2 call, 2026-11-17: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 4559 commits, 12 rules.
+
+Runner restoration, 2026-11-17: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged

@@ -729,6 +729,7 @@ def _run_start(
         "run_id": run_id,
         "utc": utc,
         "repository": repository,
+        "common_git_dir": str(Path(repository) / ".git"),
         "commit": "c" * 40,
         "dirty": False,
         "config_sha256": config,
@@ -767,6 +768,7 @@ def _measured_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     repo = tmp_path / "repo"
     repo.mkdir()
     monkeypatch.chdir(repo)
+    monkeypatch.setattr(verify_duration, "_common_git_dir", lambda _root=None: str(repo / ".git"), raising=False)
     return str(repo)
 
 
@@ -847,7 +849,7 @@ def test_slips_count_each_matching_red_full_run_once(
     code, out, _ = _slips(capsys)
     assert code == 0, out
     assert "slips: 2; incomplete/not countable runs: 0" in out, out
-    assert f"repository {os.path.realpath(repository)}" in out and "change all" in out, out
+    assert f"repository {repository}/.git" in out and "change all" in out, out
     # Reading twice reports the same count from the same bytes.
     code_again, out_again, _ = _slips(capsys)
     assert code_again == 0 and out_again == out, out_again
@@ -929,7 +931,7 @@ def test_slips_require_complete_matching_predecessor(
                 tree=TREE,
                 config=CONFIG,
             ),
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     elif case == "reversed-order":
         events = _slip_events(repository, full_utc="2026-11-13T08:00:00+00:00")
@@ -1004,7 +1006,7 @@ def test_slips_show_incomplete_runs_beside_count(
                 tree=TREE,
                 config=CONFIG,
             ),
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     elif case == "conflicting-ends":
         events = _slip_events(repository) + [
@@ -1031,7 +1033,7 @@ def test_slips_show_incomplete_runs_beside_count(
                 config=CONFIG,
             ),
             *_slip_events(repository)[:2],  # the targeted green predecessor
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     elif case == "missing-comparison":
         events = _slip_events(repository)[:2] + [
@@ -1044,7 +1046,7 @@ def test_slips_show_incomplete_runs_beside_count(
                 tree=None,
                 config=None,
             ),
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     else:  # legacy-red
         events = [
@@ -1060,7 +1062,7 @@ def test_slips_show_incomplete_runs_beside_count(
             _run_end("t-1", utc="2026-11-13T09:05:00+00:00", verdict="green", tree=TREE),
             # A legacy full red run: no comparison fields, so no countable slip.
             _run_start("f-1", utc="2026-11-13T11:00:00+00:00", repository=repository),
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red"),
+            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     _write_history(tmp_path / "state", events)
 
@@ -1168,7 +1170,7 @@ def test_slips_select_interval_repository_and_change(
     code, out, _ = _slips(capsys, *window)
     assert code == 0, out
     assert "slips: 1; incomplete/not countable runs: 0" in out, out
-    assert f"repository {os.path.realpath(repository)}" in out, out
+    assert f"repository {repository}/.git" in out, out
 
     code, out, _ = _slips(capsys, *window, "--change", "beta")
     assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
@@ -1434,3 +1436,46 @@ def test_an_unrecognised_environment_kind_is_diagnosed_by_the_reader(
 
     code, out, _ = _slips(capsys)
     assert "slips: 0; incomplete/not countable runs: 1" in out and code == 1, out
+
+
+def test_slips_pair_worktrees_by_recorded_common_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Different worktrees of the same Git repository share a recorded identity."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    common = str((repo / ".git").resolve())
+    monkeypatch.chdir(repo)
+    (repo / "decisions").mkdir()
+    (repo / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
+    receipt = verify_duration.begin_targeted_run(repo, "demo", TREE)
+    verify_duration.finish_targeted_run(receipt, TREE, "green")
+    events = _history(tmp_path / "state")
+    assert events[0].get("common_git_dir") == common
+    events[0]["utc"] = "2026-11-13T09:00:00+00:00"
+    events[1]["utc"] = "2026-11-13T09:05:00+00:00"
+    events[0]["repository"] = str(tmp_path / "removed-worktree")
+    full = _slip_events(str(repo))[2:]
+    full[0]["common_git_dir"] = common
+    full[0]["config_sha256"] = events[0]["config_sha256"]
+    events.extend(full)
+    legacy = _slip_events(str(repo), targeted_id="old-t", full_id="old-f")
+    for event in legacy:
+        event.pop("common_git_dir", None)
+    events.extend(legacy)
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+
+
+def test_slips_reject_unstable_red_targeted_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A red targeted check with a changed tree is incomplete, not a clean non-slip."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository, targeted_verdict="red")
+    events[1]["tree_id"] = "changed"
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out

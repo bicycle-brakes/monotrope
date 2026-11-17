@@ -138,6 +138,17 @@ def _git(arguments: list[str], cwd: Path | None = None) -> str | None:
     return done.stdout.strip()
 
 
+def _common_git_dir(root: Path | None = None) -> str | None:
+    """Resolve the shared Git directory at recording or reader time."""
+    base = root or Path.cwd()
+    answer = (
+        _git(["rev-parse", "--git-common-dir"], root) if root is not None else _git(["rev-parse", "--git-common-dir"])
+    )
+    if not answer:
+        return None
+    return str((base / answer).resolve())
+
+
 def _gate_file_digest(root: Path | None = None) -> str | None:
     """The SHA-256 of the one gate file this run measured, or None when absent."""
     try:
@@ -298,6 +309,7 @@ def begin_targeted_run(root: Path, change: str | None, tree: str | None) -> Targ
         "run_id": uuid.uuid4().hex,
         "utc": _utc_now(),
         "repository": str(root),
+        "common_git_dir": _common_git_dir(root),
         "commit": _git(["rev-parse", "HEAD"], root),
         # None means git could not answer; only an answer decides yes or no.
         "dirty": None if porcelain is None else bool(porcelain),
@@ -367,6 +379,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "run_id": uuid.uuid4().hex,
         "utc": _utc_now(),
         "repository": str(Path.cwd()),
+        "common_git_dir": _common_git_dir(),
         "commit": _git(["rev-parse", "HEAD"]),
         # None means git could not answer; only an answer decides yes or no.
         "dirty": None if porcelain is None else bool(porcelain),
@@ -682,22 +695,6 @@ def _instant(value: object) -> datetime.datetime | None:
         return None
 
 
-def _same_repository(recorded: str) -> bool:
-    """Whether a record's repository is the resolved repository the reader runs in."""
-    try:
-        return os.path.realpath(recorded) == os.path.realpath(str(Path.cwd()))
-    except OSError:
-        return False
-
-
-def _same_path(first: str, second: str) -> bool:
-    """Whether two recorded repository spellings resolve to one directory, as scope resolves them."""
-    try:
-        return os.path.realpath(first) == os.path.realpath(second)
-    except OSError:
-        return False
-
-
 def _slip_predecessor_match(
     predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]],
     moment: datetime.datetime,
@@ -714,13 +711,7 @@ def _slip_predecessor_match(
     checks. Several qualifying predecessors still count the full run once.
     """
     for completion, place, named, content, basis in predecessors:
-        if (
-            completion < moment
-            and _same_path(place, repository)
-            and named == change
-            and content == tree
-            and basis == config
-        ):
+        if completion < moment and place == repository and named == change and content == tree and basis == config:
             return True
     return False
 
@@ -759,10 +750,11 @@ def cmd_slips(args: argparse.Namespace) -> int:
     # qualifying predecessor may lie before the asked interval.
     predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]] = []
     full_candidates = []
+    current_repository = _common_git_dir()
     for run_id, run in runs.items():
         start = run["start"]
         moment = _instant(start.get("utc"))
-        repository = start.get("repository")
+        repository = start.get("common_git_dir")
         job = start.get("job")
         placement = start.get("placement")
         localisable = moment is not None and isinstance(repository, str) and isinstance(job, str)
@@ -773,7 +765,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
             continue
         if not localisable:
             continue
-        if job != "verify" or placement != "local" or not _same_repository(repository):
+        if job != "verify" or placement != "local" or (not repository or repository != current_repository):
             continue  # complete unrelated jobs, placements and repositories are ignored
         change = start.get("change")
         # The asked interval and change scope select what is counted; the
@@ -808,12 +800,13 @@ def cmd_slips(args: argparse.Namespace) -> int:
             if in_selection:
                 uncountable += 1
             continue
-        if kind == "targeted":
-            stable = end.get("tree_id") == start.get("tree_id")
-            if verdict == "green" and stable:
-                predecessors.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
-            elif verdict == "green" and in_selection:
+        if kind == "targeted" and end.get("tree_id") != start.get("tree_id"):
+            if in_selection:
                 uncountable += 1
+            continue
+        if kind == "targeted":
+            if verdict == "green":
+                predecessors.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
             continue
         if in_selection and verdict == "red":
             full_candidates.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
@@ -825,7 +818,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
     scope = f"change {args.change}" if args.change is not None else "change all"
     lower = since.isoformat() if since is not None else "none"
     upper = until.isoformat() if until is not None else "none"
-    print(f"repository {os.path.realpath(str(Path.cwd()))} · {scope} · since {lower} · until {upper}")
+    print(f"repository {current_repository} · {scope} · since {lower} · until {upper}")
     if not selected:
         # Nothing of this scope was measured: an observed absence needs runs.
         print("0 runs selected, no statement possible")
