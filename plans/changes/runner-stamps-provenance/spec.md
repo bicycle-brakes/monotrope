@@ -3,7 +3,7 @@ title: "Spec — runner-stamps-provenance"
 status: draft
 implementation_status: none
 date: 2026-11-16
-last_reviewed: 2026-11-16
+last_reviewed: 2026-11-17
 updated: 2026-11-17
 supersedes: null
 superseded_by: null
@@ -43,30 +43,30 @@ A **producer record** identifies a producing program and publication date in `pr
 3. When a repair attempt changes and retains a model-written artifact with frontmatter, the runner stamps a producer record with the actual program, model and publication date before its post-run checks.
    *Refuted by:* an affected artifact missing that record, or its record naming a different program, model or publication day.
    *Basis:* `decisions.md#Q-4`.
-4. When a runner verb checks its result, a touched file that fails the full research publication header contract, including any earlier producer record, makes its post-run check fail with a diagnostic identifying the file.
-   *Refuted by:* a touched file with an invalid producer, provenance, review or date accepted by its verb's post-run check.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-6`, `decisions.md#Q-7`.
+4. When a runner verb checks its result, a touched file whose frontmatter carries `produced_by` fails the publication header contract, including any earlier producer record, the post-run check fails with a diagnostic identifying the file; the check accepts the preserved provenance class and a valid retained approval.
+   *Refuted by:* a touched producer-bearing file with an invalid producer or date is accepted, or a file without `produced_by` is rejected by this check.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-6`, `decisions.md#Q-7`, `decisions.md#Q-11`, `decisions.md#Q-12`.
 5. While the runner stamps a draft or repair artifact, it preserves bytes outside `produced_by`, `updated` and a `review` reset required by criterion 8.
    *Refuted by:* changed prose, fences, plan card, `provenance` or unrelated frontmatter; in particular a draft ADR loses its `human-decided` provenance.
-   *Basis:* `research.md`, “The runner already stamps provenance in these places”.
+   *Basis:* `decisions.md#Q-11`.
 6. If an artifact cannot be stamped safely, the attempt fails with a diagnostic instead of publishing an invented or malformed header.
    *Refuted by:* accepting a header with any YAML anchor or alias, undecodable bytes, a non-mapping header or an unreadable earlier producer, or failing without identifying the artifact.
    *Basis:* `research.md`, “The runner already stamps provenance in these places”.
 
-7. When an artifact is stamped, every readable earlier producer record remains and the record of the run that actually contributed is added.
-   *Refuted by:* losing a readable earlier record or attributing an unchanged file to a later attempt.
-   *Basis:* `decisions.md#Q-5`.
-8. When a redraft changes an approved document's body, its approval is reset to pending and the reset identifies the approver.
+7. When an artifact is stamped, readable producer records committed before the run remain byte-for-byte, session-written self-descriptions from the attempt are discarded, and the measured contributor record is added.
+   *Refuted by:* normalising an earlier record, retaining a self-written record, or attributing an unchanged file to a later attempt.
+   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-10`, `decisions.md#Q-12`.
+8. When a draft or repair changes an approved document's body, its approval is reset to pending with null approver and date, and the attempt block in `findings.md` identifies the former approver.
    *Refuted by:* retaining approval for changed body content or omitting whose approval was reset.
-   *Basis:* `decisions.md`, “Decided by the agent”.
+   *Basis:* `decisions.md#Q-11`, `decisions.md#Q-12`.
 9. When stamping changes only the header of an approved document, its approval remains unchanged.
    *Refuted by:* resetting an approval solely because of a header stamp.
    *Basis:* `decisions.md`, “Decided by the agent”.
-10. If an attempt's changed files cannot be measured, the runner refuses to attribute its producer to an unmeasured file and reports the failure.
-    *Refuted by:* stamping an unchanged file with that attempt's producer or accepting an unmeasured attempt without a diagnostic.
-    *Basis:* `decisions.md#Q-5`.
+10. If a draft attempt's changed files cannot be measured, the attempt fails with a diagnostic and the next available route runs.
+    *Refuted by:* accepting the unmeasured draft attempt or failing to continue to the next available route.
+    *Basis:* `decisions.md#Q-12`.
 
-Criteria 2, 4, 5, 6 and 7 are provisional where the unanswered decisions below affect them. The explore publication's existing removal of generated skeleton notices is outside criterion 5.
+The explore publication continues to remove generated skeleton notices; criterion 5 applies to draft and repair, not that removal.
 
 ## Non-goals
 
@@ -89,40 +89,4 @@ Runner-held paths remain outside model attempts, including `provenance.yaml`, `d
 
 [DETAIL] Insert a missing field at the end of frontmatter when `tags` is absent; this preserves unrelated bytes. Refuse all YAML anchors and aliases, not just ambiguous ones, because their shared source spans make safe edits uncertain. A resumed swarm retains its frozen preparation day, because its publication bytes are bound to the resume snapshot.
 
-### [DECISION] The current session's self-description (review finding F-12)
-
-Topic: Eine Herkunftsangabe, die das gerade laufende Modell selbst in den Kopf schreibt.
-Intention: Frühere Beiträge sollen sichtbar bleiben und die Herkunft des aktuellen Laufs soll stimmen.
-Today: Modelle können ihren eigenen Namen falsch oder als Platzhalter eintragen.
-Repository change: Der Runner behält diese Angabe als früheren Eintrag oder ersetzt sie durch seine gemessene Angabe.
-Architecture change: Der Runner bleibt die zentrale Schreibstelle; die gespeicherten Einträge unterscheiden sich.
-
-Goal in one sentence: Festlegen, ob eine selbst geschriebene Angabe des aktuellen Laufs erhalten bleibt.
-Options: 1. Als früheren Eintrag behalten — keine lesbare Angabe geht verloren, aber eine falsche Angabe bleibt sichtbar. 2. Durch die gemessene Angabe ersetzen — die aktuelle Herkunft ist eindeutig, aber ein selbst geschriebener Eintrag geht verloren.
-Recommendation: Option 2 — weil die Angabe denselben aktuellen Lauf beschreibt und dessen Herkunft sonst widersprüchlich bleiben kann.
-If you say "ok": Der Runner ersetzt die selbst geschriebene Angabe des aktuellen Laufs durch den gemessenen Eintrag und behält lesbare Angaben aus dem Stand vor dem Lauf.
-What is lost: Option 1 hätte auch den selbst geschriebenen Eintrag bewahrt.
-Downside you accept: Option 1 kann falsche aktuelle Angaben behalten; Option 2 entfernt einen selbst geschriebenen Eintrag.
-
-Welche Option und den jeweils genannten Nachteil akzeptierst du?
-
-### [DECISION] Header fields changed by stamping (review finding F-13)
-
-Topic: Änderungen am Dokumentkopf durch den Herkunftsstempel.
-Intention: Der Stempel soll Herkunft richtig festhalten und bestehende Entscheidungen und Freigaben schützen.
-Today: Die Forschungs-Veröffentlichung ändert Herkunftsklasse, Urheber, Prüfstatus und Änderungsdatum und entfernt Vorlagenhinweise; eine Architekturentscheidung trägt die Herkunftsklasse `human-decided`.
-Repository change: Der Runner ändert entweder diese Kopfwerte auch bei Entwurf und Reparatur oder erhält Herkunftsklasse und Freigabe dort nach einer gesonderten Regel.
-Architecture change: Der Runner bleibt die zentrale Schreibstelle; der Umfang seiner Schreibrechte am Dokumentkopf unterscheidet sich.
-
-Goal in one sentence: Festlegen, welche Angaben der Stempel bei Entwurf und Reparatur ändern darf.
-Options: 1. Herkunftsklasse und Prüfstatus wie bei Forschungs-Veröffentlichungen ersetzen — ein einheitlicher Vertrag, aber eine Architekturentscheidung verliert ihre vorgesehene Klasse und Freigaben werden zurückgesetzt. 2. Herkunftsklasse erhalten und Freigaben nur bei geändertem Inhalt zurücksetzen — menschliche Entscheidungen bleiben erkennbar, aber die Prüfung braucht eine passende Regel für solche Dokumente.
-Recommendation: Option 2 — weil Architekturentscheidungen ihre menschlich entschiedene Herkunft behalten sollen.
-If you say "ok": Der Stempel erhält die Herkunftsklasse, ergänzt den Urheber, aktualisiert das Änderungsdatum und setzt eine Freigabe nur bei geändertem Inhalt zurück; die Prüfung berücksichtigt diese Fälle.
-What is lost: Option 1 hätte für alle Dokumentarten denselben Forschungs-Kopfvertrag angewendet.
-Downside you accept: Option 1 kann die Herkunftsklasse menschlicher Entscheidungen und bestehende Freigaben überschreiben; Option 2 benötigt eine dokumentartgerechte Prüfung und weicht damit vom unveränderten Forschungs-Kopfvertrag ab.
-
-Welche Option und den jeweils genannten Nachteil akzeptierst du?
-
-### Further review ambiguities awaiting a maintainer answer
-
-F-9, F-10, F-15, F-16 and F-17 remain open in `findings.md`. The criteria and agent details above are provisional where they address those rows. F-13 also remains open as asked above: applying the research contract's `ai-drafted-reviewed` and pending-review requirements to an ADR or a previously approved header conflicts with preserving those values. The maintainer's answer and any resulting spec changes must precede implementation.
+The remaining review ambiguities F-10 (attribution across attempts), F-15 (whether a model is required for every producer), F-16 (publication day on swarm resume), and F-17 (unsafe YAML headers) remain open in `findings.md`. Their provisional wording above does not constitute a maintainer answer; reconcile them before implementation. F-9 is settled by Q-11 and Q-12.
