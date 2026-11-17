@@ -635,5 +635,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/venv-guard/decisions.md`](changes/venv-guard/decisions.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/findings.md`](changes/venv-guard/findings.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/plan.md`](changes/venv-guard/plan.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/research.md`](changes/venv-guard/research.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/spec.md`](changes/venv-guard/spec.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
