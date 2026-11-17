@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -240,6 +240,123 @@ rows into the spec, while F-12 and F-13 stay open for the maintainer, to
 achieve progress overnight on what is already settled, accepting that the
 spec stays open on F-12 and F-13 until the maintainer answers them.
 — 2026-11-16
+
+## Q-10 · Which producer records count as earlier records
+
+context: |
+  Topic: the producer record a drafting or repairing session writes about
+  itself into the header during the attempt.
+  Intention: the spec review (finding F-12) found two readings of "earlier
+  records" in Q-5: the records committed before the run, or everything in
+  the header when the stamp runs, the session's own self-description
+  included. This change's committed `spec.md` shows a false
+  self-description (route codex accepted, header naming glm-5.3).
+  Today: the spec's open [DECISION] "The current session's
+  self-description" offers keeping that record or replacing it with the
+  runner's measured record.
+  Repository change: either the session's self-written record stays beside
+  the runner's record, or only records committed before the run count as
+  earlier records and the runner drops what the session wrote into the
+  header during the attempt.
+  Architecture change: none; the runner stays the one writer of the
+  producer record.
+asked: 2026-11-17, conversation (spec review finding F-12)
+answer: "A"
+answered_by: maintainer
+status: answered
+
+Recorded in the bead notes (coding-harness-f9sv) on 2026-11-17 as: "F-12:
+only producer records committed before the run count as earlier records;
+the runner drops whatever the session wrote into the header during the
+attempt (answer A)."
+
+In the context of a session that writes its own producer record into the
+header during an attempt, facing self-descriptions that name the wrong
+program or model, we decided that only producer records committed before
+the run count as earlier records and the runner drops whatever the session
+wrote into the header during the attempt, to achieve that the record of the
+current run is the runner's measurement alone, accepting that a
+self-written record is lost.
+— 2026-11-17
+
+## Q-11 · Which header fields stamping may change
+
+context: |
+  Topic: the header fields the runner's stamp changes on a draft or repair.
+  Intention: the spec review (finding F-13) found that AC 5 names no
+  closed list of fields the stamp changes, so "unrelated frontmatter" has
+  no edge. A new ADR carries `provenance: human-decided`, and the research
+  publication today rewrites `provenance`, `produced_by`, `review` and
+  `updated` and removes skeleton notices.
+  Today: the spec's open [DECISION] "Header fields changed by stamping"
+  offers applying the research contract's field rewrites everywhere, or
+  keeping `provenance` and resetting approval only on changed content.
+  Repository change: a closed list of fields the stamp may change, with
+  `provenance` never changed and `review` changed only through the redraft
+  reset.
+  Architecture change: none; the runner's write rights on the header are
+  bounded by the list.
+asked: 2026-11-17, conversation (spec review finding F-13)
+answer: "A"
+answered_by: maintainer
+status: answered
+
+Recorded in the bead notes (coding-harness-f9sv) on 2026-11-17 as: "F-13:
+closed list — stamping never changes provenance; review only through the
+AC 8 redraft reset; removal of skeleton notices declared; the exact field
+list is [DETAIL] for the agent (answer A)."
+
+In the context of a stamp that writes into draft and repair headers,
+facing an open boundary that could overwrite a human-decided provenance or
+an approval, we decided that the stamp works on a closed list of fields,
+never changes `provenance`, changes `review` only through the redraft
+reset of AC 8, and declares its removal of skeleton notices, with the exact
+field list left to the agent as a [DETAIL], to achieve that a test can go
+red at the list's edge, accepting that the header check must accept a
+kept `provenance` on such documents.
+— 2026-11-17
+
+## Q-12 · The four rows of the redraft's spec review (F-18 to F-21)
+
+context: |
+  Topic: the four rows the phase-2a review of the redraft of 2026-11-17
+  added (findings F-18, F-19, F-20 and F-21).
+  Intention: each row left two readings of a criterion open; the night run
+  2026-11-16-a parked the lane with one recommendation per row in the
+  bead's notes.
+  Today: F-18 asks which touched files the post-run check judges; F-19
+  whether a readable earlier record keeps its bytes or is normalised; F-20
+  where a redraft reset names the approver and whether repair resets too;
+  F-21 what happens to an attempt whose changed files were not measured.
+  Repository change: the post-run check judges only touched files whose
+  header carries `produced_by`; earlier records keep their bytes; the
+  approver reset is recorded in the attempt's block in `findings.md`, and
+  repair resets like a redraft; an unmeasured draft attempt fails and the
+  next route runs.
+  Architecture change: none.
+asked: 2026-11-17, conversation (spec review findings F-18 to F-21)
+answer: "A"
+answered_by: maintainer
+status: answered
+
+Recorded in the bead notes (coding-harness-f9sv) on 2026-11-17 as:
+"F-18..F-21: all four night-run recommendations accepted as one batch
+(answer A): F-18 only files whose header carries produced_by; F-19 earlier
+records keep their bytes (drafts on a file with an old faulty record fail
+until migration bead coding-harness-2i7x runs); F-20 approver reset
+recorded in the attempt's findings.md block, repair resets too; F-21 an
+unmeasured draft attempt fails and the next route runs."
+
+In the context of four open readings in the redraft's criteria, facing
+tests that could not be written against any of them, we decided that the
+post-run check judges only touched files whose header carries
+`produced_by`, that earlier records keep their bytes, that the approver
+reset is recorded in the attempt's block in `findings.md` and repair
+resets like a redraft, and that an unmeasured draft attempt fails and the
+next route runs, to achieve one testable reading per criterion, accepting
+that a draft or repair on a file with an old faulty record fails until
+coding-harness-2i7x migrates it.
+— 2026-11-17
 
 ## Decided by the agent
 
