@@ -661,6 +661,20 @@ def test_probes_send_only_the_fixed_text_without_tools(fx: Fixture, monkeypatch:
     assert len(audit) == 6 and all("leak check clean" in line for line in audit)
 
 
+def test_research_probes_load_neutral_paths(fx: Fixture) -> None:
+    """Ledger 1: every Pi research probe loads the neutral-path copy and keeps its fixed tool-free shape."""
+    assert fx.prepare() == 0
+    pi_calls = [call for call in fx.w.calls() if call["name"] == "pi" and "--print" in call["argv"]]
+    assert pi_calls, "no research probe went through Pi"
+    for call in pi_calls:
+        argv = call["argv"]
+        loaded = [argv[index + 1] for index, word in enumerate(argv) if word == "-e"]
+        assert [Path(path).name for path in loaded] == ["stage2-pi-neutral-paths.mjs"], loaded
+        assert argv.index("--no-extensions") < argv.index("-e")
+        assert "--no-tools" in argv and "--tools" not in argv, "the probe is no longer tool-free"
+        assert call["cwd"] != str(fx.w.root)
+
+
 def test_claude_code_candidate_is_probed_through_official_claude(fx: Fixture) -> None:
     assert fx.prepare() == 0
     claude = [call for call in fx.w.calls() if call["name"] == "claude"]

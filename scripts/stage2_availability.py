@@ -552,12 +552,18 @@ def probe_go(
         home.mkdir()
         prompt_file = scratch / "probe-prompt.md"
         prompt_file.write_text(text, encoding="utf-8")
+        try:
+            neutral = stage2_go.install_neutral_paths(scratch)
+        except stage2_go.NeutralPathsUnavailable as error:
+            raise runner.Refused(f"{error}; no probe starts.") from None
         command = [
             str(runner.PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
             "--no-extensions",
+            "-e",
+            str(neutral),
             "--no-mcp",
             "--no-skills",
             "--no-context-files",

@@ -4,13 +4,13 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-29"}
+produced_by: {kind: llm-session, name: claude-code, model: glm-5.3-flash, version: "2026-10-29"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 class: bounded

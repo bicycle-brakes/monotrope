@@ -9749,6 +9749,28 @@ def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
     assert len(lines) == 5, "a member call ran without its own declaration and leak check"
 
 
+def test_all_review_members_load_neutral_paths(world: World) -> None:
+    """Ledger 1: every free and paid review member loads the neutral-path copy from its own scratch directory.
+
+    The probe starts each free member and each ladder rung through the one reviewer launch path, so a
+    command that omits the extension, loads the source file or loads it before `--no-extensions` fails here.
+    """
+    world.script(pi=[{"stdout": "probe answer"}] * 5)
+    assert world.run("probe") == 0
+    reviews = world.reviews("pi")
+    assert [rung_of(call) for call in reviews] == [*TEST_FREE, *TEST_LADDER]
+    for call in reviews:
+        argv = call["argv"]
+        loaded = [argv[index + 1] for index, word in enumerate(argv) if word == "-e"]
+        assert [Path(path).name for path in loaded] == ["stage2-pi-neutral-paths.mjs"], (
+            f"{rung_of(call)} does not load exactly the neutral-path extension: {loaded}"
+        )
+        assert argv.index("--no-extensions") < argv.index("-e"), "the extension is loaded before extensions are off"
+        prompt = Path(argv[argv.index("--append-system-prompt") + 1])
+        assert Path(loaded[0]).parent == prompt.parent, "the copy is not in the member's own scratch directory"
+        assert Path(loaded[0]) != stage2.REPO_ROOT / "scripts" / "stage2_pi_neutral_paths.mjs"
+
+
 @pytest.mark.parametrize("failed_index", [0, 2, 4], ids=["first-free", "first-paid", "last-paid"])
 @pytest.mark.parametrize("empty", [False, True], ids=["unavailable", "empty-answer"])
 def test_the_probe_continues_after_member_failures(

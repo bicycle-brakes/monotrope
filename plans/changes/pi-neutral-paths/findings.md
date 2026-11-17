@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-29
 created: 2026-10-29
 last_reviewed: 2026-10-29
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
@@ -631,3 +631,40 @@ Stage-2 call, 2026-11-16: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-11-16: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1106 files, 4488 commits, 12 rules.
 
 Stage-2 call, 2026-11-16: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash attempts 1 and 2 failed their post-run checks; Sonnet continues from the saved attempt (night run 2026-11-16-a) · leak check clean over 1105 files, 4504 commits, 12 rules.
+
+Stage-2 call, 2026-11-16: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash attempts 1 and 2 failed their post-run checks; the first Sonnet call was cut off by a session restart (night run 2026-11-16-a) · leak check clean over 1113 files, 4512 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/pi-neutral-paths/plan.md` +14 -14
+> - `scripts/stage2.py` +6 -0
+> - `scripts/stage2_availability.py` +6 -0
+> - `scripts/stage2_go.py` +23 -0
+> - `scripts/stage2_pi_neutral_paths.mjs` +187 -0
+> - `scripts/stage2_research_run.py` +8 -0
+> - `scripts/stage2_session.py` +27 -3
+> - `tests/test_pi_contract.py` +550 -2
+> - `tests/test_stage2.py` +22 -0
+> - `tests/test_stage2_availability.py` +16 -0
+> - `tests/test_stage2_repository_pathlock.py` +3 -1
+> - `tests/test_stage2_research_availability.py` +14 -0
+> - `tests/test_stage2_session.py` +23 -1
+> - `tests/test_stage2_swarm.py` +23 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2_go.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_pi_contract.py:2433:14: SIM115 Use a context manager for opening files
+>      |
+> 2431 | def rpc_conversation(argv: list[str], cwd: Path, env: dict, prompts: list[str], timeout: float = 240) -> str:
+> 2432 |     """Test-only adapter: Pi's JSONL RPC mode stands in for the interactive terminal; one user turn per prompt."""
+> 2433 |     errors = tempfile.TemporaryFile()
+>      |              ^^^^^^^^^^^^^^^^^^^^^^ SIM115
+> 2434 |     process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors)
+> 2435 |     lines: queue.Queue = queue.Queue()
+>      |
+>
+> Found 1 error.
+> ```

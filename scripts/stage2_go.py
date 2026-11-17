@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,6 +37,29 @@ from urllib.parse import urlsplit
 import yaml
 
 PROVIDER = "opencode-go"
+
+# The extension every Pi launch with model contact loads beside its own one
+# (plans/changes/pi-neutral-paths): it keeps machine-local locations out of the
+# request. Each launch loads a copy from its private directory, never the source.
+NEUTRAL_PATHS_SOURCE = Path(__file__).resolve().parent / "stage2_pi_neutral_paths.mjs"
+NEUTRAL_PATHS_FILE = "stage2-pi-neutral-paths.mjs"
+
+
+class NeutralPathsUnavailable(Exception):
+    """The neutral-path extension could not be copied; a launch without it sends nothing."""
+
+
+def install_neutral_paths(directory: Path) -> Path:
+    """Copy the neutral-path extension into a launch's private directory; the copy is what Pi loads."""
+    copy = directory / NEUTRAL_PATHS_FILE
+    try:
+        shutil.copyfile(NEUTRAL_PATHS_SOURCE, copy)
+    except OSError as error:
+        raise NeutralPathsUnavailable(
+            f"the neutral-path extension {NEUTRAL_PATHS_SOURCE.name} could not be copied: {error}"
+        ) from error
+    return copy
+
 
 # The record's known keys. An unknown key refuses the record: a typo would
 # otherwise silently deactivate part of the policy (fail closed, criterion 8).

@@ -3272,12 +3272,18 @@ def run_reviewer(
             raise Refused(assessment.problem)
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
+        try:
+            neutral = stage2_go.install_neutral_paths(scratch)
+        except stage2_go.NeutralPathsUnavailable as error:
+            raise Refused(f"{error}; no reviewer starts.") from None
         command = [
             str(PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
             "--no-extensions",
+            "-e",
+            str(neutral),
             "--no-mcp",
             "--no-skills",
             "--no-context-files",

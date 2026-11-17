@@ -456,6 +456,10 @@ def prepare(root: Path, transport: str, cli: str, runner) -> Path:
         raise runner.Refused(f"the launch script {script} could not be written: {error}") from error
     if transport == "pi":
         try:
+            try:
+                stage2_go.install_neutral_paths(private)
+            except stage2_go.NeutralPathsUnavailable as error:
+                raise runner.Refused(f"{error}; no session starts.") from None
             confirm_loaded(root, cli, install_policy(private, runner), runner)
         except BaseException:  # any failure, an unwritable temp directory or Ctrl-C included
             shutil.rmtree(private, ignore_errors=True)
@@ -463,7 +467,15 @@ def prepare(root: Path, transport: str, cli: str, runner) -> Path:
     return private
 
 
-def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, extension: Path | None = None) -> list[str]:
+def cli_argv(
+    transport: str,
+    root: Path,
+    cli: str,
+    model: str,
+    prompt: str,
+    extension: Path | None = None,
+    neutral: Path | None = None,
+) -> list[str]:
     """The one interactive form per transport: no headless verb, no fallback, no extra writable directory.
 
     The prompt can begin with `---` (a handover's frontmatter) or with a word that is a subcommand. Codex
@@ -487,7 +499,9 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
         ]
     # Discovery is off like in the reviewer call (spec criterion 11): no MCP servers (an MCP file tool would
     # bypass the policy's worktree bounds), skills, prompt templates or themes. Context files stay on, so the
-    # session reads the repository's AGENTS.md (maintainer, 2026-10-09).
+    # session reads the repository's AGENTS.md (maintainer, 2026-10-09); the neutral-path extension then drops
+    # every discovered file that resolves outside the repository and keeps machine-local locations out of
+    # each request (plans/changes/pi-neutral-paths).
     return [
         cli,
         "--no-extensions",
@@ -497,6 +511,8 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
         "--no-themes",
         "-e",
         str(extension),
+        "-e",
+        str(neutral),
         "--offline",
         "--no-approve",
         "--model",
@@ -654,7 +670,15 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
         command = terminal_command(
             root,
             runner.foreign_env({}),
-            cli_argv(transport, root, cli, selection, prompt, private / POLICY_FILE),
+            cli_argv(
+                transport,
+                root,
+                cli,
+                selection,
+                prompt,
+                private / POLICY_FILE,
+                private / stage2_go.NEUTRAL_PATHS_FILE,
+            ),
         )
         if len(command.encode("utf-8")) > COMMAND_LIMIT:
             raise runner.Refused(

@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import queue
 import re
 import shutil
 import socket
@@ -48,6 +49,8 @@ import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
 import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
+import stage2_research_run  # noqa: E402
+import stage2_session  # noqa: E402
 import stage2_swarm  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
 from test_stage2 import World  # noqa: E402
@@ -604,7 +607,7 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     """
     calls: list[dict] = []
     providers: dict = {}
-    controls = {"trusted": False, "omit": None, "mcp_control": False}
+    controls = {"trusted": False, "omit": None, "mcp_control": False, "drop_neutral": False}
     original_launch = stage2.launch
 
     def repoint(env):
@@ -642,6 +645,11 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
             command[command.index("--no-approve")] = "--approve"
         if controls["omit"]:
             command.remove(controls["omit"])
+        if controls["drop_neutral"]:
+            # The control of the neutral-path contracts: the production command without its neutral-path copy.
+            at = command.index("-e")
+            assert Path(command[at + 1]).name == stage2_go.NEUTRAL_PATHS_FILE, "the first extension is not the copy"
+            del command[at : at + 2]
         if controls["mcp_control"]:
             command[1:1] = ["-e", "builtin:mcp"]
         # Production wrote the agent settings this launch runs on; the transport only observes the
@@ -1038,7 +1046,12 @@ def reviewer_flags() -> list[str]:
         )
     # The overlay check launches Pi too; the reviewer's own command is the one that declares its tools.
     command = next(command for command in commands if "--tools" in command)
-    return command[1 : command.index("--tools")]
+    flags = command[1 : command.index("--tools")]
+    # The neutral-path copy lives in a scratch directory that is gone by now; the contracts that need it
+    # load their own copy explicitly.
+    at = flags.index("-e")
+    assert Path(flags[at + 1]).name == stage2_go.NEUTRAL_PATHS_FILE
+    return flags[:at] + flags[at + 2 :]
 
 
 REVIEWER_FLAGS = reviewer_flags()
@@ -2205,3 +2218,538 @@ def test_both_preparation_contracts_detect_planted_faults(
         with pytest.raises(AssertionError, match="^" + re.escape(expected) + r"(?:\n|$)"):
             run_offline_contract(offline_world)
         assert diagnostic in capsys.readouterr().err, "the contract failed for a different cause than the planted fault"
+
+
+# ---------------------------------------------------------------------------
+# Neutral paths: the complete outgoing payload of every covered launch (bead coding-harness-xul8)
+# ---------------------------------------------------------------------------
+#
+# Each case starts the real pinned Pi with the production launch shape of one covered launch, answers it from
+# the loopback stand-in and reads every request body the stand-in received - the whole provider payload, not
+# the runner's input prompt. The worktree, the scratch directories and the temporary directory carry canary
+# names, so a leaked location identifier names itself. Every claim has its control: the same launch without
+# the neutral-path copy must expose the identifier the claim says is gone. Research and probe launches share
+# the free reviewer's flag set; the probe commands are held by `tests/test_stage2_availability.py` and
+# `tests/test_stage2_research_availability.py`.
+
+WORKTREE_NAME = "wt-neutral-canary-7c3e"
+TMP_NAME = "tmp-neutral-canary-5e6f"
+PARENT_NAME = "parent-ctx-dir-4a1c"
+INSTRUCTION_CANARY = "INSTRUCTION-CANARY-b81d"
+RELATIVE_REFERENCE = "src/app.py::value and plans/changes/demo/spec.md"
+NEUTRAL_PROMPT = f"{INSTRUCTION_CANARY}: check {RELATIVE_REFERENCE} and nothing else."
+SECOND_TURN = f"Second turn: look at {RELATIVE_REFERENCE} again."
+REPO_CONTEXT = "REPO-CONTEXT-CANARY-2c47"
+PARENT_CONTEXT = "PARENT-CONTEXT-CANARY-91ab"
+GLOBAL_CONTEXT = "GLOBAL-CONTEXT-CANARY-77e0"
+ESCAPE_CONTEXT = "ESCAPE-CONTEXT-CANARY-d35f"
+NEUTRAL_SHAPES = ["reviewer-paid", "reviewer-free", "research-repository", "research-public", "session"]
+CONTROLLED_SHAPES = ["reviewer-paid", "session"]
+TOOL_SHAPES = {"reviewer-paid", "research-repository", "session"}
+
+
+def identifiers(*paths: object) -> list[str]:
+    """Each path as written and as the file system resolves it: Pi may print either."""
+    found: list[str] = []
+    for path in paths:
+        for text in (str(path), os.path.realpath(str(path))):
+            if len(text) > 1 and text not in found:
+                found.append(text)
+    return found
+
+
+INSTALL_IDENTIFIERS = identifiers(REPO_ROOT, REPO_ROOT / "tools" / "pi")
+
+
+@dataclass
+class Driven:
+    """What one real launch sent: every request body, and the identifiers none of them may carry."""
+
+    requests: list[Exchange]
+    forbidden: list[str]
+    root: Path
+    returncode: int = 0
+    stderr: str = ""
+
+
+def make_project(base: Path) -> Path:
+    """A worktree with a canary name, a readable sentinel, an outside file and a symlink out of the worktree."""
+    root = base / WORKTREE_NAME
+    root.mkdir(parents=True)
+    declare_contract_models(root)
+    (root / "sentinel.txt").write_text(SENTINEL_IN + "\n", encoding="utf-8")
+    (root / "src").mkdir()
+    (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
+    outside = base / "outside-neutral"
+    outside.mkdir(exist_ok=True)
+    (outside / "outside.txt").write_text(SENTINEL_OUT + "\n", encoding="utf-8")
+    (root / "escape").symlink_to(outside)
+    return root
+
+
+def shape_script(shape: str) -> list[dict]:
+    """One tool round trip with a result and an error, a stop - and for the session a second user turn."""
+    if shape in TOOL_SHAPES:
+        script = [
+            {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+            {"tool_calls": [{"name": "read", "arguments": {"path": "missing-neutral-file.txt"}}]},
+            {"content": "No finding."},
+        ]
+    else:
+        script = [{"content": "No finding."}]
+    if shape == "session":
+        script.append({"content": "Second turn answered."})
+    return script
+
+
+def boundary_script(shape: str) -> list[dict]:
+    """The in-worktree read, then an outside path and a symlink out of the worktree."""
+    script = [
+        {"tool_calls": [{"name": "read", "arguments": {"path": "sentinel.txt"}}]},
+        {"tool_calls": [{"name": "read", "arguments": {"path": "../outside-neutral/outside.txt"}}]},
+        {"tool_calls": [{"name": "read", "arguments": {"path": "escape/outside.txt"}}]},
+        {"content": "No finding."},
+    ]
+    if shape == "session":
+        script.append({"content": "Second turn answered."})
+    return script
+
+
+def system_text(exchange: Exchange) -> str:
+    """The text of the request's system messages, as the model reads it."""
+    parts: list[str] = []
+    for message in exchange.body.get("messages", []):
+        if message.get("role") not in {"system", "developer"}:
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            parts.extend(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in content)
+    return "\n".join(parts)
+
+
+def leaks(requests: list[Exchange], forbidden: list[str]) -> list[tuple[int, str]]:
+    """Every (request number, identifier) pair found anywhere in a complete request body."""
+    found = []
+    for number, exchange in enumerate(requests):
+        body = json.dumps(exchange.body, ensure_ascii=False)
+        found.extend((number, token) for token in forbidden if token in body)
+    return found
+
+
+def tool_results(exchange: Exchange) -> list[str]:
+    return [json.dumps(message) for message in exchange.body.get("messages", []) if message.get("role") == "tool"]
+
+
+def drive_reviewer(shape: str, base: Path, monkeypatch, transport, *, neutral: bool, script=None) -> Driven:
+    """The production reviewer launch (`run_reviewer`), free or paid, over the contract transport."""
+    free = shape == "reviewer-free"
+    tmp = base / TMP_NAME
+    tmp.mkdir(parents=True)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    root = make_project(base)
+    model = "acme-1-free" if free else "contract-rung"
+    standin = StandIn(script or shape_script(shape))
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    transport.controls["drop_neutral"] = not neutral
+    try:
+        stage2.run_reviewer(contract_ctx(root, model), model, NEUTRAL_PROMPT, SYNTHETIC_KEY, free=free)
+        assert not standin.failures, standin.failures
+        requests = list(standin.requests)
+    finally:
+        standin.close()
+    call = transport.calls[-1]
+    env = call["env"]
+    forbidden = [
+        *identifiers(root, call["cwd"], env["HOME"], env["PI_CODING_AGENT_DIR"], Path(env["HOME"]).parent),
+        WORKTREE_NAME,
+        TMP_NAME,
+        *INSTALL_IDENTIFIERS,
+    ]
+    return Driven(requests, forbidden, root)
+
+
+def drive_research(shape: str, base: Path, *, neutral: bool, script=None) -> Driven:
+    """The production research seat command (`Run.pi_command`), started as the runner starts it."""
+    tools = "public" if shape == "research-public" else "repository"
+    tmp = base / TMP_NAME
+    scratch = tmp / "seat"
+    scratch.mkdir(parents=True)
+    root = make_project(base)
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.root, run.change, run.key = root, "demo", SYNTHETIC_KEY
+    run.selection = {}
+    run.runner = types.SimpleNamespace(
+        PI_WRAPPER=stage2.PI_WRAPPER,
+        PI_TOOLS=stage2.PI_TOOLS,
+        PI_AGENT_SETTINGS=stage2.PI_AGENT_SETTINGS,
+        foreign_env=stage2.foreign_env,
+        Refused=stage2.Refused,
+    )
+    command, cwd, env = run.pi_command({"model": "contract-rung", "tools": tools}, NEUTRAL_PROMPT, scratch)
+    if not neutral:
+        at = next(
+            index
+            for index, word in enumerate(command)
+            if word == "-e" and Path(command[index + 1]).name == stage2_go.NEUTRAL_PATHS_FILE
+        )
+        del command[at : at + 2]
+    standin = StandIn(script or shape_script(shape))
+    try:
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        (agent / "models.json").write_text(
+            json.dumps({"providers": {"opencode-go": {"baseUrl": standin.url}}}), encoding="utf-8"
+        )
+        env = {**env, "NODE_OPTIONS": f"--import {GUARD}"}
+        env.setdefault("PATH", os.environ.get("PATH", ""))
+        done = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=180,
+            check=False,
+        )
+        assert done.returncode == 0, f"Pi ended {done.returncode}: {done.stderr[-600:]}"
+        assert not standin.failures, standin.failures
+        requests = list(standin.requests)
+    finally:
+        standin.close()
+    forbidden = [
+        *identifiers(root, scratch, tmp, env["HOME"], env["PI_CODING_AGENT_DIR"]),
+        WORKTREE_NAME,
+        TMP_NAME,
+        *INSTALL_IDENTIFIERS,
+    ]
+    return Driven(requests, forbidden, root)
+
+
+def rpc_conversation(argv: list[str], cwd: Path, env: dict, prompts: list[str], timeout: float = 240) -> str:
+    """Test-only adapter: Pi's JSONL RPC mode stands in for the interactive terminal; one user turn per prompt."""
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors)
+        lines: queue.Queue = queue.Queue()
+
+        def pump() -> None:
+            assert process.stdout is not None
+            for line in process.stdout:
+                lines.put(line)
+            lines.put(None)
+
+        threading.Thread(target=pump, daemon=True).start()
+        deadline = time.monotonic() + timeout
+
+        def settle() -> None:
+            while True:
+                try:
+                    line = lines.get(timeout=max(deadline - time.monotonic(), 0.01))
+                except queue.Empty:
+                    raise ContractFailure("Pi did not settle a turn within the contract's limit") from None
+                if line is None:
+                    raise ContractFailure("Pi ended before it settled the turn")
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if record.get("type") == "response" and record.get("success") is False:
+                    raise ContractFailure(f"Pi refused a command: {record}")
+                if record.get("type") == "agent_settled":
+                    return
+
+        try:
+            assert process.stdin is not None
+            for number, text in enumerate(prompts):
+                command = {"id": f"turn-{number}", "type": "prompt", "message": text}
+                process.stdin.write(json.dumps(command).encode("utf-8") + b"\n")
+                process.stdin.flush()
+                settle()
+            process.stdin.close()
+            process.wait(timeout=60)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        errors.seek(0)
+        return errors.read().decode("utf-8", errors="replace")
+
+
+def write_context_files(layout: str | None, root: Path, agent: Path) -> None:
+    """Parent, global and either a symlink-escaped or a genuine repository instruction file."""
+    if layout is None:
+        return
+    (root.parent / "AGENTS.md").write_text(f"{PARENT_CONTEXT}\n", encoding="utf-8")
+    (agent / "AGENTS.md").write_text(f"{GLOBAL_CONTEXT}\n", encoding="utf-8")
+    if layout == "outside":
+        escaped = root.parent / "outside-neutral" / "escaped-context.md"
+        escaped.write_text(f"{ESCAPE_CONTEXT}\n", encoding="utf-8")
+        (root / "AGENTS.md").symlink_to(escaped)
+    else:
+        (root / "AGENTS.md").write_text(f"{REPO_CONTEXT}\n", encoding="utf-8")
+
+
+def drive_session(base: Path, *, neutral: bool, script=None, layout: str | None = None) -> Driven:
+    """The production session launch flags, driven through RPC for two user turns with a tool round trip."""
+    tmp = base / TMP_NAME
+    scratch = tmp / "scratch"
+    home = scratch / "home"
+    agent = scratch / "agent"
+    for directory in (home, agent):
+        directory.mkdir(parents=True)
+    parent = base / PARENT_NAME
+    parent.mkdir()
+    root = make_project(parent)
+    (agent / "settings.json").write_text(json.dumps(stage2.PI_AGENT_SETTINGS), encoding="utf-8")
+    write_context_files(layout, root, agent)
+    cli = str(stage2.PI_WRAPPER)
+    private = stage2_session.prepare(root, "pi", cli, stage2)
+    argv = stage2_session.cli_argv(
+        "pi",
+        root,
+        cli,
+        "opencode-go/contract-rung",
+        NEUTRAL_PROMPT,
+        private / stage2_session.POLICY_FILE,
+        private / stage2_go.NEUTRAL_PATHS_FILE,
+    )
+    assert argv[-2] == "--", "the production session command no longer ends with its prompt"
+    flags = argv[:-2]
+    if not neutral:
+        at = flags.index(str(private / stage2_go.NEUTRAL_PATHS_FILE)) - 1
+        assert flags[at] == "-e"
+        del flags[at : at + 2]
+    standin = StandIn(script or shape_script("session"))
+    try:
+        (agent / "models.json").write_text(
+            json.dumps({"providers": {"opencode-go": {"baseUrl": standin.url}}}), encoding="utf-8"
+        )
+        env = {
+            **contract_environment(),
+            "HOME": str(home),
+            "PI_CODING_AGENT_DIR": str(agent),
+            "OPENCODE_API_KEY": SYNTHETIC_KEY,
+            "NODE_OPTIONS": f"--import {GUARD}",
+        }
+        rpc_flags = [*flags, "--mode", "rpc", "--no-session"]
+        stderr = rpc_conversation(rpc_flags, root, env, [NEUTRAL_PROMPT, SECOND_TURN])
+        assert not standin.failures, standin.failures
+        requests = list(standin.requests)
+    finally:
+        standin.close()
+    forbidden = [
+        *identifiers(root, scratch, tmp, home, agent, private),
+        WORKTREE_NAME,
+        TMP_NAME,
+        *INSTALL_IDENTIFIERS,
+    ]
+    return Driven(requests, forbidden, root, stderr=stderr)
+
+
+def drive(
+    shape: str,
+    base: Path,
+    monkeypatch,
+    transport,
+    *,
+    neutral: bool = True,
+    script=None,
+    layout=None,
+) -> Driven:
+    if shape in {"reviewer-paid", "reviewer-free"}:
+        held = drive_reviewer(shape, base, monkeypatch, transport, neutral=neutral, script=script)
+    elif shape in {"research-repository", "research-public"}:
+        held = drive_research(shape, base, neutral=neutral, script=script)
+    else:
+        held = drive_session(base, neutral=neutral, script=script, layout=layout)
+    expected = len(script or shape_script(shape))
+    assert len(held.requests) == expected, f"{shape}: the stand-in saw {len(held.requests)} requests, not {expected}"
+    return held
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("shape", NEUTRAL_SHAPES)
+def test_real_pi_neutral_cwd_on_every_run(shape: str, tmp_path: Path, monkeypatch, transport) -> None:
+    """Criterion 2: the working-directory section of every request of every covered launch reads `.`.
+
+    The control starts the same launch without the neutral-path copy: its first request must name the
+    real working directory, so the check demonstrably sees what it claims is gone.
+    """
+    held = drive(shape, tmp_path / "neutral", monkeypatch, transport)
+    for number, exchange in enumerate(held.requests):
+        assert "<cwd>\n.\n</cwd>" in system_text(exchange), f"request {number} of {shape} exposes its directory"
+    if shape in CONTROLLED_SHAPES:
+        control = drive(shape, tmp_path / "control", monkeypatch, transport, neutral=False)
+        first = system_text(control.requests[0])
+        assert "<cwd>\n.\n</cwd>" not in first
+        assert any(token in first for token in control.forbidden), "the control does not expose the directory"
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("shape", NEUTRAL_SHAPES)
+def test_real_pi_omits_local_docs(shape: str, tmp_path: Path, monkeypatch, transport) -> None:
+    """Criterion 3: no request carries Pi's installation-documentation section or its locations."""
+    held = drive(shape, tmp_path / "neutral", monkeypatch, transport)
+    for number, exchange in enumerate(held.requests):
+        text = system_text(exchange)
+        assert "<docs>" not in text and "Pi documentation" not in text, f"request {number} of {shape} holds docs"
+        assert not [token for token in INSTALL_IDENTIFIERS if token in text], "an installation path remains"
+    if shape in CONTROLLED_SHAPES:
+        control = drive(shape, tmp_path / "control", monkeypatch, transport, neutral=False)
+        first = system_text(control.requests[0])
+        assert "<docs>" in first and any(token in first for token in INSTALL_IDENTIFIERS), (
+            "the control does not expose the installation documentation"
+        )
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("shape", NEUTRAL_SHAPES)
+def test_real_launch_payloads_have_no_local_identifiers(shape: str, tmp_path: Path, monkeypatch, transport) -> None:
+    """Criterion 4: no complete request of any covered launch carries a local location identifier.
+
+    That includes the follow-up after a tool result and after a tool error, and for the session a second
+    user turn. The control without the neutral-path copy must leak, or the measurement proves nothing.
+    """
+    held = drive(shape, tmp_path / "neutral", monkeypatch, transport)
+    assert leaks(held.requests, held.forbidden) == [], f"{shape} sent a local location identifier"
+    if shape in CONTROLLED_SHAPES:
+        control = drive(shape, tmp_path / "control", monkeypatch, transport, neutral=False)
+        assert leaks(control.requests, control.forbidden), "the control launch leaked nothing; the check is blind"
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("shape", [*sorted(TOOL_SHAPES - {"reviewer-paid"}), "reviewer-paid"])
+def test_real_neutralization_preserves_tool_roots_and_boundaries(
+    shape: str, tmp_path: Path, monkeypatch, transport
+) -> None:
+    """Criterion 5: relative reads still resolve in the worktree; a path lock and the session policy still block.
+
+    The directory the tools resolve from is the real worktree: a relative read of the sentinel returns its
+    content. Where a boundary exists (the research path lock, the session policy) an outside path and a
+    symlink out of the worktree stay blocked, and the outside file's content reaches no request.
+    """
+    bounded = shape != "reviewer-paid"
+    script = boundary_script(shape) if bounded else None
+    held = drive(shape, tmp_path / "neutral", monkeypatch, transport, script=script)
+    assert SENTINEL_IN in "\n".join(tool_results(held.requests[1])), "the relative in-worktree read failed"
+    assert leaks(held.requests, [SENTINEL_OUT]) == [], "an outside read's content entered a request"
+    if bounded:
+        for exchange in held.requests[2:4]:
+            assert "outside the worktree" in tool_results(exchange)[-1], "an outside or symlink read was not blocked"
+    else:
+        assert "missing-neutral-file.txt" in "\n".join(tool_results(held.requests[2])), "the read error is gone"
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("shape", NEUTRAL_SHAPES)
+def test_real_neutralization_preserves_instructions_and_tools(
+    shape: str, tmp_path: Path, monkeypatch, transport
+) -> None:
+    """Criterion 6: apart from the removed location identifiers the request is the one the launch would send.
+
+    The neutralized and the control request carry the same tool declarations, the same user message and the
+    same system prompt once the working-directory and docs sections are set aside; the appended task and
+    its repository-relative references arrive unchanged.
+    """
+    held = drive(shape, tmp_path / "neutral", monkeypatch, transport)
+    control = drive(shape, tmp_path / "control", monkeypatch, transport, neutral=False)
+
+    def set_aside(text: str) -> str:
+        text = re.sub(r"<docs>\n.*?\n</docs>\n*", "", text, flags=re.S)
+        return re.sub(r"<cwd>\n.*?\n</cwd>", "<cwd/>", text, flags=re.S)
+
+    first, baseline = held.requests[0], control.requests[0]
+    declared = json.dumps(first.body.get("tools"), sort_keys=True)
+    assert declared == json.dumps(baseline.body.get("tools"), sort_keys=True)
+    neutral_text = system_text(first)
+    assert set_aside(neutral_text) == set_aside(system_text(baseline)), "neutralization changed more than locations"
+    for kept in (
+        "You are a coding assistant running inside pi",
+        "Be concise in your responses",
+        INSTRUCTION_CANARY,
+        RELATIVE_REFERENCE,
+    ):
+        assert kept in neutral_text or kept in json.dumps(first.body), f"{kept!r} is missing from the request"
+    users = [json.dumps(m) for m in first.body["messages"] if m.get("role") == "user"]
+    assert users == [json.dumps(m) for m in baseline.body["messages"] if m.get("role") == "user"]
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_session_excludes_outside_context_files(tmp_path: Path) -> None:
+    """Criterion 8: a parent, global or symlink-escaped context file reaches no request of any turn.
+
+    The control without the neutral-path copy shows that Pi's own discovery would send all three.
+    """
+    held = drive_session(tmp_path / "neutral", neutral=True, layout="outside")
+    assert len(held.requests) == 4
+    assert leaks(held.requests, [PARENT_CONTEXT, GLOBAL_CONTEXT, ESCAPE_CONTEXT, PARENT_NAME]) == []
+    control = drive_session(tmp_path / "control", neutral=False, layout="outside")
+    seen = system_text(control.requests[0])
+    for canary in (PARENT_CONTEXT, GLOBAL_CONTEXT, ESCAPE_CONTEXT):
+        assert canary in seen, f"the control's discovery never reached {canary}; the exclusion is untested"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_session_retains_repository_context_files(tmp_path: Path) -> None:
+    """Criterion 9: the repository's own instruction file stays in every request, its label neutral."""
+    held = drive_session(tmp_path / "neutral", neutral=True, layout="inside")
+    assert len(held.requests) == 4
+    for number, exchange in enumerate(held.requests):
+        text = system_text(exchange)
+        assert REPO_CONTEXT in text, f"request {number} lost the repository instructions"
+        assert '<project_instructions path="./AGENTS.md">' in text, "the repository file's label is not neutral"
+    assert leaks(held.requests, [PARENT_CONTEXT, GLOBAL_CONTEXT, PARENT_NAME, *held.forbidden]) == []
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("planted", ["worktree", "home"])
+def test_surviving_prompt_path_blocks_delivery(planted: str, tmp_path: Path) -> None:
+    """Criterion 7: a home or worktree path the neutralization cannot rewrite stops the launch before the request.
+
+    The planted path is spelled in capitals, which the exact-case replacement does not touch and the guard
+    still recognises. The control plants the exact path: it is rewritten and the request is delivered.
+    """
+    scratch = scratch_of(tmp_path)
+    root = make_project(tmp_path)
+    neutral = stage2_go.install_neutral_paths(scratch)
+    home = scratch / "home"
+    prompt_file = scratch / "planted-prompt.md"
+
+    def launch(path_text: str, standin: StandIn) -> subprocess.CompletedProcess:
+        prompt_file.write_text(f"{INSTRUCTION_CANARY}: a path {path_text} appears here.\n", encoding="utf-8")
+        return run_pi(
+            root,
+            scratch,
+            *REVIEWER_FLAGS,
+            "-e",
+            str(neutral),
+            "--tools",
+            "read,grep,find,ls",
+            "--model",
+            "opencode-go/contract-rung",
+            "--append-system-prompt",
+            str(prompt_file),
+            "Review.",
+            providers={"opencode-go": {"baseUrl": standin.url}},
+        )
+
+    target = root if planted == "worktree" else home
+    blocked = StandIn([{"content": "No finding."}])
+    try:
+        done = launch(str(target).upper(), blocked)
+        assert done.returncode != 0, "the launch reported success after the guard detected a path"
+        assert "the request was not sent" in done.stderr, done.stderr[-600:]
+        assert blocked.requests == [], "a request with a surviving path reached the provider"
+    finally:
+        blocked.close()
+    delivered = StandIn([{"content": "No finding."}])
+    try:
+        done = launch(str(target), delivered)
+        assert done.returncode == 0, f"Pi ended {done.returncode}: {done.stderr[-600:]}"
+        (exchange,) = delivered.requests
+        assert str(target) not in json.dumps(exchange.body), "the exact path was not rewritten"
+        assert INSTRUCTION_CANARY in system_text(exchange)
+    finally:
+        delivered.close()

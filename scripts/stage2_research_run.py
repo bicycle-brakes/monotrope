@@ -891,6 +891,10 @@ class Run:
             "--offline",
         ]
         model = f"{GO}/{entry['model']}"
+        try:
+            neutral = stage2_go.install_neutral_paths(scratch)
+        except stage2_go.NeutralPathsUnavailable as error:
+            raise self.runner.Refused(f"{error}; no research seat starts.") from None
         if entry["tools"] == "public":
             research = scratch / "research"
             research.mkdir()
@@ -903,6 +907,8 @@ class Run:
                 *common[:5],
                 "-e",
                 str(extension),
+                "-e",
+                str(neutral),
                 *common[5:],
                 "--tools",
                 stage2_swarm.PUBLIC_TOOLS,
@@ -933,6 +939,8 @@ class Run:
             *common[:5],
             "-e",
             str(lock),
+            "-e",
+            str(neutral),
             *common[5:],
             "--tools",
             self.runner.PI_TOOLS,

@@ -1009,6 +1009,35 @@ def test_online_requests_exclude_private_inputs_and_ambient_paths(sworld: SwarmW
         assert "CANARY-RULE-TEXT" in call["prompt"], "repository seats embed the identical rules file"
 
 
+def test_research_seats_load_neutral_paths(sworld: SwarmWorld) -> None:
+    # Ledger 1. Planted fault: a repository, public or free seat omits the neutral-path extension, or loading it
+    # drops the seat's own path lock or public tools, or moves its working directory.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    seen: dict[str, set[str]] = {"finder": set(), "repository": set(), "online": set()}
+    for call in sworld.calls():
+        if call["name"] != "pi":
+            continue
+        argv = call["argv"]
+        loaded = [Path(argv[index + 1]).name for index, word in enumerate(argv) if word == "-e"]
+        role = {
+            "finder": "repository-pathlock.mjs",
+            "repository": "repository-pathlock.mjs",
+            "online": "research-tools.mjs",
+        }[call["kind"]]
+        assert loaded == [role, "stage2-pi-neutral-paths.mjs"], f"{call['kind']} seat loads {loaded}"
+        assert argv.count("--no-extensions") == 1 and argv.index("--no-extensions") < argv.index("-e")
+        seen[call["kind"]].add(call["model"])
+        if call["kind"] in ("finder", "repository"):
+            assert Path(call["cwd"]).resolve() == sworld.root.resolve(), "a repository seat's working directory moved"
+        else:
+            assert Path(call["cwd"]).resolve() != sworld.root.resolve(), "a public seat starts in the repository"
+    assert seen["finder"] and seen["repository"] and seen["online"] & set(FREE), (
+        "a seat kind was never launched through Pi"
+    )
+
+
 def test_peers_receive_identical_frozen_briefs_without_reports(sworld: SwarmWorld) -> None:
     # Criterion 26. Planted fault: a topic prompt carries a peer's or an earlier topic's report text.
     marker = "PEER-REPORT-MARKER"

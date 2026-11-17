@@ -163,6 +163,22 @@ def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch
     assert world.text().count("prepare-loop · endpoint") == len(calls)
 
 
+def test_review_probes_load_neutral_paths(world: World) -> None:
+    """Ledger 1: every review probe loads the neutral-path copy from its scratch directory and stays tool-free."""
+    enable(world)
+    assert world.run("prepare-loop") == 0
+    calls = world.reviews()
+    assert len(calls) == len(TEST_FREE) + len(TEST_LADDER)
+    for call in calls:
+        argv = call["argv"]
+        loaded = [argv[index + 1] for index, word in enumerate(argv) if word == "-e"]
+        assert [Path(path).name for path in loaded] == ["stage2-pi-neutral-paths.mjs"], loaded
+        assert argv.index("--no-extensions") < argv.index("-e")
+        assert Path(loaded[0]).parent == Path(argv[argv.index("--append-system-prompt") + 1]).parent
+        assert "--no-tools" in argv and "--tools" not in argv, "the probe is no longer tool-free"
+        assert call["cwd"] != str(world.root)
+
+
 @pytest.mark.parametrize("fault", ["code", "configuration", "expired", "other-worktree", "corrupt"])
 def test_prepared_selection_is_bound_to_inputs_and_freshness(world: World, monkeypatch, fault: str) -> None:
     """Criterion 17: stale, malformed or transplanted preparation launches no review."""

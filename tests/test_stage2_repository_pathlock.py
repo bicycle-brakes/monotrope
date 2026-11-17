@@ -188,10 +188,12 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     scratch.mkdir()
     command, cwd, _env = run.pi_command({"model": "qwen3.8-flash", "tools": "repository"}, "prompt", scratch)
     assert cwd == tmp_path
-    assert command.count("-e") == 1 and command.count("--no-extensions") == 1
+    assert command.count("-e") == 2 and command.count("--no-extensions") == 1
     assert command.index("--no-extensions") < command.index("-e")
     loaded = Path(command[command.index("-e") + 1])
     assert loaded.parent == scratch and loaded.read_text(encoding="utf-8") == EXTENSION.read_text(encoding="utf-8")
+    neutral = Path(command[command.index("-e", command.index("-e") + 1) + 1])
+    assert neutral.parent == scratch, "the neutral-path copy sits in the seat's scratch directory"
     assert command[command.index("--tools") + 1] == "read,grep,find,ls"
 
 

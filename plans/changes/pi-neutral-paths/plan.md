@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-29
 last_reviewed: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-xul8
@@ -97,20 +97,20 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_all_review_members_load_neutral_paths — a free, Flash or ladder command omits the extension
-- 1: not yet written tests/test_stage2_swarm.py::test_research_seats_load_neutral_paths — a repository/public/free command omits it or loses its role extension
-- 1: not yet written tests/test_stage2_availability.py::test_review_probes_load_neutral_paths — a review probe omits it
-- 1: not yet written tests/test_stage2_research_availability.py::test_research_probes_load_neutral_paths — a research probe omits it
-- 1: not yet written tests/test_stage2_session.py::test_pi_session_loads_neutral_paths_with_policy — a session omits either extension
-- 2: not yet written tests/test_pi_contract.py::test_real_pi_neutral_cwd_on_every_run — the initial or subsequent run exposes its real cwd
-- 3: not yet written tests/test_pi_contract.py::test_real_pi_omits_local_docs — the installed Pi still sends its docs section or installation paths
-- 4: not yet written tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers — any complete initial/tool/error/repeated-turn request contains a planted location identifier
-- 5: not yet written tests/test_pi_contract.py::test_real_neutralization_preserves_tool_roots_and_boundaries — allowed relative reads fail or outside/symlink reads succeed
-- 6: not yet written tests/test_pi_contract.py::test_real_neutralization_preserves_instructions_and_tools — non-location instructions, tool declarations or relative references change
+- 1: tests/test_stage2.py::test_all_review_members_load_neutral_paths — a free, Flash or ladder command omits the extension
+- 1: tests/test_stage2_swarm.py::test_research_seats_load_neutral_paths — a repository/public/free command omits it or loses its role extension
+- 1: tests/test_stage2_availability.py::test_review_probes_load_neutral_paths — a review probe omits it
+- 1: tests/test_stage2_research_availability.py::test_research_probes_load_neutral_paths — a research probe omits it
+- 1: tests/test_stage2_session.py::test_pi_session_loads_neutral_paths_with_policy — a session omits either extension
+- 2: tests/test_pi_contract.py::test_real_pi_neutral_cwd_on_every_run — the initial or subsequent run exposes its real cwd
+- 3: tests/test_pi_contract.py::test_real_pi_omits_local_docs — the installed Pi still sends its docs section or installation paths
+- 4: tests/test_pi_contract.py::test_real_launch_payloads_have_no_local_identifiers — any complete initial/tool/error/repeated-turn request contains a planted location identifier
+- 5: tests/test_pi_contract.py::test_real_neutralization_preserves_tool_roots_and_boundaries — allowed relative reads fail or outside/symlink reads succeed
+- 6: tests/test_pi_contract.py::test_real_neutralization_preserves_instructions_and_tools — non-location instructions, tool declarations or relative references change
 
-- 7: not yet written tests/test_pi_contract.py::test_surviving_prompt_path_blocks_delivery — a planted home or worktree path reaches the provider or the launch succeeds
-- 8: not yet written tests/test_pi_contract.py::test_session_excludes_outside_context_files — a parent, global or symlink-escaped context path or content reaches the provider
-- 9: not yet written tests/test_pi_contract.py::test_session_retains_repository_context_files — repository instruction content is absent from the request
+- 7: tests/test_pi_contract.py::test_surviving_prompt_path_blocks_delivery — a planted home or worktree path reaches the provider or the launch succeeds
+- 8: tests/test_pi_contract.py::test_session_excludes_outside_context_files — a parent, global or symlink-escaped context path or content reaches the provider
+- 9: tests/test_pi_contract.py::test_session_retains_repository_context_files — repository instruction content is absent from the request
 
 ## Verification
 
@@ -141,6 +141,10 @@ index updates and the final `make verify` gate.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash attempts 1 and 2 failed their post-run checks; Sonnet continues from the saved attempt (night run 2026-11-16-a).
 
+## Runner route — 2026-11-16
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash attempts 1 and 2 failed their post-run checks; the first Sonnet call was cut off by a session restart (night run 2026-11-16-a).
+
 ## Time used
 
 2026-10-30 22:28:29–23:27:54 UTC, 3564 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -160,3 +164,4 @@ Appetite: 2 hours of phase 4. Used by 2026-10-31 18:05 UTC: about 8300 s (2 h 18
 2026-11-01 10:10:24–10:50:39 UTC, 2416 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-16 14:20:59–14:22:48 UTC, 109 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 14:25:12–14:27:11 UTC, 119 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-16 22:58:06–23:08:52 UTC, 645 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

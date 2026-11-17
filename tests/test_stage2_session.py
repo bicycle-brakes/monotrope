@@ -35,6 +35,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
+import stage2_go  # noqa: E402
 import stage2_session  # noqa: E402
 from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
@@ -876,13 +877,15 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
         "--no-themes",
         "-e",
         str(extension),
+        "-e",
+        str(extension.parent / stage2_go.NEUTRAL_PATHS_FILE),
         "--offline",
         "--no-approve",
         "--model",
         GO_MODEL,
         "--",
         expected_prompt(world, HANDOVER),
-    ], "discovery off, one extension, the declared model, then the prompt"
+    ], "discovery off, the policy and neutral-path extensions, the declared model, then the prompt"
     for flag in ("--print", "-p", "--mode", "--pure"):
         assert flag not in launch["argv"], f"an interactive session never takes {flag}"
     assert launch["cwd"] == str(world.tree)
@@ -892,8 +895,27 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
         stage2_session.SCRIPT_NAME,
         stage2_session.POLICY_FILE,
         stage2_session.MODEL_SIDECAR,
+        stage2_go.NEUTRAL_PATHS_FILE,
     }
     assert world.calls("opencode") == [], "the OpenCode CLI is never called"
+
+
+def test_pi_session_loads_neutral_paths_with_policy(world: World) -> None:
+    """Ledger 1: the session loads both private copies, and the policy stays confirmed loaded."""
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    _version, readback, launch = world.calls("pi")
+    policy = world.extension()
+    neutral = policy.parent / stage2_go.NEUTRAL_PATHS_FILE
+    argv = launch["argv"]
+    loaded = [argv[index + 1] for index, word in enumerate(argv) if word == "-e"]
+    assert loaded == [str(policy), str(neutral)], "the session omits an extension or reorders them"
+    assert argv.count("--no-extensions") == 1 and argv.index("--no-extensions") < argv.index("-e")
+    assert neutral.read_bytes() == stage2_go.NEUTRAL_PATHS_SOURCE.read_bytes(), "the copy is the tested source"
+    assert "--no-context-files" not in argv, "context discovery stays on; the extension filters it"
+    assert readback["argv"][readback["argv"].index("-e") + 1] == str(policy), "the policy is still confirmed loaded"
+    assert launch["cwd"] == str(world.tree), "the working directory does not move"
 
 
 def test_all_session_pi_launches_use_repository_wrapper(world: World) -> None:
