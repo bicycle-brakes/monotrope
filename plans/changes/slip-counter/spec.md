@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -24,7 +24,7 @@ neighbours: []
 Derive missed-verification observations from the one local run history, with
 incomplete evidence visible beside the count (bead coding-harness-bxxt.7 —
 slip counter). Research: [research.md](research.md). Decisions:
-[decisions.md](decisions.md), Q-1 through Q-4.
+[decisions.md](decisions.md), Q-1 through Q-6.
 
 ## Problem
 
@@ -47,6 +47,17 @@ recorded interview, not a reconstruction of its code.
 - **Slip:** one completed red local full verification run with an earlier
   completed green targeted check of the same repository, change, checked tree
   and gate configuration; an observation, not a count of distinct defects.
+- **Repository:** the shared Git repository, identified by its common Git
+  directory, not the path of one checkout or worktree (decisions Q-5). Runs in
+  any worktree of one repository pair with each other, and a report from any
+  checkout of it selects the runs of every worktree.
+- **Valid run:** a run that passes the one validity check (decisions Q-6):
+  exactly one start and one completion, a completion not before its start, a
+  known check kind, nonempty repository, change, checked-tree and
+  gate-configuration identities, and, where the run records its checked tree
+  at both ends, the same tree at both. Every run passes this one check before
+  it may count, whatever its kind and verdict; a run that fails it is
+  incomplete once and is neither a slip, a predecessor nor a counted non-slip.
 - **Checked tree:** the Git-visible contents and file modes actually checked,
   including uncommitted and non-ignored untracked inputs, minus the change's
   own `plan.md` and `findings.md` (decisions Q-3); commit identity or a dirty
@@ -139,6 +150,22 @@ proved nothing about one tree. The error goes one way only: an overcount,
 never an undercount. Recording the tree at the full run's end as well is
 follow-up work (bead coding-harness-cf9h).
 
+**Boundary — what the validity check cannot see (decisions Q-6).** The check
+judges only what the history records. It cannot see a tree that moved and
+moved back between the two readings of one run, a full run's tree at its end
+(the Boundary above), a cause of red outside the recorded identities, such as
+the machine, the interpreter or the network, or a run that left no record at
+all. A run that passes the check on such evidence counts as recorded; a later
+phase-6 row that describes only one of these limits is this limit, not a new
+case.
+
+**Boundary — records from before the repository answer (decisions Q-5).**
+A run record that carries no common Git directory, a legacy duration record
+included, has no repository identity in the sense of the Terms. The reader
+cannot assign it to a repository without resolving a recorded path that may
+no longer exist, so it is outside every repository's selection and neither
+counts nor enters the incomplete count. Its duration stays readable (AC 7).
+
 ## Non-goals
 
 - A slip writer, persistent tally, receipt, repair of history or global service.
@@ -170,14 +197,24 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The four maintainer answers remain unchanged; Q-3 names the
-comparison tree exclusion and Q-4 narrows countable evidence.
+None open. The six maintainer answers remain unchanged; Q-3 names the
+comparison tree exclusion, Q-4 narrows countable evidence, Q-5 defines the
+repository as the shared Git repository and Q-6 puts every run through one
+validity check.
+
+[DETAIL] The runner records the resolved common Git directory with each new
+run, and the reader compares that recorded value with the common Git
+directory of the checkout it runs in; it does not resolve recorded paths at
+read time, because a removed worktree's path no longer resolves. The existing
+`repository` field keeps its meaning for duration reports, so legacy duration
+records stay readable (AC 7).
 
 [DETAIL] Count distinct red full-run identities, not distinct defects; this
 matches what the history can prove without interpreting test output. Conflicting
 duplicates make that run incomplete; identical duplicates do not multiply it.
 
-[DETAIL] Use start-time interval membership, current repository by default,
+[DETAIL] Use start-time interval membership, the current repository (the
+shared Git repository of the reader's checkout) by default,
 and all recorded time when no bounds are given; these reversible reader
 conventions make the requested interval reproducible.
 

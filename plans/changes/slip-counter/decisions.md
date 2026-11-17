@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -84,6 +84,40 @@ context: |
   Recommendation: narrow; consequence: some real slips with incomplete evidence show up only in the incomplete count, not as slips.
 
 In the context of a slip-history reader whose edge cases drew two findings in each of two phase-6 re-checks from one mechanism, facing a choice between repairing a fifth case and narrowing what the reader counts, we decided to count only runs with complete comparison evidence, report every other run once as incomplete and name the remaining edge cases as Boundaries, to achieve a reader whose count rests on evidence it can check, accepting that a slip with incomplete evidence appears only in the incomplete count. — 2026-11-16
+
+## Q-5 · What "repository" means for pairing and selection
+
+asked: 2026-11-17
+answer: "B" — 'repository' means the shared git repository (common git dir), not the single worktree; pairs form across worktrees and any checkout reports all lanes.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the slip reader pairs a green targeted check with a red full run of the same repository, change, tree and gate configuration, and selects runs by repository.
+  Intention: the phase-6 re-check of 2026-11-17 (codex 01a1e69e, row R-1) raised the open phase-2a row S-1 as a BLOCKER: the spec never says what "repository" is.
+  Today: the reader compares the recorded checkout path; a green targeted check in a lane worktree and a red full run of the same tree in another checkout never pair, and the default report from the main checkout shows no lane runs.
+  Repository change: the spec defines "Repository" as the shared Git repository (common git directory); the runner records it and the reader pairs and selects by it; one spec line plus a test.
+  Architecture change: none; the run log stays the one local history.
+  Question: is "repository" the single worktree path (A) or the shared git repository, the common git dir (B)?
+  Recommendation: B, because lanes run in worktrees of one repository and slips cross them; consequence: one spec line plus a test.
+
+In the context of lanes that run in worktrees of one repository and write one shared run history, facing a choice between the worktree path and the shared Git repository as the repository identity, we decided for the shared Git repository, to achieve pairs across worktrees and a report from any checkout that covers every lane, accepting that a report no longer separates the lanes of one repository. — 2026-11-17
+
+## Q-6 · One validity check for every run instead of a third case repair
+
+asked: 2026-11-17
+answer: "A" — third row of one mechanism (P6-2, P6-6, R-2), so one validity check that every run, green or red, passes before it counts, plus a Boundary for what it cannot see; capped at one repair round, then phase 6 (the lane is past its appetite).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the slip reader decides per run whether its evidence is complete enough to count.
+  Intention: the phase-6 re-check of 2026-11-17 (codex 01a1e69e, row R-2) found a red targeted check whose tree moved during the run counted as complete; after P6-2 and P6-6 this is the third row of one mechanism (when evidence is incomplete), so case repair stops by the house rule.
+  Today: the reader checks evidence in several branches per kind and verdict; the tree-stability check applies only to a green targeted check.
+  Repository change: one validity check at a single choke point that every run passes before it may count, green or red, targeted or full; a run that fails it is incomplete once; the spec names a Boundary for what that check cannot see.
+  Architecture change: none; a reader without a writer.
+  Question: one validity check at a single choke point plus a Boundary (A), or another case repair?
+  Recommendation: A; consequence: one more repair round.
+
+In the context of three phase-6 rows of one mechanism about incomplete evidence, facing a choice between a further case repair and one validity check every run passes, we decided for the one validity check plus a Boundary for what it cannot see, capped at one repair round before phase 6, to achieve a reader with one place that decides whether a run may count, accepting that whatever the check cannot see stays a named limit. — 2026-11-17
 
 ## Decided by the agent
 
