@@ -236,3 +236,109 @@ status: answered
 
 In the context of the completion evidence for simultaneous verify runs, facing a criterion written before the three-slot default, we decided that three simultaneous full runs under the shipped default of three slots and four workers evidence completion, citing the 3x4 trial recorded at commit e693604e, to achieve that the trial measures exactly the configuration that ships, accepting that no two-run paired trial is required.
 — 2026-11-16
+
+## Q-10 · Whether the 1.6x threshold gates the three-slot default (spec review row S2-1)
+
+context: |
+  Topic: criterion 11 cites decision Q-4 (every parallel run within 1.6 times a single run), while the 3 x 4 trial at e693604e measured 2.12 to 2.13 times.
+  Intention: the phase-2a re-review of 2026-11-16 (row S2-1, BLOCKER, still open from row S-2) found two readings: Reading A, the ratio is a gate and the change cannot close at the shipped default; Reading B, the figures are recorded only.
+  Today: the spec cites Q-4 in criterion 11's basis but its refutation has no ratio, and the non-goals exclude a new performance threshold.
+  Repository change: the spec records the trial figures as evidence and states that Q-4's 1.6x applies to two slots only; a follow-up bead tunes the default slot count against the measured ratio.
+  Architecture change: none.
+  Recommendation: B, plus a follow-up bead; consequence: the change can close, parallel runs may stay slower than 1.6x until the follow-up.
+asked: 2026-11-16, night run 2026-11-16-a, parked question
+answer: "B" — record the figures, no gate on 3 x 4; the default slot count is tuned in a follow-up bead. Reasoning, verbatim: "Die Schwelle war für 2 Slots, nicht für 3 oder 4, das ergibt sich aus der Arithmetik." Decision Q-4 (1.6x) stands, scoped to two slots; the spec states that scope explicitly. (Maintainer, 2026-11-17, day session; recorded from the bead notes of coding-harness-u1ha.)
+answered_by: maintainer
+status: answered
+
+In the context of criterion 11 and the 1.6x threshold of Q-4, facing a three-slot trial at 2.12 to 2.13 times a single run, we decided that the trial figures are recorded as evidence and do not gate completion, and that Q-4's 1.6x applies to two slots only, to achieve a change that can close at the shipped default, accepting that parallel runs may stay slower than 1.6x until a follow-up bead tunes the default slot count — 2026-11-17
+
+## Q-11 · Which trial run closes criterion 11 (spec review row S2-2)
+
+context: |
+  Topic: whether the e693604e trial closes criterion 11 or the serial and three-at-once runs must be repeated on the merged head.
+  Intention: row S2-2 (MAJOR, [AMBIGUITY]) asks it; Q-9 already answered which trial evidences completion.
+  Today: Q-9 cites the 3 x 4 trial at e693604e; at that commit DEFAULT_SLOTS was 4, so the trial set three slots through the machine-local file.
+  Repository change: the spec cites the e693604e trial as the completion evidence and says the configuration counts, not the layer that set it.
+  Architecture change: none.
+asked: 2026-11-17, settled by the orchestrating agent from Q-9 (night run 2026-11-17-a)
+answer: "Reading A — the 3 x 4 trial at e693604e closes criterion 11, as Q-9 states; three slots of four workers set through the machine file is the configuration that ships, so it counts as operation at the default; no repeat on the merged head"
+answered_by: agent
+status: answered
+
+In the context of criterion 11's completion evidence, facing a trial run at an earlier commit with the slot count set through the machine file, we decided that the e693604e 3 x 4 trial closes the criterion as Q-9 states, to achieve no second night-load trial against a spent appetite, accepting that the trial predates the Q-8 single-function worker derivation, which changes how the worker count is computed, not the four workers it computes on that machine — 2026-11-17
+
+## Q-12 · Whose core reading counts (spec review rows S2-3, S2-4, S2-10)
+
+context: |
+  Topic: the over-cores warning and the worker formula name "the shell's reading, else Python's" and "logical cores", while Q-8 makes one Python function the only reader.
+  Intention: rows S2-3 (MAJOR, [AMBIGUITY]), S2-4 (MAJOR, cannot go red) and S2-10 (MINOR, [AMBIGUITY]) follow from one gap, and phase-6 row F6-1 is the same mechanism.
+  Today: verify_all.sh reads sysctl or nproc and passes the values to `verify_lock --settings`; the runner reads os.cpu_count; the warning text says "each run gets one worker" whatever the workers are.
+  Repository change: only `read_settings` reads the machine; verify_all.sh passes no core or memory reading; the warning names the workers in force.
+  Architecture change: none; this is Q-8 applied.
+asked: 2026-11-17, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "The Python reader alone reads the machine for every entry point (Reading B of S2-3): the cores are the CPUs this process may use — os.sched_getaffinity where the platform has it, else os.cpu_count; a cgroup CPU quota is not read. Refuting case: a Linux process whose affinity allows 6 of 24 CPUs, at three slots, gets 2 workers on the shell path and on the runner path alike. The oversubscription warning compares against that same reading and states the workers in force instead of the fixed 'each run gets one worker'."
+answered_by: agent
+status: answered
+
+In the context of the core reading behind the worker count and the oversubscription warning, facing a shell reading and a Python reading that disagree under a CPU restriction, we decided that the one Python reader takes the process's CPU affinity for every entry point and that the warning names the workers in force, to achieve the single derivation Q-8 asked for and a criterion with a stated expected value, accepting that a cgroup CPU quota without an affinity mask is not seen — 2026-11-17
+
+## Q-13 · What an unusable settings file does outside an admission (spec review rows S2-5, S2-8)
+
+context: |
+  Topic: an invalid `workers_per_run`, a malformed verify.toml, a leftover verify.slots, or a present file that sets no key, met by the runner's targeted pytest or a nested verify_all.sh.
+  Intention: rows S2-5 (MAJOR, missing) and S2-8 (MINOR, [AMBIGUITY]) ask whether these paths refuse, fall back, or reuse an ancestor's values, and whether an empty file is valid.
+  Today: the reader refuses any present content that is not one non-empty `[verify]` table with valid keys; the targeted pytest fails its launch with that diagnostic; the shell exits 2.
+  Repository change: the spec states that every entry point refuses with the same diagnostic, for either key, and that only absence of the file means the repository default.
+  Architecture change: none.
+asked: 2026-11-17, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "Every entry point — admission, nested verify_all.sh, the runner's targeted and cheap pytest — refuses with the reader's diagnostic naming the file, for an unusable `slots` or `workers_per_run` alike; no fallback, no reuse of an ancestor's values. A present file that sets no key (zero bytes, comments only, a bare `[verify]`) refuses too; only an absent file means the repository default."
+answered_by: agent
+status: answered
+
+In the context of an unusable machine settings file, facing entry points outside an admission that could fall back silently, we decided that every entry point refuses with the one reader's diagnostic and that a present file must set at least one key, to achieve the one declared, validated value of Q-2 with no silent change of meaning, accepting that a broken file stops runner repairs on the machine until it is fixed or removed — 2026-11-17
+
+## Q-14 · Free memory in the verify history (spec review row S2-6)
+
+context: |
+  Topic: Q-7 keeps a real-operation window only if free memory never falls below 25 percent, but the history records only end load and peak pytest memory.
+  Intention: row S2-6 (MAJOR, missing) shows the windows cannot apply their own condition from the records.
+  Today: the run's five-second sampler records the peak summed pytest resident memory; `read_available_memory` already reads the system-wide free percentage for the admission's memory check.
+  Repository change: the same sampler also keeps the lowest free-memory percentage of the run, recorded in the end record; unknown when never readable.
+  Architecture change: none.
+asked: 2026-11-17, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "The five-second sampler also records the run's minimum available-memory percentage through `read_available_memory`, in the end record beside the peak, unknown when no sample could be read. The non-goal 'continuous memory monitoring' means no monitoring that gates or acts during the run; a recorded minimum acts on nothing."
+answered_by: agent
+status: answered
+
+In the context of the free-memory condition of Q-7, facing records that hold no free-memory figure, we decided that the existing sampler also records the run's minimum free-memory percentage, to achieve windows that can apply their own condition from the history, accepting one more field per end record and one more reading per sample — 2026-11-17
+
+## Q-15 · Which runner pytest launches take the shared workers (spec review row S2-7)
+
+context: |
+  Topic: the runner starts pytest twice outside the admission: the targeted check after a repair, and an attempt's cheap tests with xdist `-n auto`.
+  Intention: row S2-7 (MAJOR, [AMBIGUITY]) asks whether only the targeted check asks `read_settings`.
+  Today: only the targeted check asks the reader; the cheap tests run with xdist auto, every logical core, beside up to three admitted runs.
+  Repository change: the cheap tests take their workers from `read_settings` and log the `[verify-settings]` line, as the targeted check does.
+  Architecture change: none.
+asked: 2026-11-17, settled by the orchestrating agent from Q-6 and Q-8 (night run 2026-11-17-a)
+answer: "Reading B — every xdist launch of the runner takes its workers from `read_settings` and logs `[verify-settings]`; Q-6 names the runner as a user of the one reading function and Q-8 says one function computes the workers for every caller (house rule 9, one choke point)."
+answered_by: agent
+status: answered
+
+In the context of the runner's pytest launches outside the admission, facing cheap tests that size themselves to every core beside the admitted runs, we decided that every runner xdist launch takes its workers from the one reader, to achieve one worker rule on the machine as Q-6 and Q-8 ask, accepting that an attempt's cheap tests run with fewer workers than before — 2026-11-17
+
+## Q-16 · The remaining reading details (spec review rows S2-9, S2-11 to S2-16)
+
+context: |
+  Topic: seven minor holes of the re-review: the memory bound, a raised capacity, legacy-holder logs, ADR 0025's sentence, the load average, partial samples, and when the reader runs.
+  Intention: rows S2-9, S2-11, S2-12, S2-13, S2-14, S2-15 and S2-16 (MINOR) each leave a reading open; each is revisable and the implementation already takes one side.
+  Today: the code takes physical memory, re-reads capacity every 0.25-second poll, names the compatibility lock's published holder, records all three load averages, keeps the maximum of readable samples, and reads settings after the reservation in verify_all.sh.
+  Repository change: the spec states these readings; no protected file changes.
+  Architecture change: none.
+asked: 2026-11-17, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "S2-9: the memory bound is total physical memory (2 GiB per worker across all slots); a cgroup limit is not read; 'at least one' wins over a bound of zero. S2-11: a raised capacity is taken by the first waiter at its next queue poll (0.25 s). S2-12: while an older checkout holds verify.lock exclusively, the waiting logs name the compatibility lock's published holder, or say none is published. S2-13: an ADR's context is dated rationale, not current policy; criterion 11's current-policy documents are the three the Definition of Done names, and ADR 0025 stays untouched (protected). S2-14: the end record holds the 1-, 5- and 15-minute load averages. S2-15: the peak is the maximum of the readable samples, unknown only when none was read (a run that ends before its first sample included). S2-16: an admitted run reads its settings after its reservation; the runner's targeted and cheap pytest read them at launch."
+answered_by: agent
+status: answered
+
+In the context of seven minor readings the spec leaves open, facing an implementation that already takes one side of each, we decided to state those sides in the spec, to achieve criteria that can go red without a new mechanism, accepting that a missed sample can understate the peak and that ADR 0025 keeps its dated sentence until a decision pull request amends it — 2026-11-17
