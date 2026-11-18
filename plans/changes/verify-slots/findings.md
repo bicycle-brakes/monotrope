@@ -1556,7 +1556,7 @@ Stage-2 call, 2026-11-16: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_lock.py:409; scripts/stage2.py:6976; scripts/verify_all.sh:155 | On Linux, if a process is restricted to 6 CPUs on a 24-core machine with at least 48 GiB of memory and the default 3 slots, the shell reads 6 CPUs with `nproc` and selects 2 pytest workers, while the targeted runner reads 24 with `os.cpu_count()` and selects 8. The two entry points must use the same effective worker count; the targeted run can otherwise oversubscribe its CPU allocation. [Criterion 12] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_lock.py:409; scripts/stage2.py:6976; scripts/verify_all.sh:155 | On Linux, if a process is restricted to 6 CPUs on a 24-core machine with at least 48 GiB of memory and the default 3 slots, the shell reads 6 CPUs with `nproc` and selects 2 pytest workers, while the targeted runner reads 24 with `os.cpu_count()` and selects 8. The two entry points must use the same effective worker count; the targeted run can otherwise oversubscribe its CPU allocation. [Criterion 12] | Codex | taken — in spec (criterion 12; decisions Q-8, Q-12), one reader for every entry point | — |
 
 Phase 6 verdict: codex 01a1e52e-a207-7693-9abd-69fd0f3ce96f, 2026-11-16
 Reviewer session: codex 01a1e52e-a207-7693-9abd-69fd0f3ce96f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
