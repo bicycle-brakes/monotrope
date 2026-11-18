@@ -347,7 +347,7 @@ still produces slop.
 
 ## 6 · The consequence, as a proposal
 
-One session derived ten building blocks from this reading and presented
+One session derived eleven building blocks from this reading and presented
 them to the maintainer on 2026-11-18. They are a **proposal, not a
 decision**: no bead, no change folder, no code. In short:
 
@@ -379,6 +379,12 @@ decision**: no bead, no change folder, no code. In short:
     dirty; `--prune` removes only merged, clean, unpushed ones and refuses
     the rest. A writer gate reports the count, and a valve turns it blocking
     on a date.
+11. **Lock the import direction.** No file under `scripts/check_*.py`
+    imports `stage2`: a gate is read-only, while the runner writes, calls
+    foreign models and takes the verify admission. Measured on 2026-11-18:
+    zero violations, so the test locks in a property that already holds — a
+    ratchet, in the form of RB-G4's mutation ratchet (bead
+    coding-harness-7ayv).
 
 The order matters: the dated valves first, then the ratchet, then the
 missing gates. None of the last three is a cleanup — the 97 worktrees are
