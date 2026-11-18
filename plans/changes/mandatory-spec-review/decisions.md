@@ -211,3 +211,61 @@ answers on S-1..S-7.
 - **S-19, class refusals in the inventory.** The morning-handover list gets a
   group of its own, "class missing, invalid or disagreeing", for changes
   implement would refuse at the class check.
+
+## Q-9 · A BLOCKER after the third review round (row S-22)
+
+asked: 2026-11-18
+answer: "A: Du entscheidest (Empfohlen)" — in English: option A, the maintainer decides. A BLOCKER, or an `[AMBIGUITY]` whose answer changes the spec, that arrives after the third review round goes to the maintainer as a question: either the maintainer releases a fourth round, which is recorded in decisions.md and which the runner's round count then admits, or the change is re-sliced. The three-round limit stays hard; the exception stays the maintainer's.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a row S-22 (what happens after round three to a row that cannot become a plan limit).
+  Intention: the maintainer's rule of 2026-11-18 turns only non-BLOCKER rows into plan limits after round three; a BLOCKER or a spec-changing answer then needs a spec edit, every spec edit makes the review stale (criterion 11), and implement refuses until a new review exists (criterion 6).
+  Today: the spec keeps criterion 7's refusal for an open ambiguity and gives no path for such a row.
+  Repository change: one sentence in spec.md and docs/WORKFLOW.md and the runner's round count.
+  Architecture change: none beyond the exception to the three-round limit.
+  Options shown: A the maintainer decides (recommended); B freeze the spec after round three, answers only into decisions.md or plan.md; C a spec edit after round three triggers one targeted re-check that counts as no round.
+
+In the context of a spec review limited to three rounds, facing a BLOCKER or
+a spec-changing answer after the third round, we decided that such a row goes
+to the maintainer, who either releases a fourth round recorded in
+decisions.md or has the change re-sliced, to achieve a hard limit whose only
+exception is a decision the maintainer takes, accepting an occasional extra
+question — 2026-11-18
+
+## Agent decisions on the third phase-2a rows S-20..S-27 — 2026-11-18
+
+Third and last spec-review round (maintainer rule of 2026-11-18). `[DETAIL]`
+decisions by the orchestrating session (Opus 5.5), shown to the maintainer as
+one list and accepted as proposed ("A: So übernehmen"). S-22 is Q-9 above. No
+fourth review runs; the final draft works these in.
+
+- **S-20, a partly readable block.** One table line of a review block that
+  does not parse makes the whole block unreadable: it counts as no review, and
+  the runner retries or falls back as for any unreadable answer. Reason: an
+  ambiguity hidden in an unparsed line would start a model; a retry costs
+  less.
+- **S-21, what the fingerprint covers.** The spec body only — everything
+  after the front matter. The header fields (`status`,
+  `implementation_status`, `last_reviewed` and the rest of the front matter)
+  are not spec bytes. Reason: keeping the header current must not make a
+  review stale.
+- **S-23, timeout and failure kinds.** The spec-review call gets a timeout
+  that lives in the central configuration next to the pause (Q-6), easy to
+  change, proposed 30 minutes. Every non-zero exit and every timeout counts
+  the same: one retry, then the fallback reviewer. No per-kind patterns.
+  Reason: the night run must not stall, and classifying Claude CLI failures
+  would invent patterns nobody measured.
+- **S-24, the Opus re-check of a fallback review.** It is not a new round; it
+  replaces the fallback review in the same round. A BLOCKER from it after the
+  third round goes to the maintainer as Q-9 says.
+- **S-25, which audit line matches a block.** The `spec-review` audit line
+  directly above the block, with the same verb and the same model or
+  endpoint as the block heading; the date is not compared. Reason: a call
+  that runs past local midnight must not fail closed.
+- **S-26, the legacy cutoff.** A block without a fingerprint counts as legacy
+  only when its heading's day lies strictly before a fixed day written into
+  the code: the day of implementation. Named limit: blocks the old runner
+  writes between implementation and merge need a new review.
+- **S-27, which folders the morning list reads.** Only change folders that
+  hold a `spec.md`. Reason: a review is not due before there is a spec.
