@@ -64,6 +64,34 @@ def is_day(value: object) -> bool:
     return True
 
 
+def producer_record_problems(record: object) -> list[str]:
+    """The contract one producer record must satisfy, as the census and the runner's shared
+    post-run check both hold it: a known program, one publication date, an optional model."""
+    if not isinstance(record, Mapping):
+        return ["produced_by: expected program and publication date"]
+    problems = []
+    if record.get("kind") != "llm-session":
+        problems.append("produced_by.kind: expected llm-session")
+    if not isinstance(record.get("name"), str) or record.get("name") not in PROGRAMS:
+        problems.append("produced_by.name: expected producing program")
+    if not isinstance(record.get("version"), str) or not is_day(record.get("version")):
+        problems.append("produced_by.version: expected one publication date")
+    if "model" in record and (not isinstance(record["model"], str) or not record["model"].strip()):
+        problems.append("produced_by.model: expected known model identity")
+    return problems
+
+
+def producer_records_problems(producer: object) -> list[str]:
+    """Every producer record in one `produced_by` value, judged by the record contract."""
+    records = producer if isinstance(producer, list) else [producer]
+    if not records:
+        return ["produced_by: expected nonempty producer list"]
+    problems: list[str] = []
+    for record in records:
+        problems.extend(producer_record_problems(record))
+    return problems
+
+
 def metadata_problems(
     header: Mapping, raw_header: str, program: str | None = None, publication_day: str | None = None
 ) -> list[str]:
@@ -105,20 +133,7 @@ def metadata_problems(
         problems.append("provenance: expected ai-drafted-reviewed")
     producer = header.get("produced_by")
     records = producer if isinstance(producer, list) else [producer]
-    if not records:
-        problems.append("produced_by: expected nonempty producer list")
-    for record in records:
-        if not isinstance(record, Mapping):
-            problems.append("produced_by: expected program and publication date")
-            continue
-        if record.get("kind") != "llm-session":
-            problems.append("produced_by.kind: expected llm-session")
-        if not isinstance(record.get("name"), str) or record.get("name") not in PROGRAMS:
-            problems.append("produced_by.name: expected producing program")
-        if not isinstance(record.get("version"), str) or not is_day(record.get("version")):
-            problems.append("produced_by.version: expected one publication date")
-        if "model" in record and (not isinstance(record["model"], str) or not record["model"].strip()):
-            problems.append("produced_by.model: expected known model identity")
+    problems.extend(producer_records_problems(producer))
     if program and not any(
         isinstance(record, Mapping)
         and record.get("name") == program
@@ -179,41 +194,51 @@ def adoption_day(root: Path) -> date | None:
         return None
 
 
-def _file_findings(path: Path, relative: str, text_findings: list[str]) -> None:
-    """Read one file and append every defect it has, before any exemption."""
-    try:
-        text = path.read_bytes().decode("utf-8")
-    except UnicodeDecodeError:
-        text_findings.append(f"{relative}: unreadable file (not UTF-8)")
-        return
-    except OSError as error:
-        text_findings.append(f"{relative}: unreadable file ({error})")
-        return
+def text_findings(relative: str, text: str) -> list[str]:
+    """Every census defect of one file's text, each line prefixed with its relative path.
+
+    Shared with the runner's post-run check, so an active research publication a route
+    prepares is judged by the same publication contract the census applies (spec,
+    criterion 14). A file the census cannot read at all returns exactly one unreadable
+    finding; a file without frontmatter is `unreadable header`, never silently clean.
+    """
     frontmatter = FRONTMATTER.match(text)
     if frontmatter is None:
-        text_findings.append(f"{relative}: unreadable header (no frontmatter)")
-        return
+        return [f"{relative}: unreadable header (no frontmatter)"]
     try:
         header = yaml.safe_load(frontmatter.group(1))
     except (yaml.YAMLError, ValueError):
-        text_findings.append(f"{relative}: unreadable header (malformed YAML)")
-        return
+        return [f"{relative}: unreadable header (malformed YAML)"]
     if not isinstance(header, Mapping):
-        text_findings.append(f"{relative}: unreadable header (not a mapping)")
-        return
+        return [f"{relative}: unreadable header (not a mapping)"]
+    findings: list[str] = []
     body = text[frontmatter.end() :]
     try:
         program, publication_day = publication_evidence(body)
     except ValueError as error:
-        text_findings.append(f"{relative}: {error}")
+        findings.append(f"{relative}: {error}")
         program, publication_day = None, None
     if program or model_attribution(header.get("produced_by")) or header.get("provenance") == "ai-drafted-reviewed":
-        text_findings.extend(
+        findings.extend(
             f"{relative}: {problem}"
             for problem in metadata_problems(header, frontmatter.group(1), program, publication_day)
         )
         if stage2.research_opening_notices(text, frontmatter.end()):
-            text_findings.append(f"{relative}: opening skeleton notice over published research")
+            findings.append(f"{relative}: opening skeleton notice over published research")
+    return findings
+
+
+def _file_findings(path: Path, relative: str, collected: list[str]) -> None:
+    """Read one file and append every defect it has, before any exemption."""
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        collected.append(f"{relative}: unreadable file (not UTF-8)")
+        return
+    except OSError as error:
+        collected.append(f"{relative}: unreadable file ({error})")
+        return
+    collected.extend(text_findings(relative, text))
 
 
 def census_findings(paths: Iterable[Path], root: Path, *, apply_adoption: bool = False) -> list[str]:

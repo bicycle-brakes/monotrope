@@ -26603,28 +26603,40 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
 def test_research_publication_preserves_all_producers(shape):
     import yaml
 
+    baseline_field = (
+        '[{kind: llm-session, name: codex, version: "2026-11-04", model: "gpt-6.1-sol"}, '
+        '{kind: llm-session, name: pi, version: "2026-11-04"}]'
+    )
     source = (
-        b'---\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n'
-        b"date: 2026-11-04\nupdated: 2026-11-04\n---\n# Research\n\nEarlier work.\n"
+        f"---\nproduced_by: {baseline_field}\ndate: 2026-11-04\nupdated: 2026-11-04\n---\n# Research\n\nEarlier work.\n"
     )
     if shape == "block-list":
         source = source.replace(
-            b'produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}',
-            b'produced_by:\n- kind: llm-session\n  name: codex\n  version: "gpt-6.1-sol, 2026-11-04"',
+            f"produced_by: {baseline_field}",
+            "produced_by:\n"
+            '- kind: llm-session\n  name: codex\n  version: "2026-11-04"\n  model: "gpt-6.1-sol"\n'
+            '- kind: llm-session\n  name: pi\n  version: "2026-11-04"',
         )
     elif shape == "duplicate-field":
-        source = source.replace(
-            b"date: 2026-11-04",
-            b'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\ndate: 2026-11-04',
-            1,
-        )
-    corrected = stage2.research_publication(source, producer="pi", day="2026-11-05")
+        source = source.replace("date: 2026-11-04", f"produced_by: {baseline_field}\ndate: 2026-11-04", 1)
+    corrected = stage2.research_publication(
+        source.encode(),
+        producer="pi",
+        day="2026-11-05",
+        baseline_field=baseline_field,
+    )
     records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
     assert records == [
         {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-04"},
         {"kind": "llm-session", "name": "pi", "version": "2026-11-05"},
-    ], "a new publication must extend earlier producer/model attribution"
-    assert stage2.research_publication(corrected, producer="pi", day="2026-11-05") == corrected
+    ], "a new publication must extend the producer attribution committed before the run"
+    expected_field = "produced_by: [" + baseline_field[1:-1] + ', {kind: llm-session, name: pi, version: "2026-11-05"}]'
+    assert expected_field in corrected.decode(), "the committed records keep their bytes; the flow list grows in place"
+    assert (
+        stage2.research_publication(corrected, producer="pi", day="2026-11-05", baseline_field=baseline_field)
+        == corrected
+    )
     assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
 
 

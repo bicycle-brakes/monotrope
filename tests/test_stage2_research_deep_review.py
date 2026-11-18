@@ -835,7 +835,8 @@ def test_producer_history_survives_swarm_resume(sworld: SwarmWorld, monkeypatch)
 
     text = swarm.swarm_skeleton().replace(
         "provenance: human-written\n",
-        'provenance: ai-drafted-reviewed\nproduced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-04"}\n',
+        "provenance: ai-drafted-reviewed\n"
+        'produced_by: {kind: llm-session, name: codex, version: "2026-11-04", model: "gpt-6.1-sol"}\n',
     )
     sworld.research.write_text(text)
     sworld.commit()
@@ -874,20 +875,11 @@ def test_publication_never_infers_historical_program_from_publisher(evidence):
         source += "```markdown\n" + audit + "````\n"
     elif evidence == "conflicting":
         source += audit + audit.replace("glm-coding-plan", "openai-codex")
-    try:
-        corrected = stage2.research_publication(source.encode(), producer="stage2-research-swarm", day="2026-11-09")
-    except stage2.Refused as error:
-        assert evidence != "accepted", f"an evidenced historical program must be retained: {error}"
-        return
-    assert evidence == "accepted", "ambiguous historical attribution must be refused before publication"
+    corrected = stage2.research_publication(source.encode(), producer="stage2-research-swarm", day="2026-11-09")
     records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
-    assert records[0] == {
-        "kind": "llm-session",
-        "name": "claude-code",
-        "version": "2026-10-31",
-        "model": "glm-5.3-flash",
-    }, "the new swarm publisher cannot establish the historical Flash program"
-    assert records[1]["name"] == "stage2-research-swarm"
+    assert records == [{"kind": "llm-session", "name": "stage2-research-swarm", "version": "2026-11-09"}], (
+        "the session's own produced_by is a self-description: discarded whole, never read as history or evidence"
+    )
 
 
 @pytest.mark.parametrize("quote", ["'", '"'])
@@ -916,7 +908,9 @@ def test_publication_replaces_quoted_owned_yaml_keys(quote, eol):
     header = yaml.safe_load(raw_header)
     assert header["provenance"] == "ai-drafted-reviewed"
     assert header["review"] == {"status": "pending", "approved_by": None, "approved_at": None}
-    assert [record["name"] for record in header["produced_by"]] == ["codex", "pi", "pi"]
+    assert header["produced_by"] == [{"kind": "llm-session", "name": "pi", "version": "2026-11-09"}], (
+        "the session's own self-descriptions are discarded; the publication names only its producer"
+    )
     assert f'title: "Kept exactly"{eol}'.encode() in corrected
     assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
     assert stage2.research_publication(corrected, producer="pi", day="2026-11-09") == corrected

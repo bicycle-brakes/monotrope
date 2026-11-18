@@ -1227,6 +1227,22 @@ def render_table(columns: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def appended_bytes(existing: bytes, text: str) -> bytes:
+    """The bytes `append` would write: the earlier bytes, one blank line, the block, stamped.
+
+    One writer for the construction: a verb that must judge a block before it lands (the
+    pre-publication check of spec-review) reads these bytes instead of rebuilding them here.
+    """
+    addition = text.rstrip().encode("utf-8") + b"\n"
+    separator = (b"" if existing.endswith(b"\n") else b"\n") + b"\n"
+    joined = existing + separator + addition if existing else addition
+    try:
+        decoded = joined.decode("utf-8")
+    except UnicodeDecodeError:
+        return joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
+    return check_frontmatter_current.stamped(decoded, clock_now().local_date).encode("utf-8")
+
+
 def append(path: Path, text: str) -> None:
     """Add a block at the end, separated by one blank line, and stamp `updated:` - in one atomic replacement.
 
@@ -1237,16 +1253,7 @@ def append(path: Path, text: str) -> None:
     truncated one (deep review RS-2-6).
     """
     existing = path.read_bytes() if path.exists() else b""
-    addition = text.rstrip().encode("utf-8") + b"\n"
-    separator = (b"" if existing.endswith(b"\n") else b"\n") + b"\n"
-    joined = existing + separator + addition if existing else addition
-    try:
-        decoded = joined.decode("utf-8")
-    except UnicodeDecodeError:
-        stamped = joined  # a header that is not UTF-8 is never rewritten (check_frontmatter_current.stamp)
-    else:
-        stamped = check_frontmatter_current.stamped(decoded, clock_now().local_date).encode("utf-8")
-    write_atomic(path, stamped)
+    write_atomic(path, appended_bytes(existing, text))
 
 
 def write_atomic(path: Path, data: bytes) -> None:
@@ -1385,103 +1392,6 @@ def _without_skeleton_opening(text: str, body_start: int) -> str:
 RESEARCH_PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
 
 
-def research_producers(value, *, program_hint=None) -> list[dict]:
-    """Retain evidence-backed contributors, separating legacy model/date spellings.
-
-    A model name alone never establishes a program: only publication evidence may
-    supply that program. Unknown or ambiguous historical attribution is refused.
-    """
-    if value is None:
-        return []
-    records = value if isinstance(value, list) else [value]
-    if not records:
-        raise ValueError("empty producer list")
-    result = []
-    for record in records:
-        if not isinstance(record, dict) or record.get("kind") != "llm-session":
-            raise ValueError("invalid historical producer")
-        name = record.get("name")
-        name = "claude-code" if name == "Claude Code" else name
-        version = str(record.get("version", ""))
-        days = re.findall(r"\d{4}-\d{2}-\d{2}", version)
-        if len(days) != 1:
-            raise ValueError("no unique historical producer date")
-        try:
-            dt.date.fromisoformat(days[0])
-        except ValueError as error:
-            raise ValueError("invalid historical producer date") from error
-        legacy = version.replace(days[0], "").strip(" ,")
-        models = record.get("model")
-        if not isinstance(name, str) or name not in RESEARCH_PROGRAMS:
-            if name == "glm-5.3-flash" and program_hint in RESEARCH_PROGRAMS:
-                models, name = name, program_hint
-            else:
-                raise ValueError("no program evidence for historical producer")
-        if legacy and not legacy.startswith("stage-2 explore"):
-            if models and models != legacy:
-                raise ValueError("conflicting historical model evidence")
-            models = legacy
-        if models is not None and (not isinstance(models, str) or not models.strip()):
-            raise ValueError("invalid historical model evidence")
-        for model in re.split(r" and ", models) if models else [None]:
-            entry = dict(record, name=name, version=days[0])
-            if model:
-                entry["model"] = model
-            if entry not in result:
-                result.append(entry)
-    return result
-
-
-def research_header_producers(raw_header: str, *, body="") -> list[dict]:
-    """Read every owned producer span without silently losing duplicate-key evidence."""
-    node = yaml.compose(raw_header)
-    if not isinstance(node, yaml.MappingNode):
-        raise ValueError("research header is not a mapping")
-
-    def unique(value):
-        if isinstance(value, yaml.MappingNode):
-            keys = [key.value for key, _ in value.value]
-            if len(keys) != len(set(keys)):
-                raise ValueError("duplicate historical producer keys")
-            for _, child in value.value:
-                unique(child)
-        elif isinstance(value, yaml.SequenceNode):
-            for child in value.value:
-                unique(child)
-
-    # Only historical accepted publications can establish a legacy model-only producer's
-    # program. The program making this new publication says nothing about earlier work.
-    visible = research_visible_text(body)
-    programs: dict[str, set[str]] = {}
-    for answer in re.finditer(r"(?m)^## Runner exploration — (\d{4}-\d{2}-\d{2})[ \t]*\r?\n\s*\S", visible):
-        calls = list(
-            re.finditer(
-                r"(?m)^Stage-2 call, (\d{4}-\d{2}-\d{2}): explore ·[^\r\n]*?endpoint ([\w-]+)",
-                visible[: answer.start()],
-            )
-        )
-        if calls and calls[-1][1] == answer[1]:
-            programs.setdefault(answer[1], set()).add(producer_for((calls[-1][2], "", None)))
-
-    records = []
-    for key, value in node.value:
-        if key.value == "produced_by":
-            unique(value)
-            loaded = yaml.safe_load(yaml.serialize(value))
-            if loaded == []:
-                raise ValueError("empty producer list")
-            for entry in loaded if isinstance(loaded, list) else [loaded]:
-                days = (
-                    re.findall(r"\d{4}-\d{2}-\d{2}", str(entry.get("version", ""))) if isinstance(entry, dict) else []
-                )
-                evidence = programs.get(days[0], set()) if len(days) == 1 else set()
-                hint = next(iter(evidence)) if len(evidence) == 1 else None
-                for record in research_producers(entry, program_hint=hint):
-                    if record not in records:
-                        records.append(record)
-    return records
-
-
 def research_producer_field(records: list[dict]) -> str:
     """Render only the owned field; unrelated header bytes never pass through YAML."""
 
@@ -1500,15 +1410,23 @@ def research_producer_field(records: list[dict]) -> str:
     return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
 
 
-def research_publication(existing: bytes, *, producer: str, day: str, model: str | None = None) -> bytes:
+def research_publication(
+    existing: bytes, *, producer: str, day: str, model: str | None = None, baseline_field: str | None = None
+) -> bytes:
     """The research bytes as a model publication must look: truthful provenance, no skeleton notices.
 
     The header's `provenance`, `produced_by`, `review` and `updated` fields are corrected in place —
-    a complete span (inline or block mapping) is replaced, further occurrences are dropped, and a
-    missing field is inserted before `tags:` or at the header's end — and the generated opening
-    paragraph and blockquote are removed. Everything else keeps its bytes: unrelated fields, authored
-    prose, audit lines, envelopes and the file's line-ending style. Undecodable bytes, missing
-    frontmatter and a missing title heading are refused before publication.
+    a complete span (inline or block mapping) is replaced, and a missing field is inserted before
+    `tags:` or at the header's end — and the generated opening paragraph and blockquote are removed.
+    Everything else keeps its bytes: unrelated fields, authored prose, audit lines, envelopes and the
+    file's line-ending style. Undecodable bytes, missing frontmatter and a missing title heading are
+    refused before publication.
+
+    Producer records are not read from the working tree's header: the session's own self-description
+    is discarded (Q-10, Q-12) and the field is built from the records committed before the run
+    (`baseline_field`, exactly as HEAD holds it) plus this publication's contribution, keeping the
+    committed records' bytes (criterion 7). A committed field that cannot be read safely stops the
+    publication - that header belongs to the stock migration (bead coding-harness-2i7x).
     """
     try:
         text = existing.decode("utf-8")
@@ -1531,9 +1449,9 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
         metadata = yaml.safe_load(block)
         if not isinstance(metadata, dict):
             raise ValueError("header is not a mapping")
-        records = research_header_producers(block, body=text[header.end() :])
     except (ValueError, yaml.YAMLError) as error:
         raise Refused(f"research publication refused: {error}") from error
+    records = parse_producer_records(baseline_field, "<baseline>") if baseline_field is not None else []
     contribution = {"kind": "llm-session", "name": producer, "version": day}
     if model:
         contribution["model"] = model
@@ -1541,7 +1459,7 @@ def research_publication(existing: bytes, *, producer: str, day: str, model: str
         records.append(contribution)
     fields = {
         "provenance": "provenance: ai-drafted-reviewed",
-        "produced_by": research_producer_field(records),
+        "produced_by": "produced_by:" + retained_producer_field(baseline_field, records, eol=eol),
         "review": "review: {status: pending, approved_by: null, approved_at: null}",
         "updated": f"updated: {day}",
     }
@@ -3661,12 +3579,20 @@ def spec_review(root: Path, change: str) -> None:
     Codex session where no phase-2a session was recorded.
     """
     ctx = preflight(root, change, OPUS)
+    findings_rel = ctx.findings.relative_to(root).as_posix()
+    # A committed header no publication can be judged against stops the verb before a route is
+    # spent: the header migration (bead coding-harness-2i7x) owns existing headers (criterion 15).
+    refuse_committed_header_fault(root, findings_rel)
     prompt = phase_prompt(root, "02a-spec-review.md", change)
     begin_call(ctx, "spec-review", OPUS, prompt)
     answer = run_work_model(ctx, prompt, OPUS, writable=False)
     rows, _ = parse_rows(answer)
-    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
-    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
+    block = f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}"
+    # The shared check judges the prepared findings before the block lands (criterion 15): a
+    # fault in this call's output refuses the attempt, a committed fault stops the verb.
+    classify_publication(root, findings_rel, appended_bytes(ctx.findings.read_bytes(), block))
+    append(ctx.findings, block)
+    print(f"spec-review: {len(rows)} rows appended to {findings_rel}")
 
 
 def recorded_2a_session(text: str) -> str | None:
@@ -5277,6 +5203,37 @@ def _mask_stamp(text: str, *, dated: bool) -> str | None:
     return text[: block.start(1)] + "\n".join(lines) + text[block.end(1) :]
 
 
+def _mask_owned_fields(text: str) -> str | None:
+    """`text` with its header's `produced_by` and `review` spans replaced by one mask each.
+
+    The runner stamps those fields after the model call (runner-stamps-provenance), so a
+    difference only there cannot qualify an attempt: a stamp-only edit, and a review the
+    stamp reset, read as no work. None when the fields cannot be masked safely, which keeps
+    the comparison strict - work, never silence.
+    """
+    block = check_frontmatter_current._BLOCK.match(text)
+    if block is None:
+        return None
+    try:
+        spans: list[tuple[int, int, str]] = []
+        for key in ("produced_by", "review"):
+            found = _header_field_spans(block.group(1), key)
+            if len(found) > 1:
+                return None
+            if found:
+                spans.append((block.start(1) + found[0][0], block.start(1) + found[0][1], key))
+    except yaml.YAMLError:
+        return None
+    pieces: list[str] = []
+    position = block.start(1)
+    for start, end, key in sorted(spans):
+        pieces.append(text[position:start])
+        pieces.append(f"{key}: <runner stamp>")
+        position = end
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
     """Refuse pre-existing changes outside `allowed`, except the runner's own derived leftovers (bead coding-harness-b5w)."""
     outside = {path for path in changed_paths(root) - allowed if not derived_leftover(root, path)}
@@ -5951,10 +5908,15 @@ def attempt_has_work(
             new = _git_bytes(root, "cat-file", "blob", new_id)
             # Ignore stamp-only edits on every document, including malformed replacement
             # values and stamps outside held paths that the checkpoint does not restore.
+            # The producer and review fields the runner stamps after the call are discounted
+            # the same way (runner-stamps-provenance), before they can qualify an attempt.
             old_text = old.decode("utf-8", "surrogateescape")
             new_text = new.decode("utf-8", "surrogateescape")
             masked = _mask_stamp(old_text, dated=False)
             if masked is not None and _mask_stamp(new_text, dated=False) == masked:
+                continue
+            owned = _mask_owned_fields(old_text)
+            if owned is not None and _mask_owned_fields(new_text) == owned:
                 continue
         if path == plan_path and status == "M" and old_mode == new_mode:
             old = _git_bytes(root, "cat-file", "blob", old_id)
@@ -5967,6 +5929,9 @@ def attempt_has_work(
                 continue
             masked = _mask_stamp(old_body, dated=False)
             if masked is not None and _mask_stamp(new_body, dated=False) == masked:
+                continue
+            owned = _mask_owned_fields(old_body)
+            if owned is not None and _mask_owned_fields(new_body) == owned:
                 continue
         return True
     return False
@@ -8890,6 +8855,10 @@ def explore(
         "Do not design, recommend, edit a file or use review-table formatting."
     )
     prompt = work_prompt(root, "01-explore.md", change, extra)
+    research_rel = ctx.research.relative_to(root).as_posix()
+    # A committed header no publication can be written against stops the verb before a route is
+    # spent: the header migration (bead coding-harness-2i7x) owns existing headers (criterion 15).
+    refuse_committed_header_fault(root, research_rel)
     begin_work_call(ctx, "explore", endpoint, prompt, 1, route, ctx.research, stage2_off)
     answer = run_work_model(ctx, prompt, endpoint, writable=False, key=key)
     if not names_a_repository_file(root, answer):
@@ -8901,14 +8870,21 @@ def explore(
     # The publication, not a plain append: the header's provenance fields are corrected and the skeleton's
     # opening notices removed in the same atomic replacement that lands the answer (spec, criteria 1-5).
     prepared = research_publication(
-        ctx.research.read_bytes(), producer=producer_for(endpoint), day=today(), model=endpoint[1]
+        ctx.research.read_bytes(),
+        producer=producer_for(endpoint),
+        day=today(),
+        model=endpoint[1],
+        baseline_field=committed_producer_field(root, research_rel),
     )
+    # The shared check judges the prepared publication before it lands (criterion 15): a fault in
+    # this call's output refuses the attempt, a committed fault has already stopped the verb above.
+    classify_publication(root, research_rel, prepared)
     publish_research(
         ctx.research,
         prepared,
         f"## Runner exploration — {today()}\n\n{quote_research_records(answer.strip())}",
     )
-    print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
+    print(f"explore: answer appended to {research_rel} · route {route}")
 
 
 def quote_research_records(text: str) -> str:
@@ -9319,6 +9295,464 @@ def persist_time_entry(
         raise CallFailed(f"{message}; the attempt's own failure stands: {original}") from original
 
 
+# ---------------------------------------------------------------------------
+# Producer stamping and the shared post-run header check
+# (runner-stamps-provenance, bead coding-harness-f9sv)
+# ---------------------------------------------------------------------------
+
+# Active research is the one research path a publication writes; archived changes are stock.
+ACTIVE_RESEARCH = re.compile(r"plans/changes/(?!archive/)[^/]+/research\.md\Z")
+
+# The label of the stamp's own findings entries, beside the format and lifecycle labels.
+STAMP_LABEL = "Producer stamps"
+
+
+class CommittedRecordFault(Refused):
+    """A producer-record fault standing in the committed baseline, not written by this run.
+
+    No route can repair it, so the verb stops and names the stock migration
+    (bead coding-harness-2i7x) instead of spending another route (spec, criterion 15).
+    """
+
+
+def committed_bytes(root: Path, relative: str) -> bytes | None:
+    """The file's bytes as HEAD commits them, or None when HEAD holds no such file.
+
+    Only the exact missing-path diagnostic establishes absence; added warnings or fatal
+    lines refuse, like every git read.
+    """
+    missing = rf"fatal: path '{re.escape(relative)}' (?:does not exist in|exists on disk, but not in) 'HEAD'"
+    held = run_git(root, "show", f"HEAD:{relative}", allow={128: missing})
+    return held.stdout if held.returncode == 0 else None
+
+
+def _committed_fault(relative: str, reason: str) -> CommittedRecordFault:
+    return CommittedRecordFault(
+        f"{relative}: the committed header cannot be read safely ({reason}); "
+        "the header migration owns it (bead coding-harness-2i7x)"
+    )
+
+
+def parse_producer_records(field: str, relative: str) -> list[dict]:
+    """The producer records one committed `produced_by` field holds.
+
+    A duplicate key, a non-mapping record, an unknown program or a version that is not one
+    calendar day is a committed fault: the field must be readable, or the header belongs to
+    the migration (bead coding-harness-2i7x). The record contract is the census's, so the
+    stamp and the census cannot disagree about what a producer record is.
+    """
+    import research_census  # the census reads this module back, so the import stands at call time
+
+    try:
+        node = yaml.compose(field)
+    except yaml.YAMLError as error:
+        raise _committed_fault(relative, f"invalid YAML ({error})") from None
+    if isinstance(node, yaml.MappingNode):
+        keys = [key.value for key, _ in node.value]
+        if len(keys) != len(set(keys)):
+            raise _committed_fault(relative, "duplicate keys")
+    try:
+        loaded = yaml.safe_load(field)
+    except yaml.YAMLError as error:
+        raise _committed_fault(relative, f"invalid YAML ({error})") from None
+    records = loaded if isinstance(loaded, list) else [loaded]
+    if not records:
+        raise _committed_fault(relative, "empty producer list")
+    problems: list[str] = []
+    for record in records:
+        problems.extend(research_census.producer_record_problems(record))
+    if problems:
+        raise _committed_fault(relative, "; ".join(problems))
+    return records
+
+
+def _field_value_raw(block: str, key: str, relative: str) -> str | None:
+    """A committed header field's raw value text, after `key:` to the value's end.
+
+    The field must stand exactly once; a duplicate is a committed fault the migration owns
+    (spec, criterion 6). None when the committed header does not hold the field.
+    """
+    try:
+        spans = _header_field_spans(block, key)
+    except yaml.YAMLError as error:
+        raise _committed_fault(relative, f"invalid YAML ({error})") from None
+    if not spans:
+        return None
+    if len(spans) > 1:
+        raise _committed_fault(relative, f"{key} is held more than once")
+    start, end = spans[0]
+    raw = block[start:end]
+    return raw[raw.index(":") + 1 :]
+
+
+def committed_producer_field(root: Path, relative: str) -> str | None:
+    """The `produced_by` field's value exactly as HEAD commits it, or None when HEAD has none.
+
+    Only records committed before the run count as earlier contributions (Q-10): the
+    session-written field in the working tree is never one.
+    """
+    head = committed_bytes(root, relative)
+    if head is None:
+        return None
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+    if match is None:
+        return None
+    return _field_value_raw(match.group(1), "produced_by", relative)
+
+
+def refuse_committed_header_fault(root: Path, relative: str) -> None:
+    """Stop the verb before a route is spent when the committed header cannot be stamped.
+
+    A producer field the committed baseline carries but no stamp can read is the stock
+    migration's to fix (bead coding-harness-2i7x); retrying it on another route only burns one.
+    """
+    committed_producer_field(root, relative)
+
+
+def inline_producer_record(record: dict) -> str:
+    """One producer record in the header's compact inline form; dates stay quoted strings."""
+    return (
+        "{"
+        + ", ".join(f"{key}: {json.dumps(value) if isinstance(value, str) else value}" for key, value in record.items())
+        + "}"
+    )
+
+
+def _block_record_lines(record: dict, eol: str) -> str:
+    """One producer record as a compact sequence item: `- kind: ...` then the further keys."""
+    lines = []
+    for index, (key, value) in enumerate(record.items()):
+        prefix = "- " if index == 0 else "  "
+        rendered = json.dumps(value) if isinstance(value, str) else value
+        lines.append(f"{prefix}{key}: {rendered}")
+    return eol.join(lines)
+
+
+def retained_producer_field(baseline_field: str | None, records: list[dict], *, eol: str = "\n") -> str:
+    """The `produced_by` replacement the stamp writes, without its `produced_by:` key prefix.
+
+    A committed field whose records are already exactly this publication's keeps its own bytes
+    verbatim. Otherwise the earlier records keep their bytes: a single inline record and a flow
+    list grow a flow list in place, a block sequence and a block mapping grow compact sequence
+    items - the mapping's first record line's indentation becomes `- `, later lines unchanged
+    (agent decision F-35). A file with no committed field gets the canonical rendering.
+    """
+    if baseline_field is None:
+        return " " + research_producer_field(records).removeprefix("produced_by:")
+    earlier = parse_producer_records(baseline_field, "<retained>") if records else []
+    if earlier == records:
+        return baseline_field
+    added = [record for record in records if record not in earlier]
+    stripped = baseline_field.lstrip()
+    if stripped.startswith("{"):
+        # One inline record grows into a flow list; its bytes stay verbatim.
+        rest = ", ".join(inline_producer_record(record) for record in added)
+        return f" [{stripped}, {rest}]"
+    if stripped.startswith("["):
+        # A flow list grows in place: the earlier records' bytes stay verbatim (criterion 7).
+        inner = stripped[1:].strip()
+        if inner.endswith("]"):
+            inner = inner[:-1].strip()
+        rest = ", ".join(inline_producer_record(record) for record in added)
+        return f" [{inner}, {rest}]" if inner else f" [{rest}]"
+    # A block value begins with the line ending that followed `produced_by:`; the record
+    # lines follow. The first record line's indentation becomes `- `, the rest unchanged.
+    body = baseline_field[1:] if baseline_field[0] in "\r\n" else baseline_field
+    lines = body.replace("\r\n", "\n").split("\n")
+    first = lines[0]
+    indent = first[: len(first) - len(first.lstrip(" "))]
+    lines[0] = "- " + first[len(indent) :]
+    for record in added:
+        lines.append(_block_record_lines(record, eol))
+    return eol + eol.join(lines)
+
+
+def _without_fields(block: str, *keys: str) -> str:
+    """The header with each named field's first span removed: what a comparison may judge."""
+    spans: list[tuple[int, int]] = []
+    for key in keys:
+        found = _header_field_spans(block, key)
+        if found:
+            spans.append(found[0])
+    spans.sort()
+    pieces: list[str] = []
+    position = 0
+    for start, end in spans:
+        pieces.append(block[position:start])
+        position = end
+    pieces.append(block[position:])
+    return "".join(pieces)
+
+
+def _is_approval(value: object) -> bool:
+    """Whether a review value is an approval: the status field says so."""
+    return isinstance(value, dict) and value.get("status") == "approved"
+
+
+def stamp_artifact(root: Path, relative: str, *, producer: str, model: str | None, day: str) -> str | None:
+    """Stamp one retained artifact with this attempt's producer record, in place.
+
+    The field is built from the records HEAD commits - never from the session's own header
+    self-description (Q-10, Q-12) - plus this attempt's contribution; the committed records
+    keep their bytes except for the compact conversion (criterion 7). Bytes outside
+    `produced_by`, `updated` and a required approval reset are untouched (criterion 5); a
+    committed approval whose document changed elsewhere is reset to pending and reported
+    (criterion 8). Returns the reset notice, or None. Refuses headers that cannot be stamped
+    safely, naming the artifact (criterion 6).
+    """
+    path = root / relative
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused(f"{relative}: cannot be stamped safely (not UTF-8)") from error
+    except OSError as error:
+        raise Refused(f"{relative}: cannot be stamped safely ({error})") from error
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+    if match is None:
+        raise Refused(f"{relative}: cannot be stamped safely (no frontmatter)")
+    start, end = match.span(1)
+    block = text[start:end]
+    eol = "\r\n" if "\r\n" in block else "\n"
+    try:
+        # Anchors and aliases make source spans untrustworthy; refuse the mechanism before
+        # deriving any edit span (criterion 6).
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                kind = "anchor" if isinstance(token, yaml.tokens.AnchorToken) else "alias"
+                raise Refused(f"{relative}: cannot be stamped safely (YAML {kind} {token.value!r} in header)")
+        if not isinstance(yaml.safe_load(block), dict):
+            raise ValueError("header is not a mapping")
+        produced_spans = _header_field_spans(block, "produced_by")
+        if len(produced_spans) > 1:
+            raise ValueError("produced_by is held more than once")
+    except (ValueError, yaml.YAMLError) as error:
+        raise Refused(f"{relative}: cannot be stamped safely ({error})") from error
+    baseline_field = committed_producer_field(root, relative)
+    records = parse_producer_records(baseline_field, relative) if baseline_field is not None else []
+    contribution = {"kind": "llm-session", "name": producer, "version": day}
+    if model:
+        contribution["model"] = model
+    if contribution not in records:
+        records.append(contribution)
+    fields = {"produced_by": "produced_by:" + retained_producer_field(baseline_field, records, eol=eol)}
+    head = committed_bytes(root, relative)
+    head_block = None
+    if head is not None:
+        head_match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+        head_block = head_match.group(1) if head_match else None
+    notice: str | None = None
+    if head_block is not None:
+        committed_review = _field_value_raw(head_block, "review", relative)
+        try:
+            committed_state = yaml.safe_load(committed_review) if committed_review is not None else None
+        except yaml.YAMLError:
+            committed_state = None
+        if _is_approval(committed_state):
+            # The approval survives only a stamp that touches nothing else (criterion 9).
+            body_changed = _without_fields(block, "produced_by", "updated") != _without_fields(
+                head_block, "produced_by", "updated"
+            )
+            if body_changed:
+                approver = committed_state.get("approved_by")
+                approved_at = committed_state.get("approved_at")
+                fields["review"] = "review: {status: pending, approved_by: null, approved_at: null}"
+                notice = (
+                    f"Approval reset — {relative}: the committed approval by {approver} on {approved_at} "
+                    "was reset to pending; the attempt changed the document outside "
+                    "`produced_by` and `updated`."
+                )
+    fields["updated"] = f"updated: {day}"
+    edits: list[tuple[int, int, str]] = []
+    inserted: list[str] = []
+    for key, replacement in fields.items():
+        spans = _header_field_spans(block, key)
+        if not spans:
+            inserted.append(replacement)
+            continue
+        edits.append((*spans[0], replacement))
+    edits.sort(key=lambda edit: edit[0])
+    pieces: list[str] = []
+    position = 0
+    for edit_start, edit_end, replacement in edits:
+        pieces.append(block[position:edit_start])
+        pieces.append(replacement)
+        position = edit_end
+    pieces.append(block[position:])
+    corrected = "".join(pieces)
+    if inserted:
+        tags = re.search(r"(?m)^tags:[^\r\n]*", corrected)
+        if tags is not None:
+            corrected = corrected[: tags.start()] + eol.join(inserted) + eol + corrected[tags.start() :]
+        else:
+            corrected = eol.join([corrected, *inserted])
+    # Validate the complete stamped header before it can reach the atomic writer (criterion 6).
+    try:
+        yaml.compose(corrected)
+    except yaml.YAMLError as error:
+        raise Refused(f"{relative}: cannot be stamped safely (corrected header is invalid YAML: {error})") from error
+    write_atomic(path, (text[:start] + corrected + text[end:]).encode("utf-8"))
+    return notice
+
+
+def stamp_retained_artifacts(
+    root: Path, candidates: list[str], *, producer: str, model: str | None, day: str
+) -> list[str]:
+    """Stamp every retained artifact this attempt changed, before its post-run checks.
+
+    Candidates are the paths the attempt's model changed, as the caller measured them. A file
+    whose bytes equal HEAD's is not retained model work and is left alone; a file without
+    frontmatter carries no producer record. The returned lines are the approval resets for
+    the attempt's findings (criterion 8).
+    """
+    notices: list[str] = []
+    for relative in sorted(candidates):
+        try:
+            current = (root / relative).read_bytes()
+        except OSError:
+            continue  # a file the attempt deleted is not retained; deletion is judged elsewhere
+        head = committed_bytes(root, relative)
+        if head is not None and current == head:
+            continue
+        if re.match(rb"\A\xef\xbb\xbf?---\r?\n", current) is None:
+            continue
+        notice = stamp_artifact(root, relative, producer=producer, model=model, day=day)
+        if notice:
+            notices.append(notice)
+    return notices
+
+
+def changed_relative_paths(root: Path, before: str, after: str) -> list[str]:
+    """The paths between two trees, decoded the way the attempt's attribution needs them."""
+    raw = _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, after)
+    return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
+
+
+def header_problems(relative: str, baseline: bytes | None, current: bytes) -> list[str]:
+    """The shared post-run judgement for one touched file, as lines that name the file.
+
+    Active research is judged by the census contract itself, so a draft or repair result that
+    preserves an incompatible baseline fails here and not at a later full verify (criterion 14).
+    Every other file is judged on producer records, the provenance class and the review state
+    against the committed baseline (criteria 4, 11, 12); its other fields stay with their own
+    gates. A file without `produced_by` is not rejected solely for its absence.
+    """
+    import research_census  # the census reads this module back, so the import stands at call time
+
+    try:
+        text = current.decode("utf-8")
+    except UnicodeDecodeError:
+        return [f"{relative}: unreadable header (not UTF-8)"]
+    frontmatter = research_census.FRONTMATTER.match(text)
+    if frontmatter is None:
+        return [f"{relative}: unreadable header (no frontmatter)"]
+    block = frontmatter.group(1)
+    try:
+        header = yaml.safe_load(block)
+    except (yaml.YAMLError, ValueError):
+        return [f"{relative}: unreadable header (malformed YAML)"]
+    if not isinstance(header, dict):
+        return [f"{relative}: unreadable header (not a mapping)"]
+    if ACTIVE_RESEARCH.fullmatch(relative):
+        return research_census.text_findings(relative, text)
+    problems: list[str] = []
+    node = yaml.compose(block)
+    if isinstance(node, yaml.MappingNode):
+        keys = [key.value for key, _ in node.value]
+        if keys.count("produced_by") > 1:
+            problems.append(f"{relative}: produced_by is held more than once")
+    if "produced_by" in header:
+        problems.extend(
+            f"{relative}: {problem}" for problem in research_census.producer_records_problems(header["produced_by"])
+        )
+    baseline_header = None
+    baseline_block = None
+    if baseline is not None:
+        base_match = research_census.FRONTMATTER.match(baseline.decode("utf-8", "surrogateescape"))
+        if base_match is not None:
+            baseline_block = base_match.group(1)
+            try:
+                baseline_header = yaml.safe_load(baseline_block)
+            except (yaml.YAMLError, ValueError):
+                baseline_header = None
+        if baseline_header is None or not isinstance(baseline_header, dict):
+            # The committed header itself cannot be judged: a stock fault, never this attempt's.
+            problems.append(f"{relative}: the committed header cannot be read safely")
+            return problems
+    provenance = header.get("provenance")
+    review = header.get("review")
+    if baseline_header is None or not isinstance(baseline_header, dict):
+        # A new file (criterion 11): ai-drafted-reviewed provenance and a pending review; a new
+        # ADR may keep its human-decided provenance, its review still pending.
+        allowed = ("human-decided", "ai-drafted-reviewed") if NEW_ADR.fullmatch(relative) else ("ai-drafted-reviewed",)
+        if provenance not in allowed:
+            problems.append(f"{relative}: provenance: expected {' or '.join(allowed)} on a new file")
+        if review != research_census.PENDING:
+            problems.append(f"{relative}: review: expected pending without approval on a new file")
+        return problems
+    if provenance != baseline_header.get("provenance"):
+        problems.append(f"{relative}: provenance: changed from the committed class")
+    baseline_review = baseline_header.get("review")
+    if review != baseline_review:
+        body_changed = _without_fields(block, "produced_by", "updated") != _without_fields(
+            baseline_block, "produced_by", "updated"
+        )
+        if _is_approval(review) and not _is_approval(baseline_review):
+            problems.append(f"{relative}: review: an approval the commit does not carry is refused")
+        elif review == research_census.PENDING and _is_approval(baseline_review):
+            if body_changed:
+                # The runner's own reset stands exactly beside such a change (criterion 8).
+                pass
+            else:
+                problems.append(
+                    f"{relative}: review: reset without a document change outside `produced_by` and `updated`"
+                )
+        else:
+            problems.append(f"{relative}: review: changed from the committed review state")
+    return problems
+
+
+def touched_header_problems(root: Path, candidates: list[str]) -> list[str]:
+    """The shared check over every touched file with frontmatter, each failing file named.
+
+    One judgement for every file-writing verb, implement included and the writing verbs to
+    come (criterion 4). A file whose bytes equal HEAD's was not changed in effect and is not
+    judged; a file without frontmatter carries no producer record.
+    """
+    problems: list[str] = []
+    for relative in sorted(candidates):
+        try:
+            current = (root / relative).read_bytes()
+        except OSError:
+            continue  # a file the attempt deleted is judged by the work measurement, not here
+        head = committed_bytes(root, relative)
+        if head is not None and current == head:
+            continue
+        if re.match(rb"\A\xef\xbb\xbf?---\r?\n", current) is None:
+            continue
+        try:
+            problems.extend(header_problems(relative, head, current))
+        except Exception as error:  # any read or YAML failure is this file's finding (EP6-14)
+            problems.append(f"{relative}: unreadable metadata ({type(error).__name__}: {error})")
+    return problems
+
+
+def classify_publication(root: Path, relative: str, prepared: bytes) -> None:
+    """Judge a prepared publication before it lands, and say who owns a fault (criterion 15).
+
+    A fault the prepared output itself carries refuses the attempt: the next available route
+    may do better. The same fault standing in the committed header is a committed fault - the
+    verb stops and names the migration, spending no route on it.
+    """
+    head = committed_bytes(root, relative)
+    problems = header_problems(relative, head, prepared)
+    if not problems:
+        return
+    committed = header_problems(relative, head, head) if head is not None else []
+    if problems and set(problems) <= set(committed):
+        raise CommittedRecordFault("; ".join(sorted(set(problems))))
+    raise Refused("; ".join(sorted(set(problems))))
+
+
 def run_attempts(
     ctx: Context,
     verb: str,
@@ -9709,52 +10143,82 @@ def run_attempts(
             lifecycle_problems: list[str] = []
             if protect_lifecycle:
                 lifecycle_report, lifecycle_problems = restore_attempt_lifecycle()
+            # The runner stamps the actual producer of what the attempt retained before any check
+            # reads it (criteria 2 and 3): a repair writes its contribution records, an implement
+            # attempt runs the shared check only. findings.md is the runner's own audit file -
+            # restored above whenever the attempt edited it - and plans/INDEX.md a derived
+            # rendering; neither carries a model contribution.
+            stamp_notices: list[str] = []
+            stamp_problems: list[str] = []
+            findings_rel = ctx.findings.relative_to(root).as_posix()
+            if unmeasured is None and work_unmeasured is None:
+                candidates = [
+                    path
+                    for path in changed_relative_paths(root, before, after)
+                    if path not in (findings_rel, "plans/INDEX.md")
+                ]
+                try:
+                    if verb == "repair":
+                        stamp_notices = stamp_retained_artifacts(
+                            root, candidates, producer=producer_for(endpoint), model=endpoint[1], day=today()
+                        )
+                    stamp_problems = touched_header_problems(root, candidates)
+                except CommittedRecordFault:
+                    # A committed header no route can stamp stops the verb; the migration owns it
+                    # (spec, criterion 15). The attempt's own entry still stands, rejected.
+                    raise
+                except (Refused, OSError) as error:
+                    # The stamp or the check refused an artifact: the attempt fails before any
+                    # check runs on it, and the next available route may do better (criterion 6).
+                    stamp_problems = [protect_diagnostics(str(error), key)]
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             scope_lines: list[str] = []
-            try:
-                if verify_mode == "full":
-                    problems = verify_attempt(
-                        root,
-                        ctx.plan,
-                        key,
-                        formatted,
-                        tools,
-                        inputs[ctx.plan],
-                        previous_failures,
-                        clearing=clearing,
-                    )
-                else:
-                    problems = verify_attempt(
-                        root,
-                        ctx.plan,
-                        key,
-                        formatted,
-                        tools,
-                        inputs[ctx.plan],
-                        previous_failures,
-                        mode=verify_mode,
-                        against=baseline,
-                        scope=scope_lines,
-                        new_file_guard=new_file_guard,
-                        clearing=clearing,
-                    )
-            except Refused as error:
-                put_findings_back(original=error)
-                raise
-            except CallFailed as error:
-                # `make verify` could not be started: no model can repair that, so this attempt's block
-                # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
-                put_findings_back(original=error)
-                cannot_start = error
-                lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
-                problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
-            except (OSError, RuntimeError, ValueError) as error:
-                # A model that deleted or replaced its own inputs must not break the attempt boundary:
-                # the checks' unexpected filesystem failure is this attempt's diagnostic, the inputs go
-                # back through the batch restore below, and the verdict stays rejected (F-5).
-                put_findings_back()
-                problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
+            problems: list[str] = []
+            if not stamp_problems:
+                try:
+                    if verify_mode == "full":
+                        problems = verify_attempt(
+                            root,
+                            ctx.plan,
+                            key,
+                            formatted,
+                            tools,
+                            inputs[ctx.plan],
+                            previous_failures,
+                            clearing=clearing,
+                        )
+                    else:
+                        problems = verify_attempt(
+                            root,
+                            ctx.plan,
+                            key,
+                            formatted,
+                            tools,
+                            inputs[ctx.plan],
+                            previous_failures,
+                            mode=verify_mode,
+                            against=baseline,
+                            scope=scope_lines,
+                            new_file_guard=new_file_guard,
+                            clearing=clearing,
+                        )
+                except Refused as error:
+                    put_findings_back(original=error)
+                    raise
+                except CallFailed as error:
+                    # `make verify` could not be started: no model can repair that, so this attempt's block
+                    # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+                    put_findings_back(original=error)
+                    cannot_start = error
+                    lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
+                    problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+                except (OSError, RuntimeError, ValueError) as error:
+                    # A model that deleted or replaced its own inputs must not break the attempt boundary:
+                    # the checks' unexpected filesystem failure is this attempt's diagnostic, the inputs go
+                    # back through the batch restore below, and the verdict stays rejected (F-5).
+                    put_findings_back()
+                    problems = [protect_diagnostics(f"the post-run checks could not run: {error}", key)]
             # Verification executes edited code. Scrub before the final tree can store its
             # output as Git objects, just as before the immediate post-call snapshot.
             verified_exposed = remove_changed_credential(root, key, ignored_before) if key is not None else []
@@ -9795,7 +10259,7 @@ def run_attempts(
             # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
-            problems = [*work_problems, *lifecycle_problems, *problems]
+            problems = [*work_problems, *lifecycle_problems, *stamp_problems, *problems]
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -9834,6 +10298,7 @@ def run_attempts(
                 problems = [
                     *([FINDINGS_RESTORED] if findings_restored else []),
                     *(f"{LIFECYCLE_LABEL}: {line}" for line in lifecycle_report),
+                    *(f"{STAMP_LABEL}: {line}" for line in stamp_notices),
                     *(f"{FORMAT_LABEL}: {line}" for line in formatted),
                     *(f"{SCOPE_LABEL}: {line}" for line in scope_lines),
                     *problems,
@@ -9929,6 +10394,10 @@ def run_attempts(
                     # audit line and is committed with the checkpoint - never a failed label, never a
                     # fabricated review row (spec, criterion 9).
                     append(ctx.findings, quote_block(FINDINGS_RESTORED_NOTICE, key))
+                if stamp_notices:
+                    # The attempt's own record of the approval resets its stamp made (criterion 8),
+                    # quoted under its audit line and committed with the checkpoint.
+                    append(ctx.findings, quote_block("\n".join(stamp_notices), key))
                 if protect_lifecycle:
                     # The attempt's own record line, committed with the checkpoint: what moved, or
                     # that the fields stayed unchanged (status-fields-restore).
@@ -10462,7 +10931,25 @@ def draft(root: Path, change: str) -> None:
                     restored,
                 ),
             )
+        # The kept paths are what the draft retains (criterion 2): the producer records stand in
+        # them before any post-run check reads the documents. A stamp or check refusal fails the
+        # attempt before its document checks and the next available route may run (criterion 10);
+        # a committed header fault stops the verb - the migration owns that header (criterion 15).
+        stamp_notices: list[str] = []
+        stamp_problems: list[str] = []
+        kept_relative = sorted(path.as_posix() for path in keep)
+        try:
+            stamp_notices = stamp_retained_artifacts(
+                root, kept_relative, producer=producer_for(endpoint), model=endpoint[1], day=today()
+            )
+            stamp_problems = touched_header_problems(root, kept_relative)
+        except CommittedRecordFault:
+            raise
+        except (Refused, OSError) as error:
+            stamp_problems = [protect_diagnostics(str(error), key)]
         problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
+        if stamp_problems:
+            problems = [*stamp_problems, *problems]
         if problems:
             # The scope evidence stands first, as in every verb's block; the next attempt starts on
             # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
@@ -10479,6 +10966,10 @@ def draft(root: Path, change: str) -> None:
             if exposed:
                 raise Refused(credential_message(exposed))
         if not problems:
+            if stamp_notices:
+                # The draft's own record of the approval resets its stamp made (criterion 8),
+                # quoted under its audit line and committed with the checkpoint.
+                append(ctx.findings, quote_block("\n".join(stamp_notices), key))
             if owed:
                 append(
                     ctx.findings,

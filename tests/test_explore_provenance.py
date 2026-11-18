@@ -595,3 +595,47 @@ def test_census_reports_recursive_yaml_and_continues(tmp_path, apply_adoption):
     assert "unreadable.md: unreadable file (not UTF-8)" in findings
     assert "later.md: unreadable header (no frontmatter)" in findings
     assert not any(line.startswith("good.md:") for line in findings)
+
+
+def test_publication_preserves_committed_producer_bytes():
+    # Criterion 7: a publication keeps the committed producer records' bytes verbatim and grows
+    # the flow list in place; the working tree's session-written self-description is discarded.
+    import yaml
+
+    baseline_field = (
+        '[{kind: llm-session, name: codex, version: "2026-11-04", model: "gpt-6.1-sol"}, '
+        '{kind: llm-session, name: pi, version: "2026-11-04"}]'
+    )
+    source = (
+        "---\n"
+        'produced_by: {kind: llm-session, name: claude-code, version: "2020-01-01"}\n'
+        "---\n# Research\n\nAuthored research.\n"
+    )
+    prepared = stage2.research_publication(
+        source.encode(), producer="claude-code", day="2026-11-10", model="glm-5.3-flash", baseline_field=baseline_field
+    )
+    header = yaml.safe_load(prepared.decode().split("---", 2)[1])
+    assert header["produced_by"] == [
+        {"kind": "llm-session", "name": "codex", "version": "2026-11-04", "model": "gpt-6.1-sol"},
+        {"kind": "llm-session", "name": "pi", "version": "2026-11-04"},
+        {"kind": "llm-session", "name": "claude-code", "version": "2026-11-10", "model": "glm-5.3-flash"},
+    ]
+    assert baseline_field[1:-1] in prepared.decode(), "the committed records grow the flow list in place"
+
+
+def test_committed_producer_fault_refuses_publication(tmp_path):
+    # Criterion 15: a committed producer record no publication can be written against stops the
+    # verb with the stock migration's bead, instead of normalizing or dropping the history.
+    import research_census as census
+
+    root = make_repo(tmp_path / "repo", record=False)
+    path = root / "plans/changes/demo/research.md"
+    path.parent.mkdir(parents=True)
+    record = '{kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-04"}'
+    path.write_text(f"---\nproduced_by: {record}\n---\n# Research\n\nAuthored research.\n", encoding="utf-8")
+    commit(root, path, "2026-11-09")
+    assert census.producer_records_problems(yaml.safe_load(record)) != [], (
+        "the census and the runner's reader must agree the committed record is unreadable"
+    )
+    with pytest.raises(stage2.CommittedRecordFault, match="coding-harness-2i7x"):
+        stage2.committed_producer_field(root, "plans/changes/demo/research.md")

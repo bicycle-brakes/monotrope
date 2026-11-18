@@ -462,6 +462,12 @@ class Run:
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
         self.locked = True
+        # A committed header no publication can be written against stops the run before anything
+        # freezes; the stock migration owns that header (bead coding-harness-2i7x, criterion 15).
+        # The records committed before the run are the earlier contributions this publication
+        # retains; the swarm's attribution and its frozen publication binding survive a resume
+        # because the retained bytes, once prepared, are never computed anew (criterion 7).
+        self.committed_field = runner.committed_producer_field(self.root, self.research_rel)
         # The runner's appends stamp `updated:`; stamping before the freeze keeps the frozen prefix intact.
         runner.stamp_updated(self.ctx.research)
         try:
@@ -481,7 +487,10 @@ class Run:
             if publication is None:
                 self.publication_day = runner.today()
                 self.publication_bytes = runner.research_publication(
-                    self.research_bytes, producer=SWARM_PUBLISHER, day=self.publication_day
+                    self.research_bytes,
+                    producer=SWARM_PUBLISHER,
+                    day=self.publication_day,
+                    baseline_field=self.committed_field,
                 )
             else:
                 # The source binding has already verified the frozen file against the original
@@ -498,7 +507,9 @@ class Run:
             self.brief_research = stored_brief(previous) if previous is not None else None
             if self.brief_research is None:
                 research = BLOCK.sub("", self.research_bytes.decode("utf-8"))
-                corrected = runner.research_publication(research.encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY)
+                corrected = runner.research_publication(
+                    research.encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY, baseline_field=self.committed_field
+                )
                 self.brief_research = _without_updated(corrected)
             self.binding = stored_binding(
                 self.manifest,

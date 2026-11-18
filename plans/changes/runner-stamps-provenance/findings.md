@@ -141,3 +141,231 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | F-38 | MINOR | SPEC | base | AC 2, AC 3 ("a model-written artifact"), AC 11, AC 12 ("a previously committed model-written file"); Terms (no entry); `docs/adr/0001-early-parallelism.md` (`human-decided`, with `produced_by`) | [AMBIGUITY] "Model-written" is not defined. Reading A: any file with frontmatter that the attempt changed. A repair that edits the `human-decided` ADR 0001 then gets a record appended, the session-written self-description in it is discarded, and AC 12 measures its class. Reading B, which AC 12's "previously committed model-written file" suggests: a property the file had before the run, namely a model class such as `ai-drafted-reviewed`. ADR 0001, or the `human-written` skeleton `research.md`, is then not stamped when a session edits it. The session's own record in it stays, because AC 7 discards self-descriptions only in stamped files, and the repair's contribution goes unrecorded. The two readings give different headers for the same repair. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4621 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1114 files, 4623 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_census.py` +58 -33
+> - `scripts/stage2.py` +659 -163
+> - `scripts/stage2_research_run.py` +13 -2
+> - `tests/test_explore_provenance.py` +44 -0
+> - `tests/test_runner_stamps_provenance.py` +865 -0
+> - `tests/test_stage2.py` +26 -12
+> - `tests/test_stage2_research_deep_review.py` +9 -15
+> - `tests/test_stage2_swarm.py` +27 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2.py`, `tests/test_runner_stamps_provenance.py`, `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> 353 |     stage2.run_attempts(
+>     |
+>
+> tests/test_runner_stamps_provenance.py:546:57: ARG005 Unused lambda argument: `a`
+>     |
+> 544 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 545 |     monkeypatch.setattr(stage2, "run_work_model", fake_run_work_model)
+> 546 |     monkeypatch.setattr(stage2, "verify_draft", lambda *a, **k: work_calls.append(1) or ([], False, "stub scope"))
+>     |                                                         ^ ARG005
+> 547 |     with pytest.raises(stage2.CallFailed):
+> 548 |         stage2.draft(repo, "demo")
+>     |
+>
+> tests/test_runner_stamps_provenance.py:546:62: ARG005 Unused lambda argument: `k`
+>     |
+> 544 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 545 |     monkeypatch.setattr(stage2, "run_work_model", fake_run_work_model)
+> 546 |     monkeypatch.setattr(stage2, "verify_draft", lambda *a, **k: work_calls.append(1) or ([], False, "stub scope"))
+>     |                                                              ^ ARG005
+> 547 |     with pytest.raises(stage2.CallFailed):
+> 548 |         stage2.draft(repo, "demo")
+>     |
+>
+> tests/test_runner_stamps_provenance.py:671:59: ARG005 Unused lambda argument: `a`
+>     |
+> 670 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 671 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: ["targeted: one test is red (planted)"])
+>     |                                                           ^ ARG005
+> 672 |     ctx = _ctx(repo)
+> 673 |     with pytest.raises(stage2.CallFailed):
+>     |
+>
+> tests/test_runner_stamps_provenance.py:671:64: ARG005 Unused lambda argument: `k`
+>     |
+> 670 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 671 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: ["targeted: one test is red (planted)"])
+>     |                                                                ^ ARG005
+> 672 |     ctx = _ctx(repo)
+> 673 |     with pytest.raises(stage2.CallFailed):
+>     |
+>
+> tests/test_runner_stamps_provenance.py:740:59: ARG005 Unused lambda argument: `a`
+>     |
+> 738 |     checks = []
+> 739 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 740 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: checks.append(1) or [])
+>     |                                                           ^ ARG005
+> 741 |     ctx = _ctx(repo)
+> 742 |     stage2.run_attempts(
+>     |
+>
+> tests/test_runner_stamps_provenance.py:740:64: ARG005 Unused lambda argument: `k`
+>     |
+> 738 |     checks = []
+> 739 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 740 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: checks.append(1) or [])
+>     |                                                                ^ ARG005
+> 741 |     ctx = _ctx(repo)
+> 742 |     stage2.run_attempts(
+>     |
+>
+> tests/test_runner_stamps_provenance.py:919:59: ARG005 Unused lambda argument: `a`
+>     |
+> 918 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 919 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: checks.append(1) or [])
+>     |                                                           ^ ARG005
+> 920 |     ctx = _ctx(repo)
+> 921 |     with pytest.raises(stage2.CallFailed):
+>     |
+>
+> tests/test_runner_stamps_provenance.py:919:64: ARG005 Unused lambda argument: `k`
+>     |
+> 918 |     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+> 919 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *a, **k: checks.append(1) or [])
+>     |                                                                ^ ARG005
+> 920 |     ctx = _ctx(repo)
+> 921 |     with pytest.raises(stage2.CallFailed):
+>     |
+>
+> Found 12 errors.
+> ```
+
+Stage-2 call, 2026-11-18: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1115 files, 4643 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/runner-stamps-provenance/plan.md` +15 -15
+> - `tests/test_runner_stamps_provenance.py` +5 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_runner_stamps_provenance.py:289:30: ARG001 Unused function argument: `args`
+>     |
+> 287 |         return "repaired"
+> 288 |
+> 289 |     def fake_verify_attempt(*args, **kwargs):
+>     |                              ^^^^ ARG001
+> 290 |         captured.append((repo / "plans/changes/demo/spec.md").read_bytes())
+> 291 |         return []
+>     |
+>
+> tests/test_runner_stamps_provenance.py:289:38: ARG001 Unused function argument: `kwargs`
+>     |
+> 287 |         return "repaired"
+> 288 |
+> 289 |     def fake_verify_attempt(*args, **kwargs):
+>     |                                      ^^^^^^ ARG001
+> 290 |         captured.append((repo / "plans/changes/demo/spec.md").read_bytes())
+> 291 |         return []
+>     |
+>
+> Found 2 errors.
+> ```
+
+Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1115 files, 4654 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_runner_stamps_provenance.py` +1 -1
+>
+> Diagnostics:
+> `````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             captured["adr"] = (root / adr_relative).read_bytes()
+>             return [], False, "document checks only, no tests ran; result: green (stub)"
+>     
+>         monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+>         monkeypatch.setattr(stage2, "verify_draft", fake_verify_draft)
+>         stage2.draft(repo, "demo")
+>         assert calls == [1], "the checks run once, after the first green attempt"
+>         spec_header = _header_of(captured["spec"].decode("utf-8"))
+> >       assert spec_header["produced_by"] == [
+>             {"kind": "llm-session", "name": "codex", "version": "2026-11-10", "model": "gpt-6.1-terra"},
+>             {"kind": "llm-session", "name": "codex", "version": day, "model": "gpt-6.1-terra"},
+>         ], "the retained draft artifact already carries both producer records when its checks read it"
+> E       AssertionError: the retained draft artifact already carries both producer records when its checks read it
+> E       assert {'kind': 'llm... '2026-11-10'} == [{'kind': 'll...'2026-11-18'}]
+> E         
+> E         Use -v to get more diff
+>
+> tests/test_runner_stamps_provenance.py:260: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> draft: verified and committed · route codex · attempt 1
+> _ test_publication_never_infers_historical_program_from_publisher[conflicting] _
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/.venv/bin/python3
+>
+> evidence = 'conflicting'
+>
+>     @pytest.mark.parametrize("evidence", ["accepted", "missing", "quoted", "conflicting"])
+>     def test_publication_never_infers_historical_program_from_publisher(evidence):
+>         import yaml
+>     
+>         source = (
+>             '---\nproduced_by: {kind: llm-session, name: glm-5.3-flash, version: "stage-2 explore, 2026-10-31"}\n'
+>             "---\n# Research\n\n"
+>         )
+>         audit = (
+>             "Stage-2 call, 2026-10-31: explore · endpoint glm-coding-plan\n\n"
+>             "## Runner exploration — 2026-10-31\n\nAccepted research.\n"
+>         )
+>         if evidence == "accepted":
+>             source += audit
+>         elif evidence == "quoted":
+>             source += "```markdown\n" + audit + "````\n"
+>         elif evidence == "conflicting":
+>             source += audit + audit.replace("glm-coding-plan", "openai-codex")
+>         corrected = stage2.research_publication(source.encode(), producer="stage2-research-swarm", day="2026-11-09")
+>         records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+> >       assert records == [{"kind": "llm-session", "name": "stage2-research-swarm", "version": "2026-11-09"}], (
+>             "the session's own produced_by is a self-description: discarded whole, never read as history or evidence"
+>         )
+> E       AssertionError: the session's own produced_by is a self-description: discarded whole, never read as history or evidence
+> E       assert {'kind': 'llm... '2026-11-09'} == [{'kind': 'll...'2026-11-09'}]
+> E         
+> E         Use -v to get more diff
+>
+> tests/test_stage2_research_deep_review.py:880: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_runner_stamps_provenance.py::test_committed_baseline_controls_approval
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher[quoted]
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys[\n-']
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys[\n-"]
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys[\r\n-']
+> FAILED tests/test_explore_provenance.py::test_committed_producer_fault_refuses_publication
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_replaces_quoted_owned_yaml_keys[\r\n-"]
+> FAILED tests/test_runner_stamps_provenance.py::test_explore_stamps_actual_producer
+> FAILED tests/test_runner_stamps_provenance.py::test_stamping_preserves_other_bytes
+> FAILED tests/test_runner_stamps_provenance.py::test_preserves_prior_contributions
+> FAILED tests/test_runner_stamps_provenance.py::test_body_change_resets_approval
+> FAILED tests/test_runner_stamps_provenance.py::test_repair_stamps_retained_artifacts_before_checks
+> FAILED tests/test_runner_stamps_provenance.py::test_unmeasured_attempt_refused
+> FAILED tests/test_runner_stamps_provenance.py::test_unsafe_header_refuses_attempt
+> FAILED tests/test_stage2.py::test_research_publication_preserves_all_producers[duplicate-field]
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher[missing]
+> FAILED tests/test_stage2.py::test_research_publication_preserves_all_producers[block-list]
+> FAILED tests/test_runner_stamps_provenance.py::test_active_research_contract_matches_census
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher[accepted]
+> FAILED tests/test_stage2_swarm.py::test_swarm_refuses_an_unreadable_committed_producer
+> FAILED tests/test_stage2.py::test_research_publication_preserves_all_producers[inline]
+> FAILED tests/test_runner_stamps_provenance.py::test_each_verb_rejects_invalid_touched_header
+> FAILED tests/test_runner_stamps_provenance.py::test_draft_stamps_retained_artifacts_before_checks
+> FAILED tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher[conflicting]
+> 24 failed, 13 passed in 9.55s
+> `````

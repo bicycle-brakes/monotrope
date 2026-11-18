@@ -4115,21 +4115,46 @@ def test_a_unicode_line_separator_after_dashes_is_no_front_matter_fence(sworld: 
 def test_swarm_publication_preserves_prior_producers(sworld: SwarmWorld):
     import yaml
 
+    day = dt.date.today().isoformat()
+    committed = (
+        '{kind: llm-session, name: pi, version: "' + day + '", model: "GLM 5.3 Flash"}, '
+        '{kind: llm-session, name: pi, version: "' + day + '", model: "Claude Haiku 5.5"}'
+    )
     text = swarm_skeleton().replace(
         "provenance: human-written\n",
-        'provenance: ai-drafted-reviewed\nproduced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-04"}\n',
+        "provenance: ai-drafted-reviewed\nproduced_by: [" + committed + "]\n",
     )
     sworld.research.write_text(text)
     sworld.commit()
     sworld.complete(judge=[{"exit": 1}])
     assert sworld.run() == 1
-    records = yaml.safe_load(sworld.research.read_text().split("---", 2)[1])["produced_by"]
+    raw = sworld.research.read_text(encoding="utf-8")
+    records = yaml.safe_load(raw.split("---", 2)[1])["produced_by"]
     assert isinstance(records, list), "swarm publication must retain earlier contributors"
     assert [(p["name"], p.get("model")) for p in records] == [
         ("pi", "GLM 5.3 Flash"),
         ("pi", "Claude Haiku 5.5"),
         ("stage2-research-swarm", None),
     ]
+    assert committed in raw, "the committed records keep their bytes; the swarm's record grows the list in place"
+
+
+def test_swarm_refuses_an_unreadable_committed_producer(sworld: SwarmWorld) -> None:
+    # Criterion 15: a committed producer record no publication can be written against stops the
+    # run before any call, freeze or stamp; the header belongs to the stock migration.
+    text = swarm_skeleton().replace(
+        "provenance: human-written\n",
+        "provenance: ai-drafted-reviewed\n"
+        'produced_by: {kind: llm-session, name: pi, version: "GLM 5.3 Flash and Claude Haiku 5.5, 2026-11-04"}\n',
+    )
+    before = text
+    sworld.research.write_text(text)
+    sworld.commit()
+    assert sworld.run() == 2
+    assert sworld.calls() == [], "a committed-record fault spends no route"
+    assert sworld.research.read_text(encoding="utf-8") == before, "the committed bytes are never rewritten"
+    with pytest.raises(stage2.CommittedRecordFault, match="coding-harness-2i7x"):
+        stage2.committed_producer_field(sworld.root, "plans/changes/demo/research.md")
 
 
 def test_deadline_before_open_refuses_by_name(sworld: SwarmWorld) -> None:
