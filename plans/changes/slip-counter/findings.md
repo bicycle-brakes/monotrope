@@ -485,7 +485,7 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-3 | BLOCKER | SPEC | base | plans/changes/slip-counter/spec.md, Begriffe und AC 3 | [AMBIGUITY] Die offene Phase-2a-Feststellung S-11 ist weiterhin ungeklärt: „gezielter Check“ kann nur den gezielten Reparatur-Check des Runners oder auch andere erfolgreiche Teilprüfungen eines Implementierungsversuchs meinen. Bei einem grünen Teilcheck und anschließend rotem vollständigem Lauf ergeben die beiden Lesarten unterschiedliche Slip-Zahlen und verlangen unterschiedliche Aufzeichnungspfade. [AC 1, 3] | Codex | resolved 2026-11-18 by decisions.md Q-7 (answered by the maintainer: the targeted check is the runner's targeted repair check) | — |
+| R-3 | BLOCKER | SPEC | base | plans/changes/slip-counter/spec.md, Begriffe und AC 3 | [AMBIGUITY] Die offene Phase-2a-Feststellung S-11 ist weiterhin ungeklärt: „gezielter Check“ kann nur den gezielten Reparatur-Check des Runners oder auch andere erfolgreiche Teilprüfungen eines Implementierungsversuchs meinen. Bei einem grünen Teilcheck und anschließend rotem vollständigem Lauf ergeben die beiden Lesarten unterschiedliche Slip-Zahlen und verlangen unterschiedliche Aufzeichnungspfade. [AC 1, 3] | Codex | fixed — spec.md follows decisions.md Q-7 (answered by the maintainer: the targeted check is the runner's targeted repair check) since the final draft of 2026-11-18 | no |
 
 Phase 6 verdict: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c, 2026-11-18
 Reviewer session: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
