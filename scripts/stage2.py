@@ -6342,6 +6342,12 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
             if _LAUNCH_STOPPED.is_set() or clock_now().monotonic < budget["deadline"]:
                 raise
             raise StepTimedOut(f"{argv[0]} was stopped by {limit}") from error
+        except CallFailed as error:
+            # A missing gate executable is the shell's command-not-found verdict,
+            # not a failure of the verification launcher itself.
+            if not isinstance(error.__cause__, FileNotFoundError) or argv[0] == "sh":
+                raise
+            return verify_run.GateProcess(127, "", f"{error}\n")
         return verify_run.GateProcess(done.returncode, done.stdout or "", done.stderr or "")
 
     captured_out = io.StringIO()

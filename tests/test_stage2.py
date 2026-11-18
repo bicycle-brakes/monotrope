@@ -29025,6 +29025,38 @@ def test_scheduled_gate_shell_is_the_shell_entry_points():
     assert argv[0] == "sh"
 
 
+@pytest.mark.parametrize("enforcement", ["block", "report"])
+def test_scheduled_missing_executable_keeps_gate_verdict_and_continues(
+    world: World, monkeypatch: pytest.MonkeyPatch, enforcement: str
+) -> None:
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    template = copy.deepcopy(doc["gates"][0])
+    later = world.state / "later"
+    protected = world.state / "protected"
+    gates = []
+    for identifier, command, cost, level in [
+        ("missing-command", "missing_verify_gate_executable_8f42", "seconds", enforcement),
+        ("later-cheap", f"/usr/bin/touch {later}", "seconds", "block"),
+        ("protected-work", f"/usr/bin/touch {protected}", "minutes", "block"),
+    ]:
+        gate = copy.deepcopy(template)
+        gate.update(id=identifier, command=command, cost=cost, enforcement=level, job="verify")
+        gates.append(gate)
+    doc["gates"] = gates
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, env, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"a missing executable must be a gate failure: {error}")
+    assert "missing-command" in out and "missing_verify_gate_executable_8f42" in out + err
+    assert later.exists(), out + err
+    assert protected.exists() == (enforcement == "report"), out + err
+    assert (code == 0) == (enforcement == "report"), out + err
+
+
 @pytest.mark.parametrize("command, expected", [(":", 0), ("exit 1", 1), ("command exit 1", 1)])
 def test_scheduled_shell_builtins_keep_gate_verdicts(
     world: World, monkeypatch: pytest.MonkeyPatch, command: str, expected: int
