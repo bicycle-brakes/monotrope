@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -125,3 +125,24 @@ context: |
   Architecture change: none.
 
 In the context of two open phase-6 rows about gates that are not declared cheap or a tree that cannot be measured, facing a choice between case-by-case repairs and one rule at the gate-declaration choke point, we decided (the maintainer answered "Ja") to narrow the scope so the cheap phase runs only gates explicitly declared cheap and anything else is deferred to the admitted phase, to achieve one classification that closes both rows, accepting that spec criteria 1, 5 and 10 and the Boundaries are amended and the remaining cases are named Boundaries with follow-up beads proposed. — 2026-11-16
+
+## Q-8 · One bootstrap for both full-check entry points (phase-6 rows F6-1, F6-2 of the third block)
+
+asked: 2026-11-18
+answer: "A: Vorlauf in den Planer (Empfohlen)" — in English: option A, the bootstrap moves into the shared scheduler. The interpreter choice (an explicit `$PYTHON` first, else the checkout's `.venv/bin/python3`, else a `python3` that imports PyYAML) and the pytest temporary-area guard (the run's own area, the `harness_verify_tmp` plugin that refuses a `--basetemp` outside it, its removal at the end) move into `scripts/verify_run.py`; `scripts/verify_all.sh` and `scripts/stage2.py` both call that one bootstrap and keep no copy of their own.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the phase-6 re-check of 2026-11-18 raised F6-1 (the Stage-2 full check bypasses the temporary-area guard of verify_all.sh, so a `--basetemp` outside the run's area can be cleared) and F6-2 (Stage 2 replaces an explicit `$PYTHON` that the shell entry point honours).
+  Intention: the earlier phase-6 row F6-1 (a missing gate executable raised CallFailed in Stage 2 but not in the shell) was the same mechanism: two entry points with a bootstrap each; a second finding of one mechanism ends case repair (house rule 9).
+  Today: both entry points share the two-phase scheduler, but each chooses the interpreter and prepares the run itself; Stage 2 calls the scheduler in-process since this change.
+  Repository change: scripts/verify_run.py, scripts/verify_all.sh, scripts/stage2.py and their tests.
+  Architecture change: one bootstrap for both entry points.
+  Options shown: A bootstrap into the scheduler (recommended); B Stage 2 starts verify_all.sh as a subprocess again (charges admission wait to the runner's bound, against criterion 10, unless the scheduler gains a budget option); C ship both as named limits with a follow-up bead.
+
+In the context of two full-check entry points that share the scheduler but
+not the bootstrap before it, facing a third finding of the same drift, we
+decided that the interpreter choice and the temporary-area guard move into
+`scripts/verify_run.py` and both entry points call that one bootstrap, to
+achieve one path that cannot drift again, accepting a larger repair and a
+further phase-6 re-check — 2026-11-18
