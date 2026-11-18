@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -118,6 +118,76 @@ context: |
   Recommendation: A; consequence: one more repair round.
 
 In the context of three phase-6 rows of one mechanism about incomplete evidence, facing a choice between a further case repair and one validity check every run passes, we decided for the one validity check plus a Boundary for what it cannot see, capped at one repair round before phase 6, to achieve a reader with one place that decides whether a run may count, accepting that whatever the check cannot see stays a named limit. — 2026-11-17
+
+## Q-7 · "Targeted check" means the runner's targeted repair check in this change
+
+asked: 2026-11-18
+answer: "C: A jetzt, B als nächster Change" — A now, B as the next change: this change counts only the runner's targeted repair check (A); the follow-up change (bead coding-harness-l0g6) extends it right after to every green partial check (B) through the same step.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the slip definition pairs a green "targeted check" with a later red full run; phase-2a row S-11 found the term undefined, and the phase-6 re-check of 2026-11-18 (codex 01a1ec2b, row R-3) raised it as a BLOCKER.
+  Intention: on 2026-11-18 the maintainer re-cut the lane: the spec is cleaned with all open phase-2a rows decided in one sitting, then the lane restarts from the cleaned spec.
+  Today: only the runner's targeted repair check records slip evidence; a green cheap check of an implement or draft attempt followed by a red full verify counts as no slip.
+  Options: A — only the runner's targeted repair check; B — every partial check by which an attempt called its work green; C — A in this change, B in the next change.
+  Repository change: A — a spec Term only, no code; B — more runner paths record evidence, one more repair round and tests; C — A here, B in the follow-up change through the same step.
+  Architecture change: none under A.
+  Question: does "targeted check" mean only the runner's targeted check (A) or every partial check an attempt called green (B)?
+  Recommendation: A, with B as a follow-up bead.
+
+In the context of a slip definition whose term "targeted check" was undefined and raised as a BLOCKER by a phase-6 re-check, facing a choice between counting only the runner's targeted repair check and instrumenting every runner path where an attempt calls its work green, we decided to count only the runner's targeted repair check in this change and to extend the count to every green partial check in the follow-up change (bead coding-harness-l0g6) through the same step, to achieve a defined term without a further repair round in this change, accepting that until the follow-up merges a green partial check of an implement or draft attempt followed by a red full verify counts as no slip. — 2026-11-18
+
+## Q-8 · A targeted green pairs only with the first full run after it
+
+asked: 2026-11-18
+answer: "C" — a targeted green pairs only with the first full run of the same identity after it; any later check of that identity ends the pairing, so each wrong green counts once; in addition the pattern "full green, then full red" on the same identity is counted separately as a flaky-test signal.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which runs of one identity may answer a green targeted check and form a slip (phase-2a row S-3).
+  Intention: the re-cut of 2026-11-18 decides all open phase-2a rows in one sitting.
+  Today: the spec says "an earlier completed green targeted check" and does not say whether other runs of the same identity in between matter. For the histories targeted green, full red, full red / targeted green, targeted red, full red / targeted green, full green, full red, row S-3's reading A (any earlier green targeted check qualifies) gives 2, 1 and 1 slips, its reading B (only the first full run after a targeted green answers it, any later check ends the pairing) gives 1, 0 and 0.
+  Options: row S-3 states readings A and B; the bead notes record the chosen option C and no wording of the others.
+  Repository change: the spec's pairing rule follows C; the report also counts "full green, then full red" on one identity as a separate flaky-test signal.
+  Architecture change: not recorded with the question in the bead notes.
+
+In the context of a pairing rule that gave different slip counts for one history under two readings, facing a choice of which runs of one identity may answer a green targeted check, we decided that a targeted green pairs only with the first full run of the same identity after it, that any later check of that identity ends the pairing, and that "full green, then full red" on one identity is counted separately as a flaky-test signal, to achieve a count in which each wrong green counts once, accepting that a red full run after an intermediate check of the same identity is not counted as a slip. — 2026-11-18
+
+## Q-9 · Legacy and change-less runs are outside the population
+
+asked: 2026-11-18
+answer: "B" — legacy version-1 records and full runs without a change name are outside the population and not gaps; the report names their count in a line "outside the count", so a complete report is reachable.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether legacy version-1 records and full runs with no change name (for example a hand-run `make verify`) belong to the population the slip reader counts (phase-2a row S-4).
+  Intention: the re-cut of 2026-11-18 decides all open phase-2a rows in one sitting.
+  Today: the spec does not say; under reading A each such run is incomplete once, so with the default selection every real history reports them as incomplete and the report can never exit as a complete measurement; under reading B they are outside the slip population, neither enters the incomplete count, and a complete report is reachable.
+  Options: A — they are in-scope runs without comparison evidence, each incomplete once; B — they are outside the population.
+  Repository change: under B the reader leaves them out of both counts and the report names their number on a line "outside the count".
+  Architecture change: not recorded with the question in the bead notes.
+
+In the context of records that by construction carry no comparison identity, facing a choice between counting them as incomplete and leaving them outside the population, we decided to leave legacy version-1 records and change-less full runs outside the population and name their number on a line "outside the count", to achieve a report that can exit as a complete measurement on a real history, accepting that a fault in a legacy or change-less run is never counted as a slip. — 2026-11-18
+
+## Q-10 · A slip is decided on the pair's evidence
+
+asked: 2026-11-18
+answer: "B" — when either side of a pair is incomplete, both count as incomplete; the slip is decided on the pair.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether "complete comparison evidence" (decision Q-4) means each run's own evidence or the evidence of the pair (phase-2a row S-10).
+  Intention: the re-cut of 2026-11-18 decides all open phase-2a rows in one sitting.
+  Today: case of row S-10 — a red full run with complete evidence whose only same-identity green targeted predecessor is itself incomplete (conflicting duplicate completions, or a tree that moved during the check); under reading A the full run is a counted non-slip and only the targeted run is incomplete (incomplete = 1); under reading B whether the full run is a slip cannot be decided from complete evidence, so it is incomplete too (incomplete = 2).
+  Options: A — per-run evidence; B — per-pair evidence.
+  Repository change: under B the reader moves both sides of a pair to the incomplete count when either side is incomplete.
+  Architecture change: not recorded with the question in the bead notes.
+
+In the context of a pair whose targeted side has incomplete evidence while its full side is complete, facing a choice between judging each run's own evidence and judging the pair, we decided that when either side of a pair is incomplete both count as incomplete, to achieve a slip that is decided only on evidence complete for both runs, accepting that one incomplete targeted run moves a complete full run into the incomplete count. — 2026-11-18
+
+## Appetite for the restarted lane
+
+The maintainer's appetite for the restarted lane is 6 hours of phase 4, repairs included — stated to the orchestrating session on 2026-11-18 and relayed to this lane's session; not read in the bead notes. It replaces the 3 hours of the first draft (bead notes, 2026-11-13).
 
 ## Decided by the agent
 
