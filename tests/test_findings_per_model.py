@@ -1,0 +1,478 @@
+"""The per-model findings report and the shared findings reader (bead coding-harness-qut1).
+
+Criteria 1-8 and 10-19 of plans/changes/findings-per-model/spec.md (criterion 9
+is `tests/test_finding_duplicates.py`, criterion 17 is checked in phase 6).
+Every tree a test reads is built in `tmp_path`; the one exception is the make
+entry point, which reads this checkout's own history. Each test stands next to
+the fault that turns it red.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import findings_per_model as fpm  # noqa: E402
+import findings_reader as fr  # noqa: E402
+
+RELEASE = "## Phase 4b — loop rows, released 2026-11-01"
+RELEASE_2 = "## Phase 4b — loop rows, released 2026-11-02"
+GLM_RELEASE = "## Phase 4b — GLM loop rows, released 2026-11-01"
+PHASE6 = "## Phase 6 — Codex, 2026-11-01"
+PHASE6_2 = "## Phase 6 — Codex, 2026-11-02"
+IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
+
+
+def lrow(row_id: str, reviewer: str, status: str) -> str:
+    """A released loop row: ten cells."""
+    return f"| {row_id} | MAJOR | CODE | loop | x.py | a finding | {reviewer} | {status} | no | – |"
+
+
+def p6row(row_id: str, status: str) -> str:
+    """A historical phase-6 row: seven cells."""
+    return f"| {row_id} | MAJOR | CODE | x.py | a finding | Codex | {status} |"
+
+
+def call(verb: str, model: str) -> str:
+    return f"Stage-2 call, 2026-11-01: {verb} · model {model} · route test · attempt 1"
+
+
+def doc(*parts: str) -> str:
+    return "\n".join(parts) + "\n"
+
+
+def read(text: str, change: str = "c1", source: fr.AttributionSource | None = None) -> fr.ReaderResult:
+    return fr.read_change(change, f"plans/changes/{change}/findings.md", text, source=source)
+
+
+def totals(findings: list[fr.Finding]) -> dict[str | None, dict]:
+    return {record["model"]: record for record in fpm.totals_of(findings)}
+
+
+# --- git helpers -------------------------------------------------------------------
+
+
+def git(root: Path, *args: str) -> str:
+    command = ["git", "-C", str(root), *IDENTITY, *args]
+    return subprocess.run(command, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def commit(root: Path, files: dict[str, str | bytes]) -> str:
+    for rel, content in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "step")
+    return git(root, "rev-parse", "HEAD")
+
+
+def repo(tmp_path: Path, files: dict[str, str | bytes]) -> tuple[Path, str]:
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    return root, commit(root, files)
+
+
+def findings_path(name: str, archived: bool = False) -> str:
+    base = "plans/changes/archive/2026-10-01-" if archived else "plans/changes/"
+    return f"{base}{name}/findings.md"
+
+
+def run_report(root: Path, rev: str | None, monkeypatch, state: Path) -> tuple[int, list[str]]:
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    chunks: list[str] = []
+    code = fpm.run(root, rev, out=chunks.append)
+    return code, chunks
+
+
+def jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+# --- criterion 1 ---------------------------------------------------------------------
+
+
+def test_scope_at_single_commit(tmp_path):
+    rejected = doc("## Rejected phase-6 answer, 2026-11-01", p6row("R-1", "fixed"))
+    glm1 = lrow("L1-1", "glm-5.3-flash", "fixed")
+    glm2 = lrow("L1-2", "glm-5.3-flash", "open")
+    alpha1 = doc(RELEASE, glm1, "") + rejected
+    alpha2 = doc(RELEASE, glm1, glm2, "") + rejected
+    beta = doc(PHASE6, p6row("F-1", "open"))
+    root, sha1 = repo(tmp_path, {findings_path("alpha"): alpha1, findings_path("beta", archived=True): beta})
+    sha2 = commit(root, {findings_path("alpha"): alpha2})
+
+    first = totals(fpm.collect(root, sha1)[0])
+    assert first["glm-5.3-flash"]["raised"] == 1, "the eligible row of the first commit is omitted"
+    assert first[None]["raised"] == 1, "the archived change's phase-6 row is omitted"
+    assert sum(record["raised"] for record in first.values()) == 2, "a rejected answer was counted"
+
+    second = totals(fpm.collect(root, sha2)[0])
+    assert second["glm-5.3-flash"]["raised"] == 2, "the second commit's row is omitted"
+    # evidence of another commit is never combined
+    assert totals(fpm.collect(root, sha1)[0]) == first
+    labels = [table.label for table in fpm.collect(root, sha1)[2]]
+    assert "rejected phase-6 answer tables" in labels, "a rejected answer must stand outside the count, visibly"
+
+
+# --- criterion 2 ---------------------------------------------------------------------
+
+
+def test_latest_row_per_change_and_id():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "glm-5.3-flash", "open"),
+        "",
+        RELEASE_2,
+        lrow("L1-1", "gpt-6.1-terra", "fixed — tests/x.py::t"),
+    )
+    one = read(text, "c1").findings
+    assert len(one) == 1
+    assert one[0].model == "glm-5.3-flash", "a re-check changed the credited model"
+    assert one[0].outcome == "defects_accepted", "an older Status won over the latest one"
+    merged = totals(one + read(text, "c2").findings)
+    assert merged["glm-5.3-flash"]["raised"] == 2, "the same id in two changes was collapsed"
+
+
+# --- criterion 3 ---------------------------------------------------------------------
+
+
+def test_loop_model_attribution():
+    named = doc(RELEASE, lrow("L1-1", "hy3", "open"))
+    assert read(named).findings[0].model == "hy3", "a named model's row is attributed elsewhere"
+
+    legacy = doc(call("review-loop", "glm-5.3-flash"), "", GLM_RELEASE, lrow("L1-1", "GLM", "open"))
+    assert read(legacy).findings[0].model == "glm-5.3-flash", "GLM was not resolved through the call line"
+
+    no_call = doc(GLM_RELEASE, lrow("L1-1", "GLM", "open"))
+    assert read(no_call).findings[0].model is None, "a vendor-only row without a call line must be unattributed"
+
+
+# --- criterion 4 ---------------------------------------------------------------------
+
+
+def test_phase6_nearest_call_boundary():
+    review = call("review", "gpt-6.1-terra")
+    row1 = p6row("F-1", "open")
+    direct = doc(review, "", PHASE6, row1)
+    assert read(direct).findings[0].model == "gpt-6.1-terra"
+
+    repaired = doc(review, call("repair", "gpt-6.1-terra"), "", PHASE6, row1)
+    assert read(repaired).findings[0].model is None, "a repair call was skipped to reach an older review call"
+
+    looped = doc(review, call("review-loop", "hy3"), "", PHASE6, row1)
+    assert read(looped).findings[0].model is None, "a review-loop call was used or skipped"
+
+    between = doc(review, "", PHASE6, row1, "", PHASE6_2, p6row("F-2", "open"))
+    found = {finding.id: finding.model for finding in read(between).findings}
+    assert found == {"F-1": "gpt-6.1-terra", "F-2": None}, "a call across another phase-6 block was used"
+
+
+# --- criterion 5 ---------------------------------------------------------------------
+
+
+def test_unattributed_rows_are_visible():
+    result = read(doc(PHASE6, p6row("F-1", "fixed")), "c1")
+    assert [(finding.change, finding.id, finding.model) for finding in result.findings] == [("c1", "F-1", None)]
+    assert totals(result.findings)[None]["raised"] == 1, "the unpaired seven-cell row disappeared"
+    records = fpm.jsonl_records("a" * 40, True, fpm.totals_of(result.findings), result.findings, [])
+    assert {"type": "finding", "change": "c1", "id": "F-1"} in records
+
+
+# --- criterion 6 ---------------------------------------------------------------------
+
+
+class HeadingOnly(fr.AttributionSource):
+    """A substitute source that attributes from the heading alone."""
+
+    def __init__(self) -> None:
+        self.seen: list[fr.BlockIdentity] = []
+
+    def attribute(self, block: fr.BlockIdentity) -> str:
+        self.seen.append(block)
+        return "hy3" if block.heading and block.heading.startswith("## Phase 6") else fr.UNATTRIBUTED
+
+
+def test_replace_attribution_source(tmp_path):
+    text = doc(PHASE6, p6row("F-1", "open"))
+    assert read(text).findings[0].model is None
+    source = HeadingOnly()
+    assert read(text, source=source).findings[0].model == "hy3", "the replacement source did not attribute"
+    identity = source.seen[0]
+    assert identity.change == "c1" and identity.findings_file.endswith("findings.md")
+    assert identity.heading == PHASE6 and identity.position == 1 and identity.preceding_calls == ()
+
+    # the report consumer passes the source on; its reader call keeps its shape
+    root, sha = repo(tmp_path, {findings_path("c1"): text})
+    assert totals(fpm.collect(root, sha, source=HeadingOnly())[0])["hy3"]["raised"] == 1
+
+
+# --- criteria 7 and 8 ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        "rejected — Same as L1-1",
+        "Duplicate of L2-2",
+        "rejected — repeat of F-3",
+        "REPEATS L1-1",
+        "repeat L1-1",
+        "rejected — duplicate of L1-1 and L1-2: same shell",
+    ],
+)
+def test_legacy_duplicate_markers(status):
+    assert fr.is_duplicate(status), f"a valid duplicate marker was missed: {status!r}"
+    assert fr.duplicate_targets(status)
+
+
+@pytest.mark.parametrize(
+    "status",
+    ["rejected — same as above", "rejected — a repeat", "repeats finding 3", "fixed", "open", "rejected — duplicates"],
+)
+def test_legacy_duplicate_markers_without_id(status):
+    assert not fr.is_duplicate(status), f"a marker without a row id counted as a duplicate: {status!r}"
+
+
+def test_duplicate_credits_each_named_original():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "glm-5.3-flash", "fixed"),
+        lrow("L1-2", "hy3", "rejected — duplicate of L1-1"),
+        lrow("L1-3", "hy3", "rejected — same as L1-2"),
+        lrow("L1-4", "hy3", "rejected — duplicate of L1-1 and L1-3"),
+    )
+    result = read(text)
+    assert result.gaps == []
+    by_model = totals(result.findings)
+    assert by_model["glm-5.3-flash"]["raised"] == 1 and by_model["glm-5.3-flash"]["defects_accepted"] == 1
+    assert "hy3" not in by_model, "a duplicate earned credit"
+
+    unattributed_root = doc(
+        PHASE6,
+        p6row("F-1", "fixed"),
+        "",
+        RELEASE,
+        lrow("L1-1", "glm-5.3-flash", "rejected — duplicate of F-1"),
+    )
+    by_model = totals(read(unattributed_root).findings)
+    assert by_model[None]["raised"] == 1 and by_model[None]["defects_accepted"] == 1, "the root lost its credit"
+    assert "glm-5.3-flash" not in by_model, "an unattributed root's credit moved to a duplicate's model"
+
+
+# --- criteria 10-13 ------------------------------------------------------------------
+
+
+def test_raised_counts_open_and_rejected_once():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "hy3", "open"),
+        lrow("L1-2", "hy3", "rejected — wrong"),
+        lrow("L1-3", "hy3", "fixed"),
+        "",
+        RELEASE_2,
+        lrow("L1-3", "hy3", "fixed — again"),
+    )
+    assert totals(read(text).findings)["hy3"]["raised"] == 3, "an open finding was omitted or one counted twice"
+
+
+def test_defects_accepted_statuses():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "hy3", "taken"),
+        lrow("L1-2", "hy3", "fixed — orchestrator hand edit"),
+        lrow("L1-3", "hy3", "closed — merged in #12"),
+        lrow("L1-4", "hy3", "rejected — wrong"),
+    )
+    record = totals(read(text).findings)["hy3"]
+    assert record["defects_accepted"] == 3, "fixed or historical closed was omitted, or a rejection included"
+    assert record["rejected"] == 1
+
+
+def test_questions_settled_statuses():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "hy3", "resolved 2026-11-18 by decisions.md"),
+        lrow("L1-2", "hy3", "answered"),
+        lrow("L1-3", "hy3", "in spec"),
+        lrow("L1-4", "hy3", "taken"),
+    )
+    record = totals(read(text).findings)["hy3"]
+    assert record["questions_settled"] == 3, "a resolved question was omitted or a taken defect included"
+    assert record["defects_accepted"] == 1
+
+
+def test_rejected_status():
+    text = doc(RELEASE, lrow("L1-1", "hy3", "rejected — not a bug"), lrow("L1-2", "hy3", "open"))
+    record = totals(read(text).findings)["hy3"]
+    assert record["rejected"] == 1
+    assert record["raised"] == 2
+    assert record["defects_accepted"] == 0 and record["questions_settled"] == 0, "an open row got an outcome"
+
+
+# --- criterion 14 --------------------------------------------------------------------
+
+
+def test_formats_agree_and_name_commit(tmp_path, monkeypatch):
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "glm-5.3-flash", "fixed"),
+        lrow("L1-2", "hy3", "rejected — wrong"),
+        lrow("L1-3", "hy3", "resolved 2026-11-18"),
+        "",
+        PHASE6,
+        p6row("F-1", "open"),
+    )
+    root, sha = repo(tmp_path, {findings_path("c1"): text})
+    state = tmp_path / "state"
+    base = state / "coding-harness" / "findings-per-model"
+
+    code, chunks = run_report(root, None, monkeypatch, state)
+    assert code == 0
+    output = "".join(chunks)
+    main_file = base / "main.jsonl"
+    assert main_file.exists()
+    assert chunks[-1].strip() == str(main_file), "the file path is not printed last"
+    assert sha in output.splitlines()[0], "the table does not name the full cutoff commit"
+
+    records = jsonl(main_file)
+    assert records[0] == {"type": "metadata", "commit": sha, "complete": True}
+    models = [record for record in records if record["type"] == "model"]
+    assert [record["model"] for record in models] == ["glm-5.3-flash", "hy3", None]
+    for record in models:
+        label = "unattributed" if record["model"] is None else record["model"]
+        counts = [record[key] for key in ("raised", "defects_accepted", "questions_settled", "rejected")]
+        expected = f"| {label} | " + " | ".join(str(count) for count in counts) + " |"
+        assert expected in output, f"the table and the JSON Lines disagree for {label}"
+    assert {"type": "finding", "change": "plans/changes/c1", "id": "F-1"} in records
+
+    # a branch has its own file and never overwrites main
+    before = main_file.read_text(encoding="utf-8")
+    git(root, "checkout", "-q", "-b", "feat/x")
+    commit(root, {findings_path("c2"): doc(RELEASE, lrow("L1-1", "hy3", "open"))})
+    code, chunks = run_report(root, None, monkeypatch, state)
+    branch_file = base / "branches" / (b"feat/x".hex() + ".jsonl")
+    assert code == 0 and branch_file.exists()
+    assert chunks[-1].strip() == str(branch_file)
+    assert main_file.read_text(encoding="utf-8") == before, "a branch output overwrote main"
+
+    # a revision that is no branch tip writes revisions/<full commit>.jsonl
+    revision_file = base / "revisions" / f"{sha}.jsonl"
+    code, chunks = run_report(root, sha, monkeypatch, state)
+    assert revision_file.exists()
+    assert chunks[-1].strip() == str(revision_file)
+
+
+# --- criterion 15 --------------------------------------------------------------------
+
+
+def test_make_entry_point_and_revision(tmp_path):
+    lookup = ["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "HEAD~1^{commit}"]
+    probe = subprocess.run(lookup, capture_output=True, text=True, check=False)
+    if probe.returncode != 0:
+        pytest.skip("HEAD~1 is not available in this checkout")
+    expected = probe.stdout.strip()
+    env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
+    env.pop("REV", None)
+    command = ["make", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
+    done = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
+    # the exit code may be non-zero on real history: gaps are reported, never hidden
+    lines = done.stdout.splitlines()
+    assert expected in lines[0], f"the requested revision was ignored: {done.stdout[:300]!r} {done.stderr[:300]!r}"
+    wanted = tmp_path / "state" / "coding-harness" / "findings-per-model" / "revisions" / f"{expected}.jsonl"
+    assert Path(lines[-1].strip()) == wanted, "the JSON Lines file is missing or its path is not printed last"
+    assert jsonl(wanted)[0]["commit"] == expected
+    assert "| Model |" in done.stdout, "the table is missing"
+
+
+# --- criterion 16 --------------------------------------------------------------------
+
+
+def test_gaps_produce_both_incomplete_outputs_and_nonzero(tmp_path, monkeypatch):
+    bad = doc(
+        RELEASE,
+        lrow("L1-1", "hy3", "maybe later"),
+        lrow("L1-2", "hy3", "rejected — same as L9-9"),
+        lrow("L1-3", "hy3", "duplicate of L1-4"),
+        lrow("L1-4", "hy3", "duplicate of L1-3"),
+        "| L1-5 | MAJOR | too few cells |",
+    )
+    files = {findings_path("bad"): bad, findings_path("raw"): b"\xff\xfe not utf-8"}
+    root, _ = repo(tmp_path, files)
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    assert code != 0, "a report with gaps exited zero"
+    output = "".join(chunks)
+    assert "Incomplete" in output
+    needles = ("maybe later", "L9-9", "duplicate cycle", "UTF-8", "L1-5")
+    for needle in needles:
+        assert needle in output, f"the gap {needle!r} is not shown in the table output"
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert records[0]["complete"] is False
+    reasons = " ".join(record["reason"] for record in records if record["type"] == "gap")
+    for needle in needles[:4]:
+        assert needle in reasons, f"the gap {needle!r} is missing from the JSON Lines"
+
+    # accepted limit is a known status: raised only, no gap
+    result = read(doc(RELEASE, lrow("L1-1", "hy3", "accepted limit — style")))
+    assert result.gaps == []
+    record = totals(result.findings)["hy3"]
+    assert record["raised"] == 1 and record["defects_accepted"] == 0, "accepted limit was counted as fixed"
+
+
+# --- criterion 18 --------------------------------------------------------------------
+
+
+def test_headingless_tables_outside_count():
+    text = doc(
+        p6row("H-1", "fixed"),
+        "",
+        "## Phase 2a — spec review, 2026-11-01",
+        p6row("2a-1", "answered"),
+        "",
+        "## Phase 2a — spec review, round 2",
+        p6row("2a-2", "answered"),
+        "",
+        RELEASE,
+        lrow("L1-1", "hy3", "open"),
+        "",
+        "## Restated for the reader",
+        lrow("L1-1", "hy3", "fixed"),
+    )
+    result = read(text)
+    labels = {table.label: table.rows for table in result.outside}
+    assert labels["headingless tables"] == 1, "a table before any heading was omitted"
+    assert labels["phase-2a tables"] == 2, "phase-2a blocks are not grouped"
+    assert labels["## Restated for the reader"] == 1
+    assert [finding.id for finding in result.findings] == ["L1-1"], "an outside table was credited"
+    assert result.findings[0].status == "open", "a restatement changed an eligible row's Status"
+    assert result.findings[0].outcome is None
+
+
+# --- criterion 19 --------------------------------------------------------------------
+
+
+def test_phase2a_ids_excluded():
+    result = read(doc(PHASE6, p6row("2a-1", "answered"), p6row("F-1", "fixed")))
+    assert [finding.id for finding in result.findings] == ["F-1"]
+    assert totals(result.findings)[None]["raised"] == 1, "a 2a row increased a total"
+    assert result.gaps == []
+
+
+# --- the mirror of the runner's row shapes -----------------------------------------
+
+
+def test_row_shapes_match_the_runner():
+    stage2 = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    assert f'RELEASE_HEADING = "{fr.RELEASE_HEADING}"' in stage2, "the release heading drifted from the writer"

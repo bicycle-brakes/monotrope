@@ -61,25 +61,33 @@ def head_commit(root: Path, rev: str) -> str:
     return done.stdout.decode().strip()
 
 
-def changed_files(root: Path, base: str, head: str) -> list[tuple[str, str]]:
-    """The findings.md files added, changed or renamed between base and head, as (old, new) paths."""
+def changed_files(root: Path, base: str, head: str) -> list[tuple[str | None, str]]:
+    """The findings.md files added, changed or renamed between base and head, as (old, new) paths.
+
+    An added file has no old path (None); a deleted file carries no new rows and is skipped.
+    """
     done = git(root, "diff", "-M", "-z", "--name-status", base, head, "--", "plans/changes")
     if done.returncode != 0:
         raise SystemExit(f"check-duplicates: cannot measure — the diff failed: {done.stderr.decode().strip()} (3)")
     tokens = done.stdout.decode().split("\0")
-    pairs: list[tuple[str, str]] = []
+    pairs: list[tuple[str | None, str]] = []
     index = 0
     while index < len(tokens):
         status = tokens[index]
         if not status:
             index += 1
             continue
-        if status.startswith("R"):
+        old: str | None
+        if status.startswith(("R", "C")):
             old, new = tokens[index + 1], tokens[index + 2]
             index += 3
         else:
             old = new = tokens[index + 1]
             index += 2
+            if status.startswith("A"):
+                old = None
+            elif status.startswith("D"):
+                continue
         if new.endswith("/findings.md"):
             pairs.append((old, new))
     return pairs
@@ -106,15 +114,15 @@ def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
 
 
 def marks_duplicate(status: str) -> bool:
-    """The row marks a duplicate: a marker in its status, or the bare canonical leading word."""
-    return reader.DUPLICATE_MARKER.search(status) is not None or reader.normalized_status(status).startswith("duplicate")
+    """The row marks a duplicate: a marker naming a row id (a marker without an id is none, criterion 7)."""
+    return reader.is_duplicate(status)
 
 
 def measure(root: Path, base: str, head: str) -> list[str]:
     """The findings of the gate: changed rows whose duplicate form is not the canonical one."""
     findings: list[str] = []
     for old, new in changed_files(root, base, head):
-        before = rows_at(root, base, old)
+        before = rows_at(root, base, old) if old is not None else {}
         after = rows_at(root, head, new)
         for row_id, rows in sorted(after.items()):
             if before.get(row_id) == rows:

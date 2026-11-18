@@ -13,7 +13,7 @@
 # first lines record the exact command that wrote it, and rerunning that
 # command must give the committed file byte for byte. Only the machine that
 # changes a pin needs uv; CI and `make venv` install with pip.
-.PHONY: verify test staleness gates leakcheck venv lock change index report close-merged archive help
+.PHONY: verify test staleness gates leakcheck venv lock change index report findings-per-model close-merged archive help
 
 verify:
 	bash scripts/verify_all.sh
@@ -74,6 +74,14 @@ index:
 # gate and runs nowhere in verify (docs/WORKFLOW.md, "The run report").
 report:
 	@export CHANGE; python3 scripts/run_report.py
+
+# Findings raised, defects accepted, questions settled and rejected per model
+# (bead coding-harness-qut1): one report at ONE commit — HEAD, or the revision
+# REV names — as a table on standard output and as JSON Lines under the state
+# directory; the file path is printed last and gaps make the exit non-zero. REV
+# passes as data in the environment, never interpolated into the shell line.
+findings-per-model:
+	@export REV; if [ -n "$$REV" ]; then python3 scripts/findings_per_model.py --rev "$$REV"; else python3 scripts/findings_per_model.py; fi
 
 # Closes beads whose work merged (bead coding-harness-l1if): the reconciler
 # reads Closes-Bead trailers from a freshly fetched origin/main and closes what
@@ -145,6 +153,7 @@ help:
 	@echo '                                        create plans/changes/<name>/ linked to an existing bead'
 	@echo 'make index                              regenerate plans/INDEX.md from the registry'
 	@echo 'make report [CHANGE=<name>]             one read-only snapshot of the active changes (not a gate)'
+	@echo 'make findings-per-model [REV=<revision>] findings per model at one commit: table plus JSON Lines (HEAD by default)'
 	@echo 'make close-merged [ARGS=--write]        close beads a merged Closes-Bead trailer declared (report without ARGS)'
 	@echo '                                        reporting also fails on unresolved declarations (nonzero exit)'
 	@echo 'make archive [ARGS=--write]             archive change folders whose bead is closed (report without ARGS)'

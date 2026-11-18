@@ -115,12 +115,10 @@ def status_outcome(status: str) -> str | None:
     lowered = normalized_status(status)
     if lowered.startswith(("open", "accepted limit")):
         return None
-    for prefix in DEFECT_PREFIXES:
-        if lowered.startswith(prefix):
-            return "defects_accepted"
-    for prefix in QUESTION_PREFIXES:
-        if lowered.startswith(prefix):
-            return "questions_settled"
+    if lowered.startswith(DEFECT_PREFIXES):
+        return "defects_accepted"
+    if lowered.startswith(QUESTION_PREFIXES):
+        return "questions_settled"
     if lowered.startswith("rejected"):
         return "rejected"
     return None
@@ -289,7 +287,8 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
                 blocks[-1].rows.append(RowRecord(cells, position))
             else:
                 row_id = cells[0] if ROW_ID.fullmatch(cells[0]) else None
-                gaps.append(Gap(path, row_id, f"line {position}: a phase-6 row needs 7, 9 or 10 cells, found {len(cells)}"))
+                reason = f"line {position}: a phase-6 row needs 7, 9 or 10 cells, found {len(cells)}"
+                gaps.append(Gap(path, row_id, reason))
             continue
         if kind in ("", "other") and ROW_ID.fullmatch(cells[0]):
             # criterion 18: a table whose first cell holds a finding id, under a heading
@@ -371,15 +370,18 @@ def attribute_rows(parsed: Parsed, *, source: AttributionSource | None = None) -
     rows: list[AttributedRow] = []
     for block in parsed.blocks:
         for record in block.rows:
-            reviewer = record.cells[ROW_COLUMNS.index("Reviewer")] if len(record.cells) == len(RELEASED_COLUMNS) else ""
+            reviewer = ""
+            if len(record.cells) == len(RELEASED_COLUMNS):
+                reviewer = record.cells[ROW_COLUMNS.index("Reviewer")]
             if block.kind == "released" and MODEL_NAME.fullmatch(reviewer):
                 model: str | None = reviewer
             else:
                 answer = chosen.attribute(block.identity)
                 model = None if answer in (UNATTRIBUTED, "") else answer
-            status = status_cell(record.cells)
-            rows.append(AttributedRow(block.identity.change, block.identity.findings_file, record.cells[0], model,
-                status or "", record.line))
+            status = status_cell(record.cells) or ""
+            identity = block.identity
+            row = AttributedRow(identity.change, identity.findings_file, record.cells[0], model, status, record.line)
+            rows.append(row)
     return rows
 
 
@@ -422,8 +424,8 @@ def resolve(rows: list[AttributedRow]) -> tuple[list[Finding], list[Gap]]:
         earliest, latest = same[0], same[-1]
         ids_by_change.setdefault(change, set()).add(finding_id)
         duplicate = is_duplicate(latest.status)
-        findings.append(Finding(change, latest.path, finding_id, earliest.model, latest.status,
-            None if duplicate else status_outcome(latest.status), duplicate))
+        outcome = None if duplicate else status_outcome(latest.status)
+        findings.append(Finding(change, latest.path, finding_id, earliest.model, latest.status, outcome, duplicate))
     gaps: list[Gap] = []
     edges: dict[tuple[str, str], list[str]] = {}
     paths: dict[tuple[str, str], str] = {}
@@ -431,20 +433,19 @@ def resolve(rows: list[AttributedRow]) -> tuple[list[Finding], list[Gap]]:
         paths[(finding.change, finding.id)] = finding.path
         if not finding.duplicate:
             if not known_status(finding.status):
-                gaps.append(Gap(finding.path, finding.id,
-                    f"row {finding.id}: unknown status {finding.status!r} (the known set is closed)"))
+                reason = f"row {finding.id}: unknown status {finding.status!r} (the known set is closed)"
+                gaps.append(Gap(finding.path, finding.id, reason))
             continue
         targets = duplicate_targets(finding.status)
-        missing = [target for target in targets if target not in ids_by_change[finding.change]]
-        for target in missing:
-            gaps.append(Gap(finding.path, finding.id,
-                f"row {finding.id}: duplicate marker names row {target}, which the change has no row for"))
-        edges[(finding.change, finding.id)] = [
-            target for target in targets if target in ids_by_change[finding.change]
-        ]
+        known_ids = ids_by_change[finding.change]
+        for target in targets:
+            if target not in known_ids:
+                reason = f"row {finding.id}: duplicate marker names row {target}, which the change has no row for"
+                gaps.append(Gap(finding.path, finding.id, reason))
+        edges[(finding.change, finding.id)] = [target for target in targets if target in known_ids]
     for cycle in _cycles(edges):
         first = cycle[0]
-        chain = " -> ".join(name for _, name in [*cycle, first[1]])
+        chain = " -> ".join(name for _, name in cycle)  # the cycle already closes on its first node
         gaps.append(Gap(paths[first], first[1], f"duplicate cycle: {chain}"))
     return findings, gaps
 
@@ -463,7 +464,8 @@ def _cycles(edges: dict[tuple[str, str], list[str]]) -> list[list[tuple[str, str
             if key not in edges:
                 continue
             if color[key] == GREY:
-                found.append([*path[path.index(key):], key])
+                start = path.index(key)
+                found.append([*path[start:], key])
             elif color[key] == WHITE:
                 visit(key, path)
         path.pop()

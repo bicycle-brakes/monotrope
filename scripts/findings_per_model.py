@@ -96,7 +96,7 @@ def change_folders(root: Path, sha: str) -> list[str]:
     for base in ("plans/changes", "plans/changes/archive"):
         done = git(root, "ls-tree", "-d", "-z", "--name-only", f"{sha}:{base}")
         if done.returncode == 0:
-            folders += sorted(name for name in done.stdout.decode().split("\0") if name)
+            folders += sorted(f"{base}/{name}" for name in done.stdout.decode().split("\0") if name)
     return folders
 
 
@@ -113,8 +113,17 @@ def read_findings(root: Path, sha: str, folder: str, gaps: list[reader.Gap]) -> 
         return None
 
 
-def collect(root: Path, sha: str) -> tuple[list[reader.Finding], list[reader.Gap], list[reader.OutsideTable]]:
-    """The findings, gaps and outside tables of every change at one commit."""
+def collect(
+    root: Path,
+    sha: str,
+    *,
+    source: reader.AttributionSource | None = None,
+) -> tuple[list[reader.Finding], list[reader.Gap], list[reader.OutsideTable]]:
+    """The findings, gaps and outside tables of every change at one commit.
+
+    ``source`` swaps the legacy attribution source for another one; the reader
+    call below stays the same (criterion 6).
+    """
     findings: list[reader.Finding] = []
     gaps: list[reader.Gap] = []
     outside: list[reader.OutsideTable] = []
@@ -122,7 +131,7 @@ def collect(root: Path, sha: str) -> tuple[list[reader.Finding], list[reader.Gap
         text = read_findings(root, sha, folder, gaps)
         if text is None:
             continue
-        result = reader.read_change(folder, f"{folder}/findings.md", text)
+        result = reader.read_change(folder, f"{folder}/findings.md", text, source=source)
         findings += result.findings
         gaps += result.gaps
         outside += result.outside
@@ -142,21 +151,24 @@ def totals_of(findings: list[reader.Finding]) -> list[dict[str, object]]:
         row["raised"] += 1
         if finding.outcome is not None:
             row[finding.outcome] += 1
-    ordered = [model for model in sorted(totals) if model is not None]
+    ordered = sorted(model for model in totals if model is not None)
     if None in totals:
         ordered.append(None)
     return [{"type": "model", "model": model, **totals[model]} for model in ordered]
 
 
-def jsonl_records(sha: str, complete: bool, models: list[dict[str, object]], findings: list[reader.Finding],
-    gaps: list[reader.Gap]) -> list[dict[str, object]]:
+def jsonl_records(
+    sha: str,
+    complete: bool,
+    models: list[dict[str, object]],
+    findings: list[reader.Finding],
+    gaps: list[reader.Gap],
+) -> list[dict[str, object]]:
     """The deterministic record sequence of the JSON Lines file (spec, criterion 14)."""
     records: list[dict[str, object]] = [{"type": "metadata", "commit": sha, "complete": complete}]
     records += models
     records += [
-        {"type": "finding", "change": finding.change, "id": finding.id}
-        for finding in findings
-        if finding.model is None
+        {"type": "finding", "change": finding.change, "id": finding.id} for finding in findings if finding.model is None
     ]
     records += [{"type": "gap", "path": gap.path, "id": gap.id, "reason": gap.reason} for gap in gaps]
     return records
@@ -174,8 +186,10 @@ def table(models: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
-def run(root: Path, rev_arg: str | None, out: Callable[[str], object] = sys.stdout.write) -> int:
+def run(root: Path, rev_arg: str | None, out: Callable[[str], object] | None = None) -> int:
     """One report: table to stdout, JSON Lines to the state file, the path printed last."""
+    if out is None:
+        out = sys.stdout.write  # looked up at call time, so a redirected stdout is honoured
     sha = full_commit(root, rev_arg or "HEAD")
     findings, gaps, outside = collect(root, sha)
     models = totals_of(findings)
@@ -183,7 +197,8 @@ def run(root: Path, rev_arg: str | None, out: Callable[[str], object] = sys.stdo
     target = state_root() / output_relative(root, rev_arg, sha)
     target.parent.mkdir(parents=True, exist_ok=True)
     records = jsonl_records(sha, complete, models, findings, gaps)
-    target.write_text("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8")
+    body = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
+    target.write_text(body, encoding="utf-8")
 
     out(f"Findings per model — cutoff commit {sha}\n\n")
     out(table(models) + "\n")
@@ -203,7 +218,7 @@ def run(root: Path, rev_arg: str | None, out: Callable[[str], object] = sys.stdo
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     parser.add_argument("--rev", default=None, help="the revision to read (default: HEAD)")
-    parser.add_argument("--root", type=Path, default=REPO_ROOT, help="the repository to read (default: this checkout)")
+    parser.add_argument("--root", type=Path, default=REPO_ROOT, help="the repository to read")
     args = parser.parse_args(argv)
     return run(args.root.resolve(), args.rev)
 

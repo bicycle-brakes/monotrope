@@ -123,6 +123,13 @@ request open. Every step is committed and pushed at once, tracker first, so an
 interrupted session loses nothing. A lane ledger with UTC times backs the
 handover.
 
+The morning handover also carries the findings per model (bead
+coding-harness-qut1): the table `make findings-per-model` prints, with its
+cutoff commit, once for main at handover time and once for each unmerged
+change branch that gained findings rows that night, including an earlier
+branch of a lane (`make findings-per-model REV=<branch>`). Each table names
+its own commit; reports at different commits are never combined into one.
+
 ## Stated, enforced, planned
 
 | Rule | Today | Planned |
