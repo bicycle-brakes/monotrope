@@ -533,3 +533,5 @@ Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-c
 Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1115 files, 4645 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refused with claude-code:unrecognized_model glm-5.3-flash since about 16:07 · leak check clean over 1115 files, 4666 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1 · leak check clean over 1115 files, 4686 commits, 12 rules.

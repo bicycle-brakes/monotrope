@@ -2262,6 +2262,9 @@ def test_runner_start_record_carries_the_full_run_comparison_context(
     assert len(starts) == 1, starts
     assert (starts[0]["job"], starts[0]["placement"]) == ("verify", "local"), starts[0]
     assert (starts[0]["check_kind"], starts[0]["change"], starts[0]["tree_id"]) == ("full", "demo", "tree-x")
+    assert starts[0]["comparison_version"] == verify_duration.COMPARISON_VERSION
+    # The targeted check sits in its own history, never among the full-run durations.
+    assert all(e.get("check_kind") != "targeted" for e in _tree_history(tree))
 
     read = subprocess.run(
         [sys.executable, str(tree / "scripts" / "verify_duration.py"), "slips"],

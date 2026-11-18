@@ -4,7 +4,7 @@ status: accepted
 implementation_status: done
 date: 2026-10-08
 last_reviewed: 2026-10-08
-updated: 2026-11-15
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-mfv
@@ -58,19 +58,23 @@ No design phase: the existing stamp and registry provide the design.
 
 The runner's local checks also leave the evidence one slip count is derived
 from (bead coding-harness-bxxt.7, integrated 2026-11-15): a targeted check
-records ordinary start and completion rows through
-`scripts/verify_duration.py` around its execution, with the checked tree's
-content identity — without the change's own `plan.md` and `findings.md`,
-where the runner's bookkeeping lands between the checks — captured on both
-sides, and the runner's admitted full check (`full_verify`) carries
-its comparison context in runner-owned environment variables that the
-shell's start record captures. Nothing about a slip is stored — no slip
-event, tally, receipt or consumed marker; `python3 -m scripts.verify_duration
-slips` derives the count from the one local history and reports it beside
-the number of incomplete or not countable runs. Interrupted work,
-conflicting records, moved trees, and red full runs without comparison
-identity (legacy rows included) are reported as gaps beside the count, never as evidence of zero, and
-missing history is unavailable, as is a scope that selects no run at all.
+records start and completion rows through `scripts/verify_duration.py` around
+its execution into a targeted history beside the duration history, with the
+checked tree's content identity — without the change's own `plan.md` and
+`findings.md`, where the runner's bookkeeping lands between the checks —
+captured on both sides, and the runner's admitted full check (`full_verify`)
+carries its comparison context in runner-owned environment variables that the
+shell's start record captures as additive fields with a version-2 marker.
+Nothing about a slip is stored — no slip event, tally, receipt or consumed
+marker; `python3 -m scripts.verify_duration slips` derives the count from both
+local histories and reports it beside the number of incomplete or not
+countable runs. A slip is a red full run that immediately follows a green
+targeted check of the same identity. Interrupted work, conflicting records,
+moved trees, unknown identities and the other side of such a possible pair are
+reported as gaps beside the count, never as evidence of zero; legacy runs and
+change-less full runs are reported outside the count without making the read
+partial. Missing history is unavailable, as is a scope that selects no run at
+all.
 Reading never appends, repairs or creates
 history, and a failed measurement write never changes a verification
 verdict. Admission, gate selection and the full check's semantics stay

@@ -38,16 +38,24 @@ Command line:
     python -m scripts.verify_duration report [--run ID]
     python -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]
 
-**Slips.** A slip is a completed red local full verification run that an earlier
-completed green targeted check of the same repository, change, checked tree and
-gate configuration failed to catch (bead coding-harness-bxxt.7). Nothing about a
-slip is ever written: the `slips` reader derives the count from the run records
-the runner already leaves — targeted checks record ordinary run evidence through
-`begin_targeted_run`/`finish_targeted_run`, full checks carry their comparison
-context in runner-owned environment variables that `cmd_start` captures. The
-count stands beside the number of incomplete or not countable runs, never
-alone: lost or conflicting evidence is a gap, not a zero (decisions Q-1, Q-2).
-Reading never appends, repairs or creates history.
+**Slips.** A slip is one completed red local full verification run that answers
+the immediately preceding completed check of the same repository, change,
+checked tree and gate configuration when that check is a green targeted check
+(bead coding-harness-bxxt.7). Nothing about a slip is ever written: the `slips`
+reader derives the count from the run records the runner already leaves.
+Full checks stay in `verify-duration.jsonl` as version-1 events with additive
+comparison fields (`check_kind`, `change`, `tree_id` and the marker
+`comparison_version`: 2, captured by `cmd_start` from runner-owned environment
+variables). Targeted checks record their start and end through
+`begin_targeted_run`/`finish_targeted_run` into `verify-targeted.jsonl` beside
+it, so no duration reader ever counts a targeted check as a full duration. The
+reader combines both histories, orders checks by UTC completion with strict
+earlier-than, and stands the count beside the incomplete or not countable runs,
+the separate flaky-test signal and the runs outside the count — lost or
+conflicting evidence is a gap, never a zero (decisions Q-1, Q-2, Q-8, Q-10).
+Exit codes of `slips`: 0 complete evidence, 1 partial or unavailable evidence,
+2 an invalid interval or refused storage. Reading never appends, repairs or
+creates history.
 """
 
 from __future__ import annotations
@@ -71,7 +79,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import verify_lock  # noqa: E402
 
 HISTORY_NAME = "verify-duration.jsonl"
+# The targeted checks' own history, beside the duration history and created at
+# the first version-2 runner record: a targeted duration never reaches a reader
+# of full-run durations.
+TARGETED_HISTORY_NAME = "verify-targeted.jsonl"
 EVENT_VERSION = 1
+# The additive marker every comparison-carrying start holds. The outer event
+# version stays 1, so older readers accept the new fields.
+COMPARISON_VERSION = 2
 RUN_START = "run_start"
 GATE = "gate"
 RUN_END = "run_end"
@@ -108,6 +123,11 @@ class HistoryMissing(Exception):
 def history_path() -> Path:
     """The one history file under the shared verification state root."""
     return verify_lock.state_root() / HISTORY_NAME
+
+
+def targeted_history_path() -> Path:
+    """The targeted checks' history file beside the duration history."""
+    return verify_lock.state_root() / TARGETED_HISTORY_NAME
 
 
 def _log(message: str) -> None:
@@ -163,12 +183,13 @@ def _worker_setting() -> str | None:
     return value if value else None
 
 
-def _open_history() -> int:
+def _open_history(destination: Path | None = None) -> int:
     """A private regular history file for appending; an aliased or nonregular destination refuses.
 
     The same shape as the admission's lock files: the no-follow open fails on
     a symlink standing in the file's place, a FIFO cannot pass the regular
     check, and nothing is ever written through a substituted destination.
+    `destination` names the targeted history; the default is the duration history.
     """
     root = verify_lock.state_root()
     try:
@@ -179,7 +200,7 @@ def _open_history() -> int:
         ) from error
     if root.is_symlink() or not root.is_dir():
         raise StorageUnusable(f"the shared state directory {root} is not a usable directory")
-    path = history_path()
+    path = destination or history_path()
     try:
         return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND | os.O_NOFOLLOW, 0o600)
     except FileExistsError:
@@ -203,10 +224,10 @@ def _open_history() -> int:
     return fd
 
 
-def append_event(event: dict) -> None:
+def append_event(event: dict, destination: Path | None = None) -> None:
     """Append one complete JSON line under a file lock, so concurrent runs never mix identities."""
     line = json.dumps(event, sort_keys=True) + "\n"
-    fd = _open_history()
+    fd = _open_history(destination)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         try:
@@ -266,6 +287,7 @@ def _comparison_fields() -> dict:
         "check_kind": recorded,
         "change": os.environ.get(CHANGE_ENV, "").strip() or None,
         "tree_id": os.environ.get(TREE_ENV, "").strip() or None,
+        "comparison_version": COMPARISON_VERSION,
     }
 
 
@@ -322,10 +344,11 @@ def begin_targeted_run(root: Path, change: str | None, tree: str | None) -> Targ
         "check_kind": "targeted",
         "change": change,
         "tree_id": tree,
+        "comparison_version": COMPARISON_VERSION,
     }
     notes: list[str] = []
     try:
-        append_event(event)
+        append_event(event, targeted_history_path())
     except StorageUnusable as unusable:
         notes.append(f"the targeted run was not recorded: {unusable}")
         return TargetedRun(run_id=None, tree=tree, started=monotonic(), notes=notes)
@@ -357,7 +380,7 @@ def finish_targeted_run(evidence: TargetedRun, tree_after: str | None, outcome: 
         "tree_id": tree_after,
     }
     try:
-        append_event(event)
+        append_event(event, targeted_history_path())
     except StorageUnusable as unusable:
         notes.append(f"the targeted run's completion was not recorded: {unusable}")
     return notes
@@ -436,14 +459,15 @@ def cmd_end(args: argparse.Namespace) -> int:
     return 0
 
 
-def _read_events() -> tuple[list[dict], list[str]]:
+def _read_events(source: Path | None = None) -> tuple[list[dict], list[str]]:
     """The valid version-1 events in file order, plus one diagnostic per unreadable line.
 
     A malformed line never stops the read: the valid records before and after
     it are preserved, and each one is named by its line number — a truncated
-    final row is an interrupted run, not a crash.
+    final row is an interrupted run, not a crash. `source` names the targeted
+    history; the default is the duration history.
     """
-    path = history_path()
+    path = source or history_path()
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
@@ -536,7 +560,9 @@ def _record_error(event: dict) -> str | None:
     return f"invalid {kind} fields: {', '.join(invalid)}" if invalid else None
 
 
-def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str], set[str], int]:
+def _runs(
+    events: list[dict], orphans: list[tuple[int, dict, str]] | None = None
+) -> tuple[dict[str, dict], list[str], set[str], int]:
     """Group the events by run identity in file order, with the damaged runs and unassigned rows.
 
     Identical duplicate starts and ends collapse — one retried append must not
@@ -544,14 +570,17 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str], set[str], int
     record with invalid fields, damage their run: its evidence counts nowhere,
     and the reader shows it as not countable instead of guessing. Returns the
     runs in file order, one finding per diagnosed row, the damaged run
-    identities, and the number of rows that name no start at all.
+    identities, and the number of rows that name no start at all. With an
+    `orphans` list, a row without a start goes there as (position, row,
+    finding) instead of into the findings: the slip reader classifies it by
+    its position against the first version-2 marker.
     """
     runs: dict[str, dict] = {}
     findings: list[str] = []
     order: list[str] = []
     damaged: set[str] = set()
     unassigned = 0
-    for event in events:
+    for position, event in enumerate(events):
         run_id = event["run_id"]
         kind = event["event"]
         error = _record_error(event)
@@ -569,7 +598,11 @@ def _runs(events: list[dict]) -> tuple[dict[str, dict], list[str], set[str], int
             order.append(run_id)
         elif run_id not in runs:
             unassigned += 1
-            findings.append(f"line with {kind} for unknown run {run_id} — its start row is missing or malformed")
+            finding = f"line with {kind} for unknown run {run_id} — its start row is missing or malformed"
+            if orphans is None:
+                findings.append(finding)
+            else:
+                orphans.append((position, event, finding))
         elif error:
             continue
         elif kind == GATE:
@@ -695,140 +728,353 @@ def _instant(value: object) -> datetime.datetime | None:
         return None
 
 
-def _slip_predecessor_match(
-    predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]],
-    moment: datetime.datetime,
-    repository: str,
-    change: str | None,
-    tree: str,
-    config: str | None,
-) -> bool:
-    """Whether one completed green targeted check of the same identity finished before `moment`.
+def _text(value: object) -> str | None:
+    """A recorded identity field, or None when it is absent, blank or not text."""
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
-    Repository, change, checked tree and gate configuration must all be present
-    and equal — a missing field never matches another missing field — and the
-    completion must precede the full run's completion, including for overlapping
-    checks. Several qualifying predecessors still count the full run once.
+
+@dataclass
+class _Check:
+    """One check taking part in the pairing: a run of a known kind, or an orphan completion.
+
+    `certain` means valid, unambiguous evidence: a complete run whose
+    repository, change, checked tree(s) and gate configuration are all known,
+    whose completion does not precede its start and, for a targeted check,
+    whose tree is the same at both ends. Anything else is uncertain and counts
+    as incomplete once. `completion` is None while no valid completion exists.
     """
-    for completion, place, named, content, basis in predecessors:
-        if completion < moment and place == repository and named == change and content == tree and basis == config:
-            return True
-    return False
+
+    run_id: str
+    kind: str  # "targeted" or "full"
+    start: datetime.datetime
+    completion: datetime.datetime | None
+    verdict: str | None
+    change: str | None
+    trees: frozenset[str]  # every checked tree the run may stand for; a moved targeted check has two
+    config: str | None
+    selected: bool
+    certain: bool
 
 
-def cmd_slips(args: argparse.Namespace) -> int:
-    """The read-only slip count beside the runs that could not be counted.
+@dataclass
+class _Tally:
+    """What the collection of one report found besides the pairing checks."""
 
-    The asked interval and change scope select what is counted; the search for
-    a matching targeted completion runs over the whole available history,
-    including before the interval's lower bound. Exit 0: complete readable
-    evidence, even when the slip count is positive. Exit 1: partial or
-    unavailable evidence — usable counts are kept when they can stand, and
-    missing history is unavailable, never a zero; a selection without any run
-    (a misspelled change, another checkout, an empty window) is no statement,
-    never a zero either. Exit 2: an invalid interval.
-    Reading never appends, repairs or creates history.
+    checks: list[_Check] = field(default_factory=list)
+    selected: int = 0  # runs the scope selects; none at all leaves nothing observed
+    extra_incomplete: int = 0  # selected runs incomplete without taking part in a pairing
+    outside: int = 0  # attributable legacy or change-less full runs
+    unattributed: int = 0  # recognizable legacy runs without enough scope evidence
+    partial: bool = False
+    findings: list[str] = field(default_factory=list)
+
+
+def _compatible(first: _Check, second: _Check) -> bool:
+    """Whether the known identity fields of two checks do not conflict.
+
+    An unknown field never proves a match and never rules one out; two known,
+    different values rule it out. A moved targeted check matches either tree.
     """
+    if first.change and second.change and first.change != second.change:
+        return False
+    if first.config and second.config and first.config != second.config:
+        return False
+    return not (first.trees and second.trees and not (first.trees & second.trees))
+
+
+def _may_precede(other: _Check, full: _Check) -> bool:
+    """Whether an uncertain check could have completed before the full run's completion."""
+    assert full.completion is not None
+    if other.completion is not None:
+        return other.completion < full.completion
+    return other.start < full.completion
+
+
+def _may_follow(other: _Check, earlier: _Check) -> bool:
+    """Whether an uncertain check could have completed after an earlier check's completion."""
+    assert earlier.completion is not None
+    return other.completion is None or other.completion > earlier.completion
+
+
+def _collect(
+    runs: dict[str, dict], damaged: set[str], args: argparse.Namespace, current_repository: str | None
+) -> _Tally:
+    """Classify every run of the history: pairing check, outside the count, or a diagnosed gap."""
+    tally = _Tally()
     since, until = args.since, args.until
-    if since is not None and until is not None and since >= until:
-        _log(f"the interval {since.isoformat()}..{until.isoformat()} is reversed; refusing it")
-        return 2
-    try:
-        events, findings = _read_events()
-    except HistoryMissing as missing:
-        print("slips: unavailable; incomplete/not countable runs: unavailable")
-        _log(f"{missing} — missing history is unavailable, never a counted zero")
-        return 1
-    runs, grouping, damaged, unassigned = _runs(events)
-    findings.extend(grouping)
-    partial = bool(findings) or unassigned > 0
-
-    slips = 0
-    uncountable = 0
-    selected = 0  # the runs the scope selects; none at all leaves nothing observed
-    # Valid targeted greens of the whole available history, in file order: a
-    # qualifying predecessor may lie before the asked interval.
-    predecessors: list[tuple[datetime.datetime, str, str | None, str, str | None]] = []
-    full_candidates = []
-    current_repository = _common_git_dir()
     for run_id, run in runs.items():
         start = run["start"]
         moment = _instant(start.get("utc"))
         repository = start.get("common_git_dir")
         job = start.get("job")
         placement = start.get("placement")
-        localisable = moment is not None and isinstance(repository, str) and isinstance(job, str)
-        if run_id in damaged and not localisable:
-            # Damaged evidence of unknown origin: the diagnosis stays visible,
-            # the measurement stays partial, and no run is invented for it.
-            partial = True
+        legacy = "check_kind" not in start  # no comparison evidence: a recognizable legacy duration record
+        located = moment is not None and isinstance(job, str) and isinstance(repository, str) and bool(repository)
+        if not located:
+            if legacy and run_id not in damaged and moment is not None:
+                tally.unattributed += 1  # a legacy run that names no repository cannot be assigned to one
+            else:
+                # Damaged or unassignable evidence: the measurement stays
+                # partial and no run is invented for it.
+                tally.partial = True
+                if run_id not in damaged:
+                    tally.findings.append(f"run {run_id} cannot be assigned to a repository or start time")
             continue
-        if not localisable:
-            continue
-        if job != "verify" or placement != "local" or (not repository or repository != current_repository):
+        if job != "verify" or placement != "local" or repository != current_repository:
             continue  # complete unrelated jobs, placements and repositories are ignored
-        change = start.get("change")
-        # The asked interval and change scope select what is counted; the
-        # predecessor search stays whole-history, because a targeted check that
-        # started before `since` is still the one that missed the later red run.
-        started_in_bounds = (since is None or moment >= since) and (until is None or moment < until)
-        named_in_scope = args.change is None or change == args.change
-        in_selection = started_in_bounds and named_in_scope
-        if in_selection:
-            selected += 1
+        assert moment is not None
+        change = _text(start.get("change"))
+        in_bounds = (since is None or moment >= since) and (until is None or moment < until)
+        named = args.change is None or change == args.change
         end = run["end"]
-        if run_id in damaged or end is None:
-            if in_selection:
-                uncountable += 1  # an interrupted or conflicting run is a gap, not a zero
+        completion = _instant(end.get("utc")) if end is not None and run_id not in damaged else None
+        valid_end = completion is not None and completion >= moment
+        if legacy:
+            if not in_bounds:
+                continue
+            if args.change is not None:
+                tally.unattributed += 1  # a legacy run names no change, so it cannot answer a change scope
+                continue
+            tally.selected += 1
+            if valid_end:
+                tally.outside += 1
+            else:
+                tally.extra_incomplete += 1  # an interrupted or conflicting legacy run is a gap
             continue
-        completion = _instant(end.get("utc"))
-        if completion is None or completion < moment:
-            if in_selection:
-                uncountable += 1  # a completion before its own start is contradictory evidence
+        kind = start.get("check_kind")
+        if kind not in CHECK_KINDS:
+            if in_bounds and named:
+                tally.selected += 1
+                tally.extra_incomplete += 1  # an unknown kind is unsupported evidence, never a clean run
             continue
-        verdict = end.get("verdict")
-        kind = start.get("check_kind")  # absent: a legacy duration record
-        if kind is not None and kind not in CHECK_KINDS:
-            if in_selection:
-                uncountable += 1  # an unknown kind is unsupported evidence, never a clean run
+        if kind == "full" and change is None:
+            if args.change is None and in_bounds:
+                tally.selected += 1
+                if valid_end:
+                    tally.outside += 1  # a change-less full run is outside the slip population
+                else:
+                    tally.extra_incomplete += 1
             continue
-        identities_known = all(
-            isinstance(value, str) and bool(value.strip())
-            for value in (start.get("tree_id"), change, start.get("config_sha256"))
-        )
-        if not identities_known or kind is None:
-            if in_selection:
-                uncountable += 1
-            continue
-        if kind == "targeted" and end.get("tree_id") != start.get("tree_id"):
-            if in_selection:
-                uncountable += 1
-            continue
+        tree_start = _text(start.get("tree_id"))
+        tree_end = _text(end.get("tree_id")) if end is not None and run_id not in damaged else None
+        config = _text(start.get("config_sha256"))
+        trees = {tree_start, tree_end} if kind == "targeted" else {tree_start}
+        certain = valid_end and bool(change and tree_start and config)
         if kind == "targeted":
-            if verdict == "green":
-                predecessors.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
-            continue
-        if in_selection and verdict == "red":
-            full_candidates.append((completion, repository, change, start["tree_id"], start["config_sha256"]))
+            certain = certain and tree_end == tree_start  # both readings must exist and agree
+        verdict = end.get("verdict") if valid_end and end is not None else None
+        selected = in_bounds and named
+        tally.checks.append(
+            _Check(
+                run_id=run_id,
+                kind=kind,
+                start=moment,
+                completion=completion if valid_end else None,
+                verdict=verdict,
+                change=change,
+                trees=frozenset(tree for tree in trees if tree),
+                config=config,
+                selected=selected,
+                certain=certain,
+            )
+        )
+        if selected:
+            tally.selected += 1
+    return tally
 
-    for completion, repository, change, tree, config in full_candidates:
-        if _slip_predecessor_match(predecessors, completion, repository, change, tree, config):
-            slips += 1  # each qualifying red full-run identity counts once
+
+def _when(check: _Check) -> datetime.datetime:
+    """A check's completion, or its start while it has no valid completion."""
+    return check.completion or check.start
+
+
+def _targeted_green(check: _Check) -> bool:
+    return check.kind == "targeted" and check.verdict == "green"
+
+
+def _full_green(check: _Check) -> bool:
+    return check.kind == "full" and check.verdict == "green"
+
+
+def _between(other: _Check, full: _Check, predecessor: _Check | None) -> bool:
+    """Whether an uncertain check could stand between a full run and its certain predecessor."""
+    if not _compatible(other, full) or not _may_precede(other, full):
+        return False
+    return predecessor is None or _may_follow(other, predecessor)
+
+
+def _tie_uncertain(checks: list[_Check]) -> None:
+    """Equal completions of compatible, different checks cannot order them: both become uncertain."""
+    timed = [check for check in checks if check.completion is not None]
+    for index, first in enumerate(timed):
+        for second in timed[index + 1 :]:
+            if first.completion != second.completion:
+                continue
+            if (first.kind, first.verdict) == (second.kind, second.verdict):
+                continue  # interchangeable: either order leaves the same kind and verdict first
+            if _compatible(first, second):
+                first.certain = False
+                second.certain = False
+
+
+def _pair(checks: list[_Check], orphans: list[_Check]) -> tuple[int, int, int, set[str]]:
+    """Slips, flaky-test signals, undecided signals and the runs promoted to incomplete.
+
+    Checks are ordered by UTC completion with strict earlier-than; equal
+    completions of compatible checks cannot establish an order and make both
+    uncertain. A complete red full run pairs only with its immediate certain
+    predecessor of the same identity. An uncertain check that could stand
+    between them — or that could itself be that predecessor or successor —
+    leaves the pair undecidable: each selected side counts as incomplete once,
+    and no arbitrary pair is chosen. Where only uncertain full runs may
+    intervene and no targeted check could be the predecessor, the later full
+    run keeps its non-slip status and its flaky-test signal stays undecided.
+    """
+    _tie_uncertain(checks)
+    certain = [check for check in checks if check.certain]
+    uncertain = [check for check in checks if not check.certain]
+    pool = [*uncertain, *orphans]
+    promoted: set[str] = set()
+    slips = flaky = undecided = 0
+    reds = [check for check in certain if check.kind == "full" and check.verdict == "red"]
+    for full in sorted(reds, key=_when):
+        earlier = [check for check in certain if check is not full and _compatible(check, full)]
+        earlier = [check for check in earlier if _when(check) < _when(full)]
+        predecessor = max(earlier, key=_when, default=None)
+        between = [check for check in pool if _between(check, full, predecessor)]
+        green = predecessor is not None and _targeted_green(predecessor)
+        if not between:
+            if full.selected and green:
+                slips += 1
+            elif full.selected and predecessor is not None and _full_green(predecessor):
+                flaky += 1
+            continue
+        if green or any(check.kind == "targeted" for check in between):
+            promoted.add(full.run_id)
+            promoted.update(check.run_id for check in between)
+            if green and predecessor is not None:
+                promoted.add(predecessor.run_id)
+        elif full.selected:
+            undecided += 1  # the intervening full run may have been green: the signal stays undecided
+    for unsure in uncertain:
+        if unsure.kind != "full":
+            continue
+        # An uncertain full run could be the red successor of the latest certain check before it.
+        before = [check for check in certain if _compatible(check, unsure)]
+        if unsure.completion is not None:
+            before = [check for check in before if _when(check) < unsure.completion]
+        latest = max(before, key=_when, default=None)
+        if latest is not None and _targeted_green(latest):
+            promoted.add(latest.run_id)
+    return slips, flaky, undecided, promoted
+
+
+def cmd_slips(args: argparse.Namespace) -> int:
+    """The read-only slip count beside the runs that could not be counted.
+
+    The asked interval and change scope select what is counted; the search for
+    a predecessor runs over the whole available history, including before the
+    interval's lower bound. Exit 0: complete readable evidence, even when the
+    slip count is positive. Exit 1: partial or unavailable evidence — usable
+    counts are kept when they can stand, and missing history is unavailable,
+    never a zero; a selection without any run (a misspelled change, another
+    checkout, an empty window) is no statement, never a zero either. Exit 2:
+    an invalid interval. Reading never appends, repairs or creates history.
+    """
+    since, until = args.since, args.until
+    if since is not None and until is not None and since >= until:
+        _log(f"the interval {since.isoformat()}..{until.isoformat()} is reversed; refusing it")
+        return 2
+    unavailable = "slips: unavailable; incomplete/not countable runs: unavailable"
+    try:
+        events, findings = _read_events()
+    except HistoryMissing as missing:
+        print(unavailable)
+        _log(f"{missing} — missing history is unavailable, never a counted zero")
+        return 1
+    marker: int | None = None  # the position of the first version-2 comparison start
+    for position, event in enumerate(events):
+        if event["event"] == RUN_START and event.get("comparison_version") == COMPARISON_VERSION:
+            marker = position
+            break
+    try:
+        targeted_events, targeted_findings = _read_events(targeted_history_path())
+    except HistoryMissing as missing:
+        if marker is not None:
+            print(unavailable)
+            _log(f"{missing} — version-2 evidence exists; a missing targeted history is unavailable")
+            return 1
+        targeted_events, targeted_findings = [], []
+    duration_orphans: list[tuple[int, dict, str]] = []
+    targeted_orphans: list[tuple[int, dict, str]] = []
+    runs, grouping, damaged, _ = _runs(events, duration_orphans)
+    targeted_runs, targeted_grouping, targeted_damaged, _ = _runs(targeted_events, targeted_orphans)
+    runs.update(targeted_runs)
+    damaged |= targeted_damaged
+    targeted_notes = [f"targeted history: {note}" for note in [*targeted_findings, *targeted_grouping]]
+    findings = [*findings, *grouping, *targeted_notes]
+
+    current_repository = _common_git_dir()
+    tally = _collect(runs, damaged, args, current_repository)
+    tally.findings = findings + tally.findings
+    orphan_checks: list[_Check] = []
+    for source, orphans in (("duration", duration_orphans), ("targeted", targeted_orphans)):
+        for position, event, finding in orphans:
+            if source == "duration" and (marker is None or position < marker):
+                if event["event"] == RUN_END:
+                    tally.unattributed += 1  # a legacy start lost before any marker: outside the count
+                continue
+            completion = _instant(event.get("utc"))
+            # An end that completed before the lower bound cannot belong to this
+            # selection, whatever repository it came from; one without a usable
+            # timestamp belongs to every selection.
+            if completion is None or since is None or completion >= since:
+                tally.partial = True
+                tally.findings.append(finding)
+            if completion is not None and event["event"] == RUN_END:
+                orphan_checks.append(
+                    _Check(
+                        run_id=f"orphan:{source}:{position}",
+                        kind="full" if source == "duration" else "targeted",
+                        start=completion,
+                        completion=completion,
+                        verdict=None,
+                        change=None,
+                        trees=frozenset(),
+                        config=None,
+                        selected=False,
+                        certain=False,
+                    )
+                )
+
+    slips, flaky, undecided, promoted = _pair(tally.checks, orphan_checks)
+    pending = [check for check in tally.checks if check.selected]
+    gaps = sum(1 for check in pending if not check.certain or check.run_id in promoted)
+    uncountable = tally.extra_incomplete + gaps
 
     scope = f"change {args.change}" if args.change is not None else "change all"
     lower = since.isoformat() if since is not None else "none"
     upper = until.isoformat() if until is not None else "none"
     print(f"repository {current_repository} · {scope} · since {lower} · until {upper}")
-    if not selected:
+    if not tally.selected:
         # Nothing of this scope was measured: an observed absence needs runs.
         print("0 runs selected, no statement possible")
-        for finding in findings:
+        if tally.unattributed:
+            print(f"unattributed outside runs: {tally.unattributed}")
+        for finding in tally.findings:
             print(f"history note: {finding}")
         return 1
     print(f"slips: {slips}; incomplete/not countable runs: {uncountable}")
-    for finding in findings:
+    if flaky or undecided:
+        print(f"flaky-test signals: {flaky}; undecided flaky-test signals: {undecided}")
+    if tally.outside or tally.unattributed:
+        print(
+            f"outside the count: {tally.outside} legacy or change-less full runs; "
+            f"unattributed outside runs: {tally.unattributed}"
+        )
+    for finding in tally.findings:
         print(f"history note: {finding}")
-    if partial or uncountable:
+    if tally.partial or tally.findings or uncountable:
         print("evidence partial — the runs beside the count name what could not be counted")
         return 1
     return 0

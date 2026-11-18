@@ -125,11 +125,13 @@ handover. A lane that ran verification also reports its missed-verification
 observations: the slip count and the incomplete or not countable runs beside
 it, read from the local history with `python3 -m scripts.verify_duration
 slips`, together with the reader's partial status — a diagnosed gap travels
-with the numbers, never as a bare zero (bead coding-harness-bxxt.7). Red
-full runs recorded before the counter existed carry no comparison identity:
-an unbounded read counts each of them as not countable and reports partial
-evidence for as long as they stay in the history, so a lane reads its own
-run with `--since` set to the lane's start in UTC.
+with the numbers, never as a bare zero (bead coding-harness-bxxt.7). Runs
+recorded before the counter existed carry no comparison identity: the reader
+reports them on a separate line outside the count, and they do not make the
+read partial. A lane still reads its own run with `--since` set to the lane's
+start in UTC. The reader also reports flaky-test signals (a full green then a
+full red of one identity) and, when evidence is incomplete, names the
+incomplete runs on both sides of a possible pair.
 
 ## Stated, enforced, planned
 

@@ -101,36 +101,40 @@ the fix; no real machine history or deliberately failing full suite is needed.
 ## Criterion ledger
 
 - 1: tests/test_verify_duration.py::test_slips_pair_overlapping_checks_by_completion — an overlapping qualifying pair disappears
-- 1: not yet written tests/test_verify_duration.py::test_slips_count_only_immediate_successor — a repeated red full run counts twice
-- 2: not yet written tests/test_verify_duration.py::test_slips_intervening_check_ends_pairing — an intervening same-identity check leaves the prior green eligible
-- 3: not yet written tests/test_verify_duration.py::test_slips_report_consecutive_full_flaky_signal — a full green then full red lacks its separate signal
+- 1: tests/test_verify_duration.py::test_slips_count_only_immediate_successor — a repeated red full run counts twice
+- 2: tests/test_verify_duration.py::test_slips_intervening_check_ends_pairing — an intervening same-identity check leaves the prior green eligible
+- 3: tests/test_verify_duration.py::test_slips_report_consecutive_full_flaky_signal — a full green then full red lacks its separate signal
 - 4: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — targeted repair evidence is missing or incomparable
 - 4: tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green — a failed or unstable check records a comparable green
 - 5: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — a named full run loses available comparison context
 - 6: tests/test_verify_duration.py::test_slips_show_incomplete_runs_beside_count — interrupted or conflicting evidence disappears or counts twice
 - 6: tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run — an unstable red check counts as valid
-- 7: not yet written tests/test_verify_duration.py::test_slips_incomplete_candidate_marks_both_sides — a complete full run with an incomplete possible predecessor is a non-slip
+- 7: tests/test_verify_duration.py::test_slips_incomplete_candidate_marks_both_sides — a complete full run with an incomplete possible predecessor is a non-slip
 - 8: tests/test_verify_duration.py::test_slips_select_interval_repository_and_change — selection leaks or a predecessor before the interval is lost
-- 9: not yet written tests/test_verify_duration.py::test_slips_report_legacy_and_changeless_outside_count — an excluded run becomes incomplete or vanishes from the outside line
+- 9: tests/test_verify_duration.py::test_slips_report_legacy_and_changeless_outside_count — an excluded run becomes incomplete or vanishes from the outside line
 - 10: tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — damaged or missing history appears complete
 - 11: tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — reading mutates history or legacy durations fail
 - 11: tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — an append failure changes the verdict
-- 11: not yet written tests/test_verify_duration.py::test_old_duration_reader_accepts_additive_version_one_fields — an older reader rejects new records or counts targeted checks as full durations
-- 12: not yet written tests/test_verify_duration.py::test_flaky_signal_undecided_after_conflicting_full — the later full run becomes incomplete or the signal is decided
-- 13: not yet written tests/test_verify_duration.py::test_equal_completion_times_are_incomplete — tied targeted green and full red are a complete non-slip
-- 14: not yet written tests/test_verify_duration.py::test_orphan_full_end_respects_comparison_marker — an orphan after the marker appears legacy or one before it makes the report partial
-- 1: not yet written tests/test_verify_duration.py::test_identical_completion_retry_collapses — an identical duplicate prevents one slip
-- 4: not yet written tests/test_stage2.py::test_targeted_history_requires_end_tree — a changed targeted tree yields a slip
-- 7: not yet written tests/test_verify_duration.py::test_unstable_intervening_check_makes_candidates_incomplete — the reader pairs around an uncertain intervening check
-- 7: not yet written tests/test_verify_duration.py::test_moved_targeted_predecessor_makes_pair_incomplete — a changed predecessor tree makes the full run a non-slip
-- 10: not yet written tests/test_verify_duration.py::test_incomplete_run_exits_partial — an interrupted run exits successfully
-- 7: not yet written tests/test_verify_duration.py::test_running_intervening_full_makes_pair_incomplete — a pending full run is bypassed
-- 7: not yet written tests/test_verify_duration.py::test_moved_targeted_end_tree_is_possible_match — a full run on the end tree is declared a non-slip
-- 10: not yet written tests/test_verify_duration.py::test_missing_one_history_is_unavailable — one missing history yields a complete zero
-- 10: not yet written tests/test_verify_duration.py::test_orphan_end_affects_possible_selections_and_pairs — an intervening orphan leaves a slip or a later lower bound stays partial
-- 9: not yet written tests/test_verify_duration.py::test_legacy_pair_after_marker_is_outside — a version-1 pair after the marker makes the report partial
-- 12: not yet written tests/test_verify_duration.py::test_uncertain_full_between_targeted_and_red — uncertain tree or order leaves a decided flaky signal or fewer than three incomplete runs
-- 13: not yet written tests/test_verify_duration.py::test_tied_full_checks_after_targeted_are_incomplete — tied full checks after a targeted green leave a flaky line
+- 11: tests/test_verify_duration.py::test_old_duration_reader_accepts_additive_version_one_fields — an older reader rejects new records or counts targeted checks as full durations
+- 12: tests/test_verify_duration.py::test_flaky_signal_undecided_after_conflicting_full — the later full run becomes incomplete or the signal is decided
+- 13: tests/test_verify_duration.py::test_equal_completion_times_are_incomplete — tied targeted green and full red are a complete non-slip
+- 14: tests/test_verify_duration.py::test_orphan_full_end_respects_comparison_marker — an orphan after the marker appears legacy or one before it makes the report partial
+- 1: tests/test_verify_duration.py::test_identical_completion_retry_collapses — an identical duplicate prevents one slip
+- 4: tests/test_stage2.py::test_targeted_history_requires_end_tree — a changed targeted tree yields a slip
+- 7: tests/test_verify_duration.py::test_unstable_intervening_check_makes_candidates_incomplete — the reader pairs around an uncertain intervening check
+- 7: tests/test_verify_duration.py::test_moved_targeted_predecessor_makes_pair_incomplete — a changed predecessor tree makes the full run a non-slip
+- 10: tests/test_verify_duration.py::test_incomplete_run_exits_partial — an interrupted run exits successfully
+- 7: tests/test_verify_duration.py::test_running_intervening_full_makes_pair_incomplete — a pending full run is bypassed
+- 7: tests/test_verify_duration.py::test_moved_targeted_end_tree_is_possible_match — a full run on the end tree is declared a non-slip
+- 10: tests/test_verify_duration.py::test_missing_one_history_is_unavailable — one missing history yields a complete zero
+- 10: tests/test_verify_duration.py::test_orphan_end_affects_possible_selections_and_pairs — an intervening orphan leaves a slip or a later lower bound stays partial
+- 9: tests/test_verify_duration.py::test_legacy_pair_after_marker_is_outside — a version-1 pair after the marker makes the report partial
+- 12: tests/test_verify_duration.py::test_uncertain_full_between_targeted_and_red — uncertain tree or order leaves a decided flaky signal or fewer than three incomplete runs
+- 13: tests/test_verify_duration.py::test_tied_full_checks_after_targeted_are_incomplete — tied full checks after a targeted green leave a flaky line
+
+## Runner route — 2026-11-18
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1.
 
 ## Time used
 
@@ -147,3 +151,4 @@ the fix; no real machine history or deliberately failing full suite is needed.
 2026-11-18 12:49:17–12:52:26 UTC, 189 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 13:33:54–13:36:16 UTC, 142 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 15:33:49–15:35:44 UTC, 115 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 22:04:56–22:53:31 UTC, 2915 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it · measured by the runner

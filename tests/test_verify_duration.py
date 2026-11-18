@@ -742,7 +742,7 @@ def _run_start(
         "admission_reused": None,
     }
     if kind is not None:
-        record.update({"check_kind": kind, "change": change, "tree_id": tree})
+        record.update({"check_kind": kind, "change": change, "tree_id": tree, "comparison_version": 2})
     return record
 
 
@@ -754,13 +754,54 @@ def _run_end(run_id: str, *, utc: str, verdict: str = "green", seconds: float = 
     return end
 
 
-def _write_history(state: Path, events: list[dict]) -> Path:
-    """The given records as the one history file, without going through any writer."""
+def _write_history(state: Path, events: list[dict], *, targeted_file: bool = True) -> Path:
+    """The given records as the two history files, without going through any writer.
+
+    A run whose start names the kind `targeted` and every row of it go to the
+    targeted history; everything else goes to the duration history. A row may
+    name its file with `_file`. Returns the duration history's path.
+    """
     root = state / "coding-harness"
     root.mkdir(parents=True, exist_ok=True)
+    targeted_ids = set()
+    for event in events:
+        if event.get("event") == "run_start" and event.get("check_kind") == "targeted":
+            targeted_ids.add(event["run_id"])
+    duration_rows: list[dict] = []
+    targeted_rows: list[dict] = []
+    for event in events:
+        row = {key: value for key, value in event.items() if key != "_file"}
+        destination = event.get("_file") or ("targeted" if event.get("run_id") in targeted_ids else "duration")
+        (targeted_rows if destination == "targeted" else duration_rows).append(row)
     path = root / verify_duration.HISTORY_NAME
-    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    path.write_text("".join(json.dumps(row) + "\n" for row in duration_rows), encoding="utf-8")
+    targeted_path = root / verify_duration.TARGETED_HISTORY_NAME
+    if targeted_file:
+        targeted_path.write_text("".join(json.dumps(row) + "\n" for row in targeted_rows), encoding="utf-8")
+    else:
+        targeted_path.unlink(missing_ok=True)
     return path
+
+
+def _check(
+    run_id: str,
+    kind: str,
+    start: str,
+    end: str,
+    verdict: str,
+    repository: str,
+    *,
+    change: str | None = "demo",
+    tree: str | None = TREE,
+    end_tree: str | None = None,
+    config: str | None = CONFIG,
+) -> list[dict]:
+    """One run's start and end records; a targeted end carries its own tree reading."""
+    finish = tree if end_tree is None and kind == "targeted" else end_tree
+    return [
+        _run_start(run_id, utc=start, repository=repository, kind=kind, change=change, tree=tree, config=config),
+        _run_end(run_id, utc=end, verdict=verdict, tree=finish),
+    ]
 
 
 def _measured_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
@@ -834,13 +875,12 @@ def test_slips_count_each_matching_red_full_run_once(
     """
     repository = _measured_repo(tmp_path, monkeypatch)
     events = [
-        # Two distinct green targeted predecessors of the same identity, then the
-        # red full run that missed both — plus its start row written twice, as a
-        # retried append leaves it.
+        # Two distinct green targeted predecessors of the same identity (equal
+        # completions of interchangeable checks), then the red full run that
+        # missed both — plus its start row written twice, as a retried append
+        # leaves it.
         *_slip_events(repository, targeted_id="t-1", targeted_end="2026-11-13T09:05:00+00:00"),
         *_slip_events(repository, targeted_id="t-2", full_id="f-1"),
-        # A second, distinct red full run of the same identity counts once more.
-        *_slip_events(repository, targeted_id="t-3", full_id="f-2", full_utc="2026-11-13T12:00:00+00:00"),
     ]
     duplicate = dict(events[2])  # f-1's start row again, dict-equal — a retried append, not a conflict
     events.append(duplicate)
@@ -848,7 +888,7 @@ def test_slips_count_each_matching_red_full_run_once(
 
     code, out, _ = _slips(capsys)
     assert code == 0, out
-    assert "slips: 2; incomplete/not countable runs: 0" in out, out
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
     assert f"repository {repository}/.git" in out and "change all" in out, out
     # Reading twice reports the same count from the same bytes.
     code_again, out_again, _ = _slips(capsys)
@@ -884,6 +924,11 @@ def test_slips_mark_all_unknown_identities_incomplete(
     pair[1]["verdict"] = verdict
     _write_history(tmp_path / "state", pair)
     code, out, _ = _slips(capsys)
+    if kind == "full" and field == "change":
+        # A full run without a change is outside the slip population, not a gap.
+        assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+        assert "outside the count: 1 legacy or change-less full runs" in out, out
+        return
     assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
     assert "evidence partial" in out, out
 
@@ -895,7 +940,6 @@ def test_slips_mark_all_unknown_identities_incomplete(
         "full-green",
         "fallback-masquerade",
         "reversed-order",
-        "same-instant",
         "other-tree",
         "other-change",
         "other-config",
@@ -935,8 +979,6 @@ def test_slips_require_complete_matching_predecessor(
         ]
     elif case == "reversed-order":
         events = _slip_events(repository, full_utc="2026-11-13T08:00:00+00:00")
-    elif case == "same-instant":
-        events = _slip_events(repository, full_utc="2026-11-13T08:35:00+00:00")
     elif case == "other-tree":
         events = _slip_events(repository, tree="t2" * 20, full_tree=TREE)
     elif case == "other-change":
@@ -960,7 +1002,9 @@ def test_slips_require_complete_matching_predecessor(
         # predecessor counts nowhere, and the red full run cannot count against it.
         assert "incomplete/not countable runs: 2" in out and code == 1, (case, out)
     elif case == "legacy-predecessor":
-        assert "incomplete/not countable runs: 1" in out and code == 1, (case, out)
+        # A legacy run is outside the slip population: no gap, and no predecessor.
+        assert "incomplete/not countable runs: 0" in out and code == 0, (case, out)
+        assert "outside the count: 1 legacy or change-less full runs" in out, (case, out)
     else:
         assert "incomplete/not countable runs: 0" in out and code == 0, (case, out)
 
@@ -972,7 +1016,7 @@ def test_slips_require_complete_matching_predecessor(
         "conflicting-ends",
         "conflicting-starts",
         "missing-comparison",
-        "legacy-red",
+        "legacy-lost-end",
     ],
 )
 def test_slips_show_incomplete_runs_beside_count(
@@ -987,7 +1031,8 @@ def test_slips_show_incomplete_runs_beside_count(
     if case == "lost-end":
         events = [
             # The green completion never arrived: the targeted run stays a start,
-            # and the red full run beside it has no countable predecessor.
+            # and the red full run beside it cannot be paired or called a non-slip:
+            # both are incomplete.
             _run_start(
                 "t-1",
                 utc="2026-11-13T09:00:00+00:00",
@@ -1042,13 +1087,13 @@ def test_slips_show_incomplete_runs_beside_count(
                 utc="2026-11-13T11:00:00+00:00",
                 repository=repository,
                 kind="full",
-                change=None,
+                change="demo",
                 tree=None,
                 config=None,
             ),
             _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
-    else:  # legacy-red
+    else:  # legacy-lost-end
         events = [
             _run_start(
                 "t-1",
@@ -1060,15 +1105,16 @@ def test_slips_show_incomplete_runs_beside_count(
                 config=CONFIG,
             ),
             _run_end("t-1", utc="2026-11-13T09:05:00+00:00", verdict="green", tree=TREE),
-            # A legacy full red run: no comparison fields, so no countable slip.
+            # A legacy full run whose end never arrived: one gap, never a pairing partner.
             _run_start("f-1", utc="2026-11-13T11:00:00+00:00", repository=repository),
-            _run_end("f-1", utc="2026-11-13T11:30:00+00:00", verdict="red", tree=TREE),
         ]
     _write_history(tmp_path / "state", events)
 
+    # A potentially matching pair with a gap on either side is incomplete on both sides, once each.
+    expected = 1 if case == "legacy-lost-end" else 2
     code, out, _ = _slips(capsys)
     assert code == 1, (case, out)
-    assert "slips: 0; incomplete/not countable runs: 1" in out, (case, out)
+    assert f"slips: 0; incomplete/not countable runs: {expected}" in out, (case, out)
     assert "evidence partial" in out, (case, out)
     # The damaged runs keep their diagnosis, named and visible.
     if case in ("conflicting-ends", "conflicting-starts"):
@@ -1089,7 +1135,8 @@ def test_slips_reject_completion_before_own_start(
 
     code, out, _ = _slips(capsys)
     assert code == 1, out
-    assert "slips: 0; incomplete/not countable runs: 1" in out, out
+    # The broken run and its potential partner are each incomplete once.
+    assert "slips: 0; incomplete/not countable runs: 2" in out, out
 
 
 @pytest.mark.parametrize("field", ["tree_id", "change", "config_sha256"])
@@ -1103,7 +1150,12 @@ def test_slips_reject_unknown_comparison_identities(
     value: str | None,
     run_indices: tuple[int, ...],
 ) -> None:
-    """Plant absent or blank identities: they stay visibly uncountable, even when equal."""
+    """Plant absent or blank identities: they stay visibly uncountable, even when equal.
+
+    An unknown identity on either side leaves the pair undecidable, so the
+    broken run and its potential partner are each incomplete once. The one
+    exception is a full run without a change: it is outside the slip population.
+    """
     repository = _measured_repo(tmp_path, monkeypatch)
     events = _slip_events(repository)
     for index in run_indices:
@@ -1113,8 +1165,14 @@ def test_slips_reject_unknown_comparison_identities(
     _write_history(tmp_path / "state", events)
 
     code, out, _ = _slips(capsys)
+    if field == "change" and 2 in run_indices:
+        expected = 1 if 0 in run_indices else 0
+        assert f"slips: 0; incomplete/not countable runs: {expected}" in out, out
+        assert "outside the count: 1 legacy or change-less full runs" in out, out
+        assert code == (1 if expected else 0), out
+        return
     assert code == 1, out
-    assert f"slips: 0; incomplete/not countable runs: {len(run_indices)}" in out, out
+    assert "slips: 0; incomplete/not countable runs: 2" in out, out
 
 
 def test_slips_select_interval_repository_and_change(
@@ -1159,7 +1217,7 @@ def test_slips_select_interval_repository_and_change(
             utc="2026-11-13T08:00:00+00:00",
             repository=repository,
             kind="targeted",
-            change="alpha",
+            change="gamma",
             tree=TREE,
             config=CONFIG,
         ),
@@ -1175,8 +1233,10 @@ def test_slips_select_interval_repository_and_change(
     code, out, _ = _slips(capsys, *window, "--change", "beta")
     assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
 
+    # Without the window the late alpha run without an end is the one gap; the
+    # gamma check is another change's and never a candidate.
     code, out, _ = _slips(capsys, "--change", "alpha")
-    assert code == 1 and "slips: 1; incomplete/not countable runs: 2" in out, out
+    assert code == 1 and "slips: 1; incomplete/not countable runs: 1" in out, out
 
     # A reversed interval refuses with exit 2; a naive bound is not an instant.
     code, _, err = _slips(capsys, "--since", "2026-11-13T14:00:00+00:00", "--until", "2026-11-13T10:00:00+00:00")
@@ -1223,7 +1283,7 @@ def test_slips_distinguish_complete_partial_and_unavailable_history(
     path.write_text(path.read_text(encoding="utf-8") + "garbage{{ not json\n", encoding="utf-8")
     code, out, _ = _slips(capsys)
     assert code == 1 and "slips: 0; incomplete/not countable runs: 0" in out, out
-    assert "history note: line 3" in out, out
+    assert "history note: line 1" in out, out
 
     # An unsupported version is diagnosed, not read as clean evidence.
     future_end = {
@@ -1267,7 +1327,7 @@ def test_slips_distinguish_complete_partial_and_unavailable_history(
         assert "slips: 0" not in out, (empty, out)
 
 
-@pytest.mark.parametrize("damaged_line", [0, 2, 4])
+@pytest.mark.parametrize("damaged_line", [0, 1, 2])
 def test_slips_preserve_observations_beside_invalid_utf8(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], damaged_line: int
 ) -> None:
@@ -1335,7 +1395,9 @@ def test_slips_are_read_only_and_preserve_duration_history(
     original = path.read_text(encoding="utf-8")
 
     code, out, _ = _slips(capsys)
-    assert code == 1 and "slips: 1; incomplete/not countable runs: 1" in out, out
+    # The legacy run is outside the count — a complete observation, no gap.
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "outside the count: 1 legacy or change-less full runs" in out, out
     assert path.read_text(encoding="utf-8") == original, "reporting wrote to the history"
 
     code_again, out_again, _ = _slips(capsys)
@@ -1433,6 +1495,8 @@ def test_an_unrecognised_environment_kind_is_diagnosed_by_the_reader(
     assert code == 0
     for name in (verify_duration.KIND_ENV, verify_duration.CHANGE_ENV, verify_duration.TREE_ENV):
         monkeypatch.delenv(name)
+    # The start carries the version-2 marker, so the targeted history must exist for a measurement.
+    (verify_lock.state_root() / verify_duration.TARGETED_HISTORY_NAME).write_text("", encoding="utf-8")
 
     code, out, _ = _slips(capsys)
     assert "slips: 0; incomplete/not countable runs: 1" in out and code == 1, out
@@ -1451,7 +1515,8 @@ def test_slips_pair_worktrees_by_recorded_common_git_dir(
     (repo / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
     receipt = verify_duration.begin_targeted_run(repo, "demo", TREE)
     verify_duration.finish_targeted_run(receipt, TREE, "green")
-    events = _history(tmp_path / "state")
+    targeted_path = tmp_path / "state" / "coding-harness" / verify_duration.TARGETED_HISTORY_NAME
+    events = [json.loads(line) for line in targeted_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert events[0].get("common_git_dir") == common
     events[0]["utc"] = "2026-11-13T09:00:00+00:00"
     events[1]["utc"] = "2026-11-13T09:05:00+00:00"
@@ -1460,22 +1525,469 @@ def test_slips_pair_worktrees_by_recorded_common_git_dir(
     full[0]["common_git_dir"] = common
     full[0]["config_sha256"] = events[0]["config_sha256"]
     events.extend(full)
+    # Old records of unknown repository: legacy shape, no common Git directory.
     legacy = _slip_events(str(repo), targeted_id="old-t", full_id="old-f")
     for event in legacy:
-        event.pop("common_git_dir", None)
+        for name in ("common_git_dir", "check_kind", "change", "tree_id", "comparison_version"):
+            event.pop(name, None)
     events.extend(legacy)
     _write_history(tmp_path / "state", events)
     code, out, _ = _slips(capsys)
     assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "unattributed outside runs: 2" in out, out
 
 
 def test_slips_reject_unstable_red_targeted_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A red targeted check with a changed tree is incomplete, not a clean non-slip."""
+    """A red targeted check with a changed tree is incomplete once, not a clean observation."""
     repository = _measured_repo(tmp_path, monkeypatch)
-    events = _slip_events(repository, targeted_verdict="red")
+    events = _slip_events(repository, targeted_verdict="red")[:2]
     events[1]["tree_id"] = "changed"
     _write_history(tmp_path / "state", events)
     code, out, _ = _slips(capsys)
     assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+
+
+# ---------------------------------------------------------------------------
+# Slips — immediate succession, potential pairs, outside runs, two histories
+# ---------------------------------------------------------------------------
+
+
+def _at(clock: str) -> str:
+    """One UTC instant of the test day, from `HH:MM`."""
+    return f"2026-11-13T{clock}:00+00:00"
+
+
+def _slips_of(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    build,
+    *argv: str,
+) -> tuple[int, str]:
+    """Write the history `build(repository)` returns and read it with `slips`."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(tmp_path / "state", build(repository))
+    code, out, _ = _slips(capsys, *argv)
+    return code, out
+
+
+def test_slips_count_only_immediate_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Fault this pins: a repeated red full run counts as a slip again.
+
+    Only the red full run that immediately follows the green targeted check
+    counts; later red runs of the same identity answer a full check, not it.
+    """
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+            *_check("f-2", "full", _at("12:00"), _at("12:30"), "red", repository),
+            *_check("f-3", "full", _at("13:00"), _at("13:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "flaky-test signals" not in out, out
+
+
+def test_slips_intervening_check_ends_pairing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 2. Fault this pins: an earlier targeted green pairs across a later same-identity check."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    # A targeted red completes between the targeted green and the full red.
+    _write_history(
+        state,
+        [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("t-2", "targeted", _at("09:10"), _at("09:15"), "red", repository),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    # A full green completes between them: the full red answers it, not the targeted check.
+    _write_history(
+        state,
+        [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("f-1", "full", _at("10:00"), _at("10:30"), "green", repository),
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+
+
+def test_slips_report_consecutive_full_flaky_signal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3. Fault this pins: a full green then full red of one identity lacks its separate signal,
+    or an intervening same-identity check still yields one."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    _write_history(
+        state,
+        [
+            *_check("f-1", "full", _at("10:00"), _at("10:30"), "green", repository),
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "flaky-test signals: 1; undecided flaky-test signals: 0" in out, out
+    # A targeted green between them: the red answers it as a slip, and no signal is reported.
+    _write_history(
+        state,
+        [
+            *_check("f-1", "full", _at("10:00"), _at("10:30"), "green", repository),
+            *_check("t-1", "targeted", _at("10:35"), _at("10:40"), "green", repository),
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "flaky-test signals" not in out, out
+
+
+def test_slips_incomplete_candidate_marks_both_sides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 7. Fault this pins: a complete red full run whose only possible targeted predecessor
+    has conflicting completions is reported as a non-slip."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            _run_end("t-1", utc=_at("09:06"), verdict="red", tree=TREE),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+    assert "a second end for run t-1" in out, out
+
+
+def test_slips_report_legacy_and_changeless_outside_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 9. Fault this pins: an excluded run becomes incomplete or vanishes from the outside line."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    ghost = [
+        _run_start("ghost", utc=_at("05:00"), repository=repository),
+        _run_end("ghost", utc=_at("05:10"), verdict="green"),
+    ]
+    for event in ghost:
+        event.pop("common_git_dir", None)  # a legacy run that names no repository
+    _write_history(
+        tmp_path / "state",
+        [
+            _run_start("old", utc=_at("06:00"), repository=repository),
+            _run_end("old", utc=_at("06:10"), verdict="red"),
+            *_check("cl", "full", _at("07:00"), _at("07:10"), "red", repository, change=None),
+            *ghost,
+            *_slip_events(repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "outside the count: 2 legacy or change-less full runs; unattributed outside runs: 1" in out, out
+    # A change scope cannot establish a legacy run's change: both legacy runs become unattributed.
+    code, out, _ = _slips(capsys, "--change", "demo")
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "unattributed outside runs: 2" in out, out
+
+
+def test_old_duration_reader_accepts_additive_version_one_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 11. Fault this pins: an older reader rejects the new full-run records, or the
+    duration report counts a targeted check as a full run."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    _write_history(state, _slip_events(repository))
+    rows = _history(state)
+    assert all(row["v"] == 1 for row in rows), rows
+    assert any(row.get("comparison_version") == 2 for row in rows), rows
+    original = (state / "coding-harness" / verify_duration.HISTORY_NAME).read_bytes()
+    code, out, _ = _run(capsys, "report")
+    assert code == 0 and "run f-1" in out and "red" in out, out
+    assert "run t-1" not in out and "history note" not in out, out
+    assert (state / "coding-harness" / verify_duration.HISTORY_NAME).read_bytes() == original
+
+
+def test_flaky_signal_undecided_after_conflicting_full(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 12. Fault this pins: the later full run becomes incomplete, or its signal is decided."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("f-1", "full", _at("10:00"), _at("10:30"), "green", repository),
+            _run_end("f-1", utc=_at("10:31"), verdict="red"),
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+    assert "flaky-test signals: 0; undecided flaky-test signals: 1" in out, out
+
+
+def test_equal_completion_times_are_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 13. Fault this pins: a targeted green and a full red completing together are a complete non-slip."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("f-1", "full", _at("08:35"), _at("09:05"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+
+
+def test_orphan_full_end_respects_comparison_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 14. Fault this pins: an orphan after the marker reads as legacy, one before it makes
+    the report partial, or a legacy pair after the marker does."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    # Before the first version-2 comparison record: legacy, outside the count.
+    _write_history(
+        state,
+        [
+            _run_end("lost-1", utc=_at("06:00"), verdict="red"),
+            _run_start("old", utc=_at("07:00"), repository=repository),
+            _run_end("old", utc=_at("07:10"), verdict="green"),
+            *_slip_events(repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "outside the count: 1 legacy or change-less full runs; unattributed outside runs: 1" in out, out
+    # After the marker: damaged evidence, the report is partial.
+    _write_history(
+        state,
+        [
+            *_slip_events(repository),
+            _run_end("lost-2", utc=_at("12:00"), verdict="red"),
+            *_check("h-1", "full", _at("13:00"), _at("13:10"), "green", repository),
+        ],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "history note: line with run_end for unknown run lost-2" in out, out
+    # An end that completed before the lower bound cannot belong to this selection.
+    code, out, _ = _slips(capsys, "--since", "2026-11-13T12:30:00+00:00")
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+    assert "lost-2" not in out, out
+
+
+def test_identical_completion_retry_collapses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Fault this pins: a byte-identical duplicate completion prevents the pair counting once."""
+
+    def build(repository: str) -> list[dict]:
+        events = _slip_events(repository)
+        return [*events, dict(events[1]), dict(events[2]), dict(events[3])]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "history note" not in out, out
+
+
+def test_unstable_intervening_check_makes_candidates_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 7. Fault this pins: the reader pairs around an intervening check whose tree moved."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("t-2", "targeted", _at("09:10"), _at("09:20"), "red", repository, end_tree="moved"),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+
+
+@pytest.mark.parametrize("moved", ["start", "end"])
+def test_moved_targeted_predecessor_makes_pair_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], moved: str
+) -> None:
+    """Criterion 7. Fault this pins: a targeted predecessor whose tree moved leaves the full run a non-slip."""
+    trees = {"tree": TREE, "end_tree": "moved"} if moved == "start" else {"tree": "a" * 40, "end_tree": TREE}
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository, **trees),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+
+
+def test_moved_targeted_end_tree_is_possible_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 7. Fault this pins: a full run on the end tree of a moved targeted check is a non-slip."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository, tree="a" * 40, end_tree=TREE),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository, tree=TREE),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+
+
+def test_incomplete_run_exits_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10. Fault this pins: an interrupted in-scope run exits as a complete measurement."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            _run_start(
+                "f-1", utc=_at("11:00"), repository=repository, kind="full", change="demo", tree=TREE, config=CONFIG
+            ),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+    assert "evidence partial" in out, out
+
+
+def test_running_intervening_full_makes_pair_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 7. Fault this pins: a full run that is still running is bypassed by the pairing."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            _run_start(
+                "f-run", utc=_at("10:00"), repository=repository, kind="full", change="demo", tree=TREE, config=CONFIG
+            ),
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+    assert "flaky-test signals" not in out, out
+
+
+def test_missing_one_history_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10. Fault this pins: one missing history yields a complete zero."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    unavailable = "slips: unavailable; incomplete/not countable runs: unavailable"
+    # Version-2 evidence in the duration history, no targeted history.
+    _write_history(state, _slip_events(repository), targeted_file=False)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and unavailable in out and "slips: 0" not in out, out
+    # A targeted history without a duration history.
+    path = _write_history(state, _slip_events(repository))
+    path.unlink()
+    code, out, _ = _slips(capsys)
+    assert code == 1 and unavailable in out, out
+    # Only legacy duration records and no targeted history: nothing version 2 exists, the read completes.
+    legacy = [
+        _run_start("old", utc=_at("07:00"), repository=repository),
+        _run_end("old", utc=_at("07:10"), verdict="green"),
+    ]
+    _write_history(state, legacy, targeted_file=False)
+    code, out, _ = _slips(capsys)
+    assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
+
+
+def test_orphan_end_affects_possible_selections_and_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10. Fault this pins: an orphan end between a targeted green and a full red leaves a slip
+    counted, or a lower bound after it still reports the orphan."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(
+        tmp_path / "state",
+        [*_slip_events(repository), _run_end("lost", utc=_at("10:15"), verdict="red")],
+    )
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+    assert "unknown run lost" in out, out
+    # The lower bound after the orphan: the full run is still selected and still undecidable.
+    code, out, _ = _slips(capsys, "--since", "2026-11-13T10:30:00+00:00")
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+    assert "unknown run lost" not in out, out
+
+
+def test_legacy_pair_after_marker_is_outside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 9. Fault this pins: a well-formed legacy pair after a version-2 marker makes the report partial."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_slip_events(repository),
+            _run_start("old", utc=_at("13:00"), repository=repository),
+            _run_end("old", utc=_at("13:10"), verdict="green"),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert "outside the count: 1 legacy or change-less full runs" in out, out
+
+
+@pytest.mark.parametrize("cause", ["conflicting-ends", "unknown-tree"])
+def test_uncertain_full_between_targeted_and_red(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], cause: str
+) -> None:
+    """Criterion 12. Fault this pins: an uncertain full run between a targeted green and a full red leaves
+    a decided flaky signal or fewer than three incomplete runs."""
+
+    def build(repository: str) -> list[dict]:
+        middle = _check("f-u", "full", _at("10:00"), _at("10:30"), "green", repository)
+        if cause == "unknown-tree":
+            middle = _check("f-u", "full", _at("10:00"), _at("10:30"), "green", repository, tree=None)
+        else:
+            middle.append(_run_end("f-u", utc=_at("10:31"), verdict="red"))
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *middle,
+            *_check("f-2", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+    assert "flaky-test signals" not in out, out
+
+
+def test_tied_full_checks_after_targeted_are_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 13. Fault this pins: tied full checks after a targeted green leave a decided flaky line."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            *_check("f-1", "full", _at("10:00"), _at("11:00"), "green", repository),
+            *_check("f-2", "full", _at("10:30"), _at("11:00"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+    assert "flaky-test signals" not in out, out
