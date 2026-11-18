@@ -1628,3 +1628,147 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | S3-4 | MINOR | SPEC | base | spec.md criterion 3 ("cannot be safely read", "substituted … setting"); Open decisions, 1st [DETAIL] | [AMBIGUITY] Criterion 3 refutes on a "substituted" setting and on a file that "cannot be safely read", but defines neither term. Reading A: only unreadable or unparseable content refuses. A symlink to a valid verify.toml is followed and its values are used, and a large file is parsed whole. Reading B: the state root's rule for state files applies. A symlinked or non-regular verify.toml refuses, and so does content beyond a size limit. A test of "substituted" cannot be written until one reading is chosen. Phase-6 row F6-1 (content beyond 65,536 bytes ignored) is one place where the two readings give different results. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4568 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4571 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-slots/plan.md` +1 -1
+> - `scripts/verify_all.sh` +2 -48
+> - `scripts/verify_lock.py` +7 -4
+> - `tests/test_ci.py` +49 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 0.83s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-1-20261118T002207696191Z-459aa1c0.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4571 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-slots/plan.md` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 5
+> bringing up nodes...
+> bringing up nodes...
+>
+>
+> no tests ran in 0.85s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-2-20261118T002207696191Z-459aa1c0.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4573 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/verify-slots/plan.md` +10 -10
+> - `scripts/stage2.py` +2 -1
+> - `scripts/verify_duration.py` +29 -3
+> - `tests/test_ci.py` +20 -0
+> - `tests/test_stage2.py` +48 -0
+> - `tests/test_verify_duration.py` +56 -0
+> - `tests/test_verify_lock.py` +141 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-slots/plan.md, plans/changes/verify-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`, `tests/test_verify_lock.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> =================================== FAILURES ===================================
+> _________ test_history_records_free_memory_minimum_and_partial_samples _________
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1713/popen-gw4/test_history_records_free_memo0')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10655c770>
+> capsys = <_pytest.capture.CaptureFixture object at 0x105912270>
+>
+>     def test_history_records_free_memory_minimum_and_partial_samples(
+>         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+>     ) -> None:
+>         """The sampler keeps the lowest readable free-memory percentage; an unreadable sample is skipped and
+>         no readable one at all stays unknown.
+>     
+>         Fault this pins: no minimum in the end record, a missing reading recorded as a number, or a readable
+>         sample discarded because another one failed.
+>         """
+>         from argparse import Namespace
+>     
+>         state = tmp_path / "state"
+>         out = tmp_path / "peak"
+>         readings = iter([60.0, None, 31.5, 44.0])
+>         alive = iter([None, None, None, ProcessLookupError()])
+>     
+>         def kill(_pid: int, _signal: int) -> None:
+>             result = next(alive)
+>             if result is not None:
+>                 raise result
+>     
+>         monkeypatch.setattr(verify_duration.os, "kill", kill)
+>         monkeypatch.setattr(verify_duration, "_process_rows", lambda: None)
+>         monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: next(readings))
+>         monkeypatch.setattr(verify_duration.time, "sleep", lambda _seconds: None)
+>         assert verify_duration.cmd_sample(Namespace(pid=100, out=str(out), every=5)) == 0
+>         assert verify_duration._min_free_memory(str(out)) == 31.5
+>     
+>         code, run_id, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+>         assert code == 0
+>         monkeypatch.setattr(os, "getloadavg", lambda: (1.0, 2.0, 3.0))
+>         _run(
+>             capsys,
+>             "end",
+>             "--run",
+>             run_id.strip(),
+>             "--start",
+>             "1",
+>             "--end",
+>             "2",
+>             "--verdict",
+>             "green",
+>             "--peak-rss-file",
+>             str(out),
+>         )
+>         ended = _history(state)[-1]
+>         assert ended["memory_pct_min"] == 31.5 and ended["load_avg_end"] == [1.0, 2.0, 3.0]
+>         assert ended["pytest_peak_rss_bytes"] is None, "no pytest sample must stay unknown beside a memory minimum"
+>         code, text, _ = _run(capsys, "report", "--run", run_id.strip())
+>         assert "lowest free memory sampled: 31.5%" in text, text
+>     
+> >       code, other, _ = _run(capsys, "start", "--job", "verify", "--placement", "local")
+>
+> tests/test_verify_duration.py:825: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_verify_duration.py:59: in _run
+>     code = verify_duration.main(list(argv))
+> scripts/verify_duration.py:678: in main
+>     return int(args.handler(args))
+> scripts/verify_duration.py:350: in cmd_start
+>     memory = verify_lock.read_available_memory()
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> _platform = None
+>
+> >   monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: next(readings))
+> E   StopIteration
+>
+> tests/test_verify_duration.py:797: StopIteration
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_duration.py::test_history_records_free_memory_minimum_and_partial_samples
+> 1 failed, 43 passed in 27.30s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-slots/stage2/attempts/verify-slots/attempt-3-20261118T002207696191Z-459aa1c0.md
+> ```
