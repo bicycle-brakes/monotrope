@@ -192,3 +192,39 @@ The maintainer's appetite for the restarted lane is 6 hours of phase 4, repairs 
 ## Decided by the agent
 
 [DETAIL] **The implementation starts after the targeted-check change (bead coding-harness-0swp) is merged.** Reason: this change reads what that one writes; spec and plan are drafted before, on the branch state of origin/main.
+
+## Agent decisions on the second phase-2a rows S-12..S-20 — 2026-11-18
+
+Second spec-review round (maintainer rule of 2026-11-18: triage each round,
+at most three rounds). Decisions by the orchestrating session (Opus 5.5),
+shown to the maintainer as one list with one principle and accepted as
+proposed ("A: Grundsatz + so übernehmen").
+
+**Principle.** A slip or non-slip is decided only on complete, unambiguous
+evidence; otherwise the runs concerned are `incomplete`. It follows from the
+maintainer's answers on S-10 (B, the pair decides) and, in the sibling change
+findings-per-model, F-8 (B, gaps are shown, never hidden).
+
+- **S-12, an end record with no start.** Before the first version-2 record in
+  the history it is a legacy record, reported on the line "outside the
+  count"; after it, the end is damaged evidence and the report is partial.
+- **S-13, an invalid check between a targeted green and a full red.** The
+  pairing cannot be decided; every run concerned is incomplete (principle).
+- **S-14, a predecessor whose tree moved during its check.** Both sides are
+  incomplete, as the context of the S-10 answer names (principle).
+- **S-15, the targeted check's end reading.** A criterion requires a targeted
+  check to record its checked tree at start and end, with the refuting case:
+  a targeted green whose tree changes between start and end, followed by a
+  red full run of the start tree, counts one slip (the mechanism of R-2).
+- **S-16, where targeted-check records go.** Into a history file of their
+  own beside `verify-duration.jsonl`; version-1 readers never see them and
+  the full-run minutes stay clean.
+- **S-17, a byte-identical duplicated end record.** It collapses into one
+  record (an append retry, not a conflict).
+- **S-18, equal completion timestamps.** No order is established; both runs
+  are incomplete (principle).
+- **S-19, one interrupted run.** Any incomplete run makes the measurement
+  not complete: the report says so and exits non-zero.
+- **S-20, the flaky signal beside an incomplete run.** The slip status of a
+  run whose predecessor is a full run stays decided (it is not a slip); the
+  flaky signal is counted as "undecided" on its own line.
