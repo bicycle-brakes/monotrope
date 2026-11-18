@@ -1311,6 +1311,591 @@ def test_release_in_one_worktree_leaves_the_other_worktrees_record(world: World)
     assert "L1-9" not in world.text(), "the other root's rows were released into this root's findings"
 
 
+# ---------------------------------------------------------------------------
+# Superseding another worktree's loop record (bead coding-harness-e82i)
+# ---------------------------------------------------------------------------
+
+
+def other_worktree(world: World, name: str = "repo-b") -> Path:
+    """A real linked worktree of the world's repository, as a maintainer's second checkout would be."""
+    path = world.root.parent / name
+    git(world.root, "worktree", "add", "-b", f"side-{name}", str(path))
+    return path
+
+
+def write_foreign_record(
+    other: Path, rounds: list[int], change: str = "demo", member: str = "deepseek-v4.1-flash"
+) -> Path:
+    """A loop record at the other worktree's key, one undecided row per numbered round."""
+    record = stage2.record_dir(change, other) / "loop.md"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    parts = [
+        f"{stage2.RECORD_HEADING}{change}\n\n{stage2.RECORD_INTRO}\n"
+        f"{stage2.STATE_KEY}{json.dumps(loop_state(), sort_keys=True)}\n"
+    ]
+    for number in rounds:
+        rows_ = [
+            [
+                f"L{number}-1",
+                "MAJOR",
+                "MAINT",
+                "base",
+                "src/app.py:1",
+                f"finding of round {number}",
+                member,
+                "",
+                "",
+            ]
+        ]
+        parts.append(
+            f"\n## Round {number} — {member}, 2026-09-30\n\n{stage2.render_table(stage2.ROW_COLUMNS, rows_)}\n"
+        )
+    record.write_text("\n".join(parts), encoding="utf-8")
+    return record
+
+
+@contextlib.contextmanager
+def lock_held_elsewhere(path: Path):
+    """A record lock genuinely held by another process, the way the other worktree's runner holds it."""
+    code = (
+        "import fcntl, sys, time\n"
+        "handle = open(sys.argv[1], 'a+')\n"
+        "fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+        "sys.stdout.write('held\\n'); sys.stdout.flush()\n"
+        "time.sleep(60)\n"
+    )
+    process = subprocess.Popen([sys.executable, "-I", "-c", code, str(path)], stdout=subprocess.PIPE, text=True)
+    try:
+        assert process.stdout.readline().strip() == "held", "the child could not take the lock"
+        yield process
+    finally:
+        process.kill()
+        process.wait()
+
+
+def archive_base() -> Path:
+    """The archive directory of superseded records, beside the records in the state directory."""
+    return stage2.record_base().parent / stage2.ARCHIVE_DIR_NAME
+
+
+def supersede(world: World, *keys: str, reason: str = "continued there") -> int:
+    """The maintainer's supersession command: every key named, one reason."""
+    options: list[str] = []
+    for key in keys:
+        options += ["--supersedes", key]
+    return world.run("release-loop", "demo", "--restart", *options, "--reason", reason)
+
+
+def test_lost_record_refusal_names_only_same_change_other_keys(world: World, capsys) -> None:
+    """Criterion 1: the no-record refusal names every active other-worktree key - and never another
+    change's key, an archive, or this worktree's own.
+    Planted fault: discovery names every key-shaped directory in the state directory."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    foreign_other_change = stage2.record_base() / f"other@{key.split('@')[1]}"
+    foreign_other_change.mkdir(parents=True)
+    (foreign_other_change / "loop.md").write_text("# Loop record — other\n", encoding="utf-8")
+    own = stage2.record_key("demo", world.root)
+    (archive_base() / f"demo@{own.split('@')[1]}@2026-01-01T00-00-00Z").mkdir(parents=True)
+    world.write_findings("Stage-2 call, 2026-11-18: review-loop · example reviewer")
+    assert world.run("release-loop") == 2
+    err = capsys.readouterr().err
+    assert key in err, "the active other-worktree key was not named"
+    assert "other@" not in err, "another change's key was named"
+    assert stage2.ARCHIVE_DIR_NAME not in err, "an archive path was named as a key"
+    assert foreign_record_path_exists(other), "the refusal removed the foreign record"
+    refusal = stage2.lost_record_refusal("demo", world.root, world.text())
+    assert refusal is not None and key in refusal
+
+
+def foreign_record_path_exists(other: Path, change: str = "demo") -> bool:
+    """Whether the other worktree's record still stands at its own key."""
+    return (stage2.record_dir(change, other) / "loop.md").exists()
+
+
+def test_supersede_accounts_for_old_rounds_and_calls(world: World) -> None:
+    """Criterion 2: one truthful accounting line - each key, its round range, its archive subdirectory
+    in the state-relative form, the pending calls, the reason - and the floor it sets.
+    Planted fault: the line misstates the highest round, the pending count or the archive path, or a
+    rerun duplicates it."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 2])
+    world.write_findings(
+        "## Phase 6 — earlier, 2026-11-17",
+        VERDICT,
+        "Stage-2 call, 2026-11-18: review-loop · first",
+        "Stage-2 call, 2026-11-18: review-loop · second",
+    )
+    assert supersede(world, key, reason="why not") == 0
+    text = world.text()
+    assert text.count("Loop restarted:") == 1, "the supersession wrote more than one restart line"
+    match = stage2.SUPERSEDED_RESTART_LINE.search(text)
+    assert match, "no superseded-record line"
+    line = match.group(0)
+    own_digest = stage2.record_key("demo", world.root).split("@")[1]
+    assert "after round 2 — superseded record" in line, line
+    assert f"{key} (rounds 1-2, archived at " in line, line
+    assert f"{stage2.ARCHIVE_PATH_FORM}/demo@{own_digest}@" in line, line
+    assert f"/{key})" in line, line
+    assert "; 2 pending audit calls accounted; why not" in line, line
+    assert stage2.restart_floor(text) == 2
+    assert stage2.rounds_run(None, text) == 2, "the superseded rounds are not counted"
+    assert stage2.restarted_fresh(None, text)
+    # A rerun over the completed supersession changes nothing: the line is matched by the archive
+    # directory name, and no duplicate lands.
+    before = text
+    assert supersede(world, key) == 0
+    assert world.text() == before
+
+
+def test_supersede_archives_only_the_old_loop_record(world: World) -> None:
+    """Criterion 3: the record and everything a release would delete are preserved unchanged in one
+    unique archive, and the old key can no longer continue the record.
+    Planted fault: the archive copies instead of moves, or the record stays active at its old key."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [3])
+    original = record.read_bytes()
+    key_dir = record.parent
+    (key_dir / "availability.json").write_text("receipt-bytes", encoding="utf-8")
+    (key_dir / "extra.txt").write_text("kept too", encoding="utf-8")
+    assert supersede(world, key) == 0
+    archives = sorted(path for path in archive_base().iterdir() if not path.name.startswith(stage2.STAGING_PREFIX))
+    assert len(archives) == 1, "the archive is not one unique directory"
+    own_digest = stage2.record_key("demo", world.root).split("@")[1]
+    assert re.fullmatch(rf"demo@{own_digest}@{r'\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z'}", archives[0].name)
+    archived = archives[0] / key
+    assert (archived / "loop.md").read_bytes() == original, "the archived record's bytes changed"
+    assert (archived / "availability.json").read_text(encoding="utf-8") == "receipt-bytes"
+    assert (archived / "extra.txt").read_text(encoding="utf-8") == "kept too"
+    assert not record.exists(), "the old key can still continue the record"
+    assert stage2.read_record("demo", other) is None
+
+
+def test_supersede_starts_fresh_after_old_round_numbers(world: World) -> None:
+    """Criterion 4: the fresh run starts at the free swarm with an empty snapshot, and its rounds -
+    after a release too - continue after the highest superseded round.
+    Planted fault: the fresh run reuses the archived snapshot or restarts numbering at 1."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 2])
+    assert supersede(world, key) == 0
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FREE))
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Round 3 — " in record, "the fresh run did not continue after round 2"
+    assert "## Round 1" not in record and "## Round 2" not in record
+    state = stage2.read_state(record, "")
+    assert state is not None and state["consumed"] == ["free"], "the archived snapshot was reused"
+    decide_record(world, status="taken — test_a", broke="yes")
+    stage2.append(world.findings, VERDICT)
+    assert world.run("release-loop") == 0
+    assert stage2.rounds_run(None, world.text()) == 3, "the released run lost the superseded rounds"
+    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    assert "## Round 4 — " in world.record().read_text(encoding="utf-8"), "numbering did not continue"
+
+
+def test_supersede_rejects_invalid_requests_without_changes(world: World, capsys) -> None:
+    """Criterion 5: every invalid request refuses and changes neither findings nor any record - a
+    malformed, traversal, foreign-change, own, unlisted, missing, unreadable, symlinked or incomplete
+    key, an active record of this worktree, a blank reason and incompatible flags included.
+    Planted fault: one of the invalid requests supersedes something."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    original = record.read_bytes()
+    second = other_worktree(world, "repo-c")
+    empty_key = stage2.record_key("demo", second)
+    own = stage2.record_key("demo", world.root)
+    outside = world.state / "outside-record"
+    outside.mkdir(parents=True)
+    shutil.copy(record, outside / "loop.md")
+
+    def refuses(argv: list[str], fragment: str) -> None:
+        assert world.run("release-loop", "demo", *argv) == 2, argv
+        assert fragment in capsys.readouterr().err, argv
+        assert not world.findings.exists() or world.text() == "", argv
+        assert not archive_base().exists() or not any(archive_base().iterdir()), argv
+        if foreign_record_path_exists(other):
+            assert record.read_bytes() == original, argv
+
+    malformed = ["--restart", "--supersedes", "demo", "--reason", "why"]
+    refuses(malformed, "no record key of demo")
+    refuses(["--restart", "--supersedes", "demo@zzzz1111", "--reason", "why"], "no record key of demo")
+    refuses(
+        ["--restart", "--supersedes", f"demo@{key.split('@')[1]}/../..", "--reason", "why"], "no record key of demo"
+    )
+    refuses(["--restart", "--supersedes", f"other@{key.split('@')[1]}", "--reason", "why"], "no record key of demo")
+    refuses(["--restart", "--supersedes", own, "--reason", "why"], "own record key")
+    refuses(["--restart", "--supersedes", "demo@00000000", "--reason", "why"], "no worktree of this repository")
+    refuses(["--restart", "--supersedes", empty_key, "--reason", "why"], "has no active loop record")
+    refuses(["--restart", "--supersedes", key, "--reason", "  "], "non-empty --reason")
+    refuses(
+        ["--restart", "--supersedes", key, "--stage-failed", TEST_FLASH[0], "--reason", "why"], "exclude each other"
+    )
+    refuses(["--supersedes", key, "--reason", "why"], "--supersedes belongs to --restart")
+    # An incomplete key set: two foreign records are active, only one named.
+    write_foreign_record(second, [2])
+    other_key = stage2.record_key("demo", second)
+    refuses(["--restart", "--supersedes", key, "--reason", "why"], "takes every active other-worktree key")
+    refuses(["--restart", "--supersedes", other_key, "--reason", "why"], "takes every active other-worktree key")
+    # An unreadable record: the bytes stand, the reading fails.
+    record.write_bytes(b"\xff\xfe not utf-8")
+    refuses(["--restart", "--supersedes", key, "--supersedes", other_key, "--reason", "why"], "cannot be read")
+    record.write_bytes(original)
+    # An active record of this worktree.
+    world.write_record([("L9-9", "taken — test_a", "no")])
+    refuses(
+        ["--restart", "--supersedes", key, "--supersedes", other_key, "--reason", "why"],
+        "a loop record exists in this worktree",
+    )
+    shutil.rmtree(stage2.record_dir("demo", world.root))
+    # A symlinked record directory.
+    third = other_worktree(world, "repo-d")
+    third_key = stage2.record_key("demo", third)
+    (stage2.record_base() / third_key).symlink_to(outside, target_is_directory=True)
+    refuses(
+        ["--restart", "--supersedes", key, "--supersedes", other_key, "--supersedes", third_key, "--reason", "why"],
+        "is a symlink",
+    )
+
+
+def test_supersede_respects_both_record_locks(world: World) -> None:
+    """Criterion 6: while either worktree's record lock is held, supersession alters neither record
+    nor findings; it holds both locks itself, in one deterministic order.
+    Planted fault: supersession moves a record whose lock another runner holds."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    original = record.read_bytes()
+    with lock_held_elsewhere(stage2.record_base() / f"{key}.lock"):
+        assert supersede(world, key) == 2, "the held foreign record was superseded anyway"
+    assert record.read_bytes() == original, "the held foreign record was altered"
+    assert not world.findings.exists() and not archive_base().exists()
+    with lock_held_elsewhere(stage2.lock_path("demo", world.root)):
+        assert supersede(world, key) == 2, "the held own lock did not stop the supersession"
+    assert record.read_bytes() == original
+    assert not world.findings.exists() and not archive_base().exists()
+    # With both locks free the same command succeeds and never leaves a lock held behind.
+    assert supersede(world, key) == 0
+    assert not record.exists()
+    assert not holds_record_lock(world, "demo")
+
+
+def test_supersede_recovers_from_interrupted_writes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 7: a failure before the archive, and one between archive and accounting - each retry
+    completes on the same evidence, loses nothing and never duplicates the line.
+    Planted fault: a retry starts a second archive, or accounts the same calls twice."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [2])
+    original = record.read_bytes()
+
+    def failing_move(_source: Path, _target: Path) -> None:
+        raise OSError("injected before the archive")
+
+    real_move = stage2._move_archive_entry
+    monkeypatch.setattr(stage2, "_move_archive_entry", failing_move)
+    assert supersede(world, key) == 1, "the injected archive failure was not reported"
+    monkeypatch.setattr(stage2, "_move_archive_entry", real_move)
+    # The staged archive stands with its manifest, the record is still at its old key: no evidence lost.
+    stagings = [path for path in archive_base().iterdir() if path.name.startswith(stage2.STAGING_PREFIX)]
+    assert len(stagings) == 1, "the interrupted attempt did not stage one archive"
+    manifest = json.loads((stagings[0] / stage2.MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert manifest["keys"] == [key] and manifest["superseder"] == stage2.record_key("demo", world.root)
+    assert record.read_bytes() == original, "the failed move lost the record"
+    # Retry one: the same key set completes the staged archive and accounts once.
+    assert supersede(world, key) == 0
+    assert not record.exists(), "the completed archive left the old key active"
+    first = stage2.SUPERSEDED_RESTART_LINE.search(world.text())
+    assert first and "rounds 2" in first.group(3)
+    # Failure two, between archive and accounting: a second supersession, of a second worktree.
+    second_worktree = other_worktree(world, "repo-c")
+    second_key = stage2.record_key("demo", second_worktree)
+    second_record = write_foreign_record(second_worktree, [4])
+    second_original = second_record.read_bytes()
+    real_append = stage2.append
+
+    def failing_append(_path: Path, _text: str) -> None:
+        raise OSError("injected between archive and accounting")
+
+    monkeypatch.setattr(stage2, "append", failing_append)
+    assert supersede(world, second_key) == 1, "the injected accounting failure was not reported"
+    monkeypatch.setattr(stage2, "append", real_append)
+    finalized = [path for path in archive_base().iterdir() if not path.name.startswith(stage2.STAGING_PREFIX)]
+    assert len(finalized) == 2, "the interrupted attempt did not finalize its archive"
+    assert (next(path for path in finalized if (path / second_key).exists()) / second_key / "loop.md").read_bytes() == (
+        second_original
+    ), "the finalized archive lost the record"
+    assert len(stage2.SUPERSEDED_RESTART_LINE.findall(world.text())) == 1, "the interrupted attempt wrote a line"
+    assert "rounds 2" in stage2.SUPERSEDED_RESTART_LINE.findall(world.text())[0][2]
+    # Retry two: only the missing line lands, naming its own archive; a further retry adds nothing.
+    assert supersede(world, second_key) == 0
+    retry = stage2.SUPERSEDED_RESTART_LINE.findall(world.text())
+    assert len(retry) == 2 and "rounds 4" in retry[-1][2], retry
+    assert supersede(world, second_key) == 0
+    assert len(stage2.SUPERSEDED_RESTART_LINE.findall(world.text())) == 2, "a retry duplicated the accounting"
+
+
+def test_supersede_preserves_research_siblings(world: World) -> None:
+    """Criterion 8: research state, receipts and probe audits beside the record stay at their own key,
+    changed by nothing and absent from the archive.
+    Planted fault: the archive moves the research siblings too."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    key_dir = record.parent
+    research = key_dir / "research"
+    research.mkdir()
+    (research / "store.json").write_text("research-state", encoding="utf-8")
+    (key_dir / "research-availability.json").write_text("receipt", encoding="utf-8")
+    (key_dir / "research-probe-audit.log").write_text("probe", encoding="utf-8")
+    assert supersede(world, key) == 0
+    assert (research / "store.json").read_text(encoding="utf-8") == "research-state"
+    assert (key_dir / "research-availability.json").read_text(encoding="utf-8") == "receipt"
+    assert (key_dir / "research-probe-audit.log").read_text(encoding="utf-8") == "probe"
+    line = stage2.SUPERSEDED_RESTART_LINE.search(world.text()).group(3)
+    name = re.search(re.escape(stage2.ARCHIVE_PATH_FORM) + r"/([^/]+)/", line).group(1)
+    archived = archive_base() / name
+    assert sorted(path.name for path in archived.iterdir()) == [key, stage2.MANIFEST_NAME], (
+        "the archive holds more than the key's record and its manifest"
+    )
+    assert sorted(path.name for path in (archived / key).iterdir()) == ["loop.md"], "research landed in the archive"
+    assert not record.exists()
+
+
+def test_supersede_release_requires_a_new_round(world: World, capsys) -> None:
+    """Criterion 10: a release after a supersession restart but before a fresh round fails without
+    writing; a plain restart keeps its existing release behavior.
+    Planted fault: the release writes the loop-did-not-run line after a supersession."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    assert supersede(world, key) == 0
+    before = world.text()
+    assert world.run("release-loop") == 2, "the release succeeded before any fresh round"
+    assert "nothing to release" in capsys.readouterr().err
+    assert world.text() == before, "the refused release wrote into findings.md"
+    # Control: after a plain restart the release keeps its existing behavior - no supersession clause,
+    # no refusal (criterion 9).
+    world.write_findings(
+        "## Phase 6 — earlier, 2026-11-17",
+        VERDICT,
+        stage2.RELEASE_HEADING + " 2026-11-17",
+        "Rounds run: 2",
+    )
+    assert world.run("release-loop", "demo", "--restart", "--reason", "plain") == 0
+    plain = world.text()
+    assert stage2.SUPERSEDED_RESTART_LINE.search(plain) is None
+    assert world.run("release-loop") == 0, "a plain restart's release changed behavior"
+    assert world.text() == plain
+    # After a fresh round and a verdict of its own the release works again.
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FREE))
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    stage2.append(world.findings, VERDICT)
+    assert world.run("release-loop") == 0
+    assert stage2.RELEASE_HEADING in world.text() and "L3-1" in world.text()
+
+
+def test_supersede_requires_a_new_verdict(world: World) -> None:
+    """Criterion 11: a verdict written before the supersession releases nothing; the fresh run's
+    release needs a verdict written after the restart line.
+    Planted fault: the verdict search ignores the supersession restart line."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 2])
+    world.write_findings("## Phase 6 — old review, 2026-11-17", VERDICT)
+    assert supersede(world, key) == 0
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FREE))
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    assert world.run("release-loop") == 2, "the verdict preceding the supersession released the new run"
+    stage2.append(world.findings, "Phase 6 verdict: codex T2, 2026-11-18")
+    assert world.run("release-loop") == 0
+    assert "L3-1" in world.text(), "the fresh run's rows were not released"
+
+
+def test_plain_restart_refuses_active_other_worktree_records(world: World, capsys) -> None:
+    """Criterion 13: the plain restart refuses while another worktree's record is active - with or
+    without completed rounds here - naming the keys and pointing to --supersedes.
+    Planted fault: the plain restart writes its line beside the foreign record."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [4])
+    assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
+    err = capsys.readouterr().err
+    assert key in err and "--supersedes" in err, err
+    assert not world.findings.exists(), "the refused restart wrote into findings.md"
+    world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 2")
+    before = world.text()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
+    assert key in capsys.readouterr().err
+    assert world.text() == before, "the refused restart wrote into findings.md"
+    # The supersession the refusal points at unlocks the restart path.
+    assert supersede(world, key) == 0
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FREE))
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    stage2.append(world.findings, VERDICT)
+    assert world.run("release-loop") == 0
+    assert world.run("release-loop", "demo", "--restart", "--reason", "later") == 0
+    assert re.search(r"^Loop restarted: \d{4}-\d{2}-\d{2} after round 5 — later$", world.text(), re.M)
+
+
+def test_supersede_clean_round_stops_next_stage(world: World, capsys) -> None:
+    """Criterion 14: a clean round of the fresh run ends the loop before any further stage runs.
+    Planted fault: the clean stop ignores the fresh run and lets a paid stage run."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 2])
+    assert supersede(world, key) == 0
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_FREE))
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    calls = len(world.reviews("pi"))
+    capsys.readouterr()
+    assert world.run("review-loop") == stage2.CLEAN_CODE, "the clean fresh round did not stop the loop"
+    assert "round 3 was clean" in capsys.readouterr().err
+    assert len(world.reviews("pi")) == calls, "a stage ran after the clean fresh round"
+
+
+def test_supersede_repair_brake_uses_fresh_rounds(world: World, capsys) -> None:
+    """Criterion 15: the brake stops on two fresh fix-r rounds after the restart floor - the rounds
+    released before the supersession are never counted into it.
+    Planted fault: the brake reads rounds before the restart floor."""
+    released_rows = [
+        [
+            "L1-1",
+            "MAJOR",
+            "MAINT",
+            "fix-r1",
+            "src/app.py:1",
+            "finding one",
+            TEST_FLASH[0],
+            "taken — test_a",
+            "yes",
+            "agree",
+        ],
+        [
+            "L2-1",
+            "MAJOR",
+            "MAINT",
+            "fix-r2",
+            "src/app.py:2",
+            "finding two",
+            TEST_FLASH[0],
+            "taken — test_a",
+            "yes",
+            "agree",
+        ],
+    ]
+    world.write_findings(
+        stage2.RELEASE_HEADING + " 2026-11-17",
+        stage2.render_table(stage2.RELEASED_COLUMNS, released_rows),
+        "Rounds run: 2",
+    )
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [3, 4])
+    assert supersede(world, key) == 0
+    # Round 5 takes the fresh run's free stage, round 6 the Flash stage: two members each.
+    world.script(pi=[{"stdout": rows(1)}] * (2 * len(TEST_FREE)))
+    assert world.run("review-loop") == 0, "the brake counted the superseded or released rounds"
+    decide_record(world, status="taken — test_a", broke="yes", origin="fix-r1")
+    assert world.run("review-loop") == 0, "the brake fired one fresh fix-r round early"
+    decide_record(world, status="taken — test_a", broke="yes", origin="fix-r2")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2, "two fresh fix-r rounds did not stop the loop"
+    assert "rounds 5 and 6 accepted only findings" in capsys.readouterr().err
+
+
+def test_supersede_retry_matches_archive_directory(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 16: the retry's accounting line is matched to its archive by the directory name - an
+    older archive of the same key set earns no second line, and the retry names its own archive.
+    Planted fault: the retry matches by key set and duplicates the older archive's line."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [5, 6])
+    original = record.read_bytes()
+    superseder = stage2.record_key("demo", world.root)
+    # An older completed supersession of the same key set, with its own line: the foreign worktree
+    # has run the loop again since, and the record stands active a second time.
+    older = archive_base() / f"demo@{superseder.split('@')[1]}@2026-01-01T00-00-00Z"
+    (older / key).mkdir(parents=True)
+    (older / key / "loop.md").write_text("# Loop record — demo\n", encoding="utf-8")
+    stage2._write_supersession_manifest(older, "demo", superseder, [key])
+    older_line = (
+        f"Loop restarted: 2026-01-01 after round 2 — superseded record {key} (rounds 1-2, archived at "
+        f"{stage2.ARCHIVE_PATH_FORM}/{older.name}/{key}); 0 pending audit calls accounted; older"
+    )
+    world.write_findings(older_line)
+    # The new attempt is interrupted between archive and accounting: its archive is its own.
+    real_append = stage2.append
+
+    def failing_append(_path: Path, _text: str) -> None:
+        raise OSError("injected between archive and accounting")
+
+    monkeypatch.setattr(stage2, "append", failing_append)
+    assert supersede(world, key) == 1
+    monkeypatch.setattr(stage2, "append", real_append)
+    assert not foreign_record_path_exists(other), "the interrupted attempt left the record active"
+    # The retry accounts the archive the interrupted attempt made, by its directory name - and an
+    # older archive of the same key set earns no second line.
+    assert supersede(world, key) == 0
+    lines = stage2.SUPERSEDED_RESTART_LINE.findall(world.text())
+    assert len(lines) == 2, f"the retry duplicated or lost a line: {lines}"
+    assert f"/{older.name}/" not in lines[1][2], "the retry accounted the older archive again"
+    name = re.search(re.escape(stage2.ARCHIVE_PATH_FORM) + r"/([^/]+)/", lines[1][2]).group(1)
+    assert (archive_base() / name / key / "loop.md").read_bytes() == original, (
+        "the line names an archive that does not hold the record"
+    )
+    assert "rounds 5-6" in lines[1][2], lines[1]
+    assert supersede(world, key) == 0
+    assert len(stage2.SUPERSEDED_RESTART_LINE.findall(world.text())) == 2
+
+
+def test_plain_restart_after_supersession_uses_highest_round(world: World) -> None:
+    """Criterion 17: a later plain restart's floor is the highest round ever assigned - the superseded
+    rounds and a clean fresh round without findings included - and numbering continues from there.
+    Planted fault: the plain restart counts only the released blocks and understates the round."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 2])
+    assert supersede(world, key) == 0
+    # A clean fresh round without findings: numbered, counted, without any row.
+    world.script(pi=[{"stdout": "No finding."}, {"stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Round 3 — " in record, "the clean fresh round was not numbered after the superseded rounds"
+    assert stage2.record_rows(record) == [], "the clean round was not clean"
+    stage2.append(world.findings, VERDICT)
+    assert world.run("release-loop") == 0
+    assert stage2.rounds_run(None, world.text()) == 3, "the clean round was lost from the count"
+    assert world.run("release-loop", "demo", "--restart", "--reason", "later") == 0
+    text = world.text()
+    assert stage2.restart_floor(text) == 3, "the plain restart understated the highest round ever assigned"
+    assert re.search(r"^Loop restarted: \d{4}-\d{2}-\d{2} after round 3 — later$", text, re.M)
+    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    assert "## Round 4 — " in world.record().read_text(encoding="utf-8"), "numbering repeated a round"
+
+
+def test_supersede_without_pending_audit_calls(world: World) -> None:
+    """Criterion 18: supersession runs while no audit call is pending, and the line reports zero.
+    Planted fault: the command demands a pending call that is not there, or reports a nonzero count."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    world.write_findings("## Phase 6 — earlier, 2026-11-17", VERDICT)
+    assert stage2.pending_audit_calls(world.text()) == 0
+    assert supersede(world, key) == 0
+    assert "; 0 pending audit calls accounted" in world.text()
+
+
 def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
     """R-3: the cut is the runner's own line, not a reviewer's cell that quotes the sentence."""
     released = "\n".join(

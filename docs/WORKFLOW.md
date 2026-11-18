@@ -1239,6 +1239,24 @@ into a shell. Thirteen verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+  While another worktree of this repository holds an active record of the
+  change, the plain restart refuses and names those keys: the maintainer
+  supersedes them instead with `--restart --supersedes <key> --reason <text>`,
+  repeating `--supersedes` for every active other-worktree key the refusal
+  names. Supersession archives each selected record — everything a release
+  would delete, `availability.json` included, never the research siblings —
+  in one directory under
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/`, and
+  writes one accounting line naming every key, its round-number range, its
+  archive subdirectory and the audit calls pending since the last release or
+  restart; zero calls are allowed and reported as zero. The keys are discovered
+  from `git worktree list` of this repository only — a removed worktree's or
+  another repository's record is never adopted — and each selected record is
+  read only under its lock. The next `review-loop` here is a fresh run whose
+  rounds continue after the highest superseded round, a later release needs a
+  verdict written after the restart line, and releasing before any fresh round
+  fails without writing: the archived run is history, not something this
+  worktree can release again (bead coding-harness-e82i).
 - `triage` — the orchestrator records one already-made decision on the loop
   record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
   '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
@@ -1648,8 +1666,13 @@ beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
-(also the release inside `review`) and `release-loop --stage-failed` refuse and name the record path they
-expected. A review-loop call that wrote audit lines and then ended without
+(also the release inside `review`), `prepare-loop`, `triage` and
+`release-loop --stage-failed` refuse and name the record path they
+expected — and, when active records of the same change stand under other
+worktree keys of this repository in the same state directory, every such key.
+The keys are derived from `git worktree list` alone; records of removed
+worktrees, of other repositories and of other changes are never named, and
+neither is anything already archived. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
 member failed still runs. Each no-round line's `audit calls: N` accounts for
@@ -1666,6 +1689,34 @@ next `review-loop` starts a fresh run. It does not recover the lost record.
 Without a completed round, restart refuses; the maintainer must reconcile
 the missing record. This resolves the lost-record recovery question: the
 existing restart is the way past the refusal when its precondition holds.
+
+A record that is not lost but stands under **another worktree's key** — the
+change was continued in a second worktree of this repository — is never
+adopted by an ordinary verb; each worktree's record stays private, and the
+plain `--restart` refuses while such a record is active, naming its keys. The
+maintainer supersedes it explicitly: `release-loop <change> --restart
+--supersedes <key> --reason <text>`, once per active other-worktree key.
+Supersession reads each selected record only under its lock, moves everything
+a release would delete — `availability.json` included — into one unique
+archive directory
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding
+digest>@<UTC timestamp>/`, one subdirectory per key, keeps the research state
+at its own key, and then writes one `Loop restarted:` line whose tail begins
+with the fixed clause `superseded record` and names every key, its
+round-number range, its archive subdirectory, the audit calls pending since
+the last release or restart (zero allowed and reported as zero) and the
+reason. An interrupted supersession is completed by repeating the same
+command: the staged archive's manifest carries the complete key set and the
+superseding worktree key, the retry matches its accounting line to the archive
+by the archive directory name, and it completes only that worktree's own key
+set. The next `review-loop` in this worktree is a fresh run; its rounds — and
+every later release's — continue after the highest superseded round, a later
+plain restart takes the highest round ever assigned, the clean stop and the
+repair brake read only the rounds after the restart, and a release before the
+first fresh round fails without writing. A record that is genuinely lost —
+its key is not derivable from any listed worktree, or it sits in another state
+directory — is not recovered by this: the command refuses it exactly like any
+other missing record.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,

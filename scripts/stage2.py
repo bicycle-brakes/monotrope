@@ -30,6 +30,8 @@ between the rule and the call.
     # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
+    # ... --restart --supersedes <key> --reason <text>: archive another worktree's active record
+    # (repeat --supersedes for every active key a refusal names) and restart fresh here.
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
@@ -447,6 +449,23 @@ STATE_LINE = re.compile(r"^Loop state: (\{.*\})[ \t]*$", re.M)
 # The maintainer's restart of a completed loop (ADR 0021, restart amendment): the runner's own line in
 # findings.md, at a line start - a quoted copy is a reviewer's or an attempt's words, not a restart.
 RESTART_LINE = re.compile(r"^Loop restarted: (\d{4}-\d{2}-\d{2}) after round (\d+) — (.+)$", re.M)
+# A supersession restart's fixed clause (bead coding-harness-e82i): the accounting line's tail begins
+# `superseded record`, so a plain restart beside it is never counted as superseded rounds, a release
+# tells a supersession restart from a plain one, and the clause cannot be quoted into meaning - the
+# line is matched at a start of a line, as RESTART_LINE's is.
+SUPERSEDED_CLAUSE = "superseded record"
+SUPERSEDED_RESTART_LINE = re.compile(
+    r"^Loop restarted: (\d{4}-\d{2}-\d{2}) after round (\d+) — " + re.escape(SUPERSEDED_CLAUSE) + r" (.+)$",
+    re.M,
+)
+# The archive of superseded records lives beside the records, outside every worktree; the accounting
+# line names it in this state-relative form, so no machine's absolute path lands in findings.md.
+ARCHIVE_DIR_NAME = "stage2-superseded"
+ARCHIVE_PATH_FORM = "${XDG_STATE_HOME:-~/.local/state}/coding-harness/" + ARCHIVE_DIR_NAME
+# A staged archive carries its manifest before its first move: the complete key set and the
+# superseding worktree key, what a retry matches before it moves or accounts anything.
+MANIFEST_NAME = "superseded-keys.json"
+STAGING_PREFIX = ".staging-"
 # The Zen provider, which the free rule may never select.
 ZEN = "opencode"
 # `pi update --models` and `--list-models` share one fresh scratch directory and
@@ -3457,28 +3476,99 @@ def matches_released_identity(record: str, text: str) -> bool:
     )
 
 
-def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
-    """Refuse unaccounted calls after the last release/restart when their record is missing.
+def worktree_digests(root: Path) -> list[str]:
+    """The 8-character record digests of every worktree `git worktree list` names for this root.
 
-    Each no-round marker accounts for exactly its failed attempt's audit calls (DL-A-6).
+    The listing is this repository's, so a record of another repository is never derived; a worktree
+    whose directory is gone is no place a record can stand in, and its digest stays out too.
+    """
+    try:
+        listing = _git_output(root, "worktree", "list", "--porcelain")
+    except Refused:
+        return []
+    digests: list[str] = []
+    for line in listing.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        path = Path(line[len("worktree ") :]).resolve()
+        if not path.is_dir():
+            continue
+        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:8]
+        if digest not in digests:
+            digests.append(digest)
+    return digests
+
+
+def record_keys_of_worktrees(change: str, root: Path) -> list[str]:
+    """Every listed worktree's record key for this change, sorted, this worktree's own included."""
+    return sorted({f"{change}@{digest}" for digest in worktree_digests(root)})
+
+
+def other_record_keys(change: str, root: Path) -> list[str]:
+    """The active record keys of this change under this repository's other worktrees, sorted.
+
+    A key is active when its record's `loop.md` stands in the current state directory: an emptied
+    directory after a release, and the research siblings a release leaves, are no record. The key of
+    this worktree, of a removed worktree and of another repository is never derived, so it is never
+    named, and no record's contents are read here - existence is all discovery needs.
+    """
+    current = record_key(change, root)
+    keys = []
+    for key in record_keys_of_worktrees(change, root):
+        if key != current and (record_base() / key / "loop.md").exists():
+            keys.append(key)
+    return keys
+
+
+def foreign_record_refusal(change: str, root: Path) -> str:
+    """The sentence a no-record refusal appends while another worktree holds this change's record.
+
+    No other behavior changes: the record stays the other worktree's (criterion 9), and only the
+    explicit supersession command adopts its history.
+    """
+    keys = other_record_keys(change, root)
+    if not keys:
+        return ""
+    quoted = ", ".join(f"`{key}`" for key in keys)
+    return (
+        f" Active loop records for {change} also stand under other worktree keys {quoted}; "
+        f"`release-loop {change} --restart --supersedes <key> --reason <text>` (repeat `--supersedes` "
+        "for every active key) archives such a record and restarts the loop in this worktree."
+    )
+
+
+def pending_audit_calls(text: str) -> int:
+    """How many review-loop audit calls since the last release or restart no round accounts for (DL-A-6).
+
+    A failed attempt accounts only for its own calls, never an earlier completed round. Old uncounted
+    markers cannot establish which calls failed, so they keep everything pending.
     """
     since = max(_last_release(text), _last_restart(text))
-    pending: list[int] = []
-    # A failed attempt accounts only for its own calls, never an earlier completed round.
-    # Old uncounted markers cannot establish which calls failed, so refuse conservatively.
+    pending = 0
     for line in text[since + 1 :].splitlines():
         if LOOP_AUDIT_LINE.match(line):
-            pending.append(1)
+            pending += 1
         elif NO_ROUND_LINE.match(line):
             count = re.search(r"; audit calls: (\d+)$", line)
             if count and int(count.group(1)):
-                del pending[max(0, len(pending) - int(count.group(1))) :]
-    if not pending:
+                pending = max(0, pending - int(count.group(1)))
+    return pending
+
+
+def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
+    """Refuse unaccounted calls after the last release/restart when their record is missing.
+
+    Each no-round marker accounts for exactly its failed attempt's audit calls (DL-A-6). While the
+    record stands active under another worktree key of this repository, the refusal names every such
+    key and the supersession that archives it (bead coding-harness-e82i, criterion 1).
+    """
+    if not pending_audit_calls(text):
         return None
     return (
         f"findings.md shows review-loop calls after the last release, but there is no loop record at "
         f"{record_dir(change, root) / 'loop.md'}; the loop ran and its record is lost or under another "
         "state directory (XDG_STATE_HOME). Nothing is released or run, and no stage is retired; the maintainer decides."
+        + foreign_record_refusal(change, root)
     )
 
 
@@ -3496,6 +3586,22 @@ def restarted_fresh(record: str | None, findings_text: str) -> bool:
     """
     matches = list(RESTART_LINE.finditer(findings_text))
     return record is None and bool(matches) and matches[-1].start() > _last_release(findings_text)
+
+
+def superseded_release_refusal(change: str, text: str) -> str | None:
+    """Why a release after a supersession restart but before its first fresh round writes nothing.
+
+    The superseded run is archived, never released, and this worktree has no rows of its own yet
+    (bead coding-harness-e82i, criterion 10). A plain restart keeps its existing release behavior:
+    its line carries no `superseded record` clause.
+    """
+    superseded = list(SUPERSEDED_RESTART_LINE.finditer(text))
+    if superseded and superseded[-1].start() > _last_release(text):
+        return (
+            f"{change} was restarted by superseding another worktree's archived record; no round has run "
+            "here since, so there is nothing to release; run review-loop first. Nothing is written."
+        )
+    return None
 
 
 def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
@@ -3944,26 +4050,33 @@ def lock_path(change: str, root: Path) -> Path:
 
 
 @contextlib.contextmanager
-def holding_record(change: str, root: Path) -> Iterator[None]:
-    """One runner per loop record at a time (R-14 of the review-swarm review).
+def holding_key(key: str) -> Iterator[None]:
+    """One runner per loop record at a time (R-14 of the review-swarm review), by the record's key.
 
     Two runners that both read `consumed: []` pay the same members and number the same round twice,
     and the doubled ids then block `repair`. The lock is advisory, held by the open descriptor, and
     a descriptor dies with its process - so a crashed run leaves no lock behind to break the next.
+    Supersession holds its own and every selected worktree's lock in one deterministic order, so it
+    cannot bypass a normal user of either record (bead coding-harness-e82i, criterion 6).
     """
-    path = lock_path(change, root)
+    path = record_base() / f"{key}.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+") as handle:
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
-            raise Refused(
-                f"another run holds the loop record `{record_key(change, root)}`; one runner at a time"
-            ) from error
+            raise Refused(f"another run holds the loop record `{key}`; one runner at a time") from error
         try:
             yield
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def holding_record(change: str, root: Path) -> Iterator[None]:
+    """The record lock of this worktree's own key."""
+    with holding_key(record_key(change, root)):
+        yield
 
 
 def read_record(change: str, root: Path) -> str | None:
@@ -4452,9 +4565,15 @@ def quote_reviewer(text: str) -> str:
 
 
 def rounds_run(record: str | None, findings_text: str) -> int:
-    """A round is counted by its block in the record, and by every count left behind by a release."""
+    """A round is counted by its block in the record, by every count left behind by a release, and by
+    the supersession restarts' superseded rounds - the archive never releases them, and the rounds
+    after a supersession continue its numbering (bead coding-harness-e82i, criteria 4 and 17). A
+    superseded line's round is the highest ever assigned when it was written, so the count rises to
+    it instead of adding it: rounds a release before that line already accounts are never counted
+    twice. A plain restart's line carries no `superseded record` clause and is counted nowhere: its
+    rounds stand in the released blocks already."""
     in_record = len(ROUND_HEADING.findall(record)) if record else 0
-    released = 0
+    total = 0
     own = False
     for line in findings_text.splitlines():
         if line.startswith("## "):
@@ -4462,8 +4581,10 @@ def rounds_run(record: str | None, findings_text: str) -> int:
         elif KEPT_FROM.match(line):
             own = False
         elif own and (match := ROUNDS_LINE.fullmatch(line)):
-            released += int(match.group(1))
-    return in_record + released
+            total += int(match.group(1))
+        elif match := SUPERSEDED_RESTART_LINE.match(line):
+            total = max(total, int(match.group(2)))
+    return in_record + total
 
 
 def kept_lines(record: str) -> str:
@@ -4600,6 +4721,11 @@ def release(root: Path, change: str) -> list[list[str]]:
         refusal = lost_record_refusal(change, root, text)
         if refusal:
             raise Refused(refusal)
+        # A supersession restart stands: the archived run is never released, and this worktree has no
+        # rows of its own until a fresh round ran (bead coding-harness-e82i, criteria 10 and 11).
+        refusal = superseded_release_refusal(change, text)
+        if refusal:
+            raise Refused(refusal)
     # A record's rows need a verdict of their own: one after the last release and the last restart
     # (ADR 0021, restart amendment; DL-A-7 of the deep review).
     floor = max(_last_release(text), _last_restart(text), 0) if record is not None else 0
@@ -4674,7 +4800,10 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
         if refusal:
             raise Refused(refusal)
     if record is None and not findings_text:
-        raise Refused(f"there is no loop record for {change} and no released block; nothing can be retired.")
+        raise Refused(
+            f"there is no loop record for {change} and no released block; nothing can be retired."
+            + foreign_record_refusal(change, root)
+        )
     # After `release-loop` the snapshot lives in findings.md while loop.md is gone: a continued run
     # whose next stage fails every member writes no new record, and this is exactly the run the
     # command must unblock (the review of PR #198).
@@ -4718,6 +4847,16 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         raise Refused("--restart needs a non-empty --reason: the maintainer's request must be readable.")
     if read_record(change, root) is not None:
         raise Refused("a loop record exists; release the running loop first, after its phase-6 verdict.")
+    # Another worktree's active record stays private (criterion 9); a plain restart here would number
+    # the fresh run without accounting for the run that still stands there (criterion 13).
+    other = other_record_keys(change, root)
+    if other:
+        raise Refused(
+            f"another worktree holds the loop record of {change} under "
+            + ", ".join(f"`{key}`" for key in other)
+            + "; a plain restart would leave that run unaccounted. Supersede it first: "
+            "`release-loop <change> --restart --supersedes <key> --reason <text>`, naming every active key."
+        )
     findings_path = folder_of(root, change) / "findings.md"
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
     last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
@@ -4735,14 +4874,265 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
     print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
 
 
+def _supersession_archive_name(archive_base: Path, change: str, digest: str) -> str:
+    """A unique archive directory name: `<change>@<superseding digest>@<UTC timestamp>`."""
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+    for counter in range(1, 100):
+        name = f"{change}@{digest}@{stamp}" + (f"-{counter}" if counter > 1 else "")
+        if not (archive_base / name).exists() and not (archive_base / f"{STAGING_PREFIX}{name}").exists():
+            return name
+    raise Refused(f"no unique archive name under {archive_base} for {change}; clean the superseded archives first.")
+
+
+def _write_supersession_manifest(staging: Path, change: str, superseder: str, keys: list[str]) -> None:
+    """The staged archive's manifest, written before the first move: the complete key set and the
+    superseding worktree key. A retry matches it before it moves or accounts anything, so only the
+    superseding worktree completes its own key set (criterion 7)."""
+    replace_record(
+        staging / MANIFEST_NAME,
+        json.dumps({"change": change, "superseder": superseder, "keys": sorted(keys)}, sort_keys=True, indent=2) + "\n",
+    )
+
+
+def _supersession_resumes(change: str, superseder: str, keys: list[str], archive_base: Path) -> dict | None:
+    """The staged or archived supersession of this worktree whose key set is exactly `keys`.
+
+    Only a manifest of the same change, the same superseding worktree key and the same complete key
+    set resumes; anything else is another worktree's work, or a supersession whose key set changed,
+    and neither is completed here (criterion 7; coding-harness-0aht follows the rest up).
+    """
+    found = []
+    if not archive_base.is_dir():
+        return None
+    for entry in sorted(archive_base.iterdir()):
+        staging = entry.name.startswith(STAGING_PREFIX)
+        name = entry.name[len(STAGING_PREFIX) :] if staging else entry.name
+        if not name.startswith(f"{change}@"):
+            continue
+        try:
+            manifest = json.loads((entry / MANIFEST_NAME).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (
+            isinstance(manifest, dict)
+            and manifest.get("change") == change
+            and manifest.get("superseder") == superseder
+            and manifest.get("keys") == sorted(keys)
+        ):
+            found.append({"path": entry, "staging": staging})
+    if not found:
+        return None
+    # Unfinished work first, then the newest archive: only one can exist for one key set.
+    found.sort(key=lambda item: (not item["staging"], str(item["path"])))
+    return found[-1]
+
+
+def _move_archive_entry(source: Path, target: Path) -> None:
+    """One record-directory entry into the staging archive; the seam an interrupted write fails at."""
+    shutil.move(str(source), str(target))
+
+
+def _supersede_accounting_line(
+    keys: list[str],
+    rounds: dict[str, list[int]],
+    archive_name: str,
+    highest: int,
+    pending: int,
+    reason: str,
+) -> str:
+    """The one accounting line: every key, its round-number range, its archive subdirectory in the
+    state-relative form, the pending audit calls since the last release or restart, and the reason.
+    The tail begins with the fixed `superseded record` clause (criterion 11), and the round N is the
+    highest superseded one."""
+    parts = []
+    for key in keys:
+        numbers = rounds.get(key) or []
+        span = f"{min(numbers)}-{max(numbers)}" if numbers else "0"
+        parts.append(f"{key} (rounds {span}, archived at {ARCHIVE_PATH_FORM}/{archive_name}/{key})")
+    return (
+        f"Loop restarted: {today()} after round {highest} — {SUPERSEDED_CLAUSE} "
+        + ", ".join(parts)
+        + f"; {pending} pending audit calls accounted"
+        + f"; {reason}"
+    )
+
+
+def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> None:
+    """Archive another worktree's loop record and restart the loop here (bead coding-harness-e82i).
+
+    The maintainer repeats `--supersedes <key>` for every active other-worktree key a refusal names.
+    Every selected record is read only under its lock, moved whole - everything a release would
+    delete, `availability.json` included, never the research siblings - into one unique archive
+    directory beside the records, and accounted for in one `Loop restarted:` line. The next
+    `review-loop` here is a fresh run whose rounds continue after the highest superseded round; the
+    old key can no longer continue the archived record.
+    """
+    reason = " ".join(reason.split())
+    if not reason:
+        raise Refused("--supersedes needs a non-empty --reason: the maintainer's request must be readable.")
+    keys = sorted(set(keys))
+    current = record_key(change, root)
+    base = record_base()
+    archive_base = base.parent / ARCHIVE_DIR_NAME
+    listed = set(record_keys_of_worktrees(change, root))
+    for key in keys:
+        if re.fullmatch(rf"{re.escape(change)}@[0-9a-f]{{8}}", key) is None:
+            raise Refused(
+                f"`{key}` is no record key of {change}: a key is `<change>@<digest>`, as the refusals name them."
+            )
+        if key == current:
+            raise Refused(f"`{key}` is this worktree's own record key; supersession takes another worktree's key.")
+        if key not in listed:
+            raise Refused(
+                f"`{key}` names no worktree of this repository (`git worktree list`); the record of a removed "
+                "worktree or of another repository is not superseded."
+            )
+        if (base / key).is_symlink():
+            raise Refused(f"the record directory of `{key}` is a symlink; supersession takes a real record directory.")
+    resume = _supersession_resumes(change, current, keys, archive_base)
+    refusal = _supersede_request_refusal(change, root, keys, resume)
+    if refusal:
+        raise Refused(refusal)
+    with contextlib.ExitStack() as stack:
+        for key in sorted({current, *keys}):
+            stack.enter_context(holding_key(key))
+        # Re-checked under the locks: the first discovery ran before any of them was held.
+        refusal = _supersede_request_refusal(change, root, keys, resume, require_current_free=True)
+        if refusal:
+            raise Refused(refusal)
+        records: dict[str, str] = {}
+        for key in keys:
+            if key not in other_record_keys(change, root):
+                continue  # moved by the interrupted attempt this retry completes; nothing to read
+            try:
+                records[key] = (base / key / "loop.md").read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                raise Refused(
+                    f"the loop record of `{key}` cannot be read; nothing is superseded or archived."
+                ) from error
+        findings_path = folder_of(root, change) / "findings.md"
+        text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+        pending = pending_audit_calls(text)
+        if resume is not None and not resume["staging"] and not records:
+            # Nothing named is active any more: the archive is complete and only the line may be
+            # missing. An active record at a key an older archive holds is a new run there, and gets
+            # its own archive below.
+            archive_dir = resume["path"]
+        else:
+            if resume is not None and resume["staging"]:
+                staging = resume["path"]
+            else:
+                archive_name = _supersession_archive_name(archive_base, change, current.split("@", 1)[1])
+                staging = archive_base / f"{STAGING_PREFIX}{archive_name}"
+                staging.mkdir(parents=True)
+                _write_supersession_manifest(staging, change, current, keys)
+            try:
+                for key in keys:
+                    source = base / key
+                    target = staging / key
+                    if key in records:
+                        if not source.is_dir():
+                            raise Refused(f"the record directory of `{key}` disappeared before it was archived.")
+                        target.mkdir(parents=True, exist_ok=True)
+                        for entry in sorted(source.iterdir()):
+                            if entry.name == "research" or entry.name.startswith("research-"):
+                                continue  # research state stays at its own key, changed by nothing (criterion 8)
+                            _move_archive_entry(entry, target / entry.name)
+                        if not any(source.iterdir()):
+                            source.rmdir()
+                    elif not target.exists():
+                        raise Refused(
+                            f"the record directory of `{key}` is gone and the staging carries no copy of it; this "
+                            "interrupted supersession cannot be completed (coding-harness-0aht follows it up)."
+                        )
+                archive_dir = archive_base / staging.name[len(STAGING_PREFIX) :]
+                if archive_dir.exists():
+                    raise Refused(f"the archive directory `{archive_dir.name}` stands already; nothing is moved again.")
+                staging.rename(archive_dir)  # finalized before any accounting line (criterion 7)
+            except OSError as error:
+                raise CallFailed(
+                    f"the archive could not be completed ({error}); the staged archive stands; repeat the "
+                    "command with the same keys to complete it."
+                ) from error
+        # The accounting is truthful on a retry too: a key the archive already holds reports the
+        # rounds of its archived record, the same facts the interrupted attempt would have written.
+        for key in keys:
+            if key in records:
+                continue
+            archived = archive_dir / key / "loop.md"
+            try:
+                records[key] = archived.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                raise Refused(
+                    f"the archived record of `{key}` cannot be read at `{archived}`; the accounting line "
+                    "would misstate its rounds, so nothing is written."
+                ) from error
+        rounds = {
+            key: [int(number) for number in re.findall(r"^## Round (\d+) — ", record, re.M)]
+            for key, record in records.items()
+        }
+        highest = max((max(numbers) for numbers in rounds.values() if numbers), default=0)
+        line = _supersede_accounting_line(keys, rounds, archive_dir.name, highest, pending, reason)
+        matched = any(
+            f"{ARCHIVE_PATH_FORM}/{archive_dir.name}/" in match.group(3)
+            for match in SUPERSEDED_RESTART_LINE.finditer(text)
+        )
+        if not matched:  # the line is matched to its archive by the directory name (criterion 16)
+            try:
+                append(findings_path, line)
+            except OSError as error:
+                raise CallFailed(
+                    f"the accounting line could not be written ({error}); the archive stands; repeat the "
+                    "command with the same keys to complete it."
+                ) from error
+        print(
+            f"release-loop: the loop of {change} restarts after round {highest}; the next review-loop is a fresh run."
+        )
+
+
+def _supersede_request_refusal(
+    change: str, root: Path, keys: list[str], resume: dict | None, require_current_free: bool = False
+) -> str | None:
+    """Why the supersession request cannot run, or None. Read-only: it changes nothing, so the
+    pre-lock call and the re-check under the locks share one body."""
+    active = other_record_keys(change, root)
+    for key in keys:
+        if key not in active and resume is None:
+            return (
+                f"`{key}` has no active loop record at `{record_base() / key / 'loop.md'}`; supersession takes "
+                "an active record, or completes an interrupted archive of this worktree's own supersession "
+                "when the exact key set is named again."
+            )
+    missing_named = [key for key in active if key not in keys]
+    if missing_named:
+        return (
+            f"supersession takes every active other-worktree key of {change} at once; also name "
+            + ", ".join(f"`{key}`" for key in missing_named)
+            + "."
+        )
+    if require_current_free and read_record(change, root) is not None:
+        return "a loop record exists in this worktree; release it first, after its phase-6 verdict."
+    return None
+
+
 def release_loop(
-    root: Path, change: str, stage_failed: str | None = None, reason: str | None = None, restart: bool = False
+    root: Path,
+    change: str,
+    stage_failed: str | None = None,
+    reason: str | None = None,
+    restart: bool = False,
+    supersedes: list[str] | None = None,
 ) -> None:
     if restart:
         if stage_failed is not None:
             raise Refused("--restart and --stage-failed exclude each other; nothing is written.")
+        if supersedes:
+            supersede_loop(root, change, supersedes, reason or "")
+            return
         restart_loop(root, change, reason or "")
         return
+    if supersedes:
+        raise Refused("--supersedes belongs to --restart; nothing is superseded.")
     if stage_failed is not None:
         retire_stage(root, change, stage_failed, reason or "")
         return
@@ -8663,7 +9053,10 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
         with holding_record(change, root):
             record = read_record(change, root)
             if record is None:
-                raise Refused("the change has no loop record here; the loop has not run for it in this worktree.")
+                raise Refused(
+                    "the change has no loop record here; the loop has not run for it in this worktree."
+                    + foreign_record_refusal(change, root)
+                )
             targets = [item for item in record_rows(record, strict=True) if item[0] == row]
             if not targets:
                 raise Refused(f"no loop row `{row}` is in the record; triage decides a row the record carries.")
@@ -11367,6 +11760,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
+    parser.add_argument(
+        "--supersedes",
+        action="append",
+        default=None,
+        metavar="KEY",
+        help=(
+            "release-loop --restart only: archive the named other worktree's active loop record and "
+            "restart here; repeat for every active other-worktree key a refusal names"
+        ),
+    )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     _LAUNCH_STOPPED.clear()
@@ -11418,6 +11821,8 @@ def _run(args: argparse.Namespace) -> int:
         refuse_repository_git(Path(args.root))
         if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
             raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+        if args.supersedes is not None and args.verb != "release-loop":
+            raise Refused("--supersedes belongs to release-loop --restart alone.")
         if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
             raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
         if args.verb == "session":
@@ -11452,8 +11857,18 @@ def _run(args: argparse.Namespace) -> int:
             with holding_record(args.change, Path(args.root)):
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
-            with holding_record(args.change, Path(args.root)):
-                release_loop(Path(args.root), args.change, args.stage_failed, args.reason, args.restart)
+            if args.restart and args.supersedes:
+                # Supersession holds this worktree's and every selected worktree's lock itself, in one
+                # deterministic order (criterion 6); the single-record lock below is not held for it,
+                # and flock would refuse a second descriptor of the same file in this process.
+                release_loop(
+                    Path(args.root), args.change, args.stage_failed, args.reason, args.restart, args.supersedes
+                )
+            else:
+                with holding_record(args.change, Path(args.root)):
+                    release_loop(
+                        Path(args.root), args.change, args.stage_failed, args.reason, args.restart, args.supersedes
+                    )
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
