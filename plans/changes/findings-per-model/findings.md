@@ -138,3 +138,5 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_findings_per_model.py::test_gaps_produce_both_incomplete_outputs_and_nonzero
 > 1 failed, 31 passed in 2.14s
 > ```
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason one of 32 new tests still red after the first Sonnet pass (a gap not shown in the table output); continues from that tree · leak check clean over 1119 files, 4679 commits, 12 rules.

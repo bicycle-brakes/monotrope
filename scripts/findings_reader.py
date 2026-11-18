@@ -481,4 +481,4 @@ def read_change(change: str, path: str, text: str, *, source: AttributionSource 
     """The one read of one change's findings.md — the call every consumer keeps (criterion 6)."""
     parsed = parse_findings(text, change=change, path=path)
     findings, gaps = resolve(attribute_rows(parsed, source=source))
-    return ReaderResult(findings, gaps, parsed.outside)
+    return ReaderResult(findings, [*parsed.gaps, *gaps], parsed.outside)
