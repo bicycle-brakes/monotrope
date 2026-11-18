@@ -161,3 +161,53 @@ as shown were not recorded beyond the recommendation package of 2026-11-18
 00:15Z and the readings in findings.md rows S-1..S-7; the contexts above are
 restated from those, not invented beyond them. Option letters other than
 those named are not recorded.*
+
+## Agent decisions on the second phase-2a rows S-10..S-19 — 2026-11-18
+
+Second spec-review round. Decisions by the orchestrating session (Opus 5.5),
+shown to the maintainer as one list and accepted as proposed ("A: So
+übernehmen"). S-15 carries the maintainer's rule of 2026-11-18 on how the
+spec-review loop ends; the rest are `[DETAIL]` decisions derived from the
+answers on S-1..S-7.
+
+- **S-15, where the draft–review loop ends (maintainer rule, 2026-11-18).**
+  After each review the orchestrator triages the rows: real decisions
+  (external contract, risk, two plausible readings of intent) go to the
+  maintainer one at a time; inner details it decides with reasons and shows
+  as one list. The loop ends at the first review of the current spec whose
+  rows are all settled (decided, or rejected with a reason) and need no spec
+  edit — at the latest after the third review round; rows still open then and
+  not BLOCKER become named limits in plan.md, and implement does not refuse
+  on them. Measured that day: second and third reviews kept raising 5–10 new
+  rows per round on five changes.
+- **S-10, a clean result.** Only an answer of exactly `No finding.` is clean,
+  as phase 6 rules; a refusal or prose without rows is not clean and admits
+  nothing.
+- **S-11, which bytes the review read.** The runner puts the spec bytes into
+  the 2a prompt and fingerprints those; it also hashes `spec.md` on disk at
+  start and end, and a difference fails the call.
+- **S-12, legacy and runner-written blocks.** Legacy means a block dated
+  before this change merges; a later block without a fingerprint fails
+  closed. A block counts only with the runner's matching `Stage-2 call … ·
+  spec-review` audit line directly above it.
+- **S-13, switching the fallback reviewer.** The block records the model that
+  wrote it; a fallback block counts when that model was the declared
+  fallback when it was written. Switching the central value never voids
+  existing reviews; they stay on the Opus re-check list.
+- **S-14, "Opus unreachable".** Usage limit, authentication failure,
+  timeout, connection failure or an empty answer: one retry after a pause
+  (its length in the central configuration), then the declared fallback. A
+  readable answer that is not clean is a result, not an outage.
+- **S-16, leaving the re-check list.** A change leaves it when its newest
+  current qualifying block is an Opus block. "By day" means in the next day
+  session.
+- **S-17, the git date of a legacy comparison.** The committer date in UTC;
+  after a rebase a legacy review counts as stale (fail closed).
+- **S-18, which workflow texts.** Every text that describes phase 2a or the
+  draft chain: `docs/WORKFLOW.md`, `prompts/02-spec.md`,
+  `prompts/02a-spec-review.md` and the phase table in `AGENTS.md`;
+  `AGENTS.md` and `prompts/` are held paths, edited by the orchestrator after
+  the accepted attempt.
+- **S-19, class refusals in the inventory.** The morning-handover list gets a
+  group of its own, "class missing, invalid or disagreeing", for changes
+  implement would refuse at the class check.
