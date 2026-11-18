@@ -79,3 +79,5 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | F-28 | MINOR | SPEC | base | `spec.md`, criteria 14 and 17 | Missing: the name of the JSON Lines file. Criterion 14 says only "a state-directory file", and decisions F-19 says metrics read from "one fixed place". Criterion 17, though, has a handover run one report per unmerged branch and one for main. With one fixed file, each run overwrites the last, and the metrics consumer reads whichever branch ran last. With one file per commit or revision, there is no fixed place to read from. The implementer has to choose, and no criterion goes red under either choice. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4645 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1114 files, 4649 commits, 12 rules.
