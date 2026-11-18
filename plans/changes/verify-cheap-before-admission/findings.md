@@ -1132,7 +1132,7 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/stage2.py` — `_scheduled_verify` and `_gate_argv` | If a selected cheap gate uses a plain command whose executable is missing, the Stage 2 launcher raises `CallFailed` instead of recording a gate failure. Later cheap gates never run, even when the missing command belongs to a report-only gate. The shell entry point instead receives the shell’s exit status and continues. Every selected cheap gate must run before admission, and report-only failures must not block protected work. [Criteria 2, 6, 10] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/stage2.py` — `_scheduled_verify` and `_gate_argv` | If a selected cheap gate uses a plain command whose executable is missing, the Stage 2 launcher raises `CallFailed` instead of recording a gate failure. Later cheap gates never run, even when the missing command belongs to a report-only gate. The shell entry point instead receives the shell’s exit status and continues. Every selected cheap gate must run before admission, and report-only failures must not block protected work. [Criteria 2, 6, 10] | Codex | taken — tests: a selected cheap gate whose executable is missing is recorded as that gate's failure on the runner path, later cheap gates still run, and a report-only one does not block (maintainer, 2026-11-18) | no |
 
 Phase 6 verdict: codex 01a1eebb-9ed6-78d3-8fdb-502fa58b9c9c, 2026-11-18
 Reviewer session: codex 01a1eebb-9ed6-78d3-8fdb-502fa58b9c9c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
