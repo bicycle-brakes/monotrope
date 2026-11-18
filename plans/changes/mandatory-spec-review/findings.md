@@ -38,3 +38,5 @@ Stage-2 call, 2026-11-17: spec-review · endpoint claude-code-plan · model clau
 | S-9 | MINOR | SPEC | base | `spec.md`, criterion 7 and Definition of Done | Red only on a live night run. The DoD delivers handover instructions only. The criterion is about the content of a future handover, which a session writes from prose, and no test or check is named. Refuting input: an open bounded change with no 2a block and a handover that omits it. That case exists only when a night run's handover is written after the merge, so the change can be merged without the criterion ever having been able to fail. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4595 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1114 files, 4601 commits, 12 rules.
