@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -18,47 +18,68 @@ tags: [plan, verification, run-log]
 # Plan — slip-counter
 
 ```text
-For you:     Read observed slips and incomplete runs beside each other from the local verification history.
-Done when:   Matching runs count once, missing evidence stays visible, the real runner pairing is proved, and make verify is green.
-Appetite:    3 hours of phase 4 in total, repairs included — a stop, not an estimate.
+For you:     Read slips, flaky-test signals, incomplete runs and runs outside the count from the local verification history.
+Done when:   Immediate matching runs count correctly, gaps and excluded runs stay visible, the real runner pairing is proved, and make verify is green.
+Appetite:    6 hours of phase 4 in total, repairs included — a stop, not an estimate.
 Not now:     Slip records, unique-defect counts, CI/nightly collection, test tiers or changes to verification policy.
 Pre-mortem:  suppose it failed: most likely because the recorded targeted tree cannot be matched to the later full check.
 Starts unless you say stop.
 ```
 
-## Prerequisite and build sequence
+## Build sequence
 
-1. Orchestrator: wait for the targeted-check expansion (bead coding-harness-0swp — targeted checks for more runner verbs) to merge, then sync this branch and read its actual logging interfaces. Do not port its removed counter. First prove the accepted targeted attempt and later phase-6 full check can record the same checked-tree identity despite commit, stamping and audit finalization. Reuse existing evidence where sufficient. If they cannot, stop and report the boundary; do not silently substitute commit/dirty identity or invent tree exclusions.
-2. Attempt: add red-first tests in `tests/test_verify_duration.py` for pairing, duplicate/conflicting records, selection, incomplete evidence, read-only reporting and legacy compatibility. Extend `tests/test_stage2.py` with targeted/full instrumentation and a real finalization-path regression; mock expensive gate execution, not the production history writer, tree capture, finalization or reader. Use isolated state roots exclusively.
-3. Attempt: extend `scripts/verify_duration.py` with ordinary targeted-run recording and a read-only `slips` subcommand; extend `scripts/stage2.py` only at the actual targeted execution and phase-6 full-verification boundaries to provide comparison context. Keep logging outside verdict logic and use the existing safe append/refusal mechanism; never write a slip result. The contracts below are the implementation details phase 4 needs.
-4. Attempt: update `docs/WORKFLOW.md` with the observation definition and evidence boundary; update `docs/orchestration.md` so a handover reports both counts and partial status; update `plans/specs/implementation-verification/spec.md` with the local measurement contract. These document existing decisions without amending ADR 0025.
-5. Attempt/runner: update `plans/changes/slip-counter/spec.md` and `plans/changes/slip-counter/plan.md` statuses only as work happens, clear ledger markers once tests exist, leave measured time to the runner in this plan, and retain runner evidence in `plans/changes/slip-counter/findings.md`. Runner regenerates `plans/INDEX.md` before verification. No deletions, new source files, manifest additions or held-path bootstrap edits are planned.
+1. Attempt: update `scripts/verify_duration.py` to derive the counts and diagnose
+   uncertainty under the contracts below. Update `scripts/stage2.py` only where
+   the targeted repair and named full runs record comparison evidence.
+2. Attempt: update `tests/test_verify_duration.py` for immediate succession,
+   pair validity, scopes, outside counts and old-reader compatibility; update
+   `tests/test_stage2.py` and `tests/test_ci.py` for the real runner evidence
+   path. Use isolated state roots and the production writer and reader.
+3. Attempt: update `docs/WORKFLOW.md`, `docs/orchestration.md` and
+   `plans/specs/implementation-verification/spec.md` to describe the counts and
+   boundaries. Update this change's `spec.md`, `plan.md` and `findings.md` as
+   the workflow requires. The runner regenerates `plans/INDEX.md` after header edits.
+4. Orchestrator: assign any newly needed held-path edit as a bootstrap edit
+   after an accepted attempt; no such edit is currently planned. Do not alter
+   `scripts/verify_all.sh`, admission, check selection or `scripts/stage2_runs.py`.
 
 ## Evidence and reader contracts
 
-- Keep `verify-duration.jsonl` as the one local history. Use its existing `run_start`/`run_end` records with additive optional comparison fields, preserving version-1 duration readability. Each start has an independent run id, repository/worktree attribution, change, check kind (`targeted` or `full`; a fallback full run is recorded as `full`, and a distinct fallback kind is follow-up work, bead coding-harness-rodx; any other kind is read as unknown), checked-tree identity and configuration digest; unknowns are explicit. Existing legacy starts remain valid duration records. End records retain the actual green/red verdict and time. No counter, pairing receipt or consumed flag is stored.
-- Supply full-run context through an explicitly runner-owned environment passed to `full_verify`; let `verify_duration.cmd_start` capture it at the shell's existing start call. No `verify_all.sh` edit is needed. Targeted starts precede execution after preparation; ends follow completion. Capture identity on both sides of execution, invalidating comparison evidence if inputs move. Red, interrupted, timed-out and failed-to-start targeted work must never emit targeted green. Fallback remains full, never a green targeted predecessor. Diagnostics from failed appends are visible and leave existing verification results unchanged.
-- Prerequisite proof result (2026-11-15): the runner's time line and call records, and phase 6's rows and audit lines, move the change's `plan.md` and `findings.md` between the two checks; the maintainer decided (decisions Q-3) that the comparison tree leaves exactly these two files of the change out — the spec's named Boundary.
-- Use the dependency's verified checked-tree capture, or the existing `worktree_tree` content-tree capture where sufficient; compare contents and modes, not commit ids. Keep repository, change and configuration in the match key. A missing field never matches another missing field. Do not broaden the checked tree's equivalence to make the counter useful: a failure of the prerequisite stops implementation.
-- `python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]` defaults to the current resolved repository/worktree and all recorded time. Require timezone-aware bounds, normalize to UTC, reject reversed intervals with exit 2. Select full-run counts and incomplete-run counts by start time in `[since, until)`; search the whole available history for an earlier matching targeted completion, including before `since`. Targeted completion must precede full-run completion; overlapping checks pair when their complete comparison identities match. Show the selected repository, change scope and bounds with the result.
-- Validate/group records before pairing. Identical duplicate events collapse; contradictory starts/ends or a malformed attributable record invalidate that run once. Count each qualifying red full-run id once regardless of predecessor multiplicity. Known nonmatching trees/configurations are non-slips; missing comparison evidence makes every otherwise in-scope run not countable once, regardless of check kind or verdict, including red targeted and green full runs (decisions Q-4). Legacy full runs therefore contribute to incomplete/not-countable runs, never inferred slips. Ignore complete unrelated jobs and placements. Diagnose unknown kinds/versions instead of treating them as clean evidence.
-- Print `slips: N; incomplete/not countable runs: M` together. Exit 0 means complete readable evidence, even when N is positive; exit 1 means partial/unavailable evidence, with usable counts retained when possible; exit 2 means invalid invocation or refused/unreadable storage. A missing history yields unavailable with no invented zero. Malformed unassignable rows get separate diagnostics and partial status, not invented run counts; conservatively retain such diagnostics when interval or repository attribution is impossible. Reading never appends, repairs or creates history. Preserve the existing `report` command's duration behavior.
-
-## Limits and route
-
-No edits to admission, `scripts/verify_lock.py`, `scripts/verify_all.sh`,
-`scripts/stage2_runs.py`, check selection, retry/timeout policy, CI, gates,
-prompts, templates, endpoint configuration, tracker or other change folders.
-Any newly necessary held-path edit goes to the orchestrator after the accepted
-attempt, never to implement/repair. No design or ADR is due for class `bounded`.
-Phase 1 used Stage 2, route `flash`, endpoint `glm-coding-plan`, model
-`glm-5.3-flash`; no Stage-1 fallback is recorded. The research's unread class
-and scope are settled by decisions.md's class declaration and answers.
-At `8807a2b8` (2026-11-13), no plan template or change-artefact validator exists;
-report that limit rather than claim that gate green. No phase-2a rows were
-found in findings; phase-6 findings remain open for implementation repair. Live
-PR and current parallel-session state were not read within the runner's
-worktree-only boundary.
+- Keep the existing version-1 run history with additive optional comparison
+  fields; prove older duration readers accept the added fields. Capture the
+  resolved common Git directory, change, check kind, checked tree and SHA-256
+  of `decisions/gates.yaml` at start, plus actual outcome and completion time.
+  Targeted repair checks capture their tree at both ends; the full run captures
+  it only at start, as the spec's Boundary states. The runner passes the named
+  change to the existing full-start path; a successful normal run with available
+  context must not substitute unknowns. Never write a slip or signal record.
+- Group identical events and validate every in-scope run once. Order completed
+  checks by UTC completion with strict earlier-than; equal timestamps cannot
+  establish succession. For each identity, any intervening completed check ends
+  the previous opportunity. A red full run immediately following a green
+  targeted repair check counts once; full green immediately followed by full
+  red counts once as a separate signal. Search history before the lower bound
+  for predecessors; select counted runs by their own start time.
+- Apply the spec's potential-pair rule before declaring a non-slip: compatible
+  known fields and possible order leave candidates even when evidence is
+  incomplete. Mark each selected affected run incomplete once; incompatible
+  known fields cannot pair, and ambiguity does not pick an arbitrary candidate.
+  Diagnose unassignable evidence separately and mark the report partial. Treat a
+  start without an end as incomplete, including an active run.
+- The reader `python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]`
+  defaults to the current shared Git repository and all time. Bounds are aware
+  UTC instants, lower inclusive and upper exclusive; reject reversed bounds.
+  Show scope, slips, incomplete runs, flaky-test signals and an outside-count
+  line for attributable legacy or change-less full runs. Recognizable legacy runs without scope evidence appear separately as
+  unattributed outside runs and do not make the slip measurement partial. A missing history or
+  empty selection is not a measured zero. Exit 0 for complete evidence, 1 for
+  partial or unavailable evidence, 2 for invalid arguments or refused storage.
+  Read without changing history; append failures never change a check verdict.
+- Phase 1 used Stage 2, route `flash`, model `glm-5.3-flash`; no Stage-1
+  Explore fallback was recorded. The later implementation fallback was Sonnet
+  5.5 after two Flash post-run failures (2026-11-14). No design or ADR is due
+  for the bounded class. The targeted-check scope is repair only in this change;
+  broader partial checks are follow-up work (bead coding-harness-l0g6).
 
 ## Verification
 
@@ -81,24 +102,22 @@ the fix; no real machine history or deliberately failing full suite is needed.
 
 ## Criterion ledger
 
-- 1: tests/test_verify_duration.py::test_slips_count_each_matching_red_full_run_once — a qualifying run disappears or duplicate predecessors/events multiply it
-- 1: tests/test_verify_duration.py::test_slips_pair_overlapping_checks_by_completion — a targeted green completing after full start but before full red is missed
-- 2: tests/test_verify_duration.py::test_slips_require_complete_matching_predecessor — mismatched identity, order, kind or verdict produces a slip
-- 3: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — the real runner path fails to yield comparable evidence or writes a slip record
-- 3: tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green — interruption, launch failure, timeout or changing inputs leaves green comparable evidence
-- 3: tests/test_stage2.py::test_slip_comparison_tree_leaves_out_only_the_changes_bookkeeping — the comparison identity follows the change's own plan.md or findings.md, or hides any other path (decisions Q-3)
-- 4: tests/test_verify_duration.py::test_slips_show_incomplete_runs_beside_count — a lost end, conflicting duplicate or missing comparison field vanishes instead of appearing once as not countable
-- 4: tests/test_verify_duration.py::test_slips_mark_all_unknown_identities_incomplete — red targeted or green full evidence with unknown identity is reported complete
-- 5: tests/test_verify_duration.py::test_slips_select_interval_repository_and_change — interval endpoints or scope leak, or a pre-interval predecessor is lost
-- 6: tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — incomplete, corrupt, unsupported or missing history exits as complete or discards valid observations
-- 7: tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — repeated reads mutate history or legacy duration reporting breaks
-- 7: tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — failed history writes change gate verdicts or disappear without a diagnostic
-- 7: tests/test_verify_duration.py::test_reader_refuses_substituted_history — a symlink or nonregular history is followed
-- 7: tests/test_verify_duration.py::test_writer_refuses_hard_linked_history — measurement writes through an aliased history
-
-## Runner route — 2026-11-14
-
-Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+- 1: tests/test_verify_duration.py::test_slips_pair_overlapping_checks_by_completion — an overlapping qualifying pair disappears
+- 1: not yet written tests/test_verify_duration.py::test_slips_count_only_immediate_successor — a repeated red full run counts twice
+- 2: not yet written tests/test_verify_duration.py::test_slips_intervening_check_ends_pairing — an intervening same-identity check leaves the prior green eligible
+- 3: not yet written tests/test_verify_duration.py::test_slips_report_consecutive_full_flaky_signal — a full green then full red lacks its separate signal
+- 4: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — targeted repair evidence is missing or incomparable
+- 4: tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green — a failed or unstable check records a comparable green
+- 5: tests/test_stage2.py::test_slip_history_captures_targeted_and_full_evidence — a named full run loses available comparison context
+- 6: tests/test_verify_duration.py::test_slips_show_incomplete_runs_beside_count — interrupted or conflicting evidence disappears or counts twice
+- 6: tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run — an unstable red check counts as valid
+- 7: not yet written tests/test_verify_duration.py::test_slips_incomplete_candidate_marks_both_sides — a complete full run with an incomplete possible predecessor is a non-slip
+- 8: tests/test_verify_duration.py::test_slips_select_interval_repository_and_change — selection leaks or a predecessor before the interval is lost
+- 9: not yet written tests/test_verify_duration.py::test_slips_report_legacy_and_changeless_outside_count — an excluded run becomes incomplete or vanishes from the outside line
+- 10: tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — damaged or missing history appears complete
+- 11: tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — reading mutates history or legacy durations fail
+- 11: tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — an append failure changes the verdict
+- 11: not yet written tests/test_verify_duration.py::test_old_duration_reader_accepts_additive_version_one_fields — an older reader rejects new records
 
 ## Time used
 
@@ -112,3 +131,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-16 16:50:35–17:05:39 UTC, 904 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
 2026-11-17 22:24:45–22:35:27 UTC, 642 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-17 22:35:37–22:50:18 UTC, 881 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
+2026-11-18 12:49:17–12:52:26 UTC, 189 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-13"
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, verification, run-log]
 class: bounded
-appetite: 3
+appetite: 6
 adr_files: []
 neighbours: []
 ---
@@ -24,7 +24,7 @@ neighbours: []
 Derive missed-verification observations from the one local run history, with
 incomplete evidence visible beside the count (bead coding-harness-bxxt.7 —
 slip counter). Research: [research.md](research.md). Decisions:
-[decisions.md](decisions.md), Q-1 through Q-6.
+[decisions.md](decisions.md), Q-1 through Q-10.
 
 ## Problem
 
@@ -44,9 +44,17 @@ recorded interview, not a reconstruction of its code.
 
 ## Terms
 
-- **Slip:** one completed red local full verification run with an earlier
-  completed green targeted check of the same repository, change, checked tree
-  and gate configuration; an observation, not a count of distinct defects.
+- **Targeted check:** only the runner's targeted repair check; a full fallback
+  and cheap checks of implement or draft attempts are not targeted checks here
+  (decisions Q-7).
+- **Slip:** one red local full run answering the immediately preceding completed
+  check of the same identity, when that check is a green targeted check. The
+  identity comprises repository, change, checked tree and gate configuration.
+- **Gate configuration:** the SHA-256 digest of the bytes of
+  `decisions/gates.yaml` at the check's start; it identifies that file, not the
+  executed subset, interpreter, environment or runtime gate outcomes.
+- **Order:** UTC completion timestamps determine order; equal timestamps do
+  not establish an earlier run. File order and monotonic values do not break ties.
 - **Repository:** the shared Git repository, identified by its common Git
   directory, not the path of one checkout or worktree (decisions Q-5). Runs in
   any worktree of one repository pair with each other, and a report from any
@@ -55,9 +63,8 @@ recorded interview, not a reconstruction of its code.
   exactly one start and one completion, a completion not before its start, a
   known check kind, nonempty repository, change, checked-tree and
   gate-configuration identities, and, where the run records its checked tree
-  at both ends, the same tree at both. Every run passes this one check before
-  it may count, whatever its kind and verdict; a run that fails it is
-  incomplete once and is neither a slip, a predecessor nor a counted non-slip.
+  at both ends, the same tree at both. Every in-scope run passes this one check before it may count, whatever its kind
+  and verdict. A pair also needs complete evidence on both sides (decisions Q-10).
 - **Checked tree:** the Git-visible contents and file modes actually checked,
   including uncommitted and non-ignored untracked inputs, minus the change's
   own `plan.md` and `findings.md` (decisions Q-3); commit identity or a dirty
@@ -70,64 +77,71 @@ recorded interview, not a reconstruction of its code.
 
 ## Acceptance criteria
 
-1. When a completed red local full verification run has an earlier completed
-   green targeted check with matching repository, change, checked-tree and
-   gate-configuration identities, the reader counts that full run once, even
-   when the full run started before the targeted check completed.
-   *Refuted by:* a qualifying run counts zero, several green predecessors
-   multiply it, or repeated identical records multiply it.
-   *Basis:* decisions.md#Q-1, decisions.md#Q-4; research, ADR 0025 measurement rule.
-2. If a full run lacks that matching predecessor, it contributes no slip.
-   *Refuted by:* targeted red, full green, full fallback masquerading as
-   targeted, reversed completion order, another repository/change/tree or
-   configuration, or an unknown identity establishes a slip.
-   *Basis:* decisions.md#Q-1.
-3. When the runner executes a targeted check, the local history contains its
-   ordinary run evidence sufficient for later comparison with full checks.
-   *Refuted by:* no identifiable start, green completion before successful
-   completion, missing check kind or comparison identity without an explicit
-   unknown, or any persisted slip event, counter or consumed marker.
-   *Basis:* decisions.md#Q-1, including its accepted downside; decisions.md#Q-3.
-4. When the reader reports an interval, it shows the slip count and the
-   number of incomplete runs excluded from counting beside each other.
-   *Refuted by:* an identifiable interrupted or conflicting run disappears,
-   is counted twice as incomplete, or is represented by a bare zero slips;
-   a red targeted or green full run with unknown comparison identity is omitted.
-   *Basis:* decisions.md#Q-2, decisions.md#Q-4.
-5. When the reader selects an interval and repository, optionally narrowed
-   to one change, only selected runs enter its counts.
-   *Refuted by:* another repository, an out-of-interval full run or an
-   out-of-interval incomplete run changes either count; a matching targeted
-   predecessor before the interval is ignored for a selected full run.
-   *Basis:* decisions.md#Q-2, “asked interval”; decisions.md#Q-1.
-6. If history is partial or unavailable, the reader distinguishes that state
-   from a complete measurement in both its output and exit status.
-   *Refuted by:* an incomplete run, malformed/unassignable row, unsupported
-   evidence or missing history produces a complete-success exit or a
-   purported complete zero; valid observations beside a diagnosed gap vanish.
-   *Basis:* decisions.md#Q-2, decisions.md#Q-4; research, existing history reader contracts.
-7. While the counter is used, history reading and measurement failures leave
-   verification outcomes and the existing duration history intact.
-   *Refuted by:* reporting writes history, repeated reporting differs on
-   unchanged input, legacy duration records become unreadable, an append
-   failure changes a verification verdict, or refused history is followed
-   through a substituted destination.
-   *Basis:* decisions.md#Q-1; research, duration-history refusal contracts.
+1. When a valid red full run completes immediately after a valid green targeted
+   check of the same identity, the reader counts one slip for the full run.
+   *Refuted by:* a qualifying overlapping pair counts zero, or identical duplicate records multiply it.
+   *Basis:* decisions.md#Q-1, decisions.md#Q-8.
+2. If a check of the same identity completes between a targeted green and a
+   full red, the earlier targeted green does not pair with that full red.
+   *Refuted by:* targeted green, targeted red, full red counts a slip, or targeted green, full red, full red counts two.
+   *Basis:* decisions.md#Q-8.
+3. When a valid full green is immediately followed in completion order by a
+   valid full red of the same identity, the report counts one separate flaky-test signal.
+   *Refuted by:* full green then full red yields no signal, or an intervening same-identity check still yields one.
+   *Basis:* decisions.md#Q-8.
+4. When the runner executes a targeted repair check, its start and completion
+   record the comparison evidence and actual outcome needed by the reader.
+   *Refuted by:* a successful stable check records unknown identity, a failed check records green, or the history contains a slip event.
+   *Basis:* decisions.md#Q-1, decisions.md#Q-3, decisions.md#Q-7.
+5. When the runner starts a full verification for a named change, its start
+   records the comparison evidence needed by the reader.
+   *Refuted by:* an available repository, change, tree, gate configuration or full kind is recorded as unknown on the real runner path.
+   *Basis:* decisions.md#Q-1, decisions.md#Q-5.
+6. When an in-scope run fails the validity check, the report counts it once as incomplete.
+   *Refuted by:* an interrupted, conflicting, unstable or unknown-identity run disappears or counts twice.
+   *Basis:* decisions.md#Q-4, decisions.md#Q-6.
+7. When a potentially matching pair has incomplete evidence on either side,
+   each selected side is counted once as incomplete rather than as a slip or non-slip.
+   *Refuted by:* a complete red full run whose only possible targeted predecessor has conflicting completions is counted as a non-slip.
+   *Basis:* decisions.md#Q-10.
+8. When the reader selects a repository, interval and optional change, only
+   selected runs contribute to the reported counts.
+   *Refuted by:* an out-of-scope run changes a count, or an earlier predecessor outside the interval is ignored.
+   *Basis:* decisions.md#Q-2, decisions.md#Q-5, decisions.md#Q-8.
+9. When the report encounters legacy duration runs or change-less full runs,
+   it reports their number outside the count without treating them as incomplete.
+   *Refuted by:* an attributable legacy or change-less full run raises the incomplete count or is absent from the outside-count line.
+   *Basis:* decisions.md#Q-9.
+10. If history is partial or unavailable, output and exit status distinguish it
+    from a complete measurement while preserving supported observations.
+    *Refuted by:* an unassignable damaged row yields complete success or suppresses an independently valid slip.
+    *Basis:* decisions.md#Q-2, decisions.md#Q-4.
+11. While measurement is used, verification outcomes and duration history remain intact.
+    *Refuted by:* reporting changes history, legacy or older duration readers reject the other version's records, an append failure changes the verification result, or substituted storage is followed.
+    *Basis:* decisions.md#Q-1; research, duration-history refusal contracts.
 
 ## Boundary
 
-The number measures only persisted, complete and comparable observations.
-An interrupted run, invalid completion, conflicting duplicate or unavailable
-comparison identity is not evidence of zero slips: show the number of such
-identifiable runs beside the observed slips. Unassignable damaged rows are
-diagnosed separately and make the report partial; do not invent run identities
-or counts from them. A wholly lost run leaves no evidence and cannot be
-reconstructed from this history. Missing history is unavailable, not zero.
-Every identifiable in-scope run without complete comparison evidence is
-incomplete once, regardless of its kind or verdict, including red targeted
-checks and green full checks. Legacy records without comparison evidence remain
-readable as durations and are not countable as slips (decisions Q-4). No
-equivalence between different trees is inferred beyond the one named below.
+Only complete, comparable evidence counts. A potentially matching pair has
+known recorded identity fields that do not conflict and an order that could
+meet the pairing rule; unknown fields never prove a match. If more than one
+candidate is possible, no arbitrary pair is chosen: affected selected runs are
+incomplete once. Runs with known incompatible identities are not candidates.
+An in-scope start without an end, including a check still running, is incomplete
+at report time; a later report may become complete. An end without a usable
+start, or damaged evidence missing repository, start time or requested change
+scope, cannot be assigned to the selection: diagnose it separately and mark the
+report partial, without inventing a run count, except for recognizable legacy
+records addressed below. A wholly lost run cannot be
+reconstructed. Missing history is unavailable, not zero.
+
+Legacy means duration records predating comparison evidence, even though both
+old and new records use version 1. Legacy and change-less full runs are outside
+the slip population (decisions Q-9). Count them on the outside line only where
+repository, start time and requested change scope can be established. Report
+recognizable legacy runs without enough scope evidence separately as unattributed
+outside runs; these do not make the slip measurement partial. An unknown
+change on a non-legacy targeted run is not presumed to be a change-less full run.
 
 **Boundary — the change's bookkeeping is unseen (decisions Q-3).** The runner's
 time line, its call records and phase 6's committed rows and audit lines land
@@ -160,18 +174,17 @@ phase-6 row that describes only one of these limits is this limit, not a new
 case.
 
 **Boundary — records from before the repository answer (decisions Q-5).**
-A run record that carries no common Git directory, a legacy duration record
-included, has no repository identity in the sense of the Terms. The reader
-cannot assign it to a repository without resolving a recorded path that may
-no longer exist, so it is outside every repository's selection and neither
-counts nor enters the incomplete count. Its duration stays readable (AC 7).
+A run record that carries no common Git directory cannot be assigned to a
+repository without guessing. Its duration stays readable, but the reader
+reports recognizable legacy records separately as unattributed outside runs;
+other unassignable evidence is diagnosed as partial without inventing a count.
 
 ## Non-goals
 
 - A slip writer, persistent tally, receipt, repair of history or global service.
 - Counting unique root causes, inferring a test failure from a timeout, or
   attributing the cause of an observed red result.
-- CI/nightly collection, test tiers, automatic handover generation, changed
+- CI/nightly collection, every partial-check source (follow-up bead coding-harness-l0g6), test tiers, automatic handover generation, changed
   check selection, admission, execution limits, retries or review gates.
 - Porting the removed sibling counter or amending ADR 0025. Phase 2b does
   not run for this bounded change; no design or ADR draft is due.
@@ -197,31 +210,29 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The six maintainer answers remain unchanged; Q-3 names the
-comparison tree exclusion, Q-4 narrows countable evidence, Q-5 defines the
-repository as the shared Git repository and Q-6 puts every run through one
-validity check.
+None open. The maintainer's answers Q-1 through Q-10 govern this revision.
 
-[DETAIL] The runner records the resolved common Git directory with each new
-run, and the reader compares that recorded value with the common Git
-directory of the checkout it runs in; it does not resolve recorded paths at
-read time, because a removed worktree's path no longer resolves. The existing
-`repository` field keeps its meaning for duration reports, so legacy duration
-records stay readable (AC 7).
+[DETAIL] Use the existing gate-file digest and additive version-1 fields: old
+readers ignore extra fields and continue reading durations, while new readers
+distinguish legacy records by their absent comparison fields. This avoids a
+version bump that older readers reject; compatibility is verified with the old
+reader contract, not assumed from the version number.
 
-[DETAIL] Count distinct red full-run identities, not distinct defects; this
-matches what the history can prove without interpreting test output. Conflicting
-duplicates make that run incomplete; identical duplicates do not multiply it.
+[DETAIL] Use UTC completion time with strict inequality; equal timestamps do
+not establish a predecessor. This deterministic conservative rule avoids
+inventing an order from concurrent appends or unrelated monotonic clocks.
 
-[DETAIL] Use start-time interval membership, the current repository (the
-shared Git repository of the reader's checkout) by default,
-and all recorded time when no bounds are given; these reversible reader
-conventions make the requested interval reproducible.
+[DETAIL] Count a same-identity full-green/full-red signal only for consecutive
+completed checks, once per red run, independently of slips. This applies the
+same immediate-successor convention to the signal in Q-8.
 
-[DETAIL] Set the phase-4 appetite to three hours including repairs: one local
-reader plus comparison evidence, with a stop if the prerequisite cannot supply
-a provable same-tree path. Implementation waits for the targeted-check change
-to merge, as already recorded in decisions.md.
+[DETAIL] Treat a start without an end as incomplete even while it may still be
+running: the history alone cannot prove interruption and the report can be rerun.
 
-[DETAIL] Use the phase-3 prompt's plan form because `templates/plan.md` and
-`scripts/validate_change_artefacts.py` are absent at `8807a2b8` (2026-11-13).
+[DETAIL] Use the resolved common Git directory recorded at run time, the current
+repository by default and UTC start-time bounds; recorded paths are not resolved
+again because a removed worktree need not exist.
+
+[DETAIL] The restarted phase-4 appetite is six hours including repairs, as
+recorded in decisions.md on 2026-11-18. The phase-3 prompt provides the plan
+form because no `templates/plan.md` exists in this worktree.
