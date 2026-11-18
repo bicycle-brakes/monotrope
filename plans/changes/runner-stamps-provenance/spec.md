@@ -30,22 +30,22 @@ The runner records the actual producer after explore, draft and repair, and reje
 
 ## Terms
 
-A **producer record** identifies a producing program and an ISO publication date in `produced_by`; the existing contract permits an absent model, while a new single-model run record requires one. A **touched file** is a file changed by a run and retained for its post-run checks; files restored by the runner are excluded. The **committed baseline** is the header committed before the run, not a session-written header. A swarm’s publication day is the preparation day frozen in its resume binding. A **valid retained approval** is a committed `approved` review with a nonempty approver and an ISO approval date, unchanged by the session; the runner does not grant approvals.
+An **artifact changed by an attempt** is any retained file with frontmatter that the attempt changes, irrespective of its prior class; edit permissions remain governed separately. **Active research** means `plans/changes/<name>/research.md` outside `archive/`; other research paths are not active research. A **producer record** identifies a producing program and an ISO publication date in `produced_by`; the existing contract permits an absent model, while a new single-model run record requires one. A **touched file** is a file changed by a run and retained for its post-run checks; files restored by the runner are excluded. The **committed baseline** is the header committed before the run, not a session-written header. A swarm’s publication day is the preparation day frozen in its resume binding. A **valid retained approval** is a committed `approved` review with a nonempty approver and an ISO approval date, unchanged by the session; the runner does not grant approvals.
 
 ## Acceptance criteria
 
 1. When a single-model explore publishes research, the runner stamps a producer record with the actual program, model and publication date of that run; a swarm publication instead names the swarm as producer, the bound publication day and no single model.
    *Refuted by:* a GLM route recording `codex`, a different model or a date other than the publication day.
    *Basis:* `decisions.md#Q-4`, `decisions.md#Q-8`.
-2. When a draft attempt changes and retains a model-written artifact with frontmatter, including a new ADR if present, the runner stamps a producer record with the actual program, model and publication date before its post-run checks, including an attempt that subsequently fails those checks.
+2. When a draft attempt changes and retains an artifact with frontmatter, including a new ADR if present, the runner stamps a producer record with the actual program, model and publication date before its post-run checks, including an attempt that subsequently fails those checks.
    *Refuted by:* an affected artifact missing that record, or a GLM attempt recorded as `codex`, with a wrong model or date.
    *Basis:* `decisions.md#Q-4`.
-3. When a repair attempt changes and retains a model-written artifact with frontmatter, the runner stamps a producer record with the actual program, model and publication date before its post-run checks.
+3. When a repair attempt changes and retains an artifact with frontmatter, the runner stamps a producer record with the actual program, model and publication date before its post-run checks.
    *Refuted by:* an affected artifact missing that record, or its record naming a different program, model or publication day.
    *Basis:* `decisions.md#Q-4`.
-4. When any file-writing runner verb completes, including future verbs, one shared post-run check rejects each touched file carrying `produced_by` if its applicable contract fails, identifying the file; for research the existing research publication contract applies, adapted to preserve the committed provenance class and valid retained approval, and for other files only the producer records' shape, known program and ISO date are checked, including every earlier record.
-   *Refuted by:* explore or spec-review bypassing the check; an invalid earlier producer being accepted; a file without `produced_by` being rejected by this check; or a valid retained approval or committed provenance class being refused.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-7`, `decisions.md#Q-12`, `decisions.md#Q-13`, `decisions.md#Q-14`, `decisions.md#Q-17`.
+4. When any file-writing runner verb checks its retained results, one shared check judges producer records, provenance and review against the committed baseline for every touched file with frontmatter, including implement and future writing verbs, and identifies each failing file; files without `produced_by` are not rejected solely for its absence.
+   *Refuted by:* implement accepting a self-approval, a verb bypassing the check, an invalid earlier producer passing, or a missing producer field alone causing rejection.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-7`, `decisions.md#Q-17`, `decisions.md#Q-18`.
 
 5. While the runner stamps a draft or repair artifact, it preserves bytes outside `produced_by`, `updated` and a `review` reset required by criterion 8.
    *Refuted by:* changed prose, fences, plan card, `provenance` or unrelated frontmatter; in particular a draft ADR loses its `human-decided` provenance.
@@ -54,7 +54,7 @@ A **producer record** identifies a producing program and an ISO publication date
    *Refuted by:* accepting a header with any YAML anchor or alias, undecodable bytes, a non-mapping header duplicate `produced_by` keys, or an unreadable earlier producer, or failing without identifying the artifact.
    *Basis:* `research.md`, “The runner already stamps provenance in these places”.
 
-7. When explore, draft or repair stamps an artifact, readable producer records committed before the run remain byte-for-byte, session-written self-descriptions are discarded, and each measured contributing attempt is recorded only for files that attempt changed.
+7. When explore, draft or repair stamps an artifact, readable producer records committed before the run retain their bytes except for the structural conversion of a block mapping to a compact sequence, session-written self-descriptions are discarded, and each measured contributing attempt is recorded only for files that attempt changed.
    *Refuted by:* normalising an earlier record, retaining a self-written record, or attributing an unchanged file to a later attempt.
    *Basis:* `decisions.md#Q-5`, `decisions.md#Q-10`, `decisions.md#Q-12`, `decisions.md#Q-15`.
 8. When a draft or repair changes an approved document outside `produced_by` and `updated`, the committed approval is reset to pending with null approver and date and an attempt block in `findings.md` identifies the former approver, including for an accepted or earlier failed attempt.
@@ -66,14 +66,24 @@ A **producer record** identifies a producing program and an ISO publication date
 10. If a draft or repair attempt's changed files cannot be measured, the attempt fails with a diagnostic and the next available route runs.
     *Refuted by:* accepting an unmeasured attempt or skipping an available next route.
     *Basis:* `decisions.md#Q-12`.
-11. When a model-written file is new, it has `ai-drafted-reviewed` provenance and a pending review, except that a new ADR may have `human-decided` provenance but must still have a pending review.
-    *Refuted by:* a new file carrying an approval written by the session, or a new ADR being refused solely for `human-decided` provenance.
+11. When a file with frontmatter written by a model attempt is new, it has `ai-drafted-reviewed` provenance and a pending review, except that a new ADR may have `human-decided` provenance but must still have a pending review.
+    *Refuted by:* a new non-ADR file accepted with `human-written` or `ai-generated` provenance, a new file carrying an approval written by the session, or a new ADR being refused solely for `human-decided` provenance.
     *Basis:* `decisions.md#Q-14`.
-12. When a previously committed model-written file is stamped, its provenance class and any retained approval are measured against the committed baseline, and a session-written approval is refused.
+12. When a previously committed file is stamped by draft or repair, its provenance class and any retained approval are measured against the committed baseline, and a session-written approval is refused.
     *Refuted by:* accepting an approval invented by the session or rejecting an unchanged committed approval solely for being approved.
     *Basis:* `decisions.md#Q-11`, `decisions.md#Q-14`.
 
-The explore publication continues to remove generated skeleton notices; criterion 5 applies to draft and repair, not that removal.
+13. When explore publishes active research, it sets `provenance: ai-drafted-reviewed` and pending review with null approver and date, including for a human-written skeleton or previously approved research.
+    *Refuted by:* a published skeleton remaining human-written or an earlier approval surviving the appended report.
+    *Basis:* `decisions.md#Q-14`, `decisions.md#Q-16`, agent decision F-33 in `decisions.md`.
+14. When active research with a model producer is checked, the shared post-run check and the research census apply the same existing research publication contract, including `ai-drafted-reviewed` and pending review; a draft or repair result that preserves an incompatible baseline therefore fails instead of passing a later full verify.
+    *Refuted by:* a post-run check accepting model-produced active research that the census rejects for class or review, or loosening the census to accept it.
+    *Basis:* `decisions.md#Q-6`, agent decision F-34 in `decisions.md`.
+15. When explore or spec-review prepares output, the shared check judges it before publication; a model-output fault fails the attempt and uses the next available route, while a faulty committed earlier producer stops the verb with a diagnostic naming the separate migration (bead `coding-harness-2i7x`) and spends no further route.
+    *Refuted by:* publishing rejected output, retrying a committed-record fault, omitting the migration diagnostic, or failing to try an available route after a model-output fault.
+    *Basis:* `decisions.md#Q-17`, agent decision F-36 in `decisions.md`.
+
+Explore continues to remove generated skeleton notices; criterion 5 applies to draft and repair, not that removal. For non-active research and other files, the shared check applies producer-record rules plus the baseline class and review rules, leaving other fields to their own gates.
 
 ## Non-goals
 
@@ -96,4 +106,4 @@ Runner-held paths remain outside model attempts, including `provenance.yaml`, `d
 
 [DETAIL] Insert a missing field at the end of frontmatter when `tags` is absent; this preserves unrelated bytes. Refuse all YAML anchors and aliases because safe source-span edits cannot be guaranteed. A resumed swarm retains its frozen preparation day so its publication binding remains stable.
 
-[DETAIL] A retained approval needs a nonempty approver and ISO approval date, without introducing role membership or date-range rules; this makes the committed approval checkable without inventing an authorization policy. Do not append an identical measured producer record twice; the existing record already represents that producer and day. If a block mapping cannot be converted into a sequence while preserving the earlier record's bytes, refuse safely with the file named, rather than silently rewriting history. Fail an unmeasured repair attempt and continue to the next available route, as for draft, because its contributions cannot be attributed reliably.
+[DETAIL] A retained approval needs a nonempty approver and ISO approval date, without introducing role membership or date-range rules; this makes the committed approval checkable without inventing an authorization policy. Do not append an identical measured producer record twice; the existing record already represents that producer and day. Convert a block mapping to a compact sequence by replacing its first record line’s indentation with `- ` and leaving later record lines unchanged; this structural conversion is the accepted exception to byte preservation (agent decision F-35). Fail an unmeasured repair attempt and continue to the next available route, as for draft, because its contributions cannot be attributed reliably.
