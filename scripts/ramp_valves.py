@@ -241,11 +241,6 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "2026-12-31",
     ),
     # --- 2ee triage 2026-09-19: demotions from the mapping (wave 2) --------
-    "agents-evidence-contract": (
-        "RB-A1: the evidence clause is byte-identical in every agent definition",
-        "tests/test_agents.py::test_every_agent_carries_the_evidence_contract",
-        "2026-11-30",
-    ),
     "agents-tool-scopes": (
         "RB-A2: read-only agents carry no shell, executors declare their scope",
         "tests/test_agents.py::test_read_only_agents_have_no_bash",
