@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -342,3 +342,33 @@ answered_by: agent
 status: answered
 
 In the context of seven minor readings the spec leaves open, facing an implementation that already takes one side of each, we decided to state those sides in the spec, to achieve criteria that can go red without a new mechanism, accepting that a missed sample can understate the peak and that ADR 0025 keeps its dated sentence until a decision pull request amends it — 2026-11-17
+
+## Q-17 · Nesting across versions during the rollout (spec review row S3-1)
+
+context: |
+  Topic: a protected check nested inside an admission of the other version — the updated one or an older single-slot checkout.
+  Intention: row S3-1 (MAJOR, missing) shows the spec does not say which markers count as validated across versions, and that an older verify_all.sh under an updated admission would wait forever for the compatibility lock its own ancestor holds shared.
+  Today: the updated reader already honours an older checkout's marker (no slot marker, the compatibility lock held exclusively, verify.holder.json naming the marker's process and token) and nests under it; the older code cannot be changed by this change; the runner and the `make verify` it starts always come from the same checkout, the worktree it runs in.
+  Repository change: the spec states both directions: an updated check nests under a valid older marker; an older check under an updated admission is a rollout limit, not built for.
+  Architecture change: none.
+asked: 2026-11-18, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "An updated check validates an older checkout's marker by the legacy shape it already reads and nests under it, consuming no slot. An older check started under an updated admission cannot validate the slot marker and waits for the compatibility lock its ancestor holds shared; this is a stated rollout limit, not built for: it needs a process of the updated version to start an older checkout's verification, which the documented path never does (the runner starts `make verify` in its own checkout), and it ends when the older branch merges origin/main. No holder record is published for the older version, so criterion 9's one-record-per-holder rule stands."
+answered_by: agent
+status: answered
+
+In the context of nesting across versions during the rollout of Q-5, facing an older check that cannot read the updated marker, we decided that the updated check nests under a valid older marker and that the opposite direction is a stated rollout limit, to achieve no second holder record and no change to old code, accepting that an older checkout's verification started by hand inside an updated admission waits until that admission ends — 2026-11-18
+
+## Q-18 · Three minor holes of the second re-review (spec review rows S3-2, S3-3, S3-4)
+
+context: |
+  Topic: a refutation case for a raised slot count, the worker count when a machine reading fails, and what "substituted" and "cannot be safely read" mean for verify.toml.
+  Intention: rows S3-2 (MINOR, cannot go red), S3-3 (MINOR, missing) and S3-4 (MINOR, [AMBIGUITY]) each leave one reading open; each is revisable and the code already takes one side.
+  Today: `derived_workers` drops a bound whose reading fails and leaves xdist's own auto when neither reading exists, naming "no machine reading" as the source; `_read_settings_file` opens without following symlinks, refuses a non-regular file and refuses content beyond 65,536 bytes.
+  Repository change: the spec states these readings and adds a refuting case above the default.
+  Architecture change: none.
+asked: 2026-11-18, settled by the orchestrating agent as [DETAIL] (night run 2026-11-17-a)
+answer: "S3-2: criterion 2 adds the refuting case `slots = 4` with four or more independent checks contending, where the fourth does not start. S3-3: a failed reading drops only its own bound; with neither reading, xdist's own auto applies, as the earlier worker-cap rule did (bead coding-harness-l7sc), and the `[verify-settings]` line names 'no machine reading' as the workers' source. S3-4: Reading B — a symlinked or non-regular verify.toml refuses, and so does content beyond 65,536 bytes; nothing is parsed from a prefix."
+answered_by: agent
+status: answered
+
+In the context of three minor readings the second re-review left open, facing code that already takes one side of each, we decided to state those sides and add the missing refuting case, to achieve criteria that can go red, accepting that a machine with no core or memory reading runs xdist's own auto beside the admitted runs — 2026-11-18
