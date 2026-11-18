@@ -45,24 +45,28 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_doctrine_requires_review_before_card — The workflow text permits a card before that review.
-- 2: not yet written tests/test_stage2.py::test_doctrine_exempts_spike — The workflow text requires the review for a spike.
-- 3: not yet written tests/test_stage2.py::test_doctrine_repeats_review_after_edit — The workflow permits the card after the edit without a current review or admits a fourth round without authorization.
-- 4: not yet written tests/test_stage2.py::test_implement_refuses_unknown_class — An unknown class reaches a model or the remedy is missing.
-- 5: not yet written tests/test_stage2.py::test_implement_exempts_spike_from_spec_review — The new precondition refuses an unreviewed spike.
-- 6: not yet written tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review — A missing, stale, unreadable, unaudited or Codex review admits a model.
-- 7: not yet written tests/test_stage2.py::test_implement_names_open_review_ambiguity — The model starts or the refusal omits the row.
-- 8: not yet written tests/test_stage2.py::test_implement_accepts_current_review — The new precondition refuses the call.
-- 9: not yet written tests/test_stage2.py::test_stage2_off_enforces_review — The flag bypasses either precondition.
-- 10: not yet written tests/test_stage2.py::test_spec_review_fingerprints_reviewed_bytes — The block lacks the fingerprint or is recorded for different prompt or disk bytes.
-- 11: not yet written tests/test_stage2.py::test_review_currency_rejects_changed_bytes — A changed body is accepted as current or a header-only edit is stale.
-- 12: not yet written tests/test_stage2.py::test_legacy_review_currency_by_day — A legacy block before the UTC committer day or with a dirty body is accepted, or an undigested block on the cutoff day qualifies.
-- 13: not yet written tests/test_stage2.py::test_spec_review_retries_then_falls_back — Fallback runs before the retry, an unreadable answer or nonzero exit does not trigger it, or a hung call has no timeout.
-- 14: not yet written tests/test_stage2.py::test_fallback_spec_review_honours_leak_check — A blocked leak check still permits the fallback call.
-- 15: not yet written tests/test_stage2.py::test_fallback_review_is_marked — A fallback block is indistinguishable from an Opus block.
-- 16: not yet written tests/test_stage2.py::test_morning_inventory_uses_review_admission — A review or class refusal with a spec is missing, a folder without a spec is listed, or an exempt spike is listed as review-refused.
-- 17: not yet written tests/test_stage2.py::test_morning_inventory_names_fallback_rechecks — A current fallback is omitted, its Opus re-check consumes another round, or a later current Opus review remains listed.
-- 18: not yet written tests/test_stage2.py::test_implement_rechecks_previously_implemented_change — Earlier implementation exempts the later call.
+- 1: tests/test_stage2.py::test_doctrine_requires_review_before_card — The workflow text permits a card before that review.
+- 2: tests/test_stage2.py::test_doctrine_exempts_spike — The workflow text requires the review for a spike.
+- 3: tests/test_stage2.py::test_doctrine_repeats_review_after_edit — The workflow permits the card after the edit without a current review or admits a fourth round without authorization.
+- 4: tests/test_stage2.py::test_implement_refuses_unknown_class — An unknown class reaches a model or the remedy is missing.
+- 5: tests/test_stage2.py::test_implement_exempts_spike_from_spec_review — The new precondition refuses an unreviewed spike.
+- 6: tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review — A missing, stale, unreadable, unaudited or Codex review admits a model.
+- 7: tests/test_stage2.py::test_implement_names_open_review_ambiguity — The model starts or the refusal omits the row.
+- 8: tests/test_stage2.py::test_implement_accepts_current_review — The new precondition refuses the call.
+- 9: tests/test_stage2.py::test_stage2_off_enforces_review — The flag bypasses either precondition.
+- 10: tests/test_stage2.py::test_spec_review_fingerprints_reviewed_bytes — The block lacks the fingerprint or is recorded for different prompt or disk bytes.
+- 11: tests/test_stage2.py::test_review_currency_rejects_changed_bytes — A changed body is accepted as current or a header-only edit is stale.
+- 12: tests/test_stage2.py::test_legacy_review_currency_by_day — A legacy block before the UTC committer day or with a dirty body is accepted, or an undigested block on the cutoff day qualifies.
+- 13: tests/test_stage2.py::test_spec_review_retries_then_falls_back — Fallback runs before the retry, an unreadable answer or nonzero exit does not trigger it, or a hung call has no timeout.
+- 14: tests/test_stage2.py::test_fallback_spec_review_honours_leak_check — A blocked leak check still permits the fallback call.
+- 15: tests/test_stage2.py::test_fallback_review_is_marked — A fallback block is indistinguishable from an Opus block.
+- 16: tests/test_stage2.py::test_morning_inventory_uses_review_admission — A review or class refusal with a spec is missing, a folder without a spec is listed, or an exempt spike is listed as review-refused.
+- 17: tests/test_stage2.py::test_morning_inventory_names_fallback_rechecks — A current fallback is omitted, its Opus re-check consumes another round, or a later current Opus review remains listed.
+- 18: tests/test_stage2.py::test_implement_rechecks_previously_implemented_change — Earlier implementation exempts the later call.
+
+## Runner route — 2026-11-18
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1; starts from the plan.
 
 ## Time used
 
@@ -70,3 +74,4 @@ make verify
 2026-11-18 12:48:45–12:51:31 UTC, 166 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 13:36:01–13:37:53 UTC, 112 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 15:31:47–15:33:54 UTC, 126 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 21:56:19–22:17:41 UTC, 1283 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
