@@ -289,7 +289,7 @@ def test_repair_stamps_retained_artifacts_before_checks(repo, monkeypatch):
                 "The problem stands; the criteria are repaired and name AGENTS.md.",
             ),
         )
-        return "repaired"
+        return "repaired", "thread"
 
     def fake_verify_attempt(*_a, **_k):
         captured.append((repo / "plans/changes/demo/spec.md").read_bytes())
@@ -349,7 +349,7 @@ def test_each_verb_rejects_invalid_touched_header(repo, monkeypatch):
                     "The problem stands; the implementation names AGENTS.md.",
                 ),
             )
-        return "worked"
+        return "worked", "thread"
 
     checks = []
     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
@@ -385,7 +385,7 @@ def test_each_verb_rejects_invalid_touched_header(repo, monkeypatch):
             .replace("1. Do the thing.", "1. Do the thing, repaired naming AGENTS.md."),
             encoding="utf-8",
         )
-        return "repaired"
+        return "repaired", "thread"
 
     monkeypatch.setattr(stage2, "run_codex", fake_repair_codex)
     with pytest.raises(stage2.CallFailed):
@@ -669,7 +669,7 @@ def test_body_change_resets_approval(repo, monkeypatch):
                 "The problem changed again; the criteria name AGENTS.md.",
             ),
         )
-        return "repaired"
+        return "repaired", "thread"
 
     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
     monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: ["targeted: one test is red (planted)"])
@@ -737,7 +737,7 @@ def test_unmeasured_attempt_refused(repo, monkeypatch):
                 "The problem stands; this attempt names AGENTS.md.",
             ),
         )
-        return "worked"
+        return "worked", "thread"
 
     checks = []
     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
@@ -917,7 +917,7 @@ def test_active_research_contract_matches_census(repo, monkeypatch):
             ),
             encoding="utf-8",
         )
-        return "worked"
+        return "worked", "thread"
 
     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
     monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: checks.append(1) or [])

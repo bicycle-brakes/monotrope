@@ -469,3 +469,96 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_runner_stamps_provenance.py::test_body_change_resets_approval
 > 6 failed, 23 passed in 5.37s
 > ```
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason the previous Sonnet pass left 6 of 29 new tests red (ValueError unpacking at scripts/stage2.py:9985 among them); continues from that tree · leak check clean over 1115 files, 4682 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_runner_stamps_provenance.py` +6 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         relative = "docs/unsafe-duplicate.md"
+>         _commit_file(repo, relative, safe)
+>         _write(
+>             repo,
+>             relative,
+>             (
+>                 "---\n"
+>                 "title: Dup\n"
+>                 'produced_by: {kind: llm-session, name: codex, version: "2026-11-04"}\n'
+>                 'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\n'
+>                 f"review: {PENDING_REVIEW}\n"
+>                 "---\n# Dup\n\nEdit.\n"
+>             ),
+>         )
+>         with pytest.raises(stage2.Refused, match=rf"{re.escape(relative)}: cannot be stamped safely"):
+>             stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day=day)
+>     
+>         # (4) Bytes that do not decode are refused, naming the artifact.
+>         relative = "docs/unsafe-bytes.md"
+>         _commit_file(repo, relative, safe)
+>         (repo / relative).write_bytes(b"---\ntitle: \xff\xfe\n---\n# Unsafe\n")
+>         with pytest.raises(stage2.Refused, match=rf"{re.escape(relative)}: cannot be stamped safely \(not UTF-8\)"):
+>             stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day=day)
+>     
+>         # (5) A producer field the committed baseline carries but no stamp can read stops as a
+>         # committed fault that names the stock migration.
+>         relative = "docs/unsafe-committed.md"
+>         _commit_file(
+>             repo,
+>             relative,
+>             (
+>                 "---\n"
+>                 "title: Dup\n"
+>                 'produced_by: {kind: llm-session, name: codex, version: "2026-11-04"}\n'
+>                 'produced_by: {kind: llm-session, name: pi, version: "2026-11-05"}\n'
+>                 f"review: {PENDING_REVIEW}\n"
+>                 "---\n# Dup\n\nClean.\n"
+>             ),
+>         )
+>         _write(repo, relative, f"---\ntitle: Dup\nreview: {PENDING_REVIEW}\n---\n# Dup\n\nNow clean, naming AGENTS.md.\n")
+>         with pytest.raises(stage2.CommittedRecordFault, match="coding-harness-2i7x"):
+>             stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day=day)
+>     
+>         # (6) On a draft route the refusal fails every attempt before the checks, naming the file.
+>         def fake_run_codex(*_a, **_k):
+>             _write(repo, "plans/changes/demo/broken.md", BROKEN_NOTE)
+>             return "drafted"
+>     
+>         def fake_run_work_model(*_a, **_k):
+>             _write(repo, "plans/changes/demo/broken.md", BROKEN_NOTE)
+>             return "drafted"
+>     
+>         work_calls = []
+>         monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+>         monkeypatch.setattr(stage2, "run_work_model", fake_run_work_model)
+>         monkeypatch.setattr(stage2, "verify_draft", lambda *_a, **_k: work_calls.append(1) or ([], False, "stub scope"))
+>         with pytest.raises(stage2.CallFailed):
+> >           stage2.draft(repo, "demo")
+>
+> tests/test_runner_stamps_provenance.py:553: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> scripts/stage2.py:10888: in draft
+>     refuse_preexisting(root, allowed)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> root = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1872/popen-gw8/test_unsafe_header_refuses_att0/repo')
+> allowed = {PosixPath('plans/changes/demo/findings.md')}
+>
+>     def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
+>         """Refuse pre-existing changes outside `allowed`, except the runner's own derived leftovers (bead coding-harness-b5w)."""
+>         outside = {path for path in changed_paths(root) - allowed if not derived_leftover(root, path)}
+>         if outside:
+>             listing = ", ".join(sorted(path.as_posix() for path in outside))
+> >           raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+> E           stage2.Refused: the worktree has pre-existing changes outside this change's findings.md: docs/unsafe-committed.md
+>
+> scripts/stage2.py:5242: Refused
+> =========================== short test summary info ============================
+> FAILED tests/test_runner_stamps_provenance.py::test_unsafe_header_refuses_attempt
+> 1 failed, 20 passed in 1.27s
+> ```
