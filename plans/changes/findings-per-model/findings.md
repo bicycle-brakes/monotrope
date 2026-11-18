@@ -59,3 +59,5 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | F-19 | MINOR | SPEC | base | `spec.md`, criteria 14 and 15 | Missing: where each format is written. The spec now fixes the order of the JSON Lines records but not their destination. Stdout in sequence (table, then JSON Lines), stderr for one of the two, or files under a named path all satisfy "produces both formats". The metrics consumer (bead coding-harness-nqaf) and the morning handover both need to know where to read. Row F-10 asked this and is marked `in spec`, but no sentence in spec.md answers it. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4623 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1114 files, 4625 commits, 12 rules.
