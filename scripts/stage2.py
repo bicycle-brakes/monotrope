@@ -4876,7 +4876,7 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
 
 def _supersession_archive_name(archive_base: Path, change: str, digest: str) -> str:
     """A unique archive directory name: `<change>@<superseding digest>@<UTC timestamp>`."""
-    stamp = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+    stamp = clock_now().utc.strftime("%Y-%m-%dT%H-%M-%SZ")
     for counter in range(1, 100):
         name = f"{change}@{digest}@{stamp}" + (f"-{counter}" if counter > 1 else "")
         if not (archive_base / name).exists() and not (archive_base / f"{STAGING_PREFIX}{name}").exists():

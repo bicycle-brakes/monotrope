@@ -194,3 +194,97 @@ Stage-2 call, 2026-11-18: implement · attempt 2 · route flash-repair · endpoi
 > ```
 
 Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1117 files, 4631 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed; Sonnet attempt 3 stopped at the Claude usage limit; continues from the saved attempt · leak check clean over 1117 files, 4636 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/loop-record-other-worktree/plan.md` +16 -16
+> - `scripts/stage2.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> ----------------------------- Captured stdout call -----------------------------
+> release-loop: the loop of demo restarts after round 2; the next review-loop is a fresh run.
+> INFO  (1):
+>   - leak check clean: 30 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 30 files, 2 commits, 1 rules, 1 prompt texts
+> review-loop: round 3 written to /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw4/test_supersede_starts_fresh_af0/state/coding-harness/stage2/demo@d41c09a0/loop.md: 2 rows from 2 of 2 members
+> release-loop: 2 loop rows appended to plans/changes/demo/findings.md
+> ----------------------------- Captured stderr call -----------------------------
+> refused: taken rows are not repaired yet (L3-1, L3-2); run `repair` and make `make verify` green before the next round starts.
+> ________________ test_supersede_repair_brake_uses_fresh_rounds _________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw0/test_supersede_repair_brake_us0/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x1075946b0>
+>
+>     def test_supersede_repair_brake_uses_fresh_rounds(world: World, capsys) -> None:
+>         """Criterion 15: the brake stops on two fresh fix-r rounds after the restart floor - the rounds
+>         released before the supersession are never counted into it.
+>         Planted fault: the brake reads rounds before the restart floor."""
+>         released_rows = [
+>             [
+>                 "L1-1",
+>                 "MAJOR",
+>                 "MAINT",
+>                 "fix-r1",
+>                 "src/app.py:1",
+>                 "finding one",
+>                 TEST_FLASH[0],
+>                 "taken — test_a",
+>                 "yes",
+>                 "agree",
+>             ],
+>             [
+>                 "L2-1",
+>                 "MAJOR",
+>                 "MAINT",
+>                 "fix-r2",
+>                 "src/app.py:2",
+>                 "finding two",
+>                 TEST_FLASH[0],
+>                 "taken — test_a",
+>                 "yes",
+>                 "agree",
+>             ],
+>         ]
+>         world.write_findings(
+>             stage2.RELEASE_HEADING + " 2026-11-17",
+>             stage2.render_table(stage2.RELEASED_COLUMNS, released_rows),
+>             "Rounds run: 2",
+>         )
+>         other = other_worktree(world)
+>         key = stage2.record_key("demo", other)
+>         write_foreign_record(other, [3, 4])
+>         assert supersede(world, key) == 0
+>         # Round 5 takes the fresh run's free stage, round 6 the Flash stage: two members each.
+>         world.script(pi=[{"stdout": rows(1)}] * (2 * len(TEST_FREE)))
+>         assert world.run("review-loop") == 0, "the brake counted the superseded or released rounds"
+>         decide_record(world, status="taken — test_a", broke="yes", origin="fix-r1")
+> >       assert world.run("review-loop") == 0, "the brake fired one fresh fix-r round early"
+> E       AssertionError: the brake fired one fresh fix-r round early
+> E       assert 2 == 0
+> E        +  where 2 = run('review-loop')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw0/test_supersede_repair_brake_us0/state')).run
+>
+> tests/test_stage2.py:1809: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> release-loop: the loop of demo restarts after round 4; the next review-loop is a fresh run.
+> INFO  (1):
+>   - leak check clean: 30 files, 2 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 30 files, 2 commits, 1 rules, 1 prompt texts
+> review-loop: round 5 written to /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1815/popen-gw0/test_supersede_repair_brake_us0/state/coding-harness/stage2/demo@3b1d0894/loop.md: 2 rows from 2 of 2 members
+> ----------------------------- Captured stderr call -----------------------------
+> refused: taken rows are not repaired yet (L5-1, L5-2); run `repair` and make `make verify` green before the next round starts.
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_supersede_rejects_invalid_requests_without_changes
+> FAILED tests/test_stage2.py::test_supersede_starts_fresh_after_old_round_numbers
+> FAILED tests/test_stage2.py::test_supersede_repair_brake_uses_fresh_rounds - ...
+> 3 failed, 15 passed in 6.91s
+> ```
