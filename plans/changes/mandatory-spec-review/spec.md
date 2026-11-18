@@ -3,8 +3,8 @@ title: "Spec — mandatory-spec-review"
 status: draft
 implementation_status: none
 date: 2026-11-17
-last_reviewed: 2026-11-17
-updated: 2026-11-17
+last_reviewed: 2026-11-18
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -19,52 +19,79 @@ adr_files: []
 
 # Spec — mandatory-spec-review
 
-The spec review is required before the plan card for bounded, feature and architectural changes, and the implement runner refuses an unreviewed or ambiguous spec (bead coding-harness-ttic). Research: `research.md`. Decisions: `decisions.md`.
+A current spec review precedes the plan card for bounded, feature and architectural changes, and implementation refuses an unreviewed spec (bead coding-harness-ttic). Research: `research.md`; decisions: `decisions.md`.
 
 ## Problem
 
-- The class table permits bounded changes to skip the spec review, and `AGENTS.md` calls phase 2a optional, although ADR 0016 requires it for changes routed through stage 2 (`research.md`, 2026-11-17).
-- The implement runner does not refuse a missing review or an open ambiguity; review and redrafting currently depend on instructions rather than a runner precondition (`research.md`, 2026-11-17).
-- Existing open changes may already have passed planning or implementation without a review; the maintainer needs a list to decide whether to catch up each one (`decisions.md`, Q-1, 2026-11-17).
+- The class table permits bounded changes to skip review and the entry table calls it optional, despite the existing review policy (`research.md`, 2026-11-17).
+- The implement runner checks neither review currency nor open ambiguity, and the existing day-only review heading cannot distinguish same-day edits (`research.md`, 2026-11-17; `decisions.md`, Q-3, 2026-11-18).
+- Open changes may already be planned or implemented without review, so the maintainer needs an inventory for individual catch-up decisions (`decisions.md`, Q-1 and Q-8, 2026-11-18).
+
+## Terms
+
+**Qualifying review:** a runner-written Opus 5.5 block or declared fallback block with readable rows, including an identifiable clean result; failed calls, unreadable answers, Codex blocks and hand-written reviews do not qualify.
+
+**Open ambiguity:** in the newest current qualifying block, a row whose Severity or Finding cell begins `[AMBIGUITY]` and whose Status begins `open`; an answer alone does not close the row.
 
 ## Acceptance criteria
 
-1. When a bounded, feature or architectural change reaches its plan card, the workflow requires an Opus spec review first.
-   *Refuted by:* The workflow permits such a card without that review.
-2. When a spike reaches its plan card, the workflow does not require the new mandatory review.
-   *Refuted by:* The new rule requires a spike to have the review.
-3. When an implement call for a bounded, feature or architectural change lacks spec-review rows dated after the spec's last change, the runner refuses before starting an implementation model.
-   *Refuted by:* An absent or older review reaches an implementation model.
-4. When an implement call for a bounded, feature or architectural change has an open `[AMBIGUITY]` in its spec-review rows, the runner refuses before starting an implementation model.
-   *Refuted by:* An open ambiguity reaches an implementation model.
-5. When an implement call for a bounded, feature or architectural change has a current spec review and no open `[AMBIGUITY]`, the new review precondition permits it to proceed to the existing checks.
-   *Refuted by:* The new precondition rejects that call.
-6. When an implement call is for a spike, the new review precondition does not refuse it.
-   *Refuted by:* An unreviewed spike is refused by the new precondition.
-7. When a morning handover is prepared, it lists open changes without a spec review for the maintainer to decide individually whether to catch up the review.
-   *Refuted by:* An open unreviewed change is omitted or the handover decides catch-up on the maintainer's behalf.
-8. When this change takes effect, the new refusal applies to subsequent implement calls, including calls on previously implemented changes.
-   *Refuted by:* A later implement call is exempted because the change was implemented before this change merged.
+1. The workflow requires a current spec review before the plan card for bounded, feature and architectural changes.
+   *Refuted by:* The workflow text permits a card before that review.
+2. The workflow exempts spikes from this mandatory review.
+   *Refuted by:* The workflow text requires the review for a spike.
+3. When a review produces rows requiring a spec edit, the workflow repeats draft and review until a clean review reads the revised spec.
+   *Refuted by:* The workflow permits the card after the edit without another review.
+4. When implement reads a missing, invalid or disagreeing class, it refuses before starting a model and tells the operator to add or repair class declarations.
+   *Refuted by:* An unknown class reaches a model or the remedy is missing.
+5. When implement is called for a spike, the new review precondition permits it to reach the existing checks.
+   *Refuted by:* The new precondition refuses an unreviewed spike.
+6. When implement is called for a bounded, feature or architectural change without a current readable qualifying review, it refuses before starting a model.
+   *Refuted by:* A missing, stale, unreadable, hand-written or Codex review admits a model.
+7. When implement is called with a current readable qualifying review whose newest current block has an open ambiguity, it refuses before starting a model and names the row.
+   *Refuted by:* The model starts or the refusal omits the row.
+8. When implement is called with a current readable qualifying review and no open ambiguity in its newest current block, the new precondition permits the existing checks.
+   *Refuted by:* The new precondition refuses the call.
+9. When implement is called with --stage2-off, the same class and review preconditions apply.
+   *Refuted by:* The flag bypasses either precondition.
+10. When a new spec review succeeds, its runner-written block records the SHA-256 fingerprint of the spec bytes read by the reviewer.
+   *Refuted by:* The block lacks the fingerprint or identifies different bytes.
+11. When spec bytes differ from the fingerprint of a review, including uncommitted edits, that review is stale.
+   *Refuted by:* A changed spec is accepted as current.
+12. When a legacy qualifying block lacks a fingerprint, its currency is compared by day against the spec change, including uncommitted changes.
+   *Refuted by:* The legacy block is treated as a fingerprinted review or an uncommitted change is ignored.
+13. When Opus is unreachable, the spec-review verb retries once after a pause before using its centrally declared DeepSeek fallback through Pi.
+   *Refuted by:* Fallback runs before the retry or a different unconfigured route is used.
+14. When the fallback reviews a spec, the existing foreign-call leak check runs before the call.
+   *Refuted by:* A blocked leak check still permits the fallback call.
+15. When a fallback review succeeds, its runner-written block identifies it as fallback.
+   *Refuted by:* A fallback block is indistinguishable from an Opus block.
+16. When the morning inventory is generated, it lists non-archived bounded, feature, architectural and classless changes that fail the same review check as implement, including implemented changes.
+   *Refuted by:* A qualifying refused change is missing or an exempt spike is listed as refused.
+17. When the morning inventory finds a fallback review, it identifies the change for an Opus re-check by day.
+   *Refuted by:* A fallback review is omitted from the re-check list.
+18. When a later implement call targets a previously implemented change, the same precondition applies.
+   *Refuted by:* Earlier implementation exempts the later call.
 
 ## Non-goals
 
-- Retroactively undoing or automatically reviewing changes already implemented.
-- A new runner verb, standalone gate, or ADR; changing the review model or the phase-6 review.
-- Requiring a spec review for spikes under the new rule.
+- Undoing prior implementation or automatically deciding which reviews to catch up.
+- Applying the shared currency component to review-loop rounds or phase 6; that follows separately (bead coding-harness-4amm).
+- A new runner verb, standalone gate, ADR amendment or mandatory review for spikes.
 
 ## Protected areas
 
-Existing decision records and ADRs stay unchanged: the maintainer has already settled this change's scope without an ADR amendment.
+Existing ADRs and decision records remain unchanged because the maintainer settled the scope without an ADR amendment.
 
 ## Definition of Done
 
 - `make verify` green.
-- Doctrine and runner behavior updated together: `AGENTS.md`, `docs/WORKFLOW.md`, `prompts/02a-spec-review.md`, `scripts/stage2.py`, and their applicable tests; morning handover instructions carry the inventory requirement.
-- Protected areas untouched and non-goals unbuilt, shown by the pull request's file list.
+- Doctrine, runner, tests and morning inventory instructions move together as named in `plan.md`.
+- Protected areas untouched and non-goals unbuilt, shown by the pull request file list.
 - The pull request closes bead coding-harness-ttic, with `Closes-Bead: coding-harness-ttic` in its last commit.
 - Special runs: none.
 
 ## Open decisions
 
-- [DETAIL] A bounded change has no design phase or ADR draft; the class and the recorded decision already set that boundary.
-- [DETAIL] A clean review must remain identifiable as a review even when it returns no finding rows; otherwise a successful clean review would be indistinguishable from no review. Its representation is an implementation detail.
+- [DETAIL] A legacy date-only review is current when its day is on or after the last committed spec-change day and the spec has no uncommitted edits; same-day committed changes remain indistinguishable, the limit accepted in Q-3.
+- [DETAIL] The retry pause is 30 seconds; it is a revisable operational delay and avoids an immediate duplicate call.
+- [DETAIL] The initial centrally configured fallback is `deepseek-v4.1-flash` on OpenCode Go, an already declared DeepSeek model; the configuration can be changed in one value.
