@@ -126,3 +126,12 @@ def test_cannot_measure_exits_three(tmp_path):
         check=False,
     )
     assert result.returncode == 3, f"cannot-measure must exit 3, got {result.returncode}: {result.stderr}"
+
+
+def test_only_added_occurrences_of_same_id_are_checked(tmp_path):
+    history = table(("L1-1", "fixed"), ("L1-2", "rejected — Same as L1-1"))
+    root, base = base_repo(tmp_path, {PATH: HEADER + history})
+    head = commit(root, {PATH: HEADER + history + table(("L1-2", "fixed"))})
+    assert gate.measure(root, base, head) == []
+    bad = commit(root, {PATH: HEADER + history + table(("L1-3", "rejected — false: repeat of L1-1"))})
+    assert any("L1-3" in item for item in gate.measure(root, base, bad))

@@ -25,6 +25,7 @@ import argparse
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -129,9 +130,11 @@ def measure(root: Path, base: str, head: str) -> list[str]:
         before = rows_at(root, base, old) if old is not None else {}
         after = rows_at(root, head, new)
         for row_id, rows in sorted(after.items()):
-            if before.get(row_id) == rows:
-                continue  # an unchanged row is not new, whatever happened to its file (F-22)
+            remaining = Counter(before.get(row_id, []))
             for cells in rows:
+                if remaining[cells]:
+                    remaining[cells] -= 1
+                    continue  # unchanged occurrence, including in a moved file
                 status = (reader.status_cell(list(cells)) or "").strip()
                 if not marks_duplicate(status) or CANONICAL.fullmatch(status):
                     continue

@@ -73,9 +73,9 @@ DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repe
 _PIPE = re.compile(r"(?<!\\)\|")
 
 UNATTRIBUTED = "unattributed"
-DEFECT_PREFIXES = ("taken", "fixed", "closed")
+DEFECT_PREFIXES = ("taken", "fixed", "closed —")
 QUESTION_PREFIXES = ("resolved", "answered", "in spec")
-KNOWN_STATUS_PREFIXES = ("open", "accepted limit", *DEFECT_PREFIXES, *QUESTION_PREFIXES, "rejected")
+KNOWN_STATUS_PREFIXES = ("open", "accepted limit —", *DEFECT_PREFIXES, *QUESTION_PREFIXES, "rejected")
 OUTCOMES = ("raised", "defects_accepted", "questions_settled", "rejected")
 
 
@@ -118,7 +118,7 @@ def status_outcome(status: str) -> str | None:
     Callers that must tell an unknown status apart check ``known_status`` too.
     """
     lowered = normalized_status(status)
-    if starts_with_status(lowered, ("open", "accepted limit")):
+    if starts_with_status(lowered, ("open", "accepted limit —")):
         return None
     if starts_with_status(lowered, DEFECT_PREFIXES):
         return "defects_accepted"
@@ -138,12 +138,21 @@ def known_status(status: str) -> bool:
 
 def duplicate_targets(status: str) -> list[str]:
     """The row ids a duplicate marker names, deduplicated, in deterministic order."""
-    return sorted(set(FINDING_ID.findall(status.split(":", 1)[0])))
+    targets: set[str] = set()
+    pattern = re.compile(
+        rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*)",
+        re.I,
+    )
+    for match in pattern.finditer(status):
+        targets.update(
+            target for target in FINDING_ID.findall(match.group(1)) if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target)
+        )
+    return sorted(targets)
 
 
 def is_duplicate(status: str) -> bool:
     """A duplicate names another row id with a marker; a marker without an id is none."""
-    return bool(DUPLICATE_MARKER.search(status)) and bool(duplicate_targets(status))
+    return bool(duplicate_targets(status))
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +244,7 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
     groups: dict[str, OutsideTable] = {}
     heading: str | None = None
     kind = ""  # "", "released", "phase6", "other" (an eligible section ended by its kept-from line)
-    last_eligible_heading = 0
+    last_release_heading = 0
     last_phase6_heading = 0
 
     def outside(label: str, position: int) -> None:
@@ -255,10 +264,11 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
             else:
                 kind = "other"
             if kind in ("released", "phase6"):
-                window = last_phase6_heading if kind == "phase6" else last_eligible_heading
+                window = last_phase6_heading if kind == "phase6" else last_release_heading
                 preceding = tuple(call for call in calls if call.line > window)
                 blocks.append(Block(BlockIdentity(change, path, heading, position, preceding), kind))
-                last_eligible_heading = position
+                if kind == "released":
+                    last_release_heading = position
                 if kind == "phase6":
                     last_phase6_heading = position
             continue

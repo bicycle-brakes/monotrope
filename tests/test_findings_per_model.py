@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -476,6 +477,13 @@ def test_phase2a_ids_excluded():
 def test_row_shapes_match_the_runner():
     stage2 = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
     assert f'RELEASE_HEADING = "{fr.RELEASE_HEADING}"' in stage2, "the release heading drifted from the writer"
+    import stage2 as writer
+
+    assert fr.ROW_COLUMNS == writer.ROW_COLUMNS
+    assert fr.RELEASED_COLUMNS == writer.RELEASED_COLUMNS
+    line = writer.call_line("review", ("test", "glm-5.3", None), SimpleNamespace(files=1, commits=2, rules=3))
+    parsed = fr.parse_call_line(line, 1)
+    assert parsed is not None and parsed.verb == "review" and parsed.model == "glm-5.3"
 
 
 def test_duplicate_reason_does_not_add_targets():
@@ -489,3 +497,43 @@ def test_statuses_require_whole_leading_words():
     for status in ("fixedy", "rejectedly", "openly", "takenish", "in specialty"):
         assert not fr.known_status(status), f"malformed status accepted: {status}"
         assert fr.status_outcome(status) is None, f"malformed status counted: {status}"
+
+
+def test_duplicate_marker_targets_are_anchored_after_colon():
+    assert fr.duplicate_targets("rejected 2026-11-18 — false: repeat of L1-6 and L3-3; see L9-9") == ["L1-6", "L3-3"]
+    assert fr.duplicate_targets("fixed — hand edit: same as L4-4") == ["L4-4"]
+    assert not fr.is_duplicate("rejected L1-1 — same as above")
+    assert not fr.is_duplicate("rejected — same as 2026-11-18")
+
+
+def test_legacy_release_calls_cross_phase6_but_not_previous_release():
+    text = doc(
+        call("review-loop", "glm-5.3"),
+        PHASE6,
+        p6row("F-1", "open"),
+        GLM_RELEASE,
+        lrow("L1-1", "GLM", "open"),
+        RELEASE_2,
+        lrow("L2-1", "GLM", "open"),
+    )
+    found = {f.id: f.model for f in read(text).findings}
+    assert found["L1-1"] == "glm-5.3"
+    assert found["L2-1"] is None
+
+
+def test_historical_statuses_require_dash():
+    for status in ("closed", "accepted limit"):
+        assert not fr.known_status(status)
+        assert fr.status_outcome(status) is None
+    assert fr.known_status("closed — merged")
+    assert fr.known_status("accepted limit — documented")
+
+
+def test_detached_main_tip_uses_main_output(tmp_path):
+    root, sha = repo(tmp_path, {"a": "one"})
+    git(root, "checkout", "--detach", "-q")
+    assert fpm.output_relative(root, None, sha) == "main.jsonl"
+    git(root, "checkout", "-q", "-b", "other")
+    later = commit(root, {"a": "two"})
+    git(root, "checkout", "--detach", "-q")
+    assert fpm.output_relative(root, None, later) == f"revisions/{later}.jsonl"

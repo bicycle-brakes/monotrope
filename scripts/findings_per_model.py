@@ -64,7 +64,10 @@ def branch_of(root: Path, rev_arg: str | None, sha: str) -> str | None:
     """The branch name the output file follows; None for a revision that is not a branch tip."""
     if rev_arg is None:
         done = git(root, "symbolic-ref", "--short", "-q", "HEAD")
-        return done.stdout.decode().strip() if done.returncode == 0 else None
+        if done.returncode == 0:
+            return done.stdout.decode().strip()
+        main = git(root, "rev-parse", "--verify", "refs/heads/main")
+        return "main" if main.returncode == 0 and main.stdout.decode().strip() == sha else None
     tip = git(root, "rev-parse", "--verify", f"refs/heads/{rev_arg}")
     if tip.returncode == 0 and tip.stdout.decode().strip() == sha:
         return rev_arg
