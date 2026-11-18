@@ -91,11 +91,10 @@ def _install_hint() -> None:
 def ensure() -> None:
     """Enter the checkout's environment when there is one; otherwise explain, in a framework checkout only."""
     python = VENV / "bin" / "python3"
-    if _usable(python) and not _active() and os.environ.get(MARKER) != str(VENV):
+    if _usable(python) and not _active() and MARKER not in os.environ:
         _reexec(python)
-    # Reached when no environment was entered: absent, unusable, active already, or not replayable. An active
-    # environment may lack the dependency too, so the hint is not limited to the absent one.
-    if _is_framework_checkout():
+    # Only an absent or unusable environment warrants the missing-environment hint.
+    if not _usable(python) and _is_framework_checkout():
         _install_hint()
 
 

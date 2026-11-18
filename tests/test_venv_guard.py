@@ -356,3 +356,41 @@ def test_exported_kit_contains_guard(tmp_path: Path) -> None:
         target.write_text((REPO_ROOT / path).read_text(encoding="utf-8"), encoding="utf-8")
     loaded = _run([sys.executable, "-S", "-c", "import venv_guard"], instance / "scripts")
     assert loaded.returncode == 0, loaded.stderr
+
+
+def test_active_environment_missing_dependency_has_no_absent_environment_hint(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    site = next((root / ".venv" / "lib").glob("python*/site-packages"))
+    (site / "yaml.py").unlink()
+    script = _write(root, "missing.py", "import venv_guard\nimport yaml\n")
+
+    result = _run([str(root / ".venv" / "bin" / "python3"), str(script)], tmp_path)
+
+    assert result.returncode == 1
+    assert "No module named 'yaml'" in result.stderr
+    assert "make venv" not in result.stderr
+
+
+def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) -> None:
+    first = _tree(tmp_path, framework=True, environment=True, name="first")
+    second = _tree(tmp_path, framework=True, environment=True, name="second")
+    counter = tmp_path / "starts"
+    script = _write(
+        first,
+        "cross.py",
+        "import importlib.util\n"
+        "from pathlib import Path\n"
+        f"counter = Path({str(counter)!r})\n"
+        "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+        "counter.write_text(str(count))\n"
+        "if count > 3: raise SystemExit('replacement loop')\n"
+        "import venv_guard\n"
+        f"spec = importlib.util.spec_from_file_location('other_guard', {str(second / 'scripts' / 'venv_guard.py')!r})\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n",
+    )
+
+    result = _run([str(first / ".venv" / "bin" / "python3"), str(script)], tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert int(counter.read_text()) <= 2
