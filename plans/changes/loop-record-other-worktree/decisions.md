@@ -94,3 +94,45 @@ to the maintainer as one list, who accepted them as proposed on 2026-11-18
   refuses and writes nothing ("no round ran since the supersession; run
   review-loop first"). Reason: the old "the loop did not run" line would be
   false here.
+
+## Agent decisions on the second phase-2a rows S-8..S-13 — 2026-11-18
+
+`[DETAIL]` decisions by the orchestrating session (Opus 5.5), shown to the
+maintainer as one list and accepted as proposed on 2026-11-18 ("A: So
+übernehmen"). Each is freely revisable before implementation.
+
+- **S-8, round numbers and stops after a supersession.** The run after a
+  restart numbers its rounds from the restart floor: round number = N (the
+  restart line's round) + rounds run since the restart + 1, for every later
+  round and after the run's own release too. The stops (clean stop, repair
+  brake) count only rounds after the floor, so a clean round N+1 stops the
+  loop. Reason: otherwise the clean stop does not fire and a paid stage runs
+  for nothing.
+- **S-9, an unfinished supersession.** One supersession moves all of its keys
+  into one archive directory, first under a staging name, with a manifest
+  listing the keys and the key of the worktree that supersedes them; the
+  staging directory is renamed into place, then the line is written. A retry
+  completes only an archive whose manifest names its own worktree key and the
+  same key set; any other archive is not "unfinished" for it. Reason: no
+  worktree completes another's supersession, and no key is dropped from an
+  interrupted multi-key supersession.
+- **S-10, a plain restart while other-worktree records are active.**
+  `release-loop --restart --reason` without `--supersedes` refuses while a
+  record of the same change is active under another key, names the keys and
+  points to `--supersedes`. Reason: otherwise the fresh run repeats the old
+  record's round numbers.
+- **S-11, which releases criterion 10 covers.** Only releases after a
+  supersession restart with no round after it refuse; the runner recognises
+  that restart by the fixed clause "superseded record" in its own line form,
+  through one pattern. A plain restart keeps today's release behaviour.
+  Reason: criterion 9 keeps plain restarts unchanged.
+- **S-12, what the archive takes.** Everything a release would delete from
+  the key directory — `loop.md` and the prepare-loop receipt
+  `availability.json` included; research state, research receipts and probe
+  audits stay in place (criterion 8). Reason: the new run must not consume
+  the old worktree's receipt.
+- **S-13, how the line writes the archive path.** In the form
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<dir>`,
+  as docs/WORKFLOW.md writes record paths; a retry matches a line to its
+  archive by `<dir>`. Reason: no home directory in a committed file, and the
+  leak check stays quiet.
