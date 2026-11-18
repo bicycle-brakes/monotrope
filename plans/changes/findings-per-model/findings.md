@@ -40,3 +40,5 @@ Stage-2 call, 2026-11-17: spec-review · endpoint claude-code-plan · model clau
 | F-11 | MAJOR | SPEC | base | `spec.md`, criterion 11 | This criterion cannot go red as written because "its instructions" names no file. The morning-handover rules currently stand in AGENTS.md:112-129 and docs/orchestration.md:114-124, and the dated night-run plans under docs/research/ repeat them. A change that adds the requirement to some other document, such as docs/WORKFLOW.md (the one plan.md names), still meets the criterion's wording. Yet a handover written from AGENTS.md and orchestration.md can omit the table. No input refutes the criterion until the governing instruction file is named. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4598 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1114 files, 4602 commits, 12 rules.
