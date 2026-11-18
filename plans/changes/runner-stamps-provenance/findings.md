@@ -369,3 +369,5 @@ Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2_research_deep_review.py::test_publication_never_infers_historical_program_from_publisher[conflicting]
 > 24 failed, 13 passed in 9.55s
 > `````
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed and the Sonnet attempt ended after 29 s with 24 tests red; continues from the saved tree · leak check clean over 1115 files, 4655 commits, 12 rules.
