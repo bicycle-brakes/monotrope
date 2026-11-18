@@ -228,3 +228,46 @@ findings-per-model, F-8 (B, gaps are shown, never hidden).
 - **S-20, the flaky signal beside an incomplete run.** The slip status of a
   run whose predecessor is a full run stays decided (it is not a slip); the
   flaky signal is counted as "undecided" on its own line.
+
+## Agent decisions on the third phase-2a rows S-21..S-27 — 2026-11-18
+
+Third and last spec-review round (maintainer rule of 2026-11-18: triage each
+round, at most three rounds). `[DETAIL]` decisions by the orchestrating
+session (Opus 5.5), applying the principle of the second round, shown to the
+maintainer as one list and accepted as proposed ("A: So übernehmen"). No
+fourth review runs; the final draft works these in.
+
+- **S-21, one of the two history files missing.** The targeted-check history
+  is created at the first record the version-2 runner writes. Once the
+  duration history holds a version-2 record, a missing targeted-check history
+  is missing history: the report is unavailable and exits non-complete. A
+  missing duration history with a present targeted-check history is missing
+  history as well. Reason: a removed file must never yield a complete zero
+  (Q-2).
+- **S-22, a full run with no end between a targeted green and a full red.**
+  Its completion is unknown, so it may intervene: the targeted green, the
+  run without an end and the full red are all incomplete — also while that
+  run is still going (principle).
+- **S-23, an end with no start between the pair.** A full-run end with no
+  start whose completion lies between the targeted green's completion and the
+  full red's completion may belong to a run of the pair's identity: both
+  sides of the pair are incomplete and the report is partial (principle).
+- **S-24, which reports such an end makes partial.** Only the selections it
+  could belong to: a report whose lower bound lies after the end's completion
+  is not made partial by it; every repository counts as possible, since the
+  end names none. Named limit in plan.md: a report without bounds stays
+  partial once one such end exists, and a damaged line with no timestamp
+  makes every report partial; `--since` is the remedy.
+- **S-25, what "legacy" means.** A record format, not a position: a
+  well-formed version-1 start and end pair is a recognisable legacy run
+  wherever it stands in the history, reported on the line "outside the
+  count", and the report can still be complete. Reason: a worktree not yet
+  rebased must not make every report partial.
+- **S-26, AC 12 against the Boundary.** The Boundary governs: when a full
+  run of uncertain tree or uncertain order sits between a targeted green and
+  a full red, all three runs are incomplete and no flaky line is printed; AC
+  12 and AC 13 are aligned to this, for all three cases the row names
+  (principle).
+- **S-27, a moved targeted check.** Its identity covers its start tree and
+  its end tree; a full run on either is a possible match, and the runs
+  concerned are incomplete (principle).
