@@ -1239,3 +1239,14 @@ Stage-2 call, 2026-11-18: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 4 errors.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-3-20261118T153859813844Z-027a1952.md
 > ```
+
+Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4656 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-18
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | BLOCKER | SPEC | base | plans/changes/verify-cheap-before-admission/spec.md:85; :228 | [DIVERGENT] If a tree snapshot is unreadable, criterion 5 requires a green cheap pass to run again under admission before protected work. The later detail instead says an unreadable snapshot fails with a request to rerun. These prescribe opposite outcomes for the same case. [Acceptance criterion 5; implementation detail on snapshots.] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1ef6b-5381-7951-b550-f3430ceee509, 2026-11-18
+Reviewer session: codex 01a1ef6b-5381-7951-b550-f3430ceee509 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
