@@ -537,6 +537,10 @@ def test_unsafe_header_refuses_attempt(repo, monkeypatch):
         stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day=day)
 
     # (6) On a draft route the refusal fails every attempt before the checks, naming the file.
+    # Cases (1)-(5) left uncommitted edits behind, and a draft refuses a tree that is not clean.
+    _git(repo, "reset", "-q", "--hard")
+    _git(repo, "clean", "-fdq")
+
     def fake_run_codex(*_a, **_k):
         _write(repo, "plans/changes/demo/broken.md", BROKEN_NOTE)
         return "drafted"
