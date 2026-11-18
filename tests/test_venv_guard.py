@@ -106,7 +106,7 @@ def test_direct_invocation_uses_checkout_environment(tmp_path: Path) -> None:
 
     assert result.returncode == 7, result.stderr
     assert _lines(result) == [
-        f"entered {environment}",
+        "entered None",
         "where checkout environment",
         f"prefix {environment}",
         "argv ['a b', '--c']",
@@ -434,3 +434,37 @@ def test_roster_missing_yaml_is_not_swallowed(tmp_path: Path) -> None:
     result = _run([sys.executable, "-S", "-c", "import ramp_valves; ramp_valves._roster_handles()"], root / "scripts")
     assert result.returncode != 0
     assert "make venv" in result.stderr
+
+
+@pytest.mark.parametrize("error", ["ImportError", "ValueError"])
+def test_broken_dependency_spec_is_treated_as_missing(tmp_path: Path, error: str) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    script = _write(
+        root,
+        "broken_spec.py",
+        "import importlib.util\n"
+        "def broken(name):\n"
+        f"    raise {error}('broken spec')\n"
+        "importlib.util.find_spec = broken\n"
+        "import venv_guard\n"
+        "print('guard loaded')\n",
+    )
+    result = _run([str(root / ".venv" / "bin" / "python3"), str(script)], tmp_path)
+    assert result.returncode == 0, f"guard import must survive a broken spec: {result.stderr}"
+    assert result.stdout.strip() == "guard loaded"
+
+
+def test_reentered_process_does_not_pass_marker_to_child(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    child = _write(root, "child.py", "import venv_guard\nimport yaml\nprint(yaml.WHERE)\n")
+    parent = _write(
+        root,
+        "parent.py",
+        "import subprocess\nimport sys\nimport venv_guard\n"
+        f"result = subprocess.run([{SYSTEM_PYTHON!r}, {str(child)!r}], capture_output=True, text=True)\n"
+        "print(result.stdout, end='')\nprint(result.stderr, file=sys.stderr, end='')\n"
+        "sys.exit(result.returncode)\n",
+    )
+    result = _run([SYSTEM_PYTHON, str(parent)], tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "checkout environment"

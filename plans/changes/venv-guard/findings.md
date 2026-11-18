@@ -384,3 +384,7 @@ Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
 
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1116 files, 4667 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4669 commits, 12 rules.
+
+Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged

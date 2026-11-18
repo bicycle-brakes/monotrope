@@ -89,13 +89,21 @@ def _install_hint() -> None:
     sys.excepthook = hook
 
 
+def _missing(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is None
+    except (ImportError, ValueError):
+        return True
+
+
 def ensure() -> None:
     """Enter the checkout's environment when there is one; otherwise explain, in a framework checkout only."""
+    entered = os.environ.pop(MARKER, None)
     python = VENV / "bin" / "python3"
     if _is_framework_checkout():
         _install_hint()
-    missing = any(importlib.util.find_spec(name) is None for name in DEPENDENCIES)
-    if missing and _usable(python) and not _active() and os.environ.get(MARKER) != str(VENV):
+    missing = any(_missing(name) for name in DEPENDENCIES)
+    if missing and _usable(python) and not _active() and entered != str(VENV):
         _reexec(python)
 
 
