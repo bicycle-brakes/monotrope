@@ -226,9 +226,11 @@ this change would silently turn reporting gates into blocking ones. `--ci`
 runs both partitions exhaustively, still admitting protected work.
 
 [DETAIL] A stable snapshot brackets each cheap pass; after a changed wait the
-fresh cheap pass runs inside the already acquired admission. An unstable or
-unreadable snapshot fails with a request to rerun, rather than looping or
-claiming unchanged. Results belong to this invocation only. This makes the
+fresh cheap pass runs inside the already acquired admission. An unstable
+snapshot fails with a request to rerun, rather than looping or claiming
+unchanged; an unreadable snapshot counts as moved, as criterion 5 states: a
+green cheap pass runs again in full inside the admission before any protected
+gate. Results belong to this invocation only. This makes the
 tree-comparison obligation explicit without inventing an external-state cache.
 
 [DETAIL] Use one internal scheduler from the shell and Stage 2, retaining the
