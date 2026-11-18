@@ -373,3 +373,99 @@ Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint cl
 Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed and the Sonnet attempt ended after 29 s with 24 tests red; continues from the saved tree · leak check clean over 1115 files, 4655 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason the previous Sonnet rerun stopped at the Claude usage limit; continues from the saved tree · leak check clean over 1115 files, 4666 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1; continues from the saved tree · leak check clean over 1115 files, 4679 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/runner-stamps-provenance/plan.md` +15 -15
+> - `scripts/stage2.py` +81 -17
+> - `tests/test_runner_stamps_provenance.py` +19 -15
+> - `tests/test_stage2_research_deep_review.py` +3 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             findings_before = ctx.findings.read_bytes()
+>             # The lifecycle baseline is this attempt's own: a retry's documents stand at their restored
+>             # pre-call bytes, so the fields protected here are the values this attempt saw.
+>             lifecycle_before = lifecycle_snapshot(ctx.folder) if protect_lifecycle else {}
+>             recovery_inputs = {**inputs_before, ctx.findings: findings_before}
+>     
+>             def restore_attempt_lifecycle(
+>                 lifecycle_before=lifecycle_before,
+>                 recovery_inputs=recovery_inputs,
+>             ) -> tuple[list[str], list[str]]:
+>                 """One recovery boundary for normal verification and exceptional handback alike."""
+>                 return restore_lifecycle_fields(root, lifecycle_before, aliases, recovery_inputs)
+>     
+>             def put_findings_back(
+>                 original: BaseException | None = None,
+>                 kept=kept,
+>                 destinations=(*inputs_before, ctx.findings),
+>             ) -> None:
+>                 """Put findings.md back, refusing first when its parent would carry the write outside."""
+>                 # Even implement (without a findings snapshot) must validate the complete batch
+>                 # before its caller can append diagnostics or finalize time on an early exit.
+>                 try:
+>                     preflight_recovery(root, destinations, aliases=aliases)
+>                 except RestorationRefused as safety_error:
+>                     preserve_attempt_failure(safety_error, original)
+>                     raise
+>                 if kept is not None:
+>                     restore_findings(kept)
+>     
+>             unmeasured: str | None = None
+>             # This call's own ledger-clearing evidence, fresh per attempt: what verification actually
+>             # removed from the plan, for the work check's discount (bead coding-harness-twbl).
+>             clearing = ClearingEvidence()
+>             try:
+>                 before = worktree_tree(root)
+>             except (Refused, OSError) as error:
+>                 before, unmeasured = "", str(error)
+>             call_error: CallFailed | None = None
+>             answer = ""
+>             evidence: str | None = None
+>             lifecycle_report: list[str] = []
+>             lifecycle_report_persisted = False
+>             broken: list[str] = []
+>     
+>             def persist_lifecycle_report(
+>                 report: list[str], destinations=(*inputs_before, ctx.findings), attempt=attempt, route=route
+>             ) -> None:
+>                 nonlocal lifecycle_report_persisted
+>                 preflight_recovery(root, destinations, aliases=aliases)
+>                 append(ctx.findings, restoration_line(verb, attempt, route, report))
+>                 lifecycle_report_persisted = True
+>     
+>             # The runner's own span of this attempt starts right before the model and ends at the verdict.
+>             # A completed call keeps its measured entry whatever post-call check then stops the run; a
+>             # call that failed, an empty Codex answer included, never gets one (spec, criterion 6).
+>             started_wall, started_mono = utc_now(), monotonic_now()
+>             completed = False
+>             logged = False
+>             try:
+>                 # The completion boundary: from here to the verdict, every departure of a completed
+>                 # attempt - the HEAD checks, both scans, verification, the answer check and diagnostic
+>                 # protection included - passes the handler below, which persists the attempt's one
+>                 # rejected entry through the one writer and then lets the original refusal or failure
+>                 # stand. The boundary never starts a model call, a retry or a checkpoint of its own,
+>                 # and never resets HEAD.
+>                 try:
+>                     if endpoint == CODEX:
+>                         # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
+> >                       answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
+> E                       ValueError: too many values to unpack (expected 2)
+>
+> scripts/stage2.py:9985: ValueError
+> =========================== short test summary info ============================
+> FAILED tests/test_runner_stamps_provenance.py::test_each_verb_rejects_invalid_touched_header
+> FAILED tests/test_runner_stamps_provenance.py::test_active_research_contract_matches_census
+> FAILED tests/test_runner_stamps_provenance.py::test_unmeasured_attempt_refused
+> FAILED tests/test_runner_stamps_provenance.py::test_unsafe_header_refuses_attempt
+> FAILED tests/test_runner_stamps_provenance.py::test_repair_stamps_retained_artifacts_before_checks
+> FAILED tests/test_runner_stamps_provenance.py::test_body_change_resets_approval
+> 6 failed, 23 passed in 5.37s
+> ```

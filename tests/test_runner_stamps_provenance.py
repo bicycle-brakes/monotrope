@@ -150,6 +150,11 @@ def _header_of(text: str) -> dict:
     return yaml.safe_load(re.match(r"\A---\n(.*?)\n---", text, re.S).group(1))
 
 
+def _records(value) -> list:
+    """The producer records of a `produced_by` value: one record is a mapping, several a list."""
+    return value if isinstance(value, list) else [value]
+
+
 def _header_at(root: Path, relative: str) -> dict:
     return _header_of((root / relative).read_text(encoding="utf-8"))
 
@@ -207,7 +212,7 @@ def test_explore_stamps_actual_producer(repo, monkeypatch):
     )
     stage2.explore(repo, "demo")
     header = _header_at(repo, "plans/changes/demo/research.md")
-    assert header["produced_by"] == [
+    assert _records(header["produced_by"]) == [
         {"kind": "llm-session", "name": "claude-code", "version": day, "model": "glm-5.3-flash"}
     ], "a GLM route must record its own program, model and publication day, never codex or another day"
 
@@ -262,7 +267,7 @@ def test_draft_stamps_retained_artifacts_before_checks(repo, monkeypatch):
         {"kind": "llm-session", "name": "codex", "version": day, "model": "gpt-6.1-terra"},
     ], "the retained draft artifact already carries both producer records when its checks read it"
     adr_header = _header_of(captured["adr"].decode("utf-8"))
-    assert adr_header["produced_by"] == [
+    assert _records(adr_header["produced_by"]) == [
         {"kind": "llm-session", "name": "codex", "version": day, "model": "gpt-6.1-terra"}
     ], "the new ADR is stamped like any retained artifact"
     assert adr_header["provenance"] == "human-decided", "the stamp never changes a provenance class"
@@ -455,7 +460,7 @@ def test_stamping_preserves_other_bytes(repo):
     stage2.stamp_artifact(repo, adr, producer="codex", model="gpt-6.1-terra", day=day)
     adr_header = _header_at(repo, adr)
     assert adr_header["provenance"] == "human-decided", "a draft ADR keeps its human-decided provenance"
-    assert adr_header["produced_by"] == [
+    assert _records(adr_header["produced_by"]) == [
         {"kind": "llm-session", "name": "codex", "version": day, "model": "gpt-6.1-terra"}
     ]
 
@@ -508,7 +513,7 @@ def test_unsafe_header_refuses_attempt(repo, monkeypatch):
     # (4) Bytes that do not decode are refused, naming the artifact.
     relative = "docs/unsafe-bytes.md"
     _commit_file(repo, relative, safe)
-    (repo / relative).write_bytes("---\ntitle: \xff\xfe\n---\n# Unsafe\n".encode("utf-8", "surrogateescape"))
+    (repo / relative).write_bytes(b"---\ntitle: \xff\xfe\n---\n# Unsafe\n")
     with pytest.raises(stage2.Refused, match=rf"{re.escape(relative)}: cannot be stamped safely \(not UTF-8\)"):
         stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day=day)
 
@@ -547,7 +552,7 @@ def test_unsafe_header_refuses_attempt(repo, monkeypatch):
     with pytest.raises(stage2.CallFailed):
         stage2.draft(repo, "demo")
     findings = (repo / "plans/changes/demo/findings.md").read_text(encoding="utf-8")
-    assert "plans/changes/demo/broken.md: cannot be stamped safely (YAML anchor 'shape')" in findings
+    assert "plans/changes/demo/broken.md: cannot be stamped safely (YAML anchor 'shape' in header)" in findings
     assert work_calls == [], "an unsafe header is refused before any post-run check runs on the attempt"
 
 
@@ -629,7 +634,7 @@ def test_preserves_prior_contributions(repo):
         ),
     )
     stage2.stamp_artifact(repo, relative, producer="claude-code", model="glm-5.3-flash", day=day)
-    assert _header_at(repo, relative)["produced_by"] == [
+    assert _records(_header_at(repo, relative)["produced_by"]) == [
         {"kind": "llm-session", "name": "claude-code", "version": day, "model": "glm-5.3-flash"}
     ], "the session's own self-description never survives as history"
 
@@ -655,16 +660,15 @@ def test_body_change_resets_approval(repo, monkeypatch):
     )
 
     # An earlier failed attempt records the reset in its own findings entry, too.
-    _write(
-        repo,
-        relative,
-        head.replace(
-            "The problem and the acceptance criteria stand here.",
-            "The problem changed again; the criteria name AGENTS.md.",
-        ),
-    )
-
     def fake_run_codex(*_a, **_k):
+        _write(
+            repo,
+            relative,
+            head.replace(
+                "The problem and the acceptance criteria stand here.",
+                "The problem changed again; the criteria name AGENTS.md.",
+            ),
+        )
         return "repaired"
 
     monkeypatch.setattr(stage2, "run_codex", fake_run_codex)

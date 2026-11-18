@@ -44,21 +44,21 @@ PYTHON=.venv/bin/python3 make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_runner_stamps_provenance.py::test_explore_stamps_actual_producer — an incorrect route, model or day is accepted.
-- 2: not yet written tests/test_runner_stamps_provenance.py::test_draft_stamps_retained_artifacts_before_checks — a retained draft artifact or new ADR has a wrong producer when checked.
-- 3: not yet written tests/test_runner_stamps_provenance.py::test_repair_stamps_retained_artifacts_before_checks — a repair artifact has a wrong producer when checked.
-- 4: not yet written tests/test_runner_stamps_provenance.py::test_each_verb_rejects_invalid_touched_header — an invalid producer-bearing touched header passes, or a restored file or file without `produced_by` causes a failure.
-- 5: not yet written tests/test_runner_stamps_provenance.py::test_stamping_preserves_other_bytes — prose or unrelated header bytes change.
-- 6: not yet written tests/test_runner_stamps_provenance.py::test_unsafe_header_refuses_attempt — an unsafe header is accepted or its file is omitted from the diagnostic.
-- 7: not yet written tests/test_runner_stamps_provenance.py::test_preserves_prior_contributions — a committed earlier record is rewritten or a session self-description survives.
-- 8: not yet written tests/test_runner_stamps_provenance.py::test_body_change_resets_approval — approval survives any change outside the two exempt fields or a failed or accepted attempt omits its approver.
-- 9: not yet written tests/test_runner_stamps_provenance.py::test_header_only_keeps_approval — changing only producer and updated fields resets approval.
-- 10: not yet written tests/test_runner_stamps_provenance.py::test_unmeasured_attempt_refused — an unmeasured draft or repair is accepted or the next available route is skipped.
-- 11: not yet written tests/test_runner_stamps_provenance.py::test_new_files_require_pending_review — a new file approves itself or a new human-decided ADR is refused.
-- 12: not yet written tests/test_runner_stamps_provenance.py::test_committed_baseline_controls_approval — a session invents an approval or an unchanged compatible committed approval is refused.
-- 13: not yet written tests/test_runner_stamps_provenance.py::test_explore_resets_class_and_approval — a skeleton stays human-written or an approval survives publication.
-- 14: not yet written tests/test_runner_stamps_provenance.py::test_active_research_contract_matches_census — a post-run check accepts research that the census rejects for class or review.
-- 15: not yet written tests/test_runner_stamps_provenance.py::test_prepublication_failure_routing — invalid output is published or a committed-record fault spends another route.
+- 1: tests/test_runner_stamps_provenance.py::test_explore_stamps_actual_producer — an incorrect route, model or day is accepted.
+- 2: tests/test_runner_stamps_provenance.py::test_draft_stamps_retained_artifacts_before_checks — a retained draft artifact or new ADR has a wrong producer when checked.
+- 3: tests/test_runner_stamps_provenance.py::test_repair_stamps_retained_artifacts_before_checks — a repair artifact has a wrong producer when checked.
+- 4: tests/test_runner_stamps_provenance.py::test_each_verb_rejects_invalid_touched_header — an invalid producer-bearing touched header passes, or a restored file or file without `produced_by` causes a failure.
+- 5: tests/test_runner_stamps_provenance.py::test_stamping_preserves_other_bytes — prose or unrelated header bytes change.
+- 6: tests/test_runner_stamps_provenance.py::test_unsafe_header_refuses_attempt — an unsafe header is accepted or its file is omitted from the diagnostic.
+- 7: tests/test_runner_stamps_provenance.py::test_preserves_prior_contributions — a committed earlier record is rewritten or a session self-description survives.
+- 8: tests/test_runner_stamps_provenance.py::test_body_change_resets_approval — approval survives any change outside the two exempt fields or a failed or accepted attempt omits its approver.
+- 9: tests/test_runner_stamps_provenance.py::test_header_only_keeps_approval — changing only producer and updated fields resets approval.
+- 10: tests/test_runner_stamps_provenance.py::test_unmeasured_attempt_refused — an unmeasured draft or repair is accepted or the next available route is skipped.
+- 11: tests/test_runner_stamps_provenance.py::test_new_files_require_pending_review — a new file approves itself or a new human-decided ADR is refused.
+- 12: tests/test_runner_stamps_provenance.py::test_committed_baseline_controls_approval — a session invents an approval or an unchanged compatible committed approval is refused.
+- 13: tests/test_runner_stamps_provenance.py::test_explore_resets_class_and_approval — a skeleton stays human-written or an approval survives publication.
+- 14: tests/test_runner_stamps_provenance.py::test_active_research_contract_matches_census — a post-run check accepts research that the census rejects for class or review.
+- 15: tests/test_runner_stamps_provenance.py::test_prepublication_failure_routing — invalid output is published or a committed-record fault spends another route.
 
 ## What is not touched
 
@@ -76,6 +76,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed and the Sonnet attempt ended after 29 s with 24 tests red; continues from the saved tree.
 
+## Runner route — 2026-11-18
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1; continues from the saved tree.
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -89,3 +93,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-18 13:32:41–15:35:09 UTC, 7347 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-18 15:35:20–15:52:38 UTC, 1038 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-18 15:52:46–15:53:15 UTC, 29 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-18 21:56:19–22:02:36 UTC, 377 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

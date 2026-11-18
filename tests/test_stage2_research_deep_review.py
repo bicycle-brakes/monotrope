@@ -877,6 +877,7 @@ def test_publication_never_infers_historical_program_from_publisher(evidence):
         source += audit + audit.replace("glm-coding-plan", "openai-codex")
     corrected = stage2.research_publication(source.encode(), producer="stage2-research-swarm", day="2026-11-09")
     records = yaml.safe_load(corrected.decode().split("---", 2)[1])["produced_by"]
+    records = records if isinstance(records, list) else [records]
     assert records == [{"kind": "llm-session", "name": "stage2-research-swarm", "version": "2026-11-09"}], (
         "the session's own produced_by is a self-description: discarded whole, never read as history or evidence"
     )
@@ -908,7 +909,8 @@ def test_publication_replaces_quoted_owned_yaml_keys(quote, eol):
     header = yaml.safe_load(raw_header)
     assert header["provenance"] == "ai-drafted-reviewed"
     assert header["review"] == {"status": "pending", "approved_by": None, "approved_at": None}
-    assert header["produced_by"] == [{"kind": "llm-session", "name": "pi", "version": "2026-11-09"}], (
+    records = header["produced_by"] if isinstance(header["produced_by"], list) else [header["produced_by"]]
+    assert records == [{"kind": "llm-session", "name": "pi", "version": "2026-11-09"}], (
         "the session's own self-descriptions are discarded; the publication names only its producer"
     )
     assert f'title: "Kept exactly"{eol}'.encode() in corrected

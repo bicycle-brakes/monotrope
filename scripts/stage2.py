@@ -9444,7 +9444,8 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
     (agent decision F-35). A file with no committed field gets the canonical rendering.
     """
     if baseline_field is None:
-        return " " + research_producer_field(records).removeprefix("produced_by:")
+        # The rendering already leads with the one space after the key's colon.
+        return research_producer_field(records).removeprefix("produced_by:")
     earlier = parse_producer_records(baseline_field, "<retained>") if records else []
     if earlier == records:
         return baseline_field
@@ -9490,13 +9491,42 @@ def _without_fields(block: str, *keys: str) -> str:
     return "".join(pieces)
 
 
+def _unowned_content(text: str, *keys: str) -> str | None:
+    """A document with the named header fields cut out: what a change judgement may compare.
+
+    The header's remaining bytes and everything after the closing `---` (the Markdown body)
+    stand together, so a change anywhere outside the named fields differs. None when the
+    document has no readable frontmatter.
+    """
+    match = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+    if match is None:
+        return None
+    try:
+        header = _without_fields(match.group(1), *keys)
+    except yaml.YAMLError:
+        return None
+    return header + "\0" + text[match.end(1) :]
+
+
 def _is_approval(value: object) -> bool:
     """Whether a review value is an approval: the status field says so."""
     return isinstance(value, dict) and value.get("status") == "approved"
 
 
-def stamp_artifact(root: Path, relative: str, *, producer: str, model: str | None, day: str) -> str | None:
+def stamp_artifact(
+    root: Path,
+    relative: str,
+    *,
+    producer: str,
+    model: str | None,
+    day: str,
+    ledger: dict[str, list[dict]] | None = None,
+) -> str | None:
     """Stamp one retained artifact with this attempt's producer record, in place.
+
+    `ledger` carries the contributions that earlier attempts of the same run already stamped
+    into this file (runner-measured, never session-written); the file's field then reads the
+    committed records, those contributions and this attempt's, and the ledger takes this one.
 
     The field is built from the records HEAD commits - never from the session's own header
     self-description (Q-10, Q-12) - plus this attempt's contribution; the committed records
@@ -9535,11 +9565,15 @@ def stamp_artifact(root: Path, relative: str, *, producer: str, model: str | Non
         raise Refused(f"{relative}: cannot be stamped safely ({error})") from error
     baseline_field = committed_producer_field(root, relative)
     records = parse_producer_records(baseline_field, relative) if baseline_field is not None else []
+    committed_count = len(records)
     contribution = {"kind": "llm-session", "name": producer, "version": day}
     if model:
         contribution["model"] = model
-    if contribution not in records:
-        records.append(contribution)
+    for record in [*(ledger or {}).get(relative, []), contribution]:
+        if record not in records:
+            records.append(record)
+    if ledger is not None:
+        ledger[relative] = records[committed_count:]
     fields = {"produced_by": "produced_by:" + retained_producer_field(baseline_field, records, eol=eol)}
     head = committed_bytes(root, relative)
     head_block = None
@@ -9555,8 +9589,8 @@ def stamp_artifact(root: Path, relative: str, *, producer: str, model: str | Non
             committed_state = None
         if _is_approval(committed_state):
             # The approval survives only a stamp that touches nothing else (criterion 9).
-            body_changed = _without_fields(block, "produced_by", "updated") != _without_fields(
-                head_block, "produced_by", "updated"
+            body_changed = _unowned_content(text, "produced_by", "updated") != _unowned_content(
+                head.decode("utf-8", "surrogateescape"), "produced_by", "updated"
             )
             if body_changed:
                 approver = committed_state.get("approved_by")
@@ -9601,7 +9635,13 @@ def stamp_artifact(root: Path, relative: str, *, producer: str, model: str | Non
 
 
 def stamp_retained_artifacts(
-    root: Path, candidates: list[str], *, producer: str, model: str | None, day: str
+    root: Path,
+    candidates: list[str],
+    *,
+    producer: str,
+    model: str | None,
+    day: str,
+    ledger: dict[str, list[dict]] | None = None,
 ) -> list[str]:
     """Stamp every retained artifact this attempt changed, before its post-run checks.
 
@@ -9621,7 +9661,7 @@ def stamp_retained_artifacts(
             continue
         if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
-        notice = stamp_artifact(root, relative, producer=producer, model=model, day=day)
+        notice = stamp_artifact(root, relative, producer=producer, model=model, day=day, ledger=ledger)
         if notice:
             notices.append(notice)
     return notices
@@ -9671,13 +9711,11 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
             f"{relative}: {problem}" for problem in research_census.producer_records_problems(header["produced_by"])
         )
     baseline_header = None
-    baseline_block = None
     if baseline is not None:
         base_match = research_census.FRONTMATTER.match(baseline.decode("utf-8", "surrogateescape"))
         if base_match is not None:
-            baseline_block = base_match.group(1)
             try:
-                baseline_header = yaml.safe_load(baseline_block)
+                baseline_header = yaml.safe_load(base_match.group(1))
             except (yaml.YAMLError, ValueError):
                 baseline_header = None
         if baseline_header is None or not isinstance(baseline_header, dict):
@@ -9699,8 +9737,9 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
         problems.append(f"{relative}: provenance: changed from the committed class")
     baseline_review = baseline_header.get("review")
     if review != baseline_review:
-        body_changed = _without_fields(block, "produced_by", "updated") != _without_fields(
-            baseline_block, "produced_by", "updated"
+        # The review itself is the field under judgement; the document is compared without it.
+        body_changed = _unowned_content(text, "produced_by", "updated", "review") != _unowned_content(
+            baseline.decode("utf-8", "surrogateescape"), "produced_by", "updated", "review"
         )
         if _is_approval(review) and not _is_approval(baseline_review):
             problems.append(f"{relative}: review: an approval the commit does not carry is refused")
@@ -10859,6 +10898,9 @@ def draft(root: Path, change: str) -> None:
         (GLM, "glm", "two Codex draft attempts failed"),
     ]
     diagnostics: list[str] = []
+    # The contributions earlier attempts of this run stamped into retained files: the next attempt
+    # starts on the tree a failed one left, so its stamp extends them (criterion 7).
+    contributions: dict[str, list[dict]] = {}
     for attempt, (endpoint, route, reason) in enumerate(routes, 1):
         key = None
         if endpoint == GLM:
@@ -10914,13 +10956,18 @@ def draft(root: Path, change: str) -> None:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key, put_back_lines(put)))
             continue
+        measure_error: str | None = unmeasured
+        changed_by_attempt: list[str] = []
         if unmeasured is None:
             # Both snapshots stand around the model call alone: the runner's own writes - the audit
             # line, the block below - fall outside both of them.
             try:
-                files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                after_tree = worktree_tree(root)
+                files: list[str] | str = attempt_files(root, before, after_tree)
+                changed_by_attempt = changed_relative_paths(root, before, after_tree)
             except (Refused, OSError) as error:
                 files = str(error)
+                measure_error = str(error)
         else:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
@@ -10945,17 +10992,34 @@ def draft(root: Path, change: str) -> None:
         stamp_problems: list[str] = []
         kept_relative = sorted(path.as_posix() for path in keep)
         try:
+            if measure_error is not None:
+                # Which files this attempt changed is unknown, so no contribution can be attributed
+                # reliably: the attempt fails and the next available route runs (criterion 10).
+                raise Refused(
+                    f"the runner could not measure which files the attempt changed ({measure_error}); "
+                    "its producer contribution cannot be attributed"
+                )
+            # Only the files this attempt's own model call changed carry its record (criterion 7).
+            stamped_now = [path for path in changed_by_attempt if path in set(kept_relative)]
             stamp_notices = stamp_retained_artifacts(
-                root, kept_relative, producer=producer_for(endpoint), model=endpoint[1], day=today()
+                root,
+                stamped_now,
+                producer=producer_for(endpoint),
+                model=endpoint[1],
+                day=today(),
+                ledger=contributions,
             )
             stamp_problems = touched_header_problems(root, kept_relative)
         except CommittedRecordFault:
             raise
         except (Refused, OSError) as error:
             stamp_problems = [protect_diagnostics(str(error), key)]
-        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
         if stamp_problems:
-            problems = [*stamp_problems, *problems]
+            # The attempt fails before any document check reads its files (criterion 6).
+            problems, owed = list(stamp_problems), False
+            scope = "document checks did not run: the producer stamp or header check refused the attempt first"
+        else:
+            problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
             # The scope evidence stands first, as in every verb's block; the next attempt starts on
             # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
