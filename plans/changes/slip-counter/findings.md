@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -581,3 +581,9 @@ Stage-2 call, 2026-11-18: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-18: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1115 files, 4694 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1115 files, 4694 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1115 files, 4695 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1115 files, 4695 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1115 files, 4695 commits, 12 rules.
