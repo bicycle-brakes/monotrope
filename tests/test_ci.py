@@ -2245,6 +2245,9 @@ def test_runner_start_record_carries_the_full_run_comparison_context(
     """
     base = tmp_path / "pairing"
     tree = _runner_tree(base, "exit 1")
+    # A run belongs to a repository only through its common Git directory (spec
+    # Term "Repository", decisions Q-5): the copied tree must be a Git repository.
+    subprocess.run(["git", "init", "-q", str(tree)], check=True, capture_output=True)
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
     monkeypatch.setenv("XDG_STATE_HOME", str(tree.parent / "state"))
     receipt = verify_duration.begin_targeted_run(tree, "demo", "tree-x")
