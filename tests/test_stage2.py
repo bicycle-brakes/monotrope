@@ -28866,6 +28866,72 @@ def test_scheduled_holder_identifies_runner_process(world: World, monkeypatch: p
     assert seen == [[sys.executable, *sys.argv]] * 3
 
 
+def test_scheduled_full_check_guards_pytest_basetemp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-1: the Stage-2 full check installs the temporary-area guard the shell entry point has.
+
+    Planted fault: the scheduler is given the caller's environment unchanged, so a `--basetemp`
+    outside the run's area is accepted and pytest clears that directory.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "sentinel"
+    sentinel.write_text("keep", encoding="utf-8")
+    probe = tmp_path / "test_probe.py"
+    probe.write_text("def test_probe():\n    assert True\n", encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def schedule(_root, **kwargs):
+        area = Path(kwargs["env"]["HARNESS_VERIFY_TMP_AREA"])
+        seen["area"] = area
+        done = subprocess.run(
+            [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--basetemp", str(outside), str(probe)],
+            cwd=tmp_path,
+            env={**kwargs["env"], "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        seen["returncode"] = done.returncode
+        seen["output"] = done.stdout + done.stderr
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        stage2._scheduled_verify(tmp_path, {"PATH": os.environ.get("PATH", ""), "PYTEST_ADDOPTS": ""}, "verify")
+    except KeyError:
+        pytest.fail("the full check must hand the gates a run area with the pytest guard")
+    assert sentinel.exists(), "a --basetemp outside the run's area was cleared"
+    assert seen["returncode"] != 0 and "outside this run's area" in str(seen["output"]), seen["output"]
+    assert not Path(str(seen["area"])).exists(), "the run's area must be removed when the run ends"
+
+
+def test_scheduled_full_check_honours_an_explicit_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-2: a caller's `PYTHON` is the interpreter of the Stage-2 full check, as in the shell.
+
+    Planted fault: the worktree's locked interpreter replaces it, so the two entry points test
+    different environments for the same input.
+    """
+    root = tmp_path / "repo"
+    venv_bin = root / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python3").symlink_to(sys.executable)
+    marker = tmp_path / "explicit-used"
+    chosen = tmp_path / "chosen-python"
+    chosen.write_text(f'#!/bin/sh\necho used > "{marker}"\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    chosen.chmod(0o755)
+
+    def schedule(_root, **kwargs):
+        result = kwargs["executor"]({}, "python3 -c pass", kwargs["env"])
+        assert result.returncode == 0, result.stderr
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    env = {"PATH": os.environ.get("PATH", ""), "PYTHON": str(chosen)}
+    out, err, code = stage2._scheduled_verify(root, env, "verify")
+    assert code == 0, out + err
+    assert marker.exists(), "the explicit PYTHON was replaced by another interpreter"
+
+
 @pytest.mark.parametrize("error", [FileNotFoundError("gate list missing"), ValueError("gate schema invalid")])
 def test_scheduled_selection_errors_are_red(world: World, monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
     """Loader failures are failed checks with diagnostics, never unhandled verb failures."""

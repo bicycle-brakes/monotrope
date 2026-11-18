@@ -317,24 +317,9 @@ trap 'verify_tmp_signal 3' QUIT
 # Let pytest resolve its own option sources, including ini overrides and @files.
 # The module lives in this run's area, so nested runs load their own guard and
 # no extra repository module or independent option parser is needed.
-if ! cat > "$verify_tmp_area/harness_verify_tmp.py" <<'PYEOF'
-import os
-from pathlib import Path
-
-import pytest
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_configure(config):
-    area = Path(os.environ["HARNESS_VERIFY_TMP_AREA"]).resolve()
-    selected = config.option.basetemp or os.environ["PYTEST_DEBUG_TEMPROOT"]
-    root = Path(selected).resolve()
-    if not root.is_relative_to(area):
-        raise pytest.UsageError(
-            f"verify-tmp: basetemp {root} lies outside this run's area {area}"
-        )
-PYEOF
-then
+# The plugin text is the scheduler's own (scripts/verify_run.py), the one the Stage-2
+# full check installs as well — no second copy here.
+if ! "$PYTHON" scripts/verify_run.py --write-tmp-guard "$verify_tmp_area"; then
     echo "verify-tmp: cannot write pytest guard in $verify_tmp_area" >&2
     exit 2
 fi

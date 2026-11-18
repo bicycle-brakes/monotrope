@@ -6312,17 +6312,21 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     slot: dict[str, int | None] = {"fd": None}
     limit = f"the runner's step limit after {VERIFY_SECONDS // 60} minutes"
 
-    # The interpreter every gate runs under, chosen as the shell runner chose it: the worktree's own
-    # locked environment when it exists, else the runner's. A gate's bare `python3` becomes this one,
-    # and its directory leads `PATH` so a gate that calls `ruff` by name finds the locked one.
-    venv_python = root / ".venv" / "bin" / "python3"
-    own_venv = venv_python.is_file() and os.access(venv_python, os.X_OK)
-    pinned = str(venv_python) if own_venv else sys.executable
+    # The interpreter every gate runs under, chosen by the scheduler's one rule (the shell entry
+    # point's): an explicit `PYTHON` of the caller, else the worktree's own locked environment, else
+    # the runner's. A gate's bare `python3` becomes this one, and its directory leads `PATH` so a gate
+    # that calls `ruff` by name finds the locked one (decisions.md Q-8).
+    pinned, explicit = verify_run.choose_interpreter(root, env)
 
     def run_gate(_gate: dict[str, object], command: str, gate_env: dict[str, str]) -> verify_run.GateProcess:
         descriptor = slot.get("fd")
         pass_fds = (descriptor,) if gate_env.get(verify_lock.LOCK_ENV) and descriptor is not None else ()
-        gate_env = {**gate_env, "PYTHON": pinned, "PATH": gate_env_path(root, gate_env)}
+        path = gate_env_path(root, gate_env)
+        if explicit and "/" in pinned:
+            interpreter_dir = str(Path(pinned).parent)
+            if interpreter_dir not in path.split(os.pathsep):
+                path = os.pathsep.join([interpreter_dir, path]).rstrip(os.pathsep)
+        gate_env = {**gate_env, "PYTHON": pinned, "PATH": path}
         argv = _gate_argv(str(command), pinned)
         try:
             done = launch(
@@ -6353,18 +6357,21 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     captured_out = io.StringIO()
     captured_err = io.StringIO()
     try:
-        result = verify_run.run_verification(
-            root,
-            job=job,
-            env=env,
-            out=captured_out,
-            err=captured_err,
-            executor=run_gate,
-            clock=lambda: clock_now().monotonic,
-            budget=budget,
-            lock_slot=slot,
-            admission_command=[sys.executable, *sys.argv],
-        )
+        # The run's own temporary area with the pytest guard, as the shell entry point installs it
+        # (decisions.md Q-8): a `--basetemp` outside it is refused, never cleared.
+        with verify_run.guarded_tmp_area(env) as guarded:
+            result = verify_run.run_verification(
+                root,
+                job=job,
+                env=guarded,
+                out=captured_out,
+                err=captured_err,
+                executor=run_gate,
+                clock=lambda: clock_now().monotonic,
+                budget=budget,
+                lock_slot=slot,
+                admission_command=[sys.executable, *sys.argv],
+            )
     except (verify_lock.VerifyLockError, OSError, ValueError, yaml.YAMLError) as error:
         # Cheap work may already have executed. Keep its frames and diagnostics
         # alongside the refusal/selection error as an ordinary failed check.

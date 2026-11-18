@@ -1152,3 +1152,90 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1eee5-7ae9-7120-8f05-e13274e20484, 2026-11-18
 Reviewer session: codex 01a1eee5-7ae9-7120-8f05-e13274e20484 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4649 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-1-20261118T153859813844Z-027a1952.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4650 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-2-20261118T153859813844Z-027a1952.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1117 files, 4650 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +26 -19
+> - `scripts/verify_all.sh` +3 -18
+> - `scripts/verify_run.py` +75 -0
+> - `tests/test_stage2.py` +66 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/stage2.py:6326:31: PTH120 `os.path.dirname()` should be replaced by `Path.parent`
+>      |
+> 6324 |         path = gate_env_path(root, gate_env)
+> 6325 |         if explicit and "/" in pinned:
+> 6326 |             interpreter_dir = os.path.dirname(pinned)
+>      |                               ^^^^^^^^^^^^^^^ PTH120
+> 6327 |             if interpreter_dir not in path.split(os.pathsep):
+> 6328 |                 path = os.pathsep.join([interpreter_dir, path]).rstrip(os.pathsep)
+>      |
+>
+> scripts/verify_run.py:437:36: PTH117 `os.path.isabs()` should be replaced by `Path.is_absolute()`
+>     |
+> 435 |     explicit = (env.get("PYTHON") or "").strip()
+> 436 |     if explicit:
+> 437 |         if "/" in explicit and not os.path.isabs(explicit):
+>     |                                    ^^^^^^^^^^^^^ PTH117
+> 438 |             explicit = os.path.join(os.getcwd(), explicit)
+> 439 |         return explicit, True
+>     |
+>
+> scripts/verify_run.py:438:24: PTH118 `os.path.join()` should be replaced by `Path` with `/` operator
+>     |
+> 436 |     if explicit:
+> 437 |         if "/" in explicit and not os.path.isabs(explicit):
+> 438 |             explicit = os.path.join(os.getcwd(), explicit)
+>     |                        ^^^^^^^^^^^^ PTH118
+> 439 |         return explicit, True
+> 440 |     venv_python = Path(root) / ".venv" / "bin" / "python3"
+>     |
+>
+> scripts/verify_run.py:438:37: PTH109 `os.getcwd()` should be replaced by `Path.cwd()`
+>     |
+> 436 |     if explicit:
+> 437 |         if "/" in explicit and not os.path.isabs(explicit):
+> 438 |             explicit = os.path.join(os.getcwd(), explicit)
+>     |                                     ^^^^^^^^^ PTH109
+> 439 |         return explicit, True
+> 440 |     venv_python = Path(root) / ".venv" / "bin" / "python3"
+>     |
+>
+> Found 4 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-3-20261118T153859813844Z-027a1952.md
+> ```

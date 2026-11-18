@@ -66,10 +66,12 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -370,6 +372,75 @@ def shell_argv(resolved: str) -> list[str]:
     both paths (loop row L3-4); `sh` is the shell both ran before the scheduler.
     """
     return ["sh", "-c", resolved]
+
+
+# The pytest plugin of the runner-owned temporary area (bead coding-harness-bxxt.3): it refuses
+# a `--basetemp` (or ini/@file override) outside the run's own area, which pytest would clear.
+# This is the one text of it: the shell entry point writes it through `--write-tmp-guard`, and
+# Stage 2 through `tmp_guard_environment`, so the two full-check paths cannot drift (Q-8).
+TMP_GUARD_MODULE = "harness_verify_tmp"
+TMP_GUARD_SOURCE = """\
+import os
+from pathlib import Path
+
+import pytest
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config):
+    area = Path(os.environ["HARNESS_VERIFY_TMP_AREA"]).resolve()
+    selected = config.option.basetemp or os.environ["PYTEST_DEBUG_TEMPROOT"]
+    root = Path(selected).resolve()
+    if not root.is_relative_to(area):
+        raise pytest.UsageError(
+            f"verify-tmp: basetemp {root} lies outside this run's area {area}"
+        )
+"""
+
+
+def write_tmp_guard(area: Path | str) -> None:
+    """Write the guard plugin into the run's own temporary area."""
+    (Path(area) / f"{TMP_GUARD_MODULE}.py").write_text(TMP_GUARD_SOURCE, encoding="utf-8")
+
+
+def tmp_guard_environment(area: Path | str, env: dict[str, str]) -> dict[str, str]:
+    """`env` with the run's temporary area and its guard plugin installed, as the shell exports them."""
+    place = str(area)
+    write_tmp_guard(place)
+    guarded = dict(env)
+    guarded["PYTEST_DEBUG_TEMPROOT"] = place
+    guarded["HARNESS_VERIFY_TMP_AREA"] = place
+    guarded["PYTHONPATH"] = place + (f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else "")
+    guarded["PYTEST_ADDOPTS"] = f"{env.get('PYTEST_ADDOPTS', '')} -p {TMP_GUARD_MODULE}"
+    return guarded
+
+
+@contextlib.contextmanager
+def guarded_tmp_area(env: dict[str, str]):
+    """A private run area with the guard installed, yielded as the guarded environment; removed at the end."""
+    area = tempfile.mkdtemp(prefix="verify-run-")
+    try:
+        yield tmp_guard_environment(area, env)
+    finally:
+        shutil.rmtree(area, ignore_errors=True)
+
+
+def choose_interpreter(root: Path | str, env: dict[str, str]) -> tuple[str, bool]:
+    """The interpreter every gate runs under, and whether the caller named it: (path, explicit).
+
+    The shell entry point's rule: an explicit `PYTHON` first (a relative path with a slash is read
+    where the caller stands, a bare name stays a PATH lookup), else the checkout's own locked
+    `.venv/bin/python3`, else the running interpreter.
+    """
+    explicit = (env.get("PYTHON") or "").strip()
+    if explicit:
+        if "/" in explicit and not Path(explicit).is_absolute():
+            explicit = str(Path.cwd() / explicit)
+        return explicit, True
+    venv_python = Path(root) / ".venv" / "bin" / "python3"
+    if venv_python.is_file() and os.access(venv_python, os.X_OK):
+        return str(venv_python), False
+    return sys.executable, False
 
 
 # The process groups of gates the default executor is currently running; a
@@ -903,7 +974,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--job", choices=ci_gates.JOBS + ci_gates.SUBSETS, default="verify")
     parser.add_argument("--ci", action="store_true", help="the CI's gate set: exhaustive, action equivalents skipped")
     parser.add_argument("--root", default=None, help="the checkout to measure (default: this checkout's root)")
+    parser.add_argument("--write-tmp-guard", default=None, metavar="AREA", help="write the temporary-area guard plugin")
     args = parser.parse_args(argv)
+    if args.write_tmp_guard:
+        write_tmp_guard(args.write_tmp_guard)
+        return 0
     wurzel = Path(args.root).resolve() if args.root else REPO_ROOT
     previous = _install_run_handlers()
     try:
