@@ -41,6 +41,10 @@ CANONICAL = re.compile(
 RowCells = tuple[str, ...]
 
 
+class CannotMeasure(Exception):
+    """The gate could not read the requested evidence."""
+
+
 def git(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(root), *args], capture_output=True, check=False)
 
@@ -51,13 +55,13 @@ def merge_base(root: Path, head: str) -> str:
         done = git(root, "merge-base", ref, head)
         if done.returncode == 0:
             return done.stdout.decode().strip()
-    raise SystemExit("check-duplicates: cannot measure — no origin/main or main to take the merge base from (3)")
+    raise CannotMeasure("check-duplicates: cannot measure — no origin/main or main to take the merge base from (3)")
 
 
 def head_commit(root: Path, rev: str) -> str:
     done = git(root, "rev-parse", "--verify", f"{rev}^{{commit}}")
     if done.returncode != 0:
-        raise SystemExit(f"check-duplicates: cannot measure — git does not know the revision {rev!r} (3)")
+        raise CannotMeasure(f"check-duplicates: cannot measure — git does not know the revision {rev!r} (3)")
     return done.stdout.decode().strip()
 
 
@@ -68,7 +72,7 @@ def changed_files(root: Path, base: str, head: str) -> list[tuple[str | None, st
     """
     done = git(root, "diff", "-M", "-z", "--name-status", base, head, "--", "plans/changes")
     if done.returncode != 0:
-        raise SystemExit(f"check-duplicates: cannot measure — the diff failed: {done.stderr.decode().strip()} (3)")
+        raise CannotMeasure(f"check-duplicates: cannot measure — the diff failed: {done.stderr.decode().strip()} (3)")
     tokens = done.stdout.decode().split("\0")
     pairs: list[tuple[str | None, str]] = []
     index = 0
@@ -97,11 +101,11 @@ def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
     """Every readable row of one findings.md at one commit, by id, in file order."""
     done = git(root, "show", f"{rev}:{path}")
     if done.returncode != 0:
-        raise SystemExit(f"check-duplicates: cannot measure — {path} is not in {rev[:12]} (3)")
+        raise CannotMeasure(f"check-duplicates: cannot measure — {path} is not in {rev[:12]} (3)")
     try:
         text = done.stdout.decode("utf-8")
     except UnicodeDecodeError:
-        raise SystemExit(f"check-duplicates: cannot measure — {path} at {rev[:12]} is not valid UTF-8 (3)") from None
+        raise CannotMeasure(f"check-duplicates: cannot measure — {path} at {rev[:12]} is not valid UTF-8 (3)") from None
     rows: dict[str, list[RowCells]] = {}
     for line in text.splitlines():
         cells = reader.split_row(line)
@@ -145,9 +149,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--head", default="HEAD", help="the head revision (default: HEAD)")
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    head = head_commit(root, args.head)
-    base = head_commit(root, args.base) if args.base else merge_base(root, head)
-    findings = measure(root, base, head)
+    try:
+        head = head_commit(root, args.head)
+        base = head_commit(root, args.base) if args.base else merge_base(root, head)
+        findings = measure(root, base, head)
+    except CannotMeasure as exc:
+        print(exc, file=sys.stderr)
+        return 3
     if findings:
         for finding in findings:
             print(finding)

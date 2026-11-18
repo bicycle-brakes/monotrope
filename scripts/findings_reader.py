@@ -107,19 +107,24 @@ def normalized_status(status: str) -> str:
     return " ".join(status.strip().lower().split())
 
 
+def starts_with_status(status: str, prefixes: tuple[str, ...]) -> bool:
+    """Match complete leading status words, not longer words sharing a prefix."""
+    return any(re.match(rf"{re.escape(prefix)}(?!\w)", status) for prefix in prefixes)
+
+
 def status_outcome(status: str) -> str | None:
     """The outcome bucket of a known status; None for raised-only statuses.
 
     Callers that must tell an unknown status apart check ``known_status`` too.
     """
     lowered = normalized_status(status)
-    if lowered.startswith(("open", "accepted limit")):
+    if starts_with_status(lowered, ("open", "accepted limit")):
         return None
-    if lowered.startswith(DEFECT_PREFIXES):
+    if starts_with_status(lowered, DEFECT_PREFIXES):
         return "defects_accepted"
-    if lowered.startswith(QUESTION_PREFIXES):
+    if starts_with_status(lowered, QUESTION_PREFIXES):
         return "questions_settled"
-    if lowered.startswith("rejected"):
+    if starts_with_status(lowered, ("rejected",)):
         return "rejected"
     return None
 
@@ -128,12 +133,12 @@ def known_status(status: str) -> bool:
     """Whether the status is in the closed set (decisions F-27); duplicates are known."""
     if is_duplicate(status):
         return True  # a marker with a row id is a recognized duplicate form
-    return normalized_status(status).startswith(KNOWN_STATUS_PREFIXES)
+    return starts_with_status(normalized_status(status), KNOWN_STATUS_PREFIXES)
 
 
 def duplicate_targets(status: str) -> list[str]:
     """The row ids a duplicate marker names, deduplicated, in deterministic order."""
-    return sorted(set(FINDING_ID.findall(status)))
+    return sorted(set(FINDING_ID.findall(status.split(":", 1)[0])))
 
 
 def is_duplicate(status: str) -> bool:

@@ -476,3 +476,16 @@ def test_phase2a_ids_excluded():
 def test_row_shapes_match_the_runner():
     stage2 = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
     assert f'RELEASE_HEADING = "{fr.RELEASE_HEADING}"' in stage2, "the release heading drifted from the writer"
+
+
+def test_duplicate_reason_does_not_add_targets():
+    status = "rejected — duplicate of L1-1: see L1-2"
+    assert fr.duplicate_targets(status) == ["L1-1"], "reason IDs are not duplicate targets"
+    result = read(doc(RELEASE, lrow("L1-1", "hy3", "fixed"), lrow("L1-3", "hy3", status)))
+    assert not result.gaps, "a reason ID must not create a missing-target gap"
+
+
+def test_statuses_require_whole_leading_words():
+    for status in ("fixedy", "rejectedly", "openly", "takenish", "in specialty"):
+        assert not fr.known_status(status), f"malformed status accepted: {status}"
+        assert fr.status_outcome(status) is None, f"malformed status counted: {status}"

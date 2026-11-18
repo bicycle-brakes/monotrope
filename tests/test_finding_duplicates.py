@@ -108,3 +108,21 @@ def test_new_duplicate_form_gate_exit_codes(tmp_path, capsys):
     bad = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", "repeat of L1-1"))})
     assert gate.main(["--root", str(root), "--base", base, "--head", bad]) == 1
     assert "L1-2" in capsys.readouterr().out
+
+
+def test_cannot_measure_exits_three(tmp_path):
+    root, base = base_repo(tmp_path, {PATH: HEADER})
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/check_finding_duplicates.py"),
+            "--root",
+            str(root),
+            "--head",
+            "missing",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 3, f"cannot-measure must exit 3, got {result.returncode}: {result.stderr}"
