@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -88,6 +88,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: the previous Sonn
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: one targeted test still red after two Sonnet passes (test_unsafe_header_refuses_attempt); continues from that tree.
 
+## Runner route — 2026-11-19
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -104,3 +108,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: one targeted test
 2026-11-18 21:56:19–22:02:36 UTC, 377 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-18 22:03:06–22:03:34 UTC, 29 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-18 22:04:11–22:05:29 UTC, 78 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_runner_stamps_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
+2026-11-18 22:12:21–22:27:16 UTC, 895 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-18 22:27:25–23:04:11 UTC, 2206 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-18 23:04:19–23:13:51 UTC, 571 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

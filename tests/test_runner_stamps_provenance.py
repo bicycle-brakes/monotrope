@@ -945,6 +945,16 @@ def test_active_research_contract_matches_census(repo, monkeypatch):
     assert checks == [], "the incompatible research fails the shared check before any post-run check"
 
 
+@pytest.mark.parametrize("position", [0, 1])
+def test_duplicate_key_in_producer_list_is_committed_fault(position):
+    valid = '{kind: llm-session, name: codex, version: "2026-11-04"}'
+    duplicate = '{kind: llm-session, name: pi, name: codex, version: "2026-11-04"}'
+    records = [valid, valid]
+    records[position] = duplicate
+    with pytest.raises(stage2.CommittedRecordFault, match="duplicate keys"):
+        stage2.parse_producer_records(f"[{', '.join(records)}]", "docs/example.md")
+
+
 def test_prepublication_failure_routing(repo, monkeypatch):
     relative = "plans/changes/demo/research.md"
     model_calls = []

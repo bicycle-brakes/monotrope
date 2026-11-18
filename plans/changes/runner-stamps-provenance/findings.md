@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-16
 created: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -608,3 +608,292 @@ Stage-2 call, 2026-11-18: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-18: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1115 files, 4687 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1115 files, 4687 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4689 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +6 -4
+> - `tests/test_runner_stamps_provenance.py` +10 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> templates/design.md:16 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/design.md:97 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Added"]
+> templates/design.md:101 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Changed"]
+> templates/design.md:105 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Removed"]
+> templates/findings.md:18 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/findings.md:45:5 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:9 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:13 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:21 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:25 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> templates/findings.md:46:7 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:15 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:22 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:54 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:99 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:106 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:63 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Severity"]
+> templates/findings.md:71 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Dimension"]
+> templates/findings.md:77 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Origin"]
+> templates/findings.md:84 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Markers that override everythi..."]
+> templates/findings.md:111:81 error MD013/line-length Line length [Expected: 80; Actual: 91]
+> templates/findings.md:112:81 error MD013/line-length Line length [Expected: 80; Actual: 101]
+> templates/findings.md:126:81 error MD013/line-length Line length [Expected: 80; Actual: 125]
+> templates/handover.md:20:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 162]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/repo-settings.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 83]
+> templates/repo-settings.md:23:81 error MD013/line-length Line length [Expected: 80; Actual: 85]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> templates/spec.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 122]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-1-20261118T221211185329Z-a96880dd.md
+> ````
+
+Stage-2 call, 2026-11-18: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4691 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - `make verify` exited 2
+> templates/design.md:16 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/design.md:97 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Added"]
+> templates/design.md:101 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Changed"]
+> templates/design.md:105 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Removed"]
+> templates/findings.md:18 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/findings.md:45:5 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:9 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:13 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:21 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:25 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> templates/findings.md:46:7 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:15 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:22 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:54 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:99 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:106 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:63 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Severity"]
+> templates/findings.md:71 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Dimension"]
+> templates/findings.md:77 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Origin"]
+> templates/findings.md:84 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Markers that override everythi..."]
+> templates/findings.md:111:81 error MD013/line-length Line length [Expected: 80; Actual: 91]
+> templates/findings.md:112:81 error MD013/line-length Line length [Expected: 80; Actual: 101]
+> templates/findings.md:126:81 error MD013/line-length Line length [Expected: 80; Actual: 125]
+> templates/handover.md:20:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 162]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/repo-settings.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 83]
+> templates/repo-settings.md:23:81 error MD013/line-length Line length [Expected: 80; Actual: 85]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> templates/spec.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 122]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-2-20261118T221211185329Z-a96880dd.md
+> ````
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4695 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - `make verify` exited 2
+> templates/design.md:16 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/design.md:97 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Added"]
+> templates/design.md:101 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Changed"]
+> templates/design.md:105 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Removed"]
+> templates/findings.md:18 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/findings.md:45:5 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:9 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:13 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:21 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:45:25 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> templates/findings.md:46:7 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:15 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:22 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:54 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:99 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:46:106 error MD060/table-column-style Table column style [Table pipe does not align with header for style "aligned"]
+> templates/findings.md:63 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Severity"]
+> templates/findings.md:71 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Dimension"]
+> templates/findings.md:77 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Origin"]
+> templates/findings.md:84 error MD036/no-emphasis-as-heading Emphasis used instead of a heading [Context: "Markers that override everythi..."]
+> templates/findings.md:111:81 error MD013/line-length Line length [Expected: 80; Actual: 91]
+> templates/findings.md:112:81 error MD013/line-length Line length [Expected: 80; Actual: 101]
+> templates/findings.md:126:81 error MD013/line-length Line length [Expected: 80; Actual: 125]
+> templates/handover.md:20:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> templates/handover.md:20:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> templates/handover.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 162]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/repo-settings.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 83]
+> templates/repo-settings.md:23:81 error MD013/line-length Line length [Expected: 80; Actual: 85]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> templates/spec.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 122]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261118T221211185329Z-a96880dd.md
+> ````

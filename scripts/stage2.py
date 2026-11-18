@@ -9347,10 +9347,12 @@ def parse_producer_records(field: str, relative: str) -> list[dict]:
         node = yaml.compose(field)
     except yaml.YAMLError as error:
         raise _committed_fault(relative, f"invalid YAML ({error})") from None
-    if isinstance(node, yaml.MappingNode):
-        keys = [key.value for key, _ in node.value]
-        if len(keys) != len(set(keys)):
-            raise _committed_fault(relative, "duplicate keys")
+    record_nodes = node.value if isinstance(node, yaml.SequenceNode) else [node]
+    for record_node in record_nodes:
+        if isinstance(record_node, yaml.MappingNode):
+            keys = [key.value for key, _ in record_node.value]
+            if len(keys) != len(set(keys)):
+                raise _committed_fault(relative, "duplicate keys")
     try:
         loaded = yaml.safe_load(field)
     except yaml.YAMLError as error:
