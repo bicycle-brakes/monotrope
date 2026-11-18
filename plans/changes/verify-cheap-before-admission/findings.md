@@ -1121,7 +1121,7 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_run.py | Bei einer Auswahl mit geschützten Prüfungen wird der Arbeitsbaum bereits vor der günstigen Prüfphase gemessen. Schlägt eine günstige Prüfung anschließend blockierend fehl, wurde dennoch ein Baseline-Snapshot erstellt; ein langsames Git oder ein großer Arbeitsbaum verzögert außerdem die Diagnose. Die Spezifikation schließt diese Messung für einen solchen fehlgeschlagenen Lauf ausdrücklich aus. [Boundaries: Tree comparison] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_run.py | Bei einer Auswahl mit geschützten Prüfungen wird der Arbeitsbaum bereits vor der günstigen Prüfphase gemessen. Schlägt eine günstige Prüfung anschließend blockierend fehl, wurde dennoch ein Baseline-Snapshot erstellt; ein langsames Git oder ein großer Arbeitsbaum verzögert außerdem die Diagnose. Die Spezifikation schließt diese Messung für einen solchen fehlgeschlagenen Lauf ausdrücklich aus. [Boundaries: Tree comparison] | Codex | fixed — orchestrator hand edit, spec Boundaries amended (maintainer answer A, 2026-11-18) | — |
 
 Phase 6 verdict: codex 01a1ec38-5ed2-7ab1-9e52-9355667813b3, 2026-11-18
 Reviewer session: codex 01a1ec38-5ed2-7ab1-9e52-9355667813b3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

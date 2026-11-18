@@ -163,8 +163,11 @@ different contents of an already dirty file (research, â€œDraft gap resolutionâ€
   untracked path, because "same tree" is defined by content; its cost grows
   with the checkout and has no bound of its own. Only a run with protected
   work measures it, at most five times (before and after each cheap pass and
-  at the admission boundary); a seconds-only job and a cheap pass that ended
-  blocking red measure no baseline at all. Measured at `36b4b356`
+  at the admission boundary); a seconds-only job measures no baseline at
+  all. With protected work selected, the baseline is taken before the cheap
+  pass and discarded when that pass ends blocking red: no further snapshot
+  is taken after a red cheap pass (maintainer, 2026-11-18, finding F6-1).
+  Measured at `36b4b356`
   (2026-11-14): 0.07 to 0.19 s per snapshot over 1,066 paths. A recipient
   with a large non-ignored untracked tree ignores it or pays that cost (loop
   row L2-8).
