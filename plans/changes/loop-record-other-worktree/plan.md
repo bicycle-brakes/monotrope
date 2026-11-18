@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -85,3 +85,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Sonnet rerun left
 2026-11-18 15:13:59–15:15:18 UTC, 79 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-18 15:36:39–15:39:10 UTC, 151 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-18 16:26:32–16:52:32 UTC, 1560 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-18 22:11:43–23:28:28 UTC, 4605 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

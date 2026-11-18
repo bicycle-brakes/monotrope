@@ -29064,3 +29064,122 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_interrupted_supersession_requires_complete_keys(world: World, capsys) -> None:
+    first = other_worktree(world)
+    second = other_worktree(world, "repo-c")
+    keys = sorted([stage2.record_key("demo", first), stage2.record_key("demo", second)])
+    for root in (first, second):
+        write_foreign_record(root, [4])
+    own = stage2.record_key("demo", world.root)
+    staging = archive_base() / f"{stage2.STAGING_PREFIX}demo@{own.split('@')[1]}@2026-01-01T00-00-00Z"
+    staging.mkdir(parents=True)
+    stage2._write_supersession_manifest(staging, "demo", own, keys)
+    moved, active = keys
+    (staging / moved).mkdir()
+    shutil.move(str(stage2.record_base() / moved / "loop.md"), str(staging / moved / "loop.md"))
+    assert supersede(world, active) == 2
+    assert moved in capsys.readouterr().err
+    assert (staging / moved / "loop.md").exists()
+
+
+def test_staging_precedes_old_archive_and_rejects_reactivated_key(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    own = stage2.record_key("demo", world.root)
+    old = archive_base() / f"demo@{own.split('@')[1]}@2026-01-01T00-00-00Z"
+    (old / key).mkdir(parents=True)
+    stage2._write_supersession_manifest(old, "demo", own, [key])
+    (old / key / "loop.md").write_text("old", encoding="utf-8")
+    staging = archive_base() / f"{stage2.STAGING_PREFIX}demo@{own.split('@')[1]}@2026-01-02T00-00-00Z"
+    (staging / key).mkdir(parents=True)
+    stage2._write_supersession_manifest(staging, "demo", own, [key])
+    record = write_foreign_record(other, [7])
+    original = record.read_bytes()
+    shutil.move(str(record), str(staging / key / "loop.md"))
+    assert supersede(world, key) == 0
+    assert "rounds 7-7" in world.text()
+    assert (
+        archive_base() / staging.name.removeprefix(stage2.STAGING_PREFIX) / key / "loop.md"
+    ).read_bytes() == original
+
+
+def test_staging_refuses_reactivated_record(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    own = stage2.record_key("demo", world.root)
+    staging = archive_base() / f"{stage2.STAGING_PREFIX}demo@{own.split(chr(64))[1]}@2026-01-02T00-00-00Z"
+    original = write_foreign_record(other, [7]).read_bytes()
+    (staging / key).mkdir(parents=True)
+    stage2._write_supersession_manifest(staging, "demo", own, [key])
+    (staging / key / "loop.md").write_bytes(original)
+    new_record = write_foreign_record(other, [9])
+    assert supersede(world, key) == 2
+    assert (staging / key / "loop.md").read_bytes() == original
+    assert new_record.exists()
+
+
+def test_worktree_discovery_failure_refuses_restart(world: World, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    other = other_worktree(world)
+    write_foreign_record(other, [1])
+    world.write_findings("Loop restarted: 2026-11-17 after round 2 — earlier")
+    real = stage2._git_output
+
+    def fail_listing(root, *args, **kwargs):
+        if args[:2] == ("worktree", "list"):
+            raise stage2.Refused("injected listing failure")
+        return real(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", fail_listing)
+    assert world.run("release-loop", "demo", "--restart", "--reason", "again") == 2
+    assert "discovery failed" in capsys.readouterr().err
+
+
+def test_plain_restart_reason_cannot_impersonate_supersession(world: World) -> None:
+    world.write_findings(
+        "Loop restarted: 2026-11-17 after round 2 — superseded record old evidence",
+        VERDICT,
+        stage2.RELEASE_HEADING + " 2026-11-17",
+        "Rounds run: 1",
+    )
+    assert world.run("release-loop", "demo", "--restart", "--reason", "superseded record is just my reason") == 0
+    assert world.run("release-loop") == 0
+
+
+def test_staging_manifest_failure_is_reported(world: World, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+
+    def fail_manifest(*_args):
+        raise OSError("injected manifest failure")
+
+    monkeypatch.setattr(stage2, "_write_supersession_manifest", fail_manifest)
+    try:
+        result = supersede(world, key)
+    except OSError as error:
+        pytest.fail(f"manifest failure escaped instead of being reported: {error}")
+    assert result == 1
+    assert "archive could not be completed" in capsys.readouterr().err
+    assert supersede(world, key) == 2
+    assert "manifest cannot be read" in capsys.readouterr().err
+
+
+def test_supersession_floor_includes_own_history(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [2])
+    world.write_findings("Loop restarted: 2026-11-17 after round 9 — superseded record older")
+    assert supersede(world, key) == 0
+    assert stage2.restart_floor(world.text()) == 9
+
+
+def test_no_record_retire_and_triage_name_foreign_key(world: World, capsys) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "unavailable") == 2
+    assert key in capsys.readouterr().err
+    assert world.run("triage", "demo", "L1-1=taken", "repair") == 2
+    assert key in capsys.readouterr().err

@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-18
 created: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -364,3 +364,7 @@ Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1117 files, 4679 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1117 files, 4679 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4688 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged

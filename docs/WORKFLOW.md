@@ -1667,8 +1667,8 @@ of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
 (also the release inside `review`), `prepare-loop`, `triage` and
-`release-loop --stage-failed` refuse and name the record path they
-expected — and, when active records of the same change stand under other
+`release-loop --stage-failed` refuse. Except for `triage`, they name the record path they
+expected; when active records of the same change stand under other
 worktree keys of this repository in the same state directory, every such key.
 The keys are derived from `git worktree list` alone; records of removed
 worktrees, of other repositories and of other changes are never named, and
@@ -1695,7 +1695,7 @@ change was continued in a second worktree of this repository — is never
 adopted by an ordinary verb; each worktree's record stays private, and the
 plain `--restart` refuses while such a record is active, naming its keys. The
 maintainer supersedes it explicitly: `release-loop <change> --restart
---supersedes <key> --reason <text>`, once per active other-worktree key.
+--supersedes <key> --reason <text>`, repeating `--supersedes <key>` in that one call for every active other-worktree key.
 Supersession reads each selected record only under its lock, moves everything
 a release would delete — `availability.json` included — into one unique
 archive directory

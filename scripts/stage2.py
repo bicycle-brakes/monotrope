@@ -3484,8 +3484,8 @@ def worktree_digests(root: Path) -> list[str]:
     """
     try:
         listing = _git_output(root, "worktree", "list", "--porcelain")
-    except Refused:
-        return []
+    except Refused as error:
+        raise Refused(f"worktree discovery failed: {error}") from error
     digests: list[str] = []
     for line in listing.splitlines():
         if not line.startswith("worktree "):
@@ -4870,6 +4870,8 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         raise Refused(f"{change} has no completed loop round; a fresh review-loop needs no restart.")
     if restarted_fresh(None, text):
         raise Refused("the loop is already restarted and no round has run since; nothing is written.")
+    if reason.startswith(SUPERSEDED_CLAUSE + " ") or reason == SUPERSEDED_CLAUSE:
+        reason = "reason: " + reason
     append(findings_path, f"Loop restarted: {today()} after round {last} — {reason}")
     print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
 
@@ -4911,8 +4913,20 @@ def _supersession_resumes(change: str, superseder: str, keys: list[str], archive
             continue
         try:
             manifest = json.loads((entry / MANIFEST_NAME).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            if staging and name.startswith(f"{change}@{superseder.split(chr(64))[-1]}@"):
+                raise Refused(f"staged supersession manifest cannot be read at `{entry}`: {error}") from error
             continue
+        if (
+            staging
+            and isinstance(manifest, dict)
+            and manifest.get("change") == change
+            and manifest.get("superseder") == superseder
+            and manifest.get("keys") != sorted(keys)
+        ):
+            raise Refused(
+                "unfinished supersession requires its complete key set: " + ", ".join(manifest.get("keys", []))
+            )
         if (
             isinstance(manifest, dict)
             and manifest.get("change") == change
@@ -4923,7 +4937,7 @@ def _supersession_resumes(change: str, superseder: str, keys: list[str], archive
     if not found:
         return None
     # Unfinished work first, then the newest archive: only one can exist for one key set.
-    found.sort(key=lambda item: (not item["staging"], str(item["path"])))
+    found.sort(key=lambda item: (item["staging"], str(item["path"])))
     return found[-1]
 
 
@@ -5000,6 +5014,10 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
         refusal = _supersede_request_refusal(change, root, keys, resume, require_current_free=True)
         if refusal:
             raise Refused(refusal)
+        if resume is not None and resume["staging"]:
+            for key in keys:
+                if (resume["path"] / key / "loop.md").exists() and (base / key / "loop.md").exists():
+                    raise Refused(f"`{key}` became active again during supersession; staged record is preserved.")
         records: dict[str, str] = {}
         for key in keys:
             if key not in other_record_keys(change, root):
@@ -5024,9 +5042,10 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
             else:
                 archive_name = _supersession_archive_name(archive_base, change, current.split("@", 1)[1])
                 staging = archive_base / f"{STAGING_PREFIX}{archive_name}"
-                staging.mkdir(parents=True)
-                _write_supersession_manifest(staging, change, current, keys)
             try:
+                if resume is None or not resume["staging"]:
+                    staging.mkdir(parents=True)
+                    _write_supersession_manifest(staging, change, current, keys)
                 for key in keys:
                     source = base / key
                     target = staging / key
@@ -5071,7 +5090,12 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
             key: [int(number) for number in re.findall(r"^## Round (\d+) — ", record, re.M)]
             for key, record in records.items()
         }
-        highest = max((max(numbers) for numbers in rounds.values() if numbers), default=0)
+        highest = max(
+            max((max(numbers) for numbers in rounds.values() if numbers), default=0),
+            max(history_rounds(None, text), default=0),
+            rounds_run(None, text),
+            restart_floor(text),
+        )
         line = _supersede_accounting_line(keys, rounds, archive_dir.name, highest, pending, reason)
         matched = any(
             f"{ARCHIVE_PATH_FORM}/{archive_dir.name}/" in match.group(3)
