@@ -1705,6 +1705,17 @@ def test_supersede_release_requires_a_new_round(world: World, capsys) -> None:
     assert stage2.RELEASE_HEADING in world.text() and "L3-1" in world.text()
 
 
+def test_plain_restart_after_supersession_allows_release(world: World) -> None:
+    """A later plain restart restores ordinary release behavior without a fresh round."""
+    world.write_findings(
+        "## Phase 6 — earlier, 2026-11-17",
+        VERDICT,
+        "Loop restarted: 2026-11-17 after round 2 — superseded record old evidence",
+        "Loop restarted: 2026-11-18 after round 2 — plain restart",
+    )
+    assert world.run("release-loop") == 0, "a supersession preceding the latest plain restart blocked release"
+
+
 def test_supersede_requires_a_new_verdict(world: World) -> None:
     """Criterion 11: a verdict written before the supersession releases nothing; the fresh run's
     release needs a verdict written after the restart line.

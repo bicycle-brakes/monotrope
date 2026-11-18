@@ -3596,7 +3596,7 @@ def superseded_release_refusal(change: str, text: str) -> str | None:
     its line carries no `superseded record` clause.
     """
     superseded = list(SUPERSEDED_RESTART_LINE.finditer(text))
-    if superseded and superseded[-1].start() > _last_release(text):
+    if superseded and superseded[-1].start() == _last_restart(text) and superseded[-1].start() > _last_release(text):
         return (
             f"{change} was restarted by superseding another worktree's archived record; no round has run "
             "here since, so there is nothing to release; run review-loop first. Nothing is written."
