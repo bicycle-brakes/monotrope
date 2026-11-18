@@ -123,3 +123,46 @@ context: |
   (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
 
 In the context of a per-model report over historical findings that cannot be edited, facing rows that cannot be read or resolved, we decided to always print the table and the JSON, flag gaps as 'incomplete' with the affected rows and exit non-zero, every unreadable row (cell count, unknown status, encoding) being a gap and never silently 'unattributed', to achieve a report that is always visible yet never passes an incomplete count as complete, accepting a non-zero exit as long as any historical gap remains. — 2026-11-18
+
+## Agent decisions on the second phase-2a rows F-12..F-19 — 2026-11-18
+
+Second spec-review round (maintainer rule of 2026-11-18: triage each round,
+at most three rounds). Decisions by the orchestrating session (Opus 5.5),
+shown to the maintainer as one list and accepted as proposed ("A: So
+übernehmen"). F-14 refines the maintainer's answer on F-3 and is marked so;
+the rest are `[DETAIL]` decisions derived from the answers on F-1, F-2, F-8.
+
+- **F-14, duplicate chains (refines the F-3 answer).** A chain of duplicate
+  markers is followed to its root; credit goes only to the root row(s), rows
+  that are not themselves duplicates. A duplicate never earns credit, even
+  when other rows name it. Rows that name each other in a cycle are a gap
+  (`incomplete`). Reason: otherwise criterion 8 contradicts itself on real
+  chains in the records (archive/2026-11-06-workflow-promises), and the root
+  is the model that actually raised the finding first.
+- **F-12, what a review call is.** Only a call line of the verb `review`
+  (phase 6) attributes a phase-6 block; any other verb directly above leaves
+  the block `unattributed`. Reason: no guessing (F-1).
+- **F-13, older phase-6 shapes.** Only headings of the runner form
+  `## Phase 6 — <who>, <date>` open a phase-6 section; other phase-6-like
+  headings give `unattributed` rows; tables with no heading are reported on
+  the line "outside the count". Rows with `2a-` ids are phase-2a rows and are
+  not counted. Reason: as for L1's legacy runs and F-8 — gaps shown, not
+  guessed.
+- **F-15, letter case.** Existing rows match the markers without regard to
+  case; new rows must use exactly the canonical form. Reason: nine real
+  duplicates in the records are capitalised.
+- **F-16, the duplicate gate.** Rows are new or changed relative to the merge
+  base with `origin/main`; the canonical Status is `rejected — duplicate of
+  <ID>`, the form `triage` writes. Reason: the runner can produce only that
+  form, and the merge base makes the gate the same locally and in CI.
+- **F-17, the attribution-source interface.** A source is given the change,
+  the findings file and the block identity (its heading line, its position
+  and the call lines directly above it) and returns a model id or
+  `unattributed`. The criterion's test plugs in a second source that
+  attributes by heading alone. Reason: the criterion can then go red.
+- **F-18, which commits the morning handover reports.** One report per
+  unmerged change branch that gained rows that night, plus `main` at the time
+  the handover is written. Reason: no lane's earlier item drops out.
+- **F-19, where the formats go.** The table to stdout; the JSON Lines to a
+  file under the state directory, whose path the run prints last. Reason:
+  metrics and the handover read from one fixed place.
