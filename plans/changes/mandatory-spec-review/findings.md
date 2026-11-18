@@ -175,3 +175,5 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-
 > ```
 
 Stage-2 call, 2026-11-18: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1114 files, 4655 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refused with claude-code:unrecognized_model glm-5.3-flash since about 16:07; the saved Flash tree crashed the runner's own admission, so this attempt starts from the plan · leak check clean over 1114 files, 4667 commits, 12 rules.
