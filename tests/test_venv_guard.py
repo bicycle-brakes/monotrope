@@ -376,6 +376,11 @@ def test_active_environment_missing_dependency_reports_hint(tmp_path: Path) -> N
 def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) -> None:
     first = _tree(tmp_path, framework=True, environment=True, name="first")
     second = _tree(tmp_path, framework=True, environment=True, name="second")
+    # Only the first environment lacks the dependencies, so the second guard really has to replace the process;
+    # the second environment carries them, so the replacement ends the chain and the marker is exercised.
+    site = next((first / ".venv" / "lib").glob("python*/site-packages"))
+    for dependency in THIRD_PARTY:
+        (site / f"{dependency}.py").unlink()
     counter = tmp_path / "starts"
     script = _write(
         first,
@@ -395,7 +400,7 @@ def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) 
     result = _run([str(first / ".venv" / "bin" / "python3"), str(script)], tmp_path)
 
     assert result.returncode == 0, result.stderr
-    assert int(counter.read_text()) <= 2
+    assert int(counter.read_text()) == 2, "the second guard must replace the process exactly once"
 
 
 def test_foreign_marker_allows_checkout_entry(tmp_path: Path) -> None:

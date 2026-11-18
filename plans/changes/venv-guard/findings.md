@@ -390,3 +390,127 @@ Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
 
 Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1116 files, 4679 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4681 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_venv_guard.py` +5 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....F..                                                                 [100%]
+> =================================== FAILURES ===================================
+> _________ test_guards_from_two_checkouts_replace_process_at_most_once __________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/venv-guard/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1866/popen-gw5/test_guards_from_two_checkouts0')
+>
+>     def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) -> None:
+>         first = _tree(tmp_path, framework=True, environment=True, name="first")
+>         second = _tree(tmp_path, framework=True, environment=True, name="second")
+>         for root in (first, second):
+>             site = next((root / ".venv" / "lib").glob("python*/site-packages"))
+>             for dependency in THIRD_PARTY:
+>                 (site / f"{dependency}.py").unlink()
+>         counter = tmp_path / "starts"
+>         script = _write(
+>             first,
+>             "cross.py",
+>             "import importlib.util\n"
+>             "from pathlib import Path\n"
+>             f"counter = Path({str(counter)!r})\n"
+>             "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+>             "counter.write_text(str(count))\n"
+>             "if count > 3: raise SystemExit('replacement loop')\n"
+>             "import venv_guard\n"
+>             f"spec = importlib.util.spec_from_file_location('other_guard', {str(second / 'scripts' / 'venv_guard.py')!r})\n"
+>             "module = importlib.util.module_from_spec(spec)\n"
+>             "spec.loader.exec_module(module)\n",
+>         )
+>     
+>         result = _run([str(first / ".venv" / "bin" / "python3"), str(script)], tmp_path)
+>     
+> >       assert result.returncode == 0, result.stderr
+> E       AssertionError: replacement loop
+> E         
+> E       assert 1 == 0
+> E        +  where 1 = CompletedProcess(args=['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1866/popen-...pen-gw5/test_guards_from_two_checkouts0/first/scripts/cross.py'], returncode=1, stdout='', stderr='replacement loop\n').returncode
+>
+> tests/test_venv_guard.py:401: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_venv_guard.py::test_guards_from_two_checkouts_replace_process_at_most_once
+> 1 failed, 7 passed in 0.69s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-1-20261118T220137204334Z-80d7586b.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4681 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....F..                                                                 [100%]
+> =================================== FAILURES ===================================
+> _________ test_guards_from_two_checkouts_replace_process_at_most_once __________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/venv-guard/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1869/popen-gw5/test_guards_from_two_checkouts0')
+>
+>     def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) -> None:
+>         first = _tree(tmp_path, framework=True, environment=True, name="first")
+>         second = _tree(tmp_path, framework=True, environment=True, name="second")
+>         for root in (first, second):
+>             site = next((root / ".venv" / "lib").glob("python*/site-packages"))
+>             for dependency in THIRD_PARTY:
+>                 (site / f"{dependency}.py").unlink()
+>         counter = tmp_path / "starts"
+>         script = _write(
+>             first,
+>             "cross.py",
+>             "import importlib.util\n"
+>             "from pathlib import Path\n"
+>             f"counter = Path({str(counter)!r})\n"
+>             "count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+>             "counter.write_text(str(count))\n"
+>             "if count > 3: raise SystemExit('replacement loop')\n"
+>             "import venv_guard\n"
+>             f"spec = importlib.util.spec_from_file_location('other_guard', {str(second / 'scripts' / 'venv_guard.py')!r})\n"
+>             "module = importlib.util.module_from_spec(spec)\n"
+>             "spec.loader.exec_module(module)\n",
+>         )
+>     
+>         result = _run([str(first / ".venv" / "bin" / "python3"), str(script)], tmp_path)
+>     
+> >       assert result.returncode == 0, result.stderr
+> E       AssertionError: replacement loop
+> E         
+> E       assert 1 == 0
+> E        +  where 1 = CompletedProcess(args=['/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1869/popen-...pen-gw5/test_guards_from_two_checkouts0/first/scripts/cross.py'], returncode=1, stdout='', stderr='replacement loop\n').returncode
+>
+> tests/test_venv_guard.py:401: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_venv_guard.py::test_guards_from_two_checkouts_replace_process_at_most_once
+> 1 failed, 7 passed in 0.74s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-2-20261118T220137204334Z-80d7586b.md
+> ```
+
+Stage-2 call, 2026-11-18: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1116 files, 4682 commits, 12 rules.
+
+Runner restoration, 2026-11-18: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
