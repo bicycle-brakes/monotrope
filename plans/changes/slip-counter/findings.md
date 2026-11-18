@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -453,6 +453,7 @@ Stage-2 call, 2026-11-17: review · endpoint openai-codex · model gpt-6.1-terra
 |---|---|---|---|---|---|---|---|---|
 | R-1 | BLOCKER | SPEC | base | spec.md, Begriffe „Slip“ und „Interval“ | [AMBIGUITY] Die Repository-Identität bleibt ungeklärt: Bei einem grünen gezielten Check in einem Worktree und einem roten vollständigen Lauf desselben Stands in einem anderen Worktree ergeben sich je nach Identität des einzelnen Worktrees oder des gemeinsamen Git-Repositories unterschiedliche Zählungen. Die offene Phase-2a-Zeile S-1 ist in der aktuellen Spezifikation nicht aufgelöst. [AC 1, 2, 5] | Codex | fixed — tests/test_verify_duration.py::test_slips_pair_worktrees_by_recorded_common_git_dir | — |
 | R-2 | MAJOR | SPEC | base | scripts/verify_duration.py, cmd_slips | Ein roter gezielter Check, dessen geprüfter Baum sich während des Laufs ändert, wird als vollständig behandelt: Die Stabilitätsprüfung erhöht den Zähler nur bei grünem Ergebnis. Der Bericht kann dadurch mit null unzählbaren Läufen und Exit 0 enden, obwohl diesem Lauf eine stabile Vergleichsidentität fehlt. [AC 4, 6; Boundary] | Codex | fixed — tests/test_verify_duration.py::test_slips_reject_unstable_red_targeted_run | — |
+| H-1 | MINOR | MAINT | fix-r1 | tests/test_ci.py | The full `make verify` before phase 6 at head `9fc07335` (2026-11-18) failed `tests/test_ci.py::test_runner_start_record_carries_the_full_run_comparison_context`: its copied runner tree is no Git repository, so after the R-1 repair its records carry no common Git directory and the reader selects no run ("0 runs selected", exit 1). The repair's targeted check did not reach this file. | orchestrator (full verify before phase 6) | fixed — not a test — orchestrator hand edit 313ce5cd, test-only: the test runs `git init` in its copied tree; run alone it passes | no |
 
 Phase 6 verdict: codex 01a1e69e-d684-7af1-bb39-40d094b08386, 2026-11-17
 Reviewer session: codex 01a1e69e-d684-7af1-bb39-40d094b08386 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
