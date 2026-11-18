@@ -136,3 +136,34 @@ maintainer as one list and accepted as proposed on 2026-11-18 ("A: So
   as docs/WORKFLOW.md writes record paths; a retry matches a line to its
   archive by `<dir>`. Reason: no home directory in a committed file, and the
   leak check stays quiet.
+
+## Agent decisions on the third phase-2a rows S-14..S-18 — 2026-11-18
+
+Third and last spec-review round (maintainer rule of 2026-11-18: triage each
+round, at most three rounds). `[DETAIL]` decisions by the orchestrating
+session (Opus 5.5), shown as one list and accepted as proposed ("A: So
+übernehmen"). No fourth review runs; the final draft works these in.
+
+- **S-14, N of a later plain restart.** N is the highest round number ever
+  given in this change's loop, across a supersession (the restart floor and
+  every numbered round after it), never a count. Reason: no round number is
+  given twice and no restart line misstates its round.
+- **S-15, no way out.** `--supersedes` is allowed with no pending audit call
+  when the named key holds an active record of the change; the line then says
+  "audit calls 0". Reason: the maintainer can always restart without deleting
+  a record directory by hand.
+- **S-16, which keys are "other worktree keys".** Only digests of this
+  repository's worktrees as `git worktree list` reports them; a record of
+  another repository with a change of the same name is never named, refused
+  on or archived. A record of a removed worktree is therefore not seen — a
+  named limit. Reason: no command may touch another repository's state.
+- **S-17, archive layout for several keys.**
+  `<change>@<digest of the superseding worktree>@<UTC timestamp>/<key>/…`,
+  one subdirectory per superseded key, with the manifest at the top; the
+  accounting line lists each key with its round range and archive
+  subdirectory. Reason: two `loop.md` files cannot collide, and every key
+  stays findable.
+- **S-18, an interrupted supersession whose key set changed before the
+  retry.** Not recoverable by a verb in this change: a named limit in
+  plan.md; follow-up bead coding-harness-0aht adds a verb to abandon or roll back such a
+  supersession. Reason: rare, and a further verb would grow this change again.
