@@ -188,3 +188,9 @@ Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model hy4-flash
 Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4683 commits, 12 rules.
 
 Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1119 files, 4691 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1119 files, 4691 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1119 files, 4691 commits, 12 rules.
