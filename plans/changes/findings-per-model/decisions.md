@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -36,3 +36,90 @@ context: |
   (Recorded by the lane session from the bead's notes, which hold the answer; the wording of the question as originally shown was not read.)
 
 In the context of measuring how many review findings each model raises that the orchestrator accepts, facing more than one reading of "accepted" and duplicates raised by several models, we decided to count per model id the raised, taken (taken, 'taken — not a test', fixed), fixed (actually repaired) and rejected findings, taken and fixed as two separate columns, a duplicate counted for the model that raised it first, output as JSONL plus a plain table with the cut-off commit through make and shown in the morning handover, to achieve a count that can order the review ladder and judge the contributor-model trial, accepting that a model which raises a finding another model already raised earns no count for it. — 2026-11-17
+
+Appetite: 6 hours of phase 4, repair rounds included (maintainer, 2026-11-17, recorded in the notes of bead coding-harness-qut1). The first draft's 4 hours did not come from the maintainer; the revision states 6 hours.
+
+## Q-2 · Which model a phase-6 finding counts for (finding F-1)
+
+asked: 2026-11-18
+answer: "A" — the maintainer asked for "eine zentrale und flexible Lösung, die sich auf die Prinzipien der Modularität stützt" ("a central and flexible solution based on the principles of modularity"). Chosen: one shared reader module for findings rows, its status vocabulary taken from one definition (templates/findings.md), with an 'attribution source' interface. The first implementation is the legacy source: a phase-6 block counts for the model of the nearest review call line directly above it with no other block in between, otherwise 'unattributed'. A later event source from bead coding-harness-oebl replaces it without changing the readers. The report, the metrics (bead coding-harness-nqaf) and the morning table are thin consumers of that module.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a finding F-1 of the Opus 5.5 spec review (2026-11-17), marked [AMBIGUITY]: which model a phase-6 finding counts for.
+  Intention: the phase-2a gate lets no ambiguity through; the answer decides whether phase 6 gets per-model totals at all.
+  Today: loop rows name the exact model in their Reviewer cell; phase-6 rows say only 'Codex'. The model id stands on a separate review call line, and it changed from gpt-6.1-sol to gpt-6.1-terra; call lines and phase-6 blocks do not pair one to one.
+  Options as offered: A — build the attribution-source interface now; B — build the event log of bead coding-harness-oebl first; C — a single attribution rule only. The 2026-11-17 recommendation was: a phase-6 block counts for the model of the review call line just above it, otherwise 'unattributed'.
+  Repository change: one shared reader module for findings rows, used by the report, the metrics and the morning table; the status vocabulary is read from one definition.
+  Architecture change: an 'attribution source' interface with a legacy implementation now and an event-log implementation later, behind one reader.
+  (Recorded by the lane session from the bead's notes, which hold the answer and the option labels; the full wording shown with the question was not read.)
+
+In the context of counting phase-6 findings per model when phase-6 rows name only 'Codex' and the model id stands on a separate review call line, facing a pairing of call lines and blocks that is not one to one and a planned event log (bead coding-harness-oebl) that will record the model directly, we decided one shared reader module for findings rows with an 'attribution source' interface whose first implementation attributes a phase-6 block to the nearest review call line directly above it with no other block in between, otherwise 'unattributed', to achieve a central and modular solution in which a later event source replaces the legacy rule without changing the report, the metrics or the morning table, accepting a new module boundary in this change and 'unattributed' phase-6 findings wherever the legacy rule cannot pair a block. — 2026-11-18
+
+## Q-3 · What marks a finding as a duplicate (finding F-2)
+
+asked: 2026-11-18
+answer: "C" — future duplicates carry one fixed form from templates/findings.md ('duplicate of <ID>'), checked by a gate. Legacy rows: a Status naming another row id with 'same as', 'duplicate of', 'repeat(s)' or 'repeat of' is a duplicate; without a row id the row counts as an ordinary rejected row.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a finding F-2, marked [AMBIGUITY]: what "marked as a duplicate" looks like.
+  Intention: the phase-2a gate lets no ambiguity through; without one reading, two models can get credit for one finding.
+  Today: duplicates are written in many forms ('same as L1-3', 'duplicate of L1-1', 'repeats L2-2', 'repeat of L1-6 and L3-3', 'Same as Finding 3' without a row id); no form is fixed.
+  Options as offered: the 2026-11-17 recommendation was: a Status naming another row id with 'same as'/'duplicate of'/'repeat(s)' is a duplicate, a marker without an id counts as an ordinary rejected row. The maintainer chose C; the wording of the other options shown on 2026-11-18 was not read.
+  Repository change: templates/findings.md states one fixed duplicate form ('duplicate of <ID>'), a gate checks it for new rows, and the reader recognises the legacy forms listed in the answer.
+  Architecture change: none beyond the shared reader of Q-2; the duplicate rule lives in that reader.
+  (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
+
+In the context of crediting a finding once when several models raise it, facing duplicate markers written in many free-text forms, some without a row id, we decided one fixed form 'duplicate of <ID>' from templates/findings.md for future rows, checked by a gate, and for legacy rows a Status naming another row id with 'same as', 'duplicate of', 'repeat(s)' or 'repeat of', a row without a row id counting as an ordinary rejected row, to achieve a duplicate rule a test can check and that new rows cannot drift from, accepting a new gate and that legacy markers without a row id are not treated as duplicates. — 2026-11-18
+
+## Q-4 · Which row gets the credit for a duplicate (finding F-3)
+
+asked: 2026-11-18
+answer: "A" — credit goes to the row or rows the marker points to; with two originals both get credit and the duplicate none; no invented chronology.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a finding F-3, marked [AMBIGUITY]: what "first raised" means for a duplicate.
+  Intention: the phase-2a gate lets no ambiguity through; within one swarm round members answer in parallel, so the row order says nothing about who raised a finding first.
+  Today: markers point backwards and forwards, sometimes to two rows at once ('same as L3-2 and L4-4').
+  Options as offered: the 2026-11-17 recommendation was: credit goes to the row the marker points to, the lowest-numbered one if two. The maintainer chose A; the wording of the other options shown on 2026-11-18 was not read.
+  Repository change: the reader credits the row or rows a duplicate marker names.
+  Architecture change: none.
+  (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
+
+In the context of crediting a duplicate finding to the model that raised it, facing parallel swarm members whose row order is only assembly order and markers that name two originals, we decided that credit goes to the row or rows the marker points to, both originals getting credit when two are named and the duplicate none, to achieve a rule read from the record itself without an invented chronology, accepting that a marker naming two originals credits two models for one finding. — 2026-11-18
+
+## Q-5 · Which statuses count as which outcome (finding F-5)
+
+asked: 2026-11-18
+answer: "D" (chosen after a context explanation, changed from A) — three outcome columns per model besides raised: defects accepted (leading word taken or fixed), questions settled (resolved, answered, in spec), rejected; open is not counted; an unknown status makes the report incomplete; weighting belongs to the ladder rule, not to the counter.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a finding F-5, marked [AMBIGUITY]: which statuses count as accepted when the vocabulary in use is wider than the four the spec lists.
+  Intention: the phase-2a gate lets no ambiguity through; the answer decides what the morning table counts.
+  Today: statuses in use include 'taken — guard test — …', 'fixed — not a test — …', 'fixed in <commit>', 'fixed — orchestrator hand edit …', 'resolved <date> by <source>', 'answered', 'in spec' and 'open' (templates/findings.md); 'resolved' has no bucket in the spec.
+  Options as offered: the 2026-11-17 recommendation was: match the status by its leading word, and count 'resolved', 'answered' and 'in spec' only as raised. The maintainer first answered A, then chose D after a context explanation; the wording of the options shown on 2026-11-18 was not read.
+  Repository change: the report shows per model raised, defects accepted, questions settled and rejected, read through the status vocabulary of templates/findings.md.
+  Architecture change: none beyond the shared reader of Q-2.
+  (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
+
+In the context of counting the outcome of each finding per model, facing a status vocabulary wider than the spec's list and statuses that settle a question rather than accept a defect, we decided three outcome columns per model besides raised — defects accepted (leading word taken or fixed), questions settled (resolved, answered, in spec) and rejected — with open not counted and an unknown status making the report incomplete, to achieve counts that keep defects and settled questions apart and leave their weighting to the ladder rule, accepting that the counter itself does not rank models. — 2026-11-18
+
+## Q-6 · What the report does when a row cannot be read (finding F-8)
+
+asked: 2026-11-18
+answer: "B" — always print the table and the JSON; gaps are flagged 'incomplete' with the affected rows, and the exit code is non-zero; every unreadable row (cell count, unknown status, encoding) is a gap, never silently 'unattributed'.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a finding F-8, marked [AMBIGUITY]: what "refuses to present an incomplete count as complete" means.
+  Intention: the phase-2a gate lets no ambiguity through; historical findings cannot be edited, so one unreadable historical row could otherwise stop the report at every commit.
+  Today: some historical rows cannot be resolved (for example a duplicate marker without a row id); the spec names neither an exit code nor a marker for an incomplete report.
+  Options as offered: the 2026-11-17 recommendation was: always print both formats, gaps as an 'incomplete' flag plus the affected inputs, non-zero exit. The maintainer chose B; the wording of the other options shown on 2026-11-18 was not read.
+  Repository change: the report prints both formats every time, marks them 'incomplete' with the affected rows when a gap exists, and exits non-zero.
+  Architecture change: none.
+  (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
+
+In the context of a per-model report over historical findings that cannot be edited, facing rows that cannot be read or resolved, we decided to always print the table and the JSON, flag gaps as 'incomplete' with the affected rows and exit non-zero, every unreadable row (cell count, unknown status, encoding) being a gap and never silently 'unattributed', to achieve a report that is always visible yet never passes an incomplete count as complete, accepting a non-zero exit as long as any historical gap remains. — 2026-11-18
