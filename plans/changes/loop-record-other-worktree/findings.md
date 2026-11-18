@@ -65,3 +65,132 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | S-18 | MINOR | SPEC | base | spec.md criteria 1, 5 and 7; decisions.md S-9 | Hole: an unfinished supersession whose key set changes before the retry can be neither completed nor abandoned. Example: the run stops after K1 has moved into the staging archive (manifest {K1, K2}), and before the retry worktree D starts a record of the change. Criterion 5 now requires the full active and unfinished set {K1, K2, D}, but criterion 7 completes only the manifest's set {K1, K2}, so every request is refused. Meanwhile K1 is neither active nor accounted for, and criterion 1's refusal does not name it because it sits in an archive. The same dead end follows if K2 becomes unreadable after K1 has moved. The spec gives no way to roll back or abandon an unfinished supersession, and does not say which of the two criteria wins. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4619 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1117 files, 4621 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +53 -2
+> - `scripts/stage2.py` +438 -24
+> - `tests/test_stage2.py` +560 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2.py`, `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/stage2.py:4936:5: ARG001 Unused function argument: `change`
+>      |
+> 4935 | def _supersede_accounting_line(
+> 4936 |     change: str,
+>      |     ^^^^^^ ARG001
+> 4937 |     keys: list[str],
+> 4938 |     rounds: dict[str, list[int]],
+>      |
+>
+> tests/test_stage2.py:1376:18: ARG001 Unused function argument: `world`
+>      |
+> 1376 | def archive_base(world: World) -> Path:
+>      |                  ^^^^^ ARG001
+> 1377 |     """The archive directory of superseded records, beside the records in the state directory."""
+> 1378 |     return stage2.record_base().parent / stage2.ARCHIVE_DIR_NAME
+>      |
+>
+> Found 2 errors.
+> ```
+
+Stage-2 call, 2026-11-18: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1117 files, 4631 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +1 -2
+> - `tests/test_stage2.py` +11 -11
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 TEST_FLASH[0],
+>                 "taken — test_a",
+>                 "yes",
+>                 "agree",
+>             ],
+>         ]
+>         world.write_findings(
+>             stage2.RELEASE_HEADING + " 2026-11-17",
+>             stage2.render_table(stage2.RELEASED_COLUMNS, released_rows),
+>             "Rounds run: 2",
+>         )
+>         other = other_worktree(world)
+>         key = stage2.record_key("demo", other)
+>         write_foreign_record(other, [3, 4])
+> >       assert supersede(world, key) == 0
+>
+> tests/test_stage2.py:1804: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2.py:1386: in supersede
+>     return world.run("release-loop", "demo", "--restart", *options, "--reason", reason)
+> tests/test_stage2.py:372: in run
+>     return stage2.main([*argv, *options, "--root", str(self.root)])
+> scripts/stage2.py:11784: in main
+>     return _run(args)
+> scripts/stage2.py:11864: in _run
+>     release_loop(
+> scripts/stage2.py:5130: in release_loop
+>     supersede_loop(root, change, supersedes, reason or "")
+> scripts/stage2.py:5025: in supersede_loop
+>     archive_name = _supersession_archive_name(archive_base, change, current.split("@", 1)[1])
+> scripts/stage2.py:4879: in _supersession_archive_name
+>     stamp = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
+> tests/runner_clock_guard.py:186: in wrapper
+>     _judge(sys._getframe(1), label)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> frame = <frame at 0x119c47010, file '/Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/scripts/stage2.py', line 4879, code _supersession_archive_name>
+> api = 'datetime.now'
+>
+>     def _judge(frame: types.FrameType, api: str) -> None:
+>         code = frame.f_code
+>         if not is_guarded(code.co_filename) or code.co_qualname == BOUNDARY_QUALNAME:
+>             return
+>         read = Read(api, code.co_filename, frame.f_lineno, code.co_qualname, _state["in_test"])
+>         READS.append(read)
+> >       raise RunnerClockRead(f"runner clock read outside clock_now: {read}")
+> E       runner_clock_guard.RunnerClockRead: runner clock read outside clock_now: datetime.now read in _supersession_archive_name at /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/scripts/stage2.py:4879
+>
+> tests/runner_clock_guard.py:160: RunnerClockRead
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_supersede_rejects_invalid_requests_without_changes
+> FAILED tests/test_stage2.py::test_supersede_archives_only_the_old_loop_record
+> FAILED tests/test_stage2.py::test_supersede_accounts_for_old_rounds_and_calls
+> FAILED tests/test_stage2.py::test_supersede_release_requires_a_new_round - ru...
+> FAILED tests/test_stage2.py::test_supersede_preserves_research_siblings - run...
+> FAILED tests/test_stage2.py::test_supersede_recovers_from_interrupted_writes
+> FAILED tests/test_stage2.py::test_supersede_clean_round_stops_next_stage - ru...
+> FAILED tests/test_stage2.py::test_plain_restart_refuses_active_other_worktree_records
+> FAILED tests/test_stage2.py::test_plain_restart_after_supersession_uses_highest_round
+> FAILED tests/test_stage2.py::test_supersede_starts_fresh_after_old_round_numbers
+> FAILED tests/test_stage2.py::test_supersede_requires_a_new_verdict - runner_c...
+> FAILED tests/test_stage2.py::test_supersede_without_pending_audit_calls - run...
+> FAILED tests/test_stage2.py::test_supersede_retry_matches_archive_directory
+> FAILED tests/test_stage2.py::test_supersede_respects_both_record_locks - runn...
+> FAILED tests/test_stage2.py::test_supersede_repair_brake_uses_fresh_rounds - ...
+> ERROR tests/test_stage2.py::test_supersede_archives_only_the_old_loop_record
+> ERROR tests/test_stage2.py::test_supersede_accounts_for_old_rounds_and_calls
+> ERROR tests/test_stage2.py::test_supersede_release_requires_a_new_round - Fai...
+> ERROR tests/test_stage2.py::test_supersede_preserves_research_siblings - Fail...
+> ERROR tests/test_stage2.py::test_supersede_recovers_from_interrupted_writes
+> ERROR tests/test_stage2.py::test_supersede_clean_round_stops_next_stage - Fai...
+> ERROR tests/test_stage2.py::test_plain_restart_refuses_active_other_worktree_records
+> ERROR tests/test_stage2.py::test_plain_restart_after_supersession_uses_highest_round
+> ERROR tests/test_stage2.py::test_supersede_starts_fresh_after_old_round_numbers
+> ERROR tests/test_stage2.py::test_supersede_requires_a_new_verdict - Failed: r...
+> ERROR tests/test_stage2.py::test_supersede_without_pending_audit_calls - Fail...
+> ERROR tests/test_stage2.py::test_supersede_retry_matches_archive_directory - ...
+> ERROR tests/test_stage2.py::test_supersede_respects_both_record_locks - Faile...
+> ERROR tests/test_stage2.py::test_supersede_repair_brake_uses_fresh_rounds - F...
+> 15 failed, 3 passed, 14 errors in 6.71s
+> ```
+
+Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1117 files, 4631 commits, 12 rules.
