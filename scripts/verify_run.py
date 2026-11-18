@@ -779,7 +779,7 @@ def run_verification(
         def measure(where: str) -> TreeSnapshot | None:
             try:
                 return tree_snapshot(wurzel)
-            except SnapshotUnusable as exc:
+            except (SnapshotUnusable, UnicodeError) as exc:
                 complain(f"the tree state cannot be measured {where}: {exc}")
                 complain("unmeasured cheap results will be repeated under admission")
                 return None

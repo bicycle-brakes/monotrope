@@ -1362,6 +1362,51 @@ def test_unmeasurable_tree_runs_cheap_first_and_defers_the_rest(checkout: Simple
     assert result.admission_requested
 
 
+@pytest.mark.parametrize("tracked", [False, True])
+def test_non_utf8_filename_runs_cheap_before_admission(
+    checkout: SimpleNamespace, gate_script: Path, tracked: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Undecodable tracked and untracked paths cannot suppress or reuse cheap work."""
+    real_git, real_measure = verify_run._git_bytes, verify_run._measure
+
+    def git_bytes(root: Path, *args: str) -> bytes:
+        result = real_git(root, *args)
+        if tracked and args == ("ls-files", "-z", "--stage"):
+            return result + b"100644 " + b"0" * 40 + b" 0\tinvalid-\xff\0"
+        if not tracked and args == ("ls-files", "-z", "--others", "--exclude-standard"):
+            return result + b"invalid-\xff\0"
+        return result
+
+    def measure(path: Path, *, allow_missing: bool) -> str:
+        if path.name == os.fsdecode(b"invalid-\xff"):
+            return "file 644 content"
+        return real_measure(path, allow_missing=allow_missing)
+
+    monkeypatch.setattr(verify_run, "_git_bytes", git_bytes)
+    monkeypatch.setattr(verify_run, "_measure", measure)
+    for exit_code in (1, 0):
+        write_gates(
+            checkout.root,
+            [
+                _gate("cheap", f"python3 {gate_script} cheap {exit_code}"),
+                _gate("heavy", f"python3 {gate_script} heavy 0", cost="minutes"),
+            ],
+        )
+        prior = len(_read_log())
+        try:
+            result, out, err = run_scheduler(checkout.root)
+        except UnicodeEncodeError:
+            pytest.fail("an unencodable filename must be treated as an unmeasurable tree")
+        entries = _read_log()[prior:]
+        if exit_code:
+            assert result.exit_code != 0 and not result.admission_requested, (result, out, err)
+            assert [entry["gate"] for entry in entries] == ["cheap"]
+        else:
+            assert result.exit_code == 0 and result.admission_requested, (result, out, err)
+            assert [entry["gate"] for entry in entries] == ["cheap", "cheap", "heavy"]
+            assert not entries[0]["held"] and entries[1]["held"] and entries[2]["held"]
+
+
 def test_only_declared_cheap_gates_run_before_admission() -> None:
     """Unknown cost and an explicit exception are never declared cheap."""
     assert ci_gates.declared_cheap({"cost": "seconds"})
