@@ -166,3 +166,46 @@ the rest are `[DETAIL]` decisions derived from the answers on F-1, F-2, F-8.
 - **F-19, where the formats go.** The table to stdout; the JSON Lines to a
   file under the state directory, whose path the run prints last. Reason:
   metrics and the handover read from one fixed place.
+
+## Agent decisions on the third phase-2a rows F-20..F-28 — 2026-11-18
+
+Third and last spec-review round (maintainer rule of 2026-11-18: triage each
+round, at most three rounds). `[DETAIL]` decisions by the orchestrating
+session (Opus 5.5), shown to the maintainer as one list and accepted as
+proposed ("A: So übernehmen"). No fourth review runs; the final draft works
+these in.
+
+- **F-20, which headings count.** Only the heading the runner writes,
+  `## Phase 6 — <who>, <date>`, and the released loop headings of F-21.
+  Restated tables under any other heading do not count and never supply a
+  row's current state. Reason: an empty restatement must not overwrite a
+  decided row.
+- **F-21, released loop rows written before the template form.** The
+  heading `## Phase 4b — GLM loop rows, released <date>` is a second fixed
+  form, recognised by the same helper as the runner's `RELEASE_HEADING`. The
+  model comes from the Stage-2 call line, never from a Reviewer cell that
+  names only a vendor.
+- **F-22, rows in a moved file.** The merge-base comparison is rename-aware
+  (`git diff -M`): rows that move unchanged with `make archive` are neither
+  added nor changed.
+- **F-23, the attributing call.** The nearest preceding Stage-2 call line of
+  any verb must itself be `review`; otherwise the block is unattributed, as
+  F-12 says.
+- **F-24, model and state of a restated ID.** The earliest eligible row of an
+  ID supplies the model that raised it; the latest eligible row supplies only
+  its Status. Reason: Q-1 credits "the model that raised it".
+- **F-25, finding tables outside the count.** Every table whose first cell
+  holds a finding ID and that stands under a heading that is not counted is
+  listed, with its heading, on the line "outside the count"; phase-2a blocks
+  are listed there as one group of their own.
+- **F-26, a duplicate of several rows.** `rejected — duplicate of <ID>` admits
+  several IDs joined by " and ", optionally followed by a colon and a reason.
+  Every named original keeps its credit; the duplicate gets none (F-14).
+- **F-27, the known statuses.** A closed list in the spec: `open`, the
+  leading words of criteria 11–13, and the historical forms `closed — …`
+  (counted as fixed) and `accepted limit — …` (raised, not fixed). Any other
+  status is a gap. Reason: history is protected, so an open set would leave
+  every report with gaps for good.
+- **F-28, the JSON Lines file.** The fixed place metrics read is the file for
+  `main` in the state directory; a report for an unmerged branch writes a file
+  of its own per branch, overwritten on each run.
