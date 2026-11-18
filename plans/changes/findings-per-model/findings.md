@@ -81,3 +81,60 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4645 commits, 12 rules.
 
 Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1114 files, 4649 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refused with claude-code:unrecognized_model glm-5.3-flash since about 16:07; continues from the saved attempt · leak check clean over 1117 files, 4666 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `Makefile` +10 -1
+> - `docs/orchestration.md` +7 -0
+> - `plans/changes/findings-per-model/plan.md` +18 -18
+> - `scripts/check_finding_duplicates.py` +15 -7
+> - `scripts/findings_per_model.py` +27 -10
+> - `scripts/findings_reader.py` +26 -24
+> - `tests/test_finding_duplicates.py` +110 -0
+> - `tests/test_findings_per_model.py` +478 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/findings_per_model.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .........................F......                                         [100%]
+> =================================== FAILURES ===================================
+> ____________ test_gaps_produce_both_incomplete_outputs_and_nonzero _____________
+> [gw6] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/findings-per-model/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1851/popen-gw6/test_gaps_produce_both_incompl0')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108739280>
+>
+>     def test_gaps_produce_both_incomplete_outputs_and_nonzero(tmp_path, monkeypatch):
+>         bad = doc(
+>             RELEASE,
+>             lrow("L1-1", "hy3", "maybe later"),
+>             lrow("L1-2", "hy3", "rejected — same as L9-9"),
+>             lrow("L1-3", "hy3", "duplicate of L1-4"),
+>             lrow("L1-4", "hy3", "duplicate of L1-3"),
+>             "| L1-5 | MAJOR | too few cells |",
+>         )
+>         files = {findings_path("bad"): bad, findings_path("raw"): b"\xff\xfe not utf-8"}
+>         root, _ = repo(tmp_path, files)
+>         state = tmp_path / "state"
+>         code, chunks = run_report(root, None, monkeypatch, state)
+>         assert code != 0, "a report with gaps exited zero"
+>         output = "".join(chunks)
+>         assert "Incomplete" in output
+>         needles = ("maybe later", "L9-9", "duplicate cycle", "UTF-8", "L1-5")
+>         for needle in needles:
+> >           assert needle in output, f"the gap {needle!r} is not shown in the table output"
+> E           AssertionError: the gap 'L1-5' is not shown in the table output
+> E           assert 'L1-5' in 'Findings per model — cutoff commit a80b0e291350af79e55c517638a84c106101e0ea\n\n| Model | Raised | Defects accepted | ...of-mikypiky/pytest-1851/popen-gw6/test_gaps_produce_both_incompl0/state/coding-harness/findings-per-model/main.jsonl\n'
+>
+> tests/test_findings_per_model.py:420: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_findings_per_model.py::test_gaps_produce_both_incomplete_outputs_and_nonzero
+> 1 failed, 31 passed in 2.14s
+> ```

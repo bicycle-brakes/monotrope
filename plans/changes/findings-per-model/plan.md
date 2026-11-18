@@ -47,25 +47,29 @@ Verification: `make verify`
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_findings_per_model.py::test_scope_at_single_commit — an eligible row is omitted or a rejected answer is included.
-- 2: not yet written tests/test_findings_per_model.py::test_latest_row_per_change_and_id — a re-check changes the originating model, an older Status wins, or distinct changes collapse.
-- 3: not yet written tests/test_findings_per_model.py::test_loop_model_attribution — a loop row receives another model or a vendor is reported as a model.
-- 4: not yet written tests/test_findings_per_model.py::test_phase6_nearest_call_boundary — an intervening block or a repair call is crossed.
-- 5: not yet written tests/test_findings_per_model.py::test_unattributed_rows_are_visible — an unpaired seven-cell row disappears.
-- 6: not yet written tests/test_findings_per_model.py::test_replace_attribution_source — replacing the source requires a consumer change.
-- 7: not yet written tests/test_findings_per_model.py::test_legacy_duplicate_markers — a valid legacy marker is missed or an ID-less marker is treated as a duplicate.
-- 8: not yet written tests/test_findings_per_model.py::test_duplicate_credits_each_named_original — a duplicate gets credit or an unattributed original loses it.
-- 9: not yet written tests/test_finding_duplicates.py::test_new_duplicate_form_gate — a new legacy form passes, a valid multi-ID form fails, or an unchanged moved row fails.
-- 10: not yet written tests/test_findings_per_model.py::test_raised_counts_open_and_rejected_once — an open row is omitted.
-- 11: not yet written tests/test_findings_per_model.py::test_defects_accepted_statuses — a fixed or historical closed row is omitted or rejection included.
-- 12: not yet written tests/test_findings_per_model.py::test_questions_settled_statuses — a resolved question is omitted.
-- 13: not yet written tests/test_findings_per_model.py::test_rejected_status — an open row gets an outcome.
-- 14: not yet written tests/test_findings_per_model.py::test_formats_agree_and_name_commit — counts or cutoff differ, or main and branch outputs overwrite one another.
-- 15: not yet written tests/test_findings_per_model.py::test_make_entry_point_and_revision — the revision is ignored or one format is missing.
-- 16: not yet written tests/test_findings_per_model.py::test_gaps_produce_both_incomplete_outputs_and_nonzero — unreadable evidence or an unknown status is silently accepted, or accepted limit is counted as fixed.
+- 1: tests/test_findings_per_model.py::test_scope_at_single_commit — an eligible row is omitted or a rejected answer is included.
+- 2: tests/test_findings_per_model.py::test_latest_row_per_change_and_id — a re-check changes the originating model, an older Status wins, or distinct changes collapse.
+- 3: tests/test_findings_per_model.py::test_loop_model_attribution — a loop row receives another model or a vendor is reported as a model.
+- 4: tests/test_findings_per_model.py::test_phase6_nearest_call_boundary — an intervening block or a repair call is crossed.
+- 5: tests/test_findings_per_model.py::test_unattributed_rows_are_visible — an unpaired seven-cell row disappears.
+- 6: tests/test_findings_per_model.py::test_replace_attribution_source — replacing the source requires a consumer change.
+- 7: tests/test_findings_per_model.py::test_legacy_duplicate_markers — a valid legacy marker is missed or an ID-less marker is treated as a duplicate.
+- 8: tests/test_findings_per_model.py::test_duplicate_credits_each_named_original — a duplicate gets credit or an unattributed original loses it.
+- 9: tests/test_finding_duplicates.py::test_new_duplicate_form_gate — a new legacy form passes, a valid multi-ID form fails, or an unchanged moved row fails.
+- 10: tests/test_findings_per_model.py::test_raised_counts_open_and_rejected_once — an open row is omitted.
+- 11: tests/test_findings_per_model.py::test_defects_accepted_statuses — a fixed or historical closed row is omitted or rejection included.
+- 12: tests/test_findings_per_model.py::test_questions_settled_statuses — a resolved question is omitted.
+- 13: tests/test_findings_per_model.py::test_rejected_status — an open row gets an outcome.
+- 14: tests/test_findings_per_model.py::test_formats_agree_and_name_commit — counts or cutoff differ, or main and branch outputs overwrite one another.
+- 15: tests/test_findings_per_model.py::test_make_entry_point_and_revision — the revision is ignored or one format is missing.
+- 16: tests/test_findings_per_model.py::test_gaps_produce_both_incomplete_outputs_and_nonzero — unreadable evidence or an unknown status is silently accepted, or accepted limit is counted as fixed.
 - 17: not a test — phase-6 review checks both instructions require main at handover time and every unmerged branch that gained rows that night, including an earlier lane item, with cutoff commits.
-- 18: not yet written tests/test_findings_per_model.py::test_headingless_tables_outside_count — an outside table is silently omitted, counted, or allowed to overwrite a decided row.
-- 19: not yet written tests/test_findings_per_model.py::test_phase2a_ids_excluded — a 2a row increases a total.
+- 18: tests/test_findings_per_model.py::test_headingless_tables_outside_count — an outside table is silently omitted, counted, or allowed to overwrite a decided row.
+- 19: tests/test_findings_per_model.py::test_phase2a_ids_excluded — a 2a row increases a total.
+
+## Runner route — 2026-11-18
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refused with claude-code:unrecognized_model glm-5.3-flash since about 16:07; continues from the saved attempt.
 
 ## Time used
 
@@ -73,3 +77,4 @@ Verification: `make verify`
 2026-11-18 12:49:14–12:51:46 UTC, 152 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 13:32:17–13:34:21 UTC, 124 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 15:35:49–15:37:43 UTC, 114 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 16:25:29–16:31:33 UTC, 364 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
