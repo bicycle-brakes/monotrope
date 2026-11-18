@@ -569,3 +569,63 @@ repair and any other), new verbs included automatically, to achieve one
 choke point that no writing verb reaches around, accepting that explore and
 spec-review may fail on a faulty header from now on.
 — 2026-11-18
+
+## Q-18 · Who stops a model from approving its own new non-research file
+
+asked: 2026-11-18
+answer: "D: Prüfpunkt + Klasse und Freigabe" — in English: option D, the check point plus class and approval. The shared post-run check point judges, for every touched file, the producer record and in addition `provenance` and `review` against the header committed before the run; all other header fields stay with each file's own gate. A self-approval makes the attempt red, implement included.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-2a row F-32 — a drafting session writes `provenance: human-written` and `review: {status: approved, approved_by: "@MPAdesso", ...}` into a new spec.md; nothing named refuses it.
+  Intention: two earlier answers pulled apart here: Q-13 (F-22 A) limits the shared check outside research to the producer record; Q-14 (F-23 A) measures class and approval against the header committed before the run and refuses a session-written approval.
+  Today: no check reads class or review of a non-research file after a run, so the self-approval would be committed.
+  Repository change: a rule in the shared post-run check point (Q-17) plus tests.
+  Architecture change: none.
+  Options shown: D check point judges producer record plus provenance and review against the committed header, other fields stay with each file's gate (recommended); A the whole header against the committed state (contradicts Q-13, touches every file on implement); C only draft and repair refuse at stamp time (new Markdown files from implement stay unchecked); B research only (a self-approved spec.md is committed, contradicting Q-14).
+
+In the context of a shared post-run check point that Q-13 limited to the
+producer record outside research, facing Q-14's rule that no session-written
+approval may stand, we decided that the check point judges the producer
+record and in addition provenance and review of every touched file against
+the header committed before the run, to achieve that no model can approve its
+own work in any file, accepting that implement attempts too go red on a
+self-approval while every other header field stays with each file's own
+gate. — 2026-11-18
+
+## Agent decisions on the third phase-2a rows F-33..F-38 — 2026-11-18
+
+Third and last spec-review round (maintainer rule of 2026-11-18: triage each
+round, at most three rounds). `[DETAIL]` decisions by the orchestrating
+session (Opus 5.5), each derived from Q-14, Q-16, Q-17 and Q-18, shown as one
+list and accepted as proposed ("A: So übernehmen"). No fourth review runs;
+the final draft works these in.
+
+- **F-33, the explore stamp and class/approval.** A downgrade is allowed, an
+  upgrade never: explore sets `provenance: ai-drafted-reviewed` and a pending
+  review as today, so a `human-written` skeleton becomes `ai-drafted-reviewed`
+  and an approved `research.md` loses its approval when explore appends to it.
+  Reason: a model may never create an approval nor keep one over content it
+  changed (Q-14, Q-16).
+- **F-34, the census in make verify.** The post-run check point and the
+  research census use one shared function; for research its contract stays
+  as today (a file with a model record is `ai-drafted-reviewed` and pending).
+  Reason: one rule, and no run passes that the next full verify refuses (Q-6).
+- **F-35, converting a block mapping.** The compact sequence form
+  (`produced_by:` followed by `- kind: …` with the later record lines
+  unchanged) counts as keeping the earlier record's bytes; a block mapping is
+  always converted, never refused. Reason: otherwise every repair touching one
+  of 112 files fails on every route.
+- **F-36, what a rejection does.** explore and spec-review check the content
+  before writing it. A fault in the model's output fails the attempt and the
+  next route runs; a fault in a committed earlier record stops the verb with a
+  message naming the migration coding-harness-2i7x, without spending a further
+  paid route. Reason: no paid attempt on a fault no model can fix.
+- **F-37, what counts as research.** Active `plans/changes/<name>/research.md`
+  only, the census scope; `archive/` and `docs/research/` get the producer-
+  record check alone. Reason: `docs/research/` uses another header form.
+- **F-38, what is model-written.** Any file with frontmatter the attempt
+  changed gets a producer record appended; its class stays protected by Q-18.
+  Whether a model may edit a `human-decided` file at all is governed by
+  `decisions/provenance.yaml`, not by this change. Reason: an honest trace of
+  who touched a file.
