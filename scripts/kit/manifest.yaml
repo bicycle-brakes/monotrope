@@ -70,6 +70,9 @@ rules:
   - prefix: scripts/_verdict.py
     rolle: mechanismus
     reason: "das gemeinsame Exit-Vokabular. Haengt an nichts"
+  - prefix: scripts/venv_guard.py
+    rolle: mechanismus
+    reason: "the startup guard every script with a PyYAML, Jinja2 or pydantic import loads first; it uses the standard library only and leaves a kit instance without a .venv as it was (bead coding-harness-s55e)"
   - prefix: scripts/gate_record.py
     rolle: mechanismus
     reason: "der Abnahme-Automat. 30 von 30 Faellen gruen in der Leerprobe"

@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-s55e
@@ -54,14 +54,19 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_venv_guard.py::test_direct_invocation_uses_checkout_environment — wrong interpreter, arguments, working directory, streams or exit code.
-- 2: not yet written tests/test_venv_guard.py::test_active_environment_does_not_reexec — repeated or unnecessary replacement.
-- 3: not yet written tests/test_venv_guard.py::test_framework_missing_environment_reports_make_venv — absent hint, success, or hidden unrelated import failure.
-- 4: not yet written tests/test_venv_guard.py::test_kit_without_environment_preserves_behavior — changed interpreter, exit or diagnostic.
-- 5: not yet written tests/test_venv_guard.py::test_all_third_party_imports_are_guarded — an unguarded or reordered import escapes detection.
-- 6: not yet written tests/test_venv_guard.py::test_imported_module_preserves_original_invocation — the imported module becomes the entry point or arguments change.
-- 7: not yet written tests/test_venv_guard.py::test_exported_kit_contains_guard — a kit script cannot import its guard.
+- 1: tests/test_venv_guard.py::test_direct_invocation_uses_checkout_environment — wrong interpreter, arguments, working directory, streams or exit code.
+- 2: tests/test_venv_guard.py::test_active_environment_does_not_reexec — repeated or unnecessary replacement.
+- 3: tests/test_venv_guard.py::test_framework_missing_environment_reports_make_venv — absent hint, success, or hidden unrelated import failure.
+- 4: tests/test_venv_guard.py::test_kit_without_environment_preserves_behavior — changed interpreter, exit or diagnostic.
+- 5: tests/test_venv_guard.py::test_all_third_party_imports_are_guarded — an unguarded or reordered import escapes detection.
+- 6: tests/test_venv_guard.py::test_imported_module_preserves_original_invocation — the imported module becomes the entry point or arguments change.
+- 7: tests/test_venv_guard.py::test_exported_kit_contains_guard — a kit script cannot import its guard.
+
+## Runner route — 2026-11-18
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Sonnet fallback call failed at the Claude usage limit (23:18Z); two GLM Flash post-run checks red.
 
 ## Time used
 
 2026-11-17 22:23:29–22:25:45 UTC, 135 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 00:12:50–00:47:27 UTC, 2077 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
