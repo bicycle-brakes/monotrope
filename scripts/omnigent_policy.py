@@ -375,8 +375,7 @@ def write(root: Path = ROOT) -> None:
 def _load_config(path: Path) -> dict:
     if not path.exists():
         return {}
-    import venv_guard  # noqa: F401  # not at module level: --print-python must run under any python3
-    import yaml
+    import yaml  # not at module level: --print-python must run under any python3
 
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if data is None:
@@ -391,7 +390,6 @@ def _load_config(path: Path) -> dict:
 
 def _file_policies() -> dict[str, dict]:
     """The policies of the committed tools/omnigent/policy.yaml."""
-    import venv_guard  # noqa: F401
     import yaml
 
     data = yaml.safe_load(POLICY_FILE.read_text(encoding="utf-8"))
@@ -416,7 +414,6 @@ def _validate(policies: dict[str, dict]) -> None:
 
 
 def _dump(data: dict) -> str:
-    import venv_guard  # noqa: F401
     import yaml
 
     class _Dumper(yaml.SafeDumper):

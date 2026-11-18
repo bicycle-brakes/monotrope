@@ -6121,7 +6121,8 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
     mirror = Path(tempfile.mkdtemp(prefix="harness-registry-"))
     try:
         for entry in root.iterdir():
-            if entry.name != "scripts":
+            # No `.venv`: the mirror's venv guard would re-exec into it (bead coding-harness-s55e).
+            if entry.name not in ("scripts", ".venv"):
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
             archive = run_git(root, "archive", "--format=tar", "HEAD", "scripts/", env=env)

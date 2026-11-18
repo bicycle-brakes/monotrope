@@ -229,6 +229,12 @@ def unguarded_imports(source: str) -> list[tuple[int, str]]:
     return problems
 
 
+# Declared exemptions: a script that must not carry the guard, with its reason.
+NOT_GUARDED = {
+    "scripts/omnigent_policy.py": "runs under Omnigent's own Python, never re-executed into the checkout's .venv",
+}
+
+
 def test_all_third_party_imports_are_guarded() -> None:
     files = sorted(SCRIPTS.rglob("*.py"))
     assert SCRIPTS / "kit" / "probe.py" in files, "the scan must reach nested directories"
@@ -240,6 +246,8 @@ def test_all_third_party_imports_are_guarded() -> None:
         if any(_third_party(node) for node in ast.walk(tree) if isinstance(node, ast.stmt)):
             importing.append(path.relative_to(REPO_ROOT).as_posix())
         name = path.relative_to(REPO_ROOT).as_posix()
+        if name in NOT_GUARDED:
+            continue
         unguarded += [f"{name}:{line} {dependency}" for line, dependency in unguarded_imports(source)]
     assert "scripts/harness.py" in importing and "scripts/omnigent_policy.py" in importing, importing
     assert not unguarded, "third-party import without an earlier `import venv_guard`: " + ", ".join(unguarded)
