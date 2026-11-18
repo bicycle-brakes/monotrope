@@ -196,18 +196,18 @@ Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
 
 ### 7.0.0 — 2026-11-18
 
-**RB-A1** steigt von Stufe 2 auf 4. Der Klauselvergleich lief bereits in
-`tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim` über alle
-Agent-Definitionen; das Ventil nannte dagegen eine Datei, die es nie gab. Der
-Test war da, die Zuordnung fehlte.
+**RB-A1** moves from level 2 to 4. The clause comparison already ran in
+`tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim`, over every
+agent definition; the valve, by contrast, named a file that never existed. The
+test was there; the assignment was missing.
 
-MAJOR, weil sich die Durchsetzungs-Zusage ändert: die Regel wird ab jetzt von
-einem Lauf gehalten, nicht von einem Hinsehen.
+MAJOR, because the promise of enforcement changes: a run holds the rule from
+now on, not a second look.
 
-- **Geändert:** RB-A1 — Stufe 2 → 4; Erzwinger `Ramp:agents-evidence-contract` ersetzt durch `tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim`; das Ventil `agents-evidence-contract` ist geschlossen, nicht still gestrichen. Keine ID geändert, keine entfernt
-- **Tests:** kein neuer Test — der vorhandene Klauselvergleich wird jetzt der benannte Erzwinger; `tests/test_ramp_valves.py` bleibt unverändert
-- **Agents/Hooks/Templates:** nichts — die neun Definitionen tragen die Klausel bereits byte-gleich, und der Test hält sie
-- **lakeswitch-ai:** nichts; die Klausel reist mit dem Kit-Transfer
+- **Geändert:** RB-A1 — level 2 → 4; enforcer `Ramp:agents-evidence-contract` replaced by `tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim`; the valve `agents-evidence-contract` is closed, not silently removed. No id changed, none removed
+- **Tests:** no new test — the existing clause comparison becomes the named enforcer; `tests/test_ramp_valves.py` unchanged
+- **Agents/Hooks/Templates:** the nine Markdown definitions already carry the clause byte-identically, and the test holds them. When the Codex definitions under `.codex/agents/*.toml` land, the enforcer must grow a TOML branch: they embed the clause in `developer_instructions`, and the current paragraph parser reads Markdown only. That extension belongs to the change that commits them, so section 6 does not claim more than the test measures
+- **lakeswitch-ai:** nothing; the clause travels with the kit transfer
 
 ### 6.0.0 — 2026-10-30
 
