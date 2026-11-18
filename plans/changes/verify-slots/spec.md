@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -76,16 +76,17 @@ worker count and shared computation).
    (`slots` in the machine-local `verify.toml`), later reservation decisions
    use that positive integer, with no code edit and no per-checkout copy of
    the value.
-   *Refuted by:* settings of one or three are ignored, different working
+   *Refuted by:* settings of one or three are ignored, `slots = 4` with four or more independent checks contending does not admit the fourth, different working
    directories select different values, or a lowered capacity grants new
    reservations before existing ones drain below it, or a raised capacity is not used by the first eligible waiter at its next 0.25-second poll.
    *Basis:* `decisions.md#Q-2`.
 
 3. If the machine settings are invalid or cannot be safely read, every entry point, including independent admission, nested shell verification and runner targeted and cheap pytest, refuses before work with the reader’s diagnostic naming the file; none falls back or reuses an ancestor’s settings.
-   *Refuted by:* an empty, zero, negative, fractional, nonnumeric,
-   substituted or unreadable setting, an unknown key or table, or a leftover
-   bare `verify.slots` file silently selects a fallback, hangs, or lets work
-   start; a zero-byte file, comments alone, or an empty `[verify]` table is also invalid, as is an invalid `workers_per_run` beside valid `slots`.
+   *Refuted by:* an empty, zero, negative, fractional or nonnumeric setting;
+   a symlinked, non-regular, unreadable or over 65,536-byte settings file;
+   a prefix parsed as the whole file; an unknown key or table; or a leftover
+   bare `verify.slots` file silently selecting a fallback, hanging or letting
+   work start; a zero-byte file, comments alone, or an empty `[verify]` table is also invalid, as is an invalid `workers_per_run` beside valid `slots`.
    *Basis:* `decisions.md#Q-2` (one declared, validated value),
    `decisions.md#Q-6`.
 
@@ -97,8 +98,9 @@ worker count and shared computation).
 
 5. When a protected check nests inside an existing admission, it reuses only
    that validated admission, its slot and its measured wait, and consumes no
-   further slot.
-   *Refuted by:* nesting queues at full capacity, a peer's slot, token or
+   further slot; an updated check also nests under a valid older single-slot
+   admission.
+   *Refuted by:* a valid older marker is rejected, nesting queues at full capacity, a peer's slot, token or
    context is mistaken for its own, or a stale or malformed marker bypasses
    admission.
    *Basis:* `decisions.md#Q-1` (extend the existing admission, not its
@@ -156,7 +158,7 @@ worker count and shared computation).
     the pytest workers per run using the same effective machine readings for
     every entry point: the validated repository default (three
     slots; workers = logical cores / slots, floored, at least one, bounded
-    by 2 GiB of total physical memory per worker across all slots, with at least one even if the bound is zero; cgroup memory limits are not read), overridden per value by
+    by 2 GiB of total physical memory per worker across all slots, with at least one even if the bound is zero; cgroup memory limits are not read). A failed machine reading drops only its own bound; if neither reading is available, xdist uses its own auto and the worker source is `no machine reading`. These defaults are overridden per value by
     the machine-local `verify.toml` (`[verify]` with `slots` and
     `workers_per_run`), and for the workers by a caller's non-empty
     `PYTEST_XDIST_AUTO_NUM_WORKERS`, which passes verbatim. Every run logs
@@ -173,7 +175,7 @@ worker count and shared computation).
     shell-started one under the same settings, CPU allocation and caller
     override, including a Linux process whose affinity permits six of 24 CPUs getting anything other than two workers at three slots with sufficient memory, a run whose log does not name the values and
     their sources, or the two paths printing the line through separate
-    wordings; 32 GiB total and 8 GiB available gives a bound other than five workers at three slots, or less than 6 GiB gives fewer than one.
+    wordings; 32 GiB total and 8 GiB available gives a bound other than five workers at three slots, or less than 6 GiB gives fewer than one; a failed reading discards a readable bound, or both readings fail without xdist auto and its logged source.
     *Basis:* `decisions.md#Q-6`, `decisions.md#Q-8`.
 
 13. When a run of `scripts/verify_all.sh` is recorded in the verify history,
@@ -217,6 +219,11 @@ holder file with the first. The runner never asks for two: every caller
 admission for one run. Lifting this boundary is the work of bead
 coding-harness-42em (each admission an explicit handle).
 
+An older check started inside an updated admission cannot validate its marker
+and waits for the compatibility lock held by its own ancestor. This rollout
+limit is outside the documented same-checkout runner path and ends when the
+older branch incorporates the updated admission (`decisions.md#Q-17`).
+
 ## Protected areas
 
 `Makefile`, `decisions/gates.yaml`, `.github/`, `provenance.yaml`, ADRs,
@@ -254,7 +261,7 @@ maintainer's behalf:
   state root holds the overrides (`[verify]`, keys `slots` and
   `workers_per_run`, positive integers up to 256 and 1024); absence means
   the repository default (`DEFAULT_SLOTS = 3` in `scripts/verify_lock.py`).
-  It replaces the bare `verify.slots` file of the first implementation
+  A symlink, non-regular file or file over 65,536 bytes is refused, without parsing a prefix (`decisions.md#Q-18`). It replaces the bare `verify.slots` file of the first implementation
   (2026-11-15): no criterion needs the old file, and none was in use on the
   machine, so it is not read as a fallback; a leftover one refuses with a
   diagnostic naming the new file, so a stale value never silently changes
@@ -265,7 +272,9 @@ maintainer's behalf:
 - [DETAIL] The shared Python reader obtains machine readings for all entry
   points, using `os.sched_getaffinity` where available and `os.cpu_count` otherwise; a cgroup CPU quota is not read. Reason: Q-8
   removes conflicting shell and Python readings; caller overrides and the
-  memory bound remain in force.
+  memory bound remain in force. Failed readings drop only their own bounds;
+  when neither exists, xdist auto is retained and its source is logged
+  (`decisions.md#Q-18`).
 - [DETAIL] An explicit `workers_per_run` in the machine file is not bounded
   by memory. Reason: an operator's stated value wins, as a caller's
   environment value does.

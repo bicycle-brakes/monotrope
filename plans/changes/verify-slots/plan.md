@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-u1ha
@@ -136,6 +136,10 @@ policy. `scripts/verify_duration.py` and `tests/test_verify_duration.py`
 remain responsible for history; alter them only if the shared settings
 interface requires it. No held path is assigned to the attempt.
 
+## Review clarifications — 2026-11-18
+
+Keep updated checks nesting under validated legacy admissions; an older check inside a new admission may wait on its own ancestor during rollout (Q-17). Test `slots = 4` admitting a fourth contender. Refuse symlinked, non-regular and over 65,536-byte settings without parsing a prefix. On failed machine readings drop only the unavailable bound; with neither reading leave xdist auto and log `no machine reading` (Q-18). Cover these cases in `tests/test_verify_lock.py`.
+
 ## Verification and measurement
 
 From this worktree's locked environment:
@@ -186,11 +190,14 @@ phase-2a rows in `findings.md` are incorporated in the spec.
 
 - 1: tests/test_verify_lock.py::test_default_slots_share_capacity_across_trees — a check cannot enter below the default or one more overlaps every occupied default slot.
 - 2: not yet written tests/test_verify_lock.py::test_raised_capacity_wakes_waiter_at_next_poll — a waiter remains blocked after capacity rises.
+- 2: not yet written tests/test_verify_lock.py::test_four_configured_slots_admit_four_checks — a configured fourth slot is ignored.
 - 2: tests/test_verify_lock.py::test_shared_capacity_setting_and_live_decrease — one/three are ignored or a decrease overlooks occupied higher slots.
 - 3: not yet written tests/test_stage2.py::test_invalid_settings_refuse_all_pytest_launches — invalid settings start targeted or cheap pytest.
 - 3: not yet written tests/test_ci.py::test_nested_verify_refuses_unusable_settings — nested verification uses stale settings.
+- 3: tests/test_verify_lock.py::test_overlong_capacity_refuses_with_diagnostic — overlong settings are accepted.
 - 3: tests/test_verify_lock.py::test_invalid_or_unsafe_capacity_refuses_before_work — invalid, substituted or unreadable settings start work or hang.
 - 4: tests/test_verify_lock.py::test_slot_waiters_reserve_in_fifo_order — a later waiter overtakes or an idle slot waits for another holder to finish.
+- 5: not yet written tests/test_verify_lock.py::test_updated_check_nests_under_valid_legacy_admission — a valid legacy marker queues or takes another slot.
 - 5: tests/test_verify_lock.py::test_nested_entries_use_their_own_slot_and_context — full-capacity nesting queues or a peer's token, slot or context is resolved.
 - 6: tests/test_verify_lock.py::test_slot_release_preserves_peers_and_inherited_children — cleanup deletes peer state, leaks capacity or releases before children end.
 - 7: tests/test_verify_lock.py::test_each_slot_checks_memory_before_work — the second reservation starts below the floor or bypasses the existing policy.
@@ -205,6 +212,7 @@ phase-2a rows in `findings.md` are incorporated in the spec.
 - 10: tests/test_verify_lock.py::test_legacy_exclusion_survives_new_holder_supervisor_death — old and new protected intervals overlap.
 - 12: not yet written tests/test_stage2.py::test_all_xdist_launches_use_shared_settings — cheap pytest bypasses the shared settings.
 - 12: not yet written tests/test_ci.py::test_shell_and_targeted_runner_share_effective_cpu_allocation — separate readings yield different worker counts for the same restricted CPU allocation.
+- 12: not yet written tests/test_verify_lock.py::test_failed_machine_readings_drop_only_unavailable_bounds — a readable bound is lost, or no readings fails to leave auto and log its source.
 - 12: tests/test_verify_lock.py::test_layered_settings_default_override_and_sources — a layer is ignored, workers do not follow an overriding slot count, or a source names the wrong layer.
 - 12: tests/test_verify_lock.py::test_workers_follow_slots_and_memory_bound — the old half-the-cores rule, a per-run memory bound, or a guessed count with nothing readable.
 - 12: tests/test_verify_lock.py::test_settings_command_logs_values_and_sources — a run's log does not name the values in force and their sources.
@@ -320,3 +328,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-16 16:49:00–16:50:26 UTC, 86 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-16 16:51:38–16:54:08 UTC, 150 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-17 22:33:18–22:35:29 UTC, 131 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 00:19:00–00:21:10 UTC, 129 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
