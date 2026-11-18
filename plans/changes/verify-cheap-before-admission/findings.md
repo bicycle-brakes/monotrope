@@ -1140,3 +1140,15 @@ Reviewer session: codex 01a1eebb-9ed6-78d3-8fdb-502fa58b9c9c — a fresh session
 Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4611 commits, 12 rules.
 
 Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4631 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-18
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | MAINT | implementation | scripts/stage2.py:6298 | Full Stage 2 verification bypasses the temporary-directory guard installed by `scripts/verify_all.sh`. If `PYTEST_ADDOPTS` specifies `--basetemp` outside the run’s area, pytest can clear that directory; the shell entry point refuses the same setting. | Codex | open | — |
+| F6-2 | MAJOR | SPEC | implementation | scripts/stage2.py:6318 | When the caller sets `PYTHON` to a specific interpreter, the shell full check uses it, but Stage 2 replaces it with the worktree interpreter or its own. The two full-check paths can therefore test different Python environments for the same input. [Criterion 10] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1eee5-7ae9-7120-8f05-e13274e20484, 2026-11-18
+Reviewer session: codex 01a1eee5-7ae9-7120-8f05-e13274e20484 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
