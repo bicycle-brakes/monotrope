@@ -78,3 +78,100 @@ Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model clau
 | S-27 | MINOR | SPEC | base | `spec.md`, criterion 16 | [AMBIGUITY] The spec does not say whether a change folder that has not reached its spec yet counts for the morning list. Three open folders (`ci-bead-summary`, `handover-at-95`, `loop-structure-first`) hold only a `research.md` with no `class:`. This change's own runner-written `research.md` also has none, because explore can take the class from its `--class` argument alone. Reading A: every non-archived folder counts. Each of these folders then shows up every day in the class group, and a folder that has a class but no draft yet shows up as refused for review. The maintainer is then asked to catch up reviews that are not due yet. Reading B: only folders with a `spec.md` (or a `plan.md`) count. The list then needs that rule, and the spec does not give it. The test for criterion 16 needs different fixtures under each reading. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4641 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1114 files, 4645 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/mandatory-spec-review/plan.md` +18 -18
+> - `scripts/stage2.py` +506 -12
+> - `tests/test_stage2.py` +491 -9
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2.py`, `tests/test_stage2.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> >       seed_spec_review(world, answer="| A1 | [AMBIGUITY] | SPEC | base | spec.md:1 | which bytes make it stale |")
+>
+> tests/test_stage2.py:28727: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2.py:28581: in seed_spec_review
+>     fingerprint = stage2.spec_body_fingerprint(stage2.spec_body_bytes(folder / "spec.md"))
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> spec = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1831/popen-gw5/test_implement_names_open_revi0/repo/plans/changes/demo/spec.md')
+>
+>     def spec_body_bytes(spec: Path) -> bytes:
+>         """The spec's body bytes: everything after the front matter header (criteria 10 and 11).
+>     
+>         A front-matter-only edit leaves the body untouched, so a review over the
+>         body stays current (criterion 11's refuted case).
+>         """
+>         data = spec.read_bytes()
+> >       match = FRONT_MATTER.match(data)
+> E       TypeError: cannot use a string pattern on a bytes-like object
+>
+> scripts/stage2.py:3697: TypeError
+> _______________________ test_stage2_off_enforces_review ________________________
+> [gw10] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1831/popen-gw.../44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1831/popen-gw10/test_stage2_off_enforces_revie0/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x10a6123c0>
+>
+>     def test_stage2_off_enforces_review(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+>         # Criterion 9. Planted fault: the flag bypasses the class or the review precondition.
+>         gate_demo(world)
+>         successful_implementation(world)
+>         assert world.run("implement", "demo", "--stage2-off", "Z.ai outage") == 2
+>         assert "has no spec review" in capsys.readouterr().err
+>         assert world.calls("claude") == []
+> >       seed_spec_review(world)
+>
+> tests/test_stage2.py:28754: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2.py:28581: in seed_spec_review
+>     fingerprint = stage2.spec_body_fingerprint(stage2.spec_body_bytes(folder / "spec.md"))
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> spec = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-1831/popen-gw10/test_stage2_off_enforces_revie0/repo/plans/changes/demo/spec.md')
+>
+>     def spec_body_bytes(spec: Path) -> bytes:
+>         """The spec's body bytes: everything after the front matter header (criteria 10 and 11).
+>     
+>         A front-matter-only edit leaves the body untouched, so a review over the
+>         body stays current (criterion 11's refuted case).
+>         """
+>         data = spec.read_bytes()
+> >       match = FRONT_MATTER.match(data)
+> E       TypeError: cannot use a string pattern on a bytes-like object
+>
+> scripts/stage2.py:3697: TypeError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_legacy_review_currency_by_day[on-cutoff-day]
+> FAILED tests/test_stage2.py::test_morning_inventory_uses_review_admission - T...
+> FAILED tests/test_stage2.py::test_legacy_review_currency_by_day[predates-commit]
+> FAILED tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review[unaudited]
+> FAILED tests/test_stage2.py::test_implement_rechecks_previously_implemented_change
+> FAILED tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review[stale]
+> FAILED tests/test_stage2.py::test_a_failed_spec_review_call_writes_no_rows[empty-answer]
+> FAILED tests/test_stage2.py::test_fallback_review_is_marked - TypeError: cann...
+> FAILED tests/test_stage2.py::test_fallback_spec_review_honours_leak_check - T...
+> FAILED tests/test_stage2.py::test_a_review_whose_bytes_change_mid_call_writes_no_block
+> FAILED tests/test_stage2.py::test_legacy_review_currency_by_day[legacy-current]
+> FAILED tests/test_stage2.py::test_spec_review_retries_then_falls_back - TypeE...
+> FAILED tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review[codex]
+> FAILED tests/test_stage2.py::test_implement_refuses_missing_stale_or_unreadable_review[unreadable]
+> FAILED tests/test_stage2.py::test_morning_inventory_names_fallback_rechecks
+> FAILED tests/test_stage2.py::test_legacy_review_currency_by_day[dirty-body]
+> FAILED tests/test_stage2.py::test_implement_accepts_current_review - TypeErro...
+> FAILED tests/test_stage2.py::test_a_failed_spec_review_call_writes_no_rows[non-zero-exit]
+> FAILED tests/test_stage2.py::test_an_answer_that_is_not_rows_is_kept - TypeEr...
+> FAILED tests/test_stage2.py::test_review_currency_rejects_changed_bytes - Typ...
+> FAILED tests/test_stage2.py::test_spec_review_fingerprints_reviewed_bytes - T...
+> FAILED tests/test_stage2.py::test_implement_names_open_review_ambiguity - Typ...
+> FAILED tests/test_stage2.py::test_stage2_off_enforces_review - TypeError: can...
+> 23 failed, 10 passed in 12.87s
+> ```
+
+Stage-2 call, 2026-11-18: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1114 files, 4655 commits, 12 rules.
