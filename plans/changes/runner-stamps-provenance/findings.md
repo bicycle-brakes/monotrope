@@ -371,3 +371,5 @@ Stage-2 call, 2026-11-18: implement · attempt 3 · route stage-1 · endpoint cl
 > `````
 
 Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed and the Sonnet attempt ended after 29 s with 24 tests red; continues from the saved tree · leak check clean over 1115 files, 4655 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason the previous Sonnet rerun stopped at the Claude usage limit; continues from the saved tree · leak check clean over 1115 files, 4666 commits, 12 rules.
