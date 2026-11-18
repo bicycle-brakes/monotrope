@@ -9397,7 +9397,11 @@ def committed_producer_field(root: Path, relative: str) -> str | None:
     match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
     if match is None:
         return None
-    return _field_value_raw(match.group(1), "produced_by", relative)
+    field = _field_value_raw(match.group(1), "produced_by", relative)
+    if field is not None:
+        # The field must be readable now: a committed fault stops the verb here, before a route is spent.
+        parse_producer_records(field, relative)
+    return field
 
 
 def refuse_committed_header_fault(root: Path, relative: str) -> None:
@@ -9413,7 +9417,9 @@ def inline_producer_record(record: dict) -> str:
     """One producer record in the header's compact inline form; dates stay quoted strings."""
     return (
         "{"
-        + ", ".join(f"{key}: {json.dumps(value) if isinstance(value, str) else value}" for key, value in record.items())
+        + ", ".join(
+            f"{key}: {json.dumps(value) if key in {'version', 'model'} else value}" for key, value in record.items()
+        )
         + "}"
     )
 
@@ -9423,7 +9429,7 @@ def _block_record_lines(record: dict, eol: str) -> str:
     lines = []
     for index, (key, value) in enumerate(record.items()):
         prefix = "- " if index == 0 else "  "
-        rendered = json.dumps(value) if isinstance(value, str) else value
+        rendered = json.dumps(value) if key in {"version", "model"} else value
         lines.append(f"{prefix}{key}: {rendered}")
     return eol.join(lines)
 
@@ -9613,7 +9619,7 @@ def stamp_retained_artifacts(
         head = committed_bytes(root, relative)
         if head is not None and current == head:
             continue
-        if re.match(rb"\A\xef\xbb\xbf?---\r?\n", current) is None:
+        if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
         notice = stamp_artifact(root, relative, producer=producer, model=model, day=day)
         if notice:
@@ -9727,7 +9733,7 @@ def touched_header_problems(root: Path, candidates: list[str]) -> list[str]:
         head = committed_bytes(root, relative)
         if head is not None and current == head:
             continue
-        if re.match(rb"\A\xef\xbb\xbf?---\r?\n", current) is None:
+        if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
         try:
             problems.extend(header_problems(relative, head, current))
