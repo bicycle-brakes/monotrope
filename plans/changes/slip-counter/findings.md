@@ -478,3 +478,14 @@ Stage-2 call, 2026-11-17: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-17: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 4559 commits, 12 rules.
 
 Runner restoration, 2026-11-17: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4576 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-18
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-3 | BLOCKER | SPEC | spec review | plans/changes/slip-counter/spec.md, Begriffe und AC 3 | [AMBIGUITY] Die offene Phase-2a-Feststellung S-11 ist weiterhin ungeklärt: „gezielter Check“ kann nur den gezielten Reparatur-Check des Runners oder auch andere erfolgreiche Teilprüfungen eines Implementierungsversuchs meinen. Bei einem grünen Teilcheck und anschließend rotem vollständigem Lauf ergeben die beiden Lesarten unterschiedliche Slip-Zahlen und verlangen unterschiedliche Aufzeichnungspfade. [AC 1, 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c, 2026-11-18
+Reviewer session: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
