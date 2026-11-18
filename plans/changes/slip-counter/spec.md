@@ -102,7 +102,7 @@ recorded interview, not a reconstruction of its code.
    *Basis:* decisions.md#Q-4, decisions.md#Q-6.
 7. When a potentially matching pair has incomplete evidence on either side,
    each selected side is counted once as incomplete rather than as a slip or non-slip.
-   *Refuted by:* a complete red full run whose only possible targeted predecessor has conflicting completions or a changed tree is counted as a non-slip; or targeted green, an intervening potentially matching unstable check, and full red do not mark all three incomplete.
+   *Refuted by:* a complete red full run whose only possible targeted predecessor has conflicting completions or a changed tree is counted as a non-slip; or a moved targeted predecessor followed by a full red on its end tree does not mark both incomplete; or a targeted green, a potentially matching full run with no end, and a full red do not mark all three incomplete.
    *Basis:* decisions.md#Q-10.
 8. When the reader selects a repository, interval and optional change, only
    selected runs contribute to the reported counts.
@@ -110,24 +110,24 @@ recorded interview, not a reconstruction of its code.
    *Basis:* decisions.md#Q-2, decisions.md#Q-5, decisions.md#Q-8.
 9. When the report encounters legacy duration runs or change-less full runs,
    it reports their number outside the count without treating them as incomplete.
-   *Refuted by:* an attributable legacy or change-less full run raises the incomplete count or is absent from the outside-count line.
+   *Refuted by:* an attributable legacy or change-less full run raises the incomplete count or is absent from the outside-count line, or a well-formed legacy pair after a version-2 marker makes the report partial.
    *Basis:* decisions.md#Q-9.
 10. If history is partial or unavailable, output and exit status distinguish it
     from a complete measurement while preserving supported observations.
-    *Refuted by:* one interrupted in-scope run yields a complete exit, or an unassignable damaged row yields complete success or suppresses an independently valid slip.
+    *Refuted by:* one interrupted in-scope run yields a complete exit, or either history file is missing after version-2 evidence exists and the report exits complete, or an orphan full end between a targeted green and full red leaves a slip counted, or a timestamped orphan before the lower bound still makes that selection partial, or an unassignable damaged row yields complete success.
     *Basis:* decisions.md#Q-2, decisions.md#Q-4.
 11. While measurement is used, verification outcomes and duration history remain intact.
     *Refuted by:* reporting changes history, legacy duration readers reject new full-run records or count a targeted check as a full duration, an append failure changes the verification result, or substituted storage is followed.
     *Basis:* decisions.md#Q-1; research, duration-history refusal contracts.
 
-12. When a full run's uncertain predecessor is known to be a full run, the report keeps the later run's non-slip status and counts its flaky signal as undecided.
-    *Refuted by:* a full run with conflicting green and red completions followed by a valid full red makes that later run incomplete or reports a decided flaky signal.
-    *Basis:* decisions.md, agent decision S-20.
+12. When a full run's uncertain predecessor is known to be a full run and no earlier targeted green could precede it, the report keeps the later run's non-slip status and counts its flaky signal as undecided.
+    *Refuted by:* a full run with conflicting green and red completions followed by a valid full red makes that later run incomplete or reports a decided flaky signal; or an uncertain intervening full run after a possible targeted green fails to make all three runs incomplete or prints a flaky line.
+    *Basis:* decisions.md, agent decisions S-20 and S-26.
 13. When two potentially matching checks have equal completion timestamps, both selected runs are incomplete.
     *Refuted by:* targeted green and full red at the same completion time are reported as a complete non-slip.
     *Basis:* decisions.md, agent decision S-18.
 14. When a full-run completion has no start, the report classifies it as outside the count before the first version-2 comparison record in the duration history and otherwise marks the report partial.
-    *Refuted by:* an orphan completion after the first version-2 comparison record is treated as legacy, or one before it makes the report partial.
+    *Refuted by:* an orphan completion after the first version-2 comparison record is treated as legacy, or one before it makes the report partial; or a well-formed legacy start/end pair after the marker makes the report partial.
     *Basis:* decisions.md, agent decision S-12.
 
 ## Boundary
@@ -142,10 +142,10 @@ at report time; a later report may become complete. An end without a usable
 start, or damaged evidence missing repository, start time or requested change
 scope, cannot be assigned to the selection: diagnose it separately and mark the
 report partial, without inventing a run count, except for recognizable legacy
-records addressed below. An invalid intervening check that could share the identity leaves the predecessor and successor undecidable too; mark all affected selected runs incomplete. A moved targeted tree remains a possible match to its start tree, not a proven mismatch. A wholly lost run cannot be
-reconstructed. Missing history is unavailable, not zero.
+records addressed below. An invalid intervening check that could share the identity leaves the predecessor and successor undecidable too; mark all affected selected runs incomplete. A moved targeted tree remains a possible match to either its start tree or its end tree. A full run without an end may intervene after it starts, even while still running: a possible targeted predecessor and full-red successor are incomplete as well. A full-run orphan end between a targeted green and full red may intervene, so both selected sides are incomplete; the orphan is diagnosed without inventing a run count. If an uncertain full run may intervene between a targeted green and full red, because its tree or order is uncertain (including conflicting ends or equal completion times), all three are incomplete and no flaky line is printed. Only where no earlier targeted green could precede that full run does the known-full-predecessor rule in criterion 12 apply. A wholly lost run cannot be
+reconstructed. The targeted history is created at the first version-2 runner record. Once the duration history has a version-2 record, a missing targeted history makes the report unavailable; a missing duration history with a present targeted history also makes it unavailable, never a complete zero.
 
-Legacy means duration records predating comparison evidence. The outer duration event stays version 1; a version-2 comparison marker in an additive full-start field establishes the boundary in that history. An orphan end before the first marker is outside the count; one after it is damaged and makes the report partial. If the first new start is lost before any marker is written, its orphan end is indistinguishable from legacy and can be classified outside the count. Legacy and change-less full runs are outside
+Legacy is a record format: a well-formed version-1 start/end pair without comparison evidence is legacy wherever it appears, including after a version-2 marker. The outer duration event stays version 1; a version-2 comparison marker in an additive full-start field distinguishes orphan ends by position in that history. An orphan end before the first marker is outside the count; one after it is damaged and makes selections it could belong to partial. An end completing before the lower interval bound cannot belong to that selection; its unknown repository can be any repository. A report without bounds remains partial after such an end, and a damaged line with no timestamp makes every report partial; `--since` can exclude a timestamped end. If the first new start is lost before any marker is written, its orphan end is indistinguishable from legacy and can be classified outside the count. Legacy and change-less full runs are outside
 the slip population (decisions Q-9). Count them on the outside line only where
 repository, start time and requested change scope can be established. Report
 recognizable legacy runs without enough scope evidence separately as unattributed
@@ -219,7 +219,7 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The maintainer's answers Q-1 through Q-10 and accepted agent decisions S-12 through S-20 govern this revision.
+None open. The maintainer's answers Q-1 through Q-10 and accepted agent decisions S-12 through S-27 govern this revision.
 
 [DETAIL] Keep full-run events version 1 with additive comparison fields and a version-2 comparison marker; put targeted-check records in a separate history beside `verify-duration.jsonl`. This keeps old duration readers compatible and excludes targeted durations from full-run minutes. The reader combines both histories; no slip records are written.
 
