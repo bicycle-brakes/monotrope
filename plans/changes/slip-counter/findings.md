@@ -491,3 +491,5 @@ Phase 6 verdict: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c, 2026-11-18
 Reviewer session: codex 01a1ec2b-797f-7ce0-8313-4ad880a3071c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-11-18: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4598 commits, 12 rules.
+
+Stage-2 call, 2026-11-18: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1115 files, 4603 commits, 12 rules.
