@@ -21,7 +21,7 @@ neighbours: []
 
 # Spec — slip-counter
 
-Derive missed-verification observations from the one local run history, with
+Derive missed-verification observations from local check histories, with
 incomplete evidence visible beside the count (bead coding-harness-bxxt.7 —
 slip counter). Research: [research.md](research.md). Decisions:
 [decisions.md](decisions.md), Q-1 through Q-10.
@@ -60,10 +60,10 @@ recorded interview, not a reconstruction of its code.
   any worktree of one repository pair with each other, and a report from any
   checkout of it selects the runs of every worktree.
 - **Valid run:** a run that passes the one validity check (decisions Q-6):
-  exactly one start and one completion, a completion not before its start, a
+  exactly one distinct start and one distinct completion after byte-identical duplicate records are collapsed, a completion not before its start, a
   known check kind, nonempty repository, change, checked-tree and
   gate-configuration identities, and, where the run records its checked tree
-  at both ends, the same tree at both. Every in-scope run passes this one check before it may count, whatever its kind
+  at both ends, the same tree at both; targeted checks require both readings. Every in-scope run passes this one check before it may count, whatever its kind
   and verdict. A pair also needs complete evidence on both sides (decisions Q-10).
 - **Checked tree:** the Git-visible contents and file modes actually checked,
   including uncommitted and non-ignored untracked inputs, minus the change's
@@ -79,7 +79,7 @@ recorded interview, not a reconstruction of its code.
 
 1. When a valid red full run completes immediately after a valid green targeted
    check of the same identity, the reader counts one slip for the full run.
-   *Refuted by:* a qualifying overlapping pair counts zero, or identical duplicate records multiply it.
+   *Refuted by:* a qualifying overlapping pair counts zero, or a byte-identical duplicate full completion prevents the pair counting exactly once.
    *Basis:* decisions.md#Q-1, decisions.md#Q-8.
 2. If a check of the same identity completes between a targeted green and a
    full red, the earlier targeted green does not pair with that full red.
@@ -90,8 +90,8 @@ recorded interview, not a reconstruction of its code.
    *Refuted by:* full green then full red yields no signal, or an intervening same-identity check still yields one.
    *Basis:* decisions.md#Q-8.
 4. When the runner executes a targeted repair check, its start and completion
-   record the comparison evidence and actual outcome needed by the reader.
-   *Refuted by:* a successful stable check records unknown identity, a failed check records green, or the history contains a slip event.
+   each record the checked tree and comparison evidence and its completion records the actual outcome needed by the reader.
+   *Refuted by:* a stable check records unknown identity, a failed check records green, a targeted green whose start and end trees differ followed by a red full run of its start tree counts as a slip, or history contains a slip event.
    *Basis:* decisions.md#Q-1, decisions.md#Q-3, decisions.md#Q-7.
 5. When the runner starts a full verification for a named change, its start
    records the comparison evidence needed by the reader.
@@ -102,7 +102,7 @@ recorded interview, not a reconstruction of its code.
    *Basis:* decisions.md#Q-4, decisions.md#Q-6.
 7. When a potentially matching pair has incomplete evidence on either side,
    each selected side is counted once as incomplete rather than as a slip or non-slip.
-   *Refuted by:* a complete red full run whose only possible targeted predecessor has conflicting completions is counted as a non-slip.
+   *Refuted by:* a complete red full run whose only possible targeted predecessor has conflicting completions or a changed tree is counted as a non-slip; or targeted green, an intervening potentially matching unstable check, and full red do not mark all three incomplete.
    *Basis:* decisions.md#Q-10.
 8. When the reader selects a repository, interval and optional change, only
    selected runs contribute to the reported counts.
@@ -114,11 +114,21 @@ recorded interview, not a reconstruction of its code.
    *Basis:* decisions.md#Q-9.
 10. If history is partial or unavailable, output and exit status distinguish it
     from a complete measurement while preserving supported observations.
-    *Refuted by:* an unassignable damaged row yields complete success or suppresses an independently valid slip.
+    *Refuted by:* one interrupted in-scope run yields a complete exit, or an unassignable damaged row yields complete success or suppresses an independently valid slip.
     *Basis:* decisions.md#Q-2, decisions.md#Q-4.
 11. While measurement is used, verification outcomes and duration history remain intact.
-    *Refuted by:* reporting changes history, legacy or older duration readers reject the other version's records, an append failure changes the verification result, or substituted storage is followed.
+    *Refuted by:* reporting changes history, legacy duration readers reject new full-run records or count a targeted check as a full duration, an append failure changes the verification result, or substituted storage is followed.
     *Basis:* decisions.md#Q-1; research, duration-history refusal contracts.
+
+12. When a full run's uncertain predecessor is known to be a full run, the report keeps the later run's non-slip status and counts its flaky signal as undecided.
+    *Refuted by:* a full run with conflicting green and red completions followed by a valid full red makes that later run incomplete or reports a decided flaky signal.
+    *Basis:* decisions.md, agent decision S-20.
+13. When two potentially matching checks have equal completion timestamps, both selected runs are incomplete.
+    *Refuted by:* targeted green and full red at the same completion time are reported as a complete non-slip.
+    *Basis:* decisions.md, agent decision S-18.
+14. When a full-run completion has no start, the report classifies it as outside the count before the first version-2 comparison record in the duration history and otherwise marks the report partial.
+    *Refuted by:* an orphan completion after the first version-2 comparison record is treated as legacy, or one before it makes the report partial.
+    *Basis:* decisions.md, agent decision S-12.
 
 ## Boundary
 
@@ -132,11 +142,10 @@ at report time; a later report may become complete. An end without a usable
 start, or damaged evidence missing repository, start time or requested change
 scope, cannot be assigned to the selection: diagnose it separately and mark the
 report partial, without inventing a run count, except for recognizable legacy
-records addressed below. A wholly lost run cannot be
+records addressed below. An invalid intervening check that could share the identity leaves the predecessor and successor undecidable too; mark all affected selected runs incomplete. A moved targeted tree remains a possible match to its start tree, not a proven mismatch. A wholly lost run cannot be
 reconstructed. Missing history is unavailable, not zero.
 
-Legacy means duration records predating comparison evidence, even though both
-old and new records use version 1. Legacy and change-less full runs are outside
+Legacy means duration records predating comparison evidence. The outer duration event stays version 1; a version-2 comparison marker in an additive full-start field establishes the boundary in that history. An orphan end before the first marker is outside the count; one after it is damaged and makes the report partial. If the first new start is lost before any marker is written, its orphan end is indistinguishable from legacy and can be classified outside the count. Legacy and change-less full runs are outside
 the slip population (decisions Q-9). Count them on the outside line only where
 repository, start time and requested change scope can be established. Report
 recognizable legacy runs without enough scope evidence separately as unattributed
@@ -210,13 +219,9 @@ Held paths, including prompts, templates, `AGENTS.md`, `provenance.yaml`,
 
 ## Open decisions
 
-None open. The maintainer's answers Q-1 through Q-10 govern this revision.
+None open. The maintainer's answers Q-1 through Q-10 and accepted agent decisions S-12 through S-20 govern this revision.
 
-[DETAIL] Use the existing gate-file digest and additive version-1 fields: old
-readers ignore extra fields and continue reading durations, while new readers
-distinguish legacy records by their absent comparison fields. This avoids a
-version bump that older readers reject; compatibility is verified with the old
-reader contract, not assumed from the version number.
+[DETAIL] Keep full-run events version 1 with additive comparison fields and a version-2 comparison marker; put targeted-check records in a separate history beside `verify-duration.jsonl`. This keeps old duration readers compatible and excludes targeted durations from full-run minutes. The reader combines both histories; no slip records are written.
 
 [DETAIL] Use UTC completion time with strict inequality; equal timestamps do
 not establish a predecessor. This deterministic conservative rule avoids

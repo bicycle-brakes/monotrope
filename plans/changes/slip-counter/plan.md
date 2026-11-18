@@ -45,15 +45,14 @@ Starts unless you say stop.
 
 ## Evidence and reader contracts
 
-- Keep the existing version-1 run history with additive optional comparison
-  fields; prove older duration readers accept the added fields. Capture the
+- Keep full-run events in the existing version-1 duration history with additive comparison fields and a version-2 comparison marker on each new full start; put targeted start/end events in a separate history alongside it. Combine the histories when reading and prove older duration readers accept the full events and never count targeted durations. Capture the
   resolved common Git directory, change, check kind, checked tree and SHA-256
   of `decisions/gates.yaml` at start, plus actual outcome and completion time.
   Targeted repair checks capture their tree at both ends; the full run captures
   it only at start, as the spec's Boundary states. The runner passes the named
   change to the existing full-start path; a successful normal run with available
   context must not substitute unknowns. Never write a slip or signal record.
-- Group identical events and validate every in-scope run once. Order completed
+- Collapse byte-identical duplicate events and validate every in-scope run once; conflicting duplicates are incomplete. Order completed
   checks by UTC completion with strict earlier-than; equal timestamps cannot
   establish succession. For each identity, any intervening completed check ends
   the previous opportunity. A red full run immediately following a green
@@ -63,16 +62,16 @@ Starts unless you say stop.
 - Apply the spec's potential-pair rule before declaring a non-slip: compatible
   known fields and possible order leave candidates even when evidence is
   incomplete. Mark each selected affected run incomplete once; incompatible
-  known fields cannot pair, and ambiguity does not pick an arbitrary candidate.
-  Diagnose unassignable evidence separately and mark the report partial. Treat a
+  known fields cannot pair, and ambiguity does not pick an arbitrary candidate. A moved targeted tree can match its start tree; an invalid intervening candidate makes all affected runs incomplete. Equal completion timestamps make both affected runs incomplete.
+  A full predecessor with conflicting verdicts makes the flaky signal undecided while the following full run remains a non-slip. Diagnose unassignable evidence separately and mark the report partial. Treat a
   start without an end as incomplete, including an active run.
 - The reader `python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]`
   defaults to the current shared Git repository and all time. Bounds are aware
   UTC instants, lower inclusive and upper exclusive; reject reversed bounds.
-  Show scope, slips, incomplete runs, flaky-test signals and an outside-count
+  Show scope, slips, incomplete runs, flaky-test signals, undecided flaky signals and an outside-count
   line for attributable legacy or change-less full runs. Recognizable legacy runs without scope evidence appear separately as
   unattributed outside runs and do not make the slip measurement partial. A missing history or
-  empty selection is not a measured zero. Exit 0 for complete evidence, 1 for
+  empty selection is not a measured zero. An orphan full end before the first version-2 comparison marker in the duration history is outside the count; after it the report is partial. The first new start lost before any marker remains indistinguishable from legacy. Any incomplete run makes the report partial. Exit 0 for complete evidence, 1 for
   partial or unavailable evidence, 2 for invalid arguments or refused storage.
   Read without changing history; append failures never change a check verdict.
 - Phase 1 used Stage 2, route `flash`, model `glm-5.3-flash`; no Stage-1
@@ -117,7 +116,15 @@ the fix; no real machine history or deliberately failing full suite is needed.
 - 10: tests/test_verify_duration.py::test_slips_distinguish_complete_partial_and_unavailable_history — damaged or missing history appears complete
 - 11: tests/test_verify_duration.py::test_slips_are_read_only_and_preserve_duration_history — reading mutates history or legacy durations fail
 - 11: tests/test_stage2.py::test_slip_measurement_failure_preserves_verification_result — an append failure changes the verdict
-- 11: not yet written tests/test_verify_duration.py::test_old_duration_reader_accepts_additive_version_one_fields — an older reader rejects new records
+- 11: not yet written tests/test_verify_duration.py::test_old_duration_reader_accepts_additive_version_one_fields — an older reader rejects new records or counts targeted checks as full durations
+- 12: not yet written tests/test_verify_duration.py::test_flaky_signal_undecided_after_conflicting_full — the later full run becomes incomplete or the signal is decided
+- 13: not yet written tests/test_verify_duration.py::test_equal_completion_times_are_incomplete — tied targeted green and full red are a complete non-slip
+- 14: not yet written tests/test_verify_duration.py::test_orphan_full_end_respects_comparison_marker — an orphan after the marker appears legacy or one before it makes the report partial
+- 1: not yet written tests/test_verify_duration.py::test_identical_completion_retry_collapses — an identical duplicate prevents one slip
+- 4: not yet written tests/test_stage2.py::test_targeted_history_requires_end_tree — a changed targeted tree yields a slip
+- 7: not yet written tests/test_verify_duration.py::test_unstable_intervening_check_makes_candidates_incomplete — the reader pairs around an uncertain intervening check
+- 7: not yet written tests/test_verify_duration.py::test_moved_targeted_predecessor_makes_pair_incomplete — a changed predecessor tree makes the full run a non-slip
+- 10: not yet written tests/test_verify_duration.py::test_incomplete_run_exits_partial — an interrupted run exits successfully
 
 ## Time used
 
@@ -132,3 +139,4 @@ the fix; no real machine history or deliberately failing full suite is needed.
 2026-11-17 22:24:45–22:35:27 UTC, 642 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-17 22:35:37–22:50:18 UTC, 881 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
 2026-11-18 12:49:17–12:52:26 UTC, 189 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-18 13:33:54–13:36:16 UTC, 142 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
