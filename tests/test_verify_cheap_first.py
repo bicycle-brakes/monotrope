@@ -39,6 +39,7 @@ from stage2 import GATE_END, GATE_START, red_sections  # noqa: E402
 # them in a recipient tree of their own.
 MECHANISM_FILES = (
     "scripts/ci_gates.py",
+    "scripts/venv_guard.py",
     "scripts/verify_all.sh",
     "scripts/verify_lock.py",
     "scripts/verify_duration.py",
@@ -49,7 +50,7 @@ def _tree_files(tree: Path) -> Path:
     """The copied runner, its gate reader, its admission module and its duration helper — no gates yet."""
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
-    for name in ("verify_all.sh", "ci_gates.py", "verify_lock.py", "verify_duration.py"):
+    for name in ("verify_all.sh", "ci_gates.py", "venv_guard.py", "verify_lock.py", "verify_duration.py"):
         shutil.copy(REPO_ROOT / "scripts" / name, tree / "scripts" / name)
     return tree
 

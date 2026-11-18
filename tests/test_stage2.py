@@ -660,7 +660,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "paths:\n  - {prefix: 'plans/', frontmatter: required}\nexcluded: []\n", encoding="utf-8"
     )
     (root / "scripts").mkdir()
-    for script in (Path(plans_registry.__file__).name, "_verdict.py"):
+    for script in (Path(plans_registry.__file__).name, "_verdict.py", "venv_guard.py"):
         shutil.copy(REPO_ROOT / "scripts" / script, root / "scripts" / script)
 
     home = tmp_path / "home"

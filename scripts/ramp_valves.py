@@ -119,6 +119,7 @@ def _roster_handles() -> set[str]:
     if not karte.exists():
         return set()
     try:
+        import venv_guard  # noqa: F401
         import yaml
 
         daten = yaml.safe_load(karte.read_text(encoding="utf-8")) or {}

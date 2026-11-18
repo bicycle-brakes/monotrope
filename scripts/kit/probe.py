@@ -30,12 +30,14 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import yaml
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 MANIFEST = Path(__file__).resolve().parent / "manifest.yaml"
 
+# This file lives one directory below `scripts/`, so its own directory is what Python puts first on the path:
+# the guard and `_verdict` are found only once `scripts/` is added.
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import venv_guard  # noqa: E402, F401
+import yaml  # noqa: E402
 from _verdict import Verdict  # noqa: E402
 
 # ---------------------------------------------------------------------------
