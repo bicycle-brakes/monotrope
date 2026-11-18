@@ -1114,3 +1114,14 @@ Runner restoration, 2026-11-17: repair · attempt 3 · route stage-1 — lifecyc
 Stage-2 call, 2026-11-18: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4566 commits, 12 rules.
 
 Runner restoration, 2026-11-18: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+
+Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4578 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-18
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/verify_run.py | Bei einer Auswahl mit geschützten Prüfungen wird der Arbeitsbaum bereits vor der günstigen Prüfphase gemessen. Schlägt eine günstige Prüfung anschließend blockierend fehl, wurde dennoch ein Baseline-Snapshot erstellt; ein langsames Git oder ein großer Arbeitsbaum verzögert außerdem die Diagnose. Die Spezifikation schließt diese Messung für einen solchen fehlgeschlagenen Lauf ausdrücklich aus. [Boundaries: Tree comparison] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1ec38-5ed2-7ab1-9e52-9355667813b3, 2026-11-18
+Reviewer session: codex 01a1ec38-5ed2-7ab1-9e52-9355667813b3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
