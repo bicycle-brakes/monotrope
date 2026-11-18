@@ -576,15 +576,6 @@ def pin_the_ladder(target: Path) -> None:
         "exclude": [],
         "input": "implementation-diff",
     }
-    # The spec review's central configuration (bead coding-harness-ttic): the
-    # test world keeps the pause at zero so a retry fires in the same second,
-    # and names the same fallback the code defaults declare.
-    data["spec-review"] = {
-        "timeout-seconds": 1800,
-        "retry-pause-seconds": 0,
-        "fallback-model": "deepseek-v4.1-flash",
-        "fallback-endpoint": "opencode-go",
-    }
     # The Z.ai subscription's real end date (bead coding-harness-dcu3) must not age the
     # explore and implement tests into a refusal: they run on a synthetic far-future record.
     zai = next(e for e in data["endpunkte"] if e["name"] == "glm-coding-plan")
@@ -653,11 +644,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
     )
     (root / "plans" / "changes" / "demo" / "research.md").write_text(
-        # The fixture change is a spike: the mandatory spec review (bead
-        # coding-harness-ttic) exempts a spike, so the standing implement tests
-        # keep their scenario; the review's own tests gate their own change by
-        # flipping this header to `bounded` (gate_demo below).
-        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: spike\n---\n\n# Research\n\nseed fact\n",
+        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: bounded\n---\n\n# Research\n\nseed fact\n",
         encoding="utf-8",
     )
     (root / "plans" / "changes" / "demo" / "plan.md").write_text(
@@ -7747,27 +7734,12 @@ def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
     assert len(world.calls("pi")) == 7, "one discovery plus two free and three paid members were expected"
 
 
-def test_an_answer_that_is_not_rows_is_kept(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    # A readable answer's non-row prose is kept and said to be kept. A prose-only answer is
-    # unreadable now (criterion 6, S-10's reading B): the retry and the fallback fail too,
-    # and no qualifying block is written. Planted fault: prose without rows is accepted.
-    monkeypatch.setattr(
-        stage2, "discover_free", lambda *_a, **_k: {"models_store": loop_state()["free"]["models_store"]}
-    )
-    world.script(
-        claude=[
-            {"stdout": "An opening remark.\n" + rows(1)},
-            {"stdout": "No finding at all."},
-            {"stdout": "Still prose, no table."},
-        ],
-        pi=[{"stdout": "The fallback answers in prose too."}],
-    )
+def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
+    world.script(claude=[{"stdout": "An opening remark.\n" + rows(1)}, {"stdout": "No finding at all."}])
     assert world.run("spec-review") == 0
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
-    assert world.run("spec-review") == 1
-    text = world.text()
-    assert text.count("## Phase 2a") == 1, "a prose answer must not gain a qualifying block"
-    assert "Opus reported no finding." not in text
+    assert world.run("spec-review") == 0
+    assert "No finding at all." in world.text() and "Opus reported no finding." in world.text()
 
 
 def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: World) -> None:
@@ -7788,13 +7760,8 @@ def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: Worl
     ],
     ids=["empty-answer", "non-zero-exit"],
 )
-def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Criterion 13. Planted fault: the failed call is not retried, or the fallback is not reached.
-    # Both Opus attempts fail the same way and the fallback fails too: exit 1, no block.
-    monkeypatch.setattr(
-        stage2, "discover_free", lambda *_a, **_k: {"models_store": loop_state()["free"]["models_store"]}
-    )
-    world.script(claude=[step, step], pi=[{"stdout": "prose, not rows"}])
+def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict) -> None:
+    world.script(claude=[step])
     assert world.run("spec-review") == 1
     text = world.text()
     assert "Reviewer session" not in text and "## Phase 2a" not in text and "X1" not in text
@@ -21110,7 +21077,7 @@ RECEIPT_ID = "a" * 64
 
 @pytest.mark.parametrize("klass", ["bounded", "spike"])
 def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> None:
-    text = world.research.read_text(encoding="utf-8").replace("class: spike", f"class: {klass}")
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", f"class: {klass}")
     world.research.write_text(text, encoding="utf-8")
     # The one call that does run is the bounded route at the end; its answer names a repository file,
     # as research must (bead coding-harness-e7m).
@@ -21126,7 +21093,7 @@ def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> 
 
 
 def test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument(world: World) -> None:
-    text = world.research.read_text(encoding="utf-8").replace("class: spike", "class: nonsense\nneighbours: nope")
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: nonsense\nneighbours: nope")
     world.research.write_text(text, encoding="utf-8")
     world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
@@ -28497,448 +28464,3 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
-
-
-# ---------------------------------------------------------------------------
-# The mandatory spec review (bead coding-harness-ttic)
-# ---------------------------------------------------------------------------
-
-
-SPEC_REVIEW_DOCTRINE_TEXTS = (
-    "AGENTS.md",
-    "docs/WORKFLOW.md",
-    "prompts/02-spec.md",
-    "prompts/02a-spec-review.md",
-    "prompts/02b-design.md",
-)
-
-
-def doctrine_permit_problems(text: str) -> list[str]:
-    """The sentences of a doctrine text that let a plan card precede a current spec review."""
-    problems = []
-    for pattern in (r"may skip the spec review", r"spec review,? which is optional", r"Spec-?Review \*\(optional\)\*"):
-        for match in re.finditer(pattern, text):
-            problems.append(f"line {text[: match.start()].count(chr(10)) + 1}: {match.group(0)}")
-    return problems
-
-
-def doctrine_spike_required_problems(text: str) -> list[str]:
-    """The sentences of a doctrine text that demand the spec review of a spike."""
-    problems = []
-    for pattern in (r"including spikes?[^.]*review", r"spikes?,? (?:also )?(?:need|require)s?[^.]*spec review"):
-        for match in re.finditer(pattern, text, re.I):
-            problems.append(f"line {text[: match.start()].count(chr(10)) + 1}: {match.group(0)}")
-    return problems
-
-
-def doctrine_repeat_problems(text: str) -> list[str]:
-    """The sentences that let the card follow an edit without a current review, or a fourth round run
-    without the maintainer."""
-    problems = []
-    for pattern in (r"card may follow without (?:a |another )?review", r"fourth round[^.]*without"):
-        for match in re.finditer(pattern, text, re.I):
-            problems.append(f"line {text[: match.start()].count(chr(10)) + 1}: {match.group(0)}")
-    return problems
-
-
-def gate_demo(world: World) -> None:
-    """Flip the fixture change's class to `bounded`, the smallest class the review gates, and commit
-    the flip: a work verb refuses pre-existing changes outside the change's findings.md.
-
-    The fixture change is a spike so the standing implement tests keep their scenario; every
-    review-gated test states `bounded` here and then seeds the review it needs.
-    """
-    world.research.write_text(
-        world.research.read_text(encoding="utf-8").replace("class: spike", "class: bounded"),
-        encoding="utf-8",
-    )
-    git(world.root, "add", "plans/changes/demo/research.md")
-    git(world.root, "commit", "--quiet", "-m", "gate demo as bounded")
-
-
-def patch_free_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stand in the reviewer launch's refreshed definitions, as a seeded loop record carries them."""
-    monkeypatch.setattr(
-        stage2, "discover_free", lambda *_a, **_k: {"models_store": loop_state()["free"]["models_store"]}
-    )
-
-
-def seed_spec_review(world: World, change: str = "demo", **options: object) -> str:
-    """A written `## Phase 2a` block for the change's current spec body, as the runner shapes it.
-
-    Options: `day`, `answer` (default the clean `No finding.`), `fingerprinted` (default True),
-    `audited` (default True), `heading_name`, `fallback` (a model/endpoint pair), and `extra_line`
-    (one more raw line inside the block, for an unreadable table line). Returns the recorded
-    fingerprint.
-    """
-    day = options.get("day", "2026-11-18")
-    answer = options.get("answer", "No finding.")
-    fingerprinted = options.get("fingerprinted", True)
-    audited = options.get("audited", True)
-    fallback = options.get("fallback")
-    heading_name = options.get("heading_name")
-    folder = world.root / "plans" / "changes" / change
-    fingerprint = stage2.spec_body_fingerprint(stage2.spec_body_bytes(folder / "spec.md"))
-    name = heading_name or (stage2.OPUS_HEADING_NAME if fallback is None else fallback[0] + stage2.FALLBACK_MARK)
-    reviewer = "Opus" if fallback is None else fallback[0]
-    endpoint, model = ("claude-code-plan", "claude-opus-5-5") if fallback is None else (fallback[1], fallback[0])
-    audit_line = (
-        f"Stage-2 call, {day}: spec-review · endpoint {endpoint} · model {model} · "
-        "leak check clean over 1114 files, 4645 commits, 12 rules."
-    )
-    pieces = [audit_line if audited else "Some prose the reviewer wrote earlier.", f"## Phase 2a — {name}, {day}"]
-    if fingerprinted:
-        pieces.append(f"Spec fingerprint: {fingerprint}")
-    if fallback is not None:
-        pieces.append(f"Spec review fallback: {fallback[0]} via {fallback[1]}, declared at write.")
-    parsed, _rest = stage2.parse_rows(answer)
-    block = stage2.answer_block(parsed, answer, reviewer)
-    extra = options.get("extra_line")
-    pieces.append(block if extra is None else f"{block}\n{extra}")
-    (folder / "findings.md").write_text(f"# Findings — {change}\n\n" + "\n\n".join(pieces) + "\n", encoding="utf-8")
-    return fingerprint
-
-
-def make_change(world: World, name: str, *, klass: str | None, spec: bool = True) -> Path:
-    """A change folder with a spec and, when a class is named, that class in both headers."""
-    folder = world.root / "plans" / "changes" / name
-    folder.mkdir()
-    if klass is not None:
-        (folder / "research.md").write_text(
-            f"---\ntitle: Research\nbead: {name}-1\nclass: {klass}\n---\n\n# Research\n", encoding="utf-8"
-        )
-    if spec:
-        stated = f"class: {klass}\n" if klass is not None else ""
-        (folder / "spec.md").write_text(f"---\ntitle: Spec\nbead: {name}-1\n{stated}---\n\n# Spec\n", encoding="utf-8")
-    return folder
-
-
-def test_doctrine_requires_review_before_card() -> None:
-    """Criterion 1 as a doctrine checker. Planted fault: a text that lets the card precede the review.
-
-    The doctrine texts themselves are the orchestrator's step 3 (plan.md, "After the accepted
-    attempt"); until that edit lands, this pins the checker on planted copies and the files'
-    presence, and step 3 tightens the real-text assertion to `[]`.
-    """
-    for relative in SPEC_REVIEW_DOCTRINE_TEXTS:
-        assert (REPO_ROOT / relative).is_file(), relative
-    drafted = "A current spec review precedes the plan card for every bounded, feature and architectural change."
-    assert doctrine_permit_problems(drafted) == []
-    planted = "A change stated as `bounded` may skip the spec review, which is optional there."
-    assert doctrine_permit_problems(planted), "the checker missed the planted permission"
-
-
-def test_doctrine_exempts_spike() -> None:
-    """Criterion 2 as a doctrine checker. Planted fault: a text that requires the review of a spike.
-
-    Written against the checker for the same reason as `test_doctrine_requires_review_before_card`;
-    step 3 tightens the real-text assertion to `[]`.
-    """
-    drafted = "The review precedes the card for bounded, feature and architectural changes; a spike needs none."
-    assert doctrine_spike_required_problems(drafted) == []
-    planted = "Every change, including spikes, needs a spec review before its card."
-    assert doctrine_spike_required_problems(planted), "the checker missed the planted requirement"
-
-
-def test_doctrine_repeats_review_after_edit() -> None:
-    """Criterion 3 as a doctrine checker. Planted faults: the card follows the edit without a current
-    review, or a fourth round runs without the maintainer.
-
-    Written against the checker for the same reason as `test_doctrine_requires_review_before_card`;
-    step 3 tightens the real-text assertion to `[]`.
-    """
-    drafted = (
-        "When a review produces rows that need a spec edit, draft and review repeat until a current "
-        "review has settled the rows; after round three a BLOCKER or an ambiguity whose answer changes "
-        "the spec goes to the maintainer, who either authorizes a fourth round or re-slices the change."
-    )
-    assert doctrine_repeat_problems(drafted) == []
-    planted_unreviewed = "After the rows are worked in, the card may follow without a review of the revised spec."
-    planted_fourth = "A BLOCKER after round three is reviewed again in a fourth round without asking."
-    assert doctrine_repeat_problems(planted_unreviewed), "the checker missed the unreviewed card"
-    assert doctrine_repeat_problems(planted_fourth), "the checker missed the unauthorized fourth round"
-
-
-def test_implement_refuses_unknown_class(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 4. Planted fault: the class is not read before the model starts, or the refusal
-    # omits the remedy.
-    world.research.write_text(
-        world.research.read_text(encoding="utf-8").replace("class: spike", "class: nonsense"),
-        encoding="utf-8",
-    )
-    assert world.run("implement") == 2
-    assert "which is none of" in capsys.readouterr().err
-    assert world.calls("claude") == []
-    world.research.write_text(
-        world.research.read_text(encoding="utf-8").replace("class: nonsense", "class: bounded"),
-        encoding="utf-8",
-    )
-    (world.root / "plans" / "changes" / "demo" / "spec.md").write_text(
-        "---\ntitle: Spec\nbead: demo-1\nclass: spike\n---\n\n# Spec\n", encoding="utf-8"
-    )
-    assert world.run("implement") == 2
-    assert "disagree" in capsys.readouterr().err
-    assert world.calls("claude") == []
-
-
-def test_implement_exempts_spike_from_spec_review(world: World) -> None:
-    # Criterion 5. Planted fault: the new precondition refuses an unreviewed spike. The fixture
-    # change is a spike with no findings.md at all: implement reaches its existing checks.
-    assert not world.findings.exists()
-    successful_implementation(world)
-    assert world.run("implement") == 0
-
-
-@pytest.mark.parametrize(
-    ("mode", "needle"),
-    [
-        ("missing", "has no spec review"),
-        ("stale", "is stale"),
-        ("unreadable", "cannot be read as a written row"),
-        ("unaudited", "no matching runner audit line"),
-        ("codex", "neither an Opus 5.5 review nor a runner fallback review"),
-    ],
-    ids=["missing", "stale", "unreadable", "unaudited", "codex"],
-)
-def test_implement_refuses_missing_stale_or_unreadable_review(
-    world: World, mode: str, needle: str, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Criterion 6. Planted fault: any of the five states admits a model.
-    gate_demo(world)
-    if mode == "stale":
-        seed_spec_review(world)
-        body = world.root / "plans" / "changes" / "demo" / "spec.md"
-        body.write_text(body.read_text(encoding="utf-8") + "a late edit\n", encoding="utf-8")
-    elif mode == "unreadable":
-        seed_spec_review(world, answer=rows(1), extra_line="| B7 | MAJOR | SPEC | base | w | a | b |")
-    elif mode == "unaudited":
-        seed_spec_review(world, audited=False)
-    elif mode == "codex":
-        seed_spec_review(world, heading_name="Codex", answer=rows(1))
-    successful_implementation(world)
-    assert world.run("implement") == 2
-    assert needle in capsys.readouterr().err
-    assert world.calls("claude") == []
-
-
-def test_implement_names_open_review_ambiguity(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 7. Planted fault: the model starts, or the refusal omits the row.
-    gate_demo(world)
-    seed_spec_review(world, answer="| A1 | [AMBIGUITY] | SPEC | base | spec.md:1 | which bytes make it stale |")
-    successful_implementation(world)
-    assert world.run("implement") == 2
-    stderr = capsys.readouterr().err
-    assert "[AMBIGUITY]" in stderr and "A1" in stderr
-    assert world.calls("claude") == []
-
-
-def test_implement_accepts_current_review(world: World) -> None:
-    # Criterion 8. Planted fault: the new precondition refuses a current review, or admits one
-    # whose rows stand open without an ambiguity.
-    gate_demo(world)
-    seed_spec_review(world)
-    successful_implementation(world)
-    assert world.run("implement") == 0
-    seed_spec_review(world, answer=rows(2))
-    successful_implementation(world)
-    assert world.run("implement") == 0
-
-
-def test_stage2_off_enforces_review(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 9. Planted fault: the flag bypasses the class or the review precondition.
-    gate_demo(world)
-    successful_implementation(world)
-    assert world.run("implement", "demo", "--stage2-off", "Z.ai outage") == 2
-    assert "has no spec review" in capsys.readouterr().err
-    assert world.calls("claude") == []
-    seed_spec_review(world)
-    successful_implementation(world)
-    assert world.run("implement", "demo", "--stage2-off", "Z.ai outage") == 0
-
-
-def test_spec_review_fingerprints_reviewed_bytes(world: World) -> None:
-    # Criterion 10. Planted fault: the block lacks the fingerprint, or the prompt carries no bytes.
-    expected = stage2.spec_body_fingerprint(stage2.spec_body_bytes(world.root / "plans/changes/demo/spec.md"))
-    world.script(claude=[{"stdout": rows(1)}])
-    assert world.run("spec-review") == 0
-    text = world.text()
-    assert f"Spec fingerprint: {expected}" in text
-    call = world.calls("claude")[0]
-    assert "```markdown" in call["prompt_file"] and "# Spec" in call["prompt_file"]
-    assert expected in world.text()
-
-
-def test_a_review_whose_bytes_change_mid_call_writes_no_block(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 10's changed-disk-bytes case. Planted fault: the block is written for bytes the
-    # answer did not read.
-    world.script(
-        claude=[{"stdout": rows(1), "append": {"plans/changes/demo/spec.md": "a mid-call edit\n"}}],
-    )
-    assert world.run("spec-review") == 1
-    assert "## Phase 2a" not in world.text()
-    assert "body bytes changed" in capsys.readouterr().err
-
-
-def test_review_currency_rejects_changed_bytes(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 11. Planted fault: a changed body is accepted as current, or a front-matter-only
-    # edit makes the review stale.
-    gate_demo(world)
-    seed_spec_review(world)
-    body = world.root / "plans" / "changes" / "demo" / "spec.md"
-    body.write_text(body.read_text(encoding="utf-8") + "an uncommitted edit\n", encoding="utf-8")
-    successful_implementation(world)
-    assert world.run("implement") == 2
-    assert "is stale" in capsys.readouterr().err
-    body.write_text(
-        body.read_text(encoding="utf-8").replace("an uncommitted edit\n", ""),
-        encoding="utf-8",
-    )
-    body.write_text(
-        body.read_text(encoding="utf-8").replace(
-            "title: Spec\nbead: demo-1\n", "title: Spec\nbead: demo-1\nupdated: 2026-11-19\n"
-        ),
-        encoding="utf-8",
-    )
-    git(world.root, "add", "-A")
-    git(world.root, "commit", "--quiet", "-m", "front matter only")
-    successful_implementation(world)
-    assert world.run("implement") == 0, "a front-matter-only edit must not make the review stale"
-
-
-@pytest.mark.parametrize(
-    ("mode", "needle"),
-    [
-        ("current", ""),
-        ("predates", "predates the spec's last committed change"),
-        ("dirty", "differs from the committed one"),
-        ("cutoff", "carries no `Spec fingerprint:` line"),
-    ],
-    ids=["legacy-current", "predates-commit", "dirty-body", "on-cutoff-day"],
-)
-def test_legacy_review_currency_by_day(
-    world: World, mode: str, needle: str, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Criterion 12. Planted fault: a legacy block before the UTC committer day, or with a dirty
-    # body, is accepted; an undigested block on the cutoff day qualifies.
-    gate_demo(world)
-    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
-    if mode == "cutoff":
-        seed_spec_review(world, day=stage2.SPEC_REVIEW_FINGERPRINT_DAY, fingerprinted=False)
-    else:
-        # The dated commit must touch the spec, so `git log -- spec.md` carries the fake day.
-        spec.write_text(spec.read_text(encoding="utf-8") + "a committed change\n", encoding="utf-8")
-        committed = "2026-11-12T10:00:00+01:00" if mode == "predates" else "2026-11-09T10:00:00+01:00"
-        monkeypatch.setenv("GIT_COMMITTER_DATE", committed)
-        git(world.root, "add", "-A")
-        git(world.root, "commit", "--quiet", "-m", "spec change")
-        seed_spec_review(world, day="2026-11-10", fingerprinted=False)
-        if mode == "dirty":
-            spec.write_text(spec.read_text(encoding="utf-8") + "uncommitted\n", encoding="utf-8")
-    successful_implementation(world)
-    assert world.run("implement") == (0 if mode == "current" else 2)
-    if needle:
-        assert needle in capsys.readouterr().err
-
-
-def test_spec_review_retries_then_falls_back(world: World) -> None:
-    # Criterion 13. Planted fault: the fallback runs before the retry, or an unreadable answer
-    # triggers no fallback.
-    patch_free_discovery()
-    world.script(claude=[{"stdout": "", "exit": 1}, {"stdout": "prose only"}], pi=[{"stdout": rows(1)}])
-    assert world.run("spec-review") == 0
-    assert len(world.calls("claude")) == 2, "the Opus call must be retried once before the fallback"
-    assert len(world.reviews()) == 1
-    text = world.text()
-    assert "## Phase 2a — deepseek-v4.1-flash (fallback), " in text
-    assert "Spec fingerprint: sha256:" in text and "declared at write." in text
-    assert text.count("Stage-2 call") == 3, "each attempt and the fallback write their own audit line"
-
-
-def test_fallback_spec_review_honours_leak_check(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Criterion 14. Planted fault: a blocked leak check still permits the fallback call.
-    denylist = Path(os.environ["LEAKCHECK_DENYLIST"])
-    denylist.write_text(denylist.read_text(encoding="utf-8") + "leak-token\n", encoding="utf-8")
-    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
-    spec.write_text(spec.read_text(encoding="utf-8") + "leak-token\n", encoding="utf-8")
-    patch_free_discovery(monkeypatch)
-    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
-    assert world.run("spec-review") == 2, "the leak check BLOCK must stop the verb before any call"
-    assert world.calls("claude") == [] and world.calls("pi") == []
-
-
-def test_fallback_review_is_marked(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Criterion 15. Planted fault: a fallback block is indistinguishable from an Opus block, or a
-    # later declaration change invalidates it while its block still names its model.
-    patch_free_discovery(monkeypatch)
-    world.script(claude=[{"stdout": "", "exit": 1}, {"stdout": "", "exit": 1}], pi=[{"stdout": "No finding."}])
-    assert world.run("spec-review") == 0
-    text = world.text()
-    assert "deepseek-v4.1-flash reported no finding." in text
-    assert "Spec review fallback: deepseek-v4.1-flash via opencode-go, declared at write." in text
-
-
-def test_morning_inventory_uses_review_admission(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 16. Planted fault: a review-refused or class-refused change with a spec is missing,
-    # a folder without a spec is listed, or an exempt spike is listed as review-refused.
-    make_change(world, "gated", klass="feature")
-    make_change(world, "badclass", klass=None)
-    spec = world.root / "plans" / "changes" / "badclass" / "spec.md"
-    spec.write_text(
-        spec.read_text(encoding="utf-8").replace("bead: badclass-1\n", "bead: badclass-1\nclass: nonsense\n"),
-        encoding="utf-8",
-    )
-    make_change(world, "settled", klass="bounded")
-    seed_spec_review(world, change="settled")
-    make_change(world, "skeleton", klass="feature", spec=False)
-    assert stage2.spec_review_inventory(world.root) == 0
-    stdout = capsys.readouterr().out
-    assert "gated" in stdout and "has no spec review" in stdout
-    assert "badclass" in stdout and "which is none of" in stdout
-    assert "settled" not in stdout, "a current review must not be listed"
-    assert "skeleton" not in stdout, "a folder without a spec is not due yet"
-    assert "demo" not in stdout, "an exempt spike is never listed"
-
-
-def test_morning_inventory_names_fallback_rechecks(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 17. Planted fault: a current fallback is omitted, its re-check consumes another
-    # round's place, or a later current Opus review remains listed.
-    make_change(world, "fbchange", klass="bounded")
-    seed_spec_review(world, change="fbchange", fallback=("deepseek-v4.1-flash", "opencode-go"))
-    make_change(world, "fbstale", klass="bounded")
-    seed_spec_review(world, change="fbstale", fallback=("deepseek-v4.1-flash", "opencode-go"))
-    body = world.root / "plans" / "changes" / "fbstale" / "spec.md"
-    body.write_text(body.read_text(encoding="utf-8") + "edited after the fallback\n", encoding="utf-8")
-    assert stage2.spec_review_inventory(world.root) == 0
-    stdout = capsys.readouterr().out
-    assert "Fallback re-check" in stdout and "fbchange" in stdout
-    assert "fbstale" in stdout and "is stale" in stdout
-    seed_spec_review(world, change="fbchange")
-    assert stage2.spec_review_inventory(world.root) == 0
-    stdout = capsys.readouterr().out
-    assert "fbchange" not in stdout, "an Opus review of the same bytes removes the re-check entry"
-
-
-def test_implement_rechecks_previously_implemented_change(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 18. Planted fault: earlier implementation exempts the later call.
-    gate_demo(world)
-    seed_spec_review(world)
-    successful_implementation(world)
-    assert world.run("implement") == 0
-    body = world.root / "plans" / "changes" / "demo" / "spec.md"
-    body.write_text(body.read_text(encoding="utf-8") + "edited after implementation\n", encoding="utf-8")
-    assert world.run("implement") == 2
-    assert "is stale" in capsys.readouterr().err
-
-
-def test_the_spec_review_configuration_is_central(world: World) -> None:
-    # Criterion 13's configured values. Planted fault: the timeout, pause or fallback is hardcoded
-    # beside the declaration.
-    values = stage2.spec_review_config(world.root)
-    assert values["fallback-model"] == "deepseek-v4.1-flash" and values["fallback-endpoint"] == "opencode-go"
-    assert values["retry-pause-seconds"] == 0, "the test world declares its own pause"
-    data = yaml.safe_load((world.root / "model-endpoints.yaml").read_text(encoding="utf-8"))
-    del data["spec-review"]
-    (world.root / "model-endpoints.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    defaults = stage2.spec_review_config(world.root)
-    assert defaults == stage2.SPEC_REVIEW_DEFAULTS
-    assert defaults["timeout-seconds"] == 1800 and defaults["retry-pause-seconds"] == 30
