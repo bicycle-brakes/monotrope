@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-s55e
@@ -48,6 +48,10 @@ On 2026-11-16 the workflow-start command failed when the system Python lacked Py
 - A language-neutral launcher, changing callers' command lines, or changing the verify runner's interpreter-selection contract.
 - Installing or repairing environments automatically, changing the dependency lock, or modifying cloud setup.
 - Guarding non-Python tools; a language-neutral launcher returns as a separate change if Rust tools make it necessary.
+
+## Boundaries
+
+The Omnigent policy script is exempt from the guard because it also runs under Omnigent’s own Python. The trusted registry mirror excludes `.venv` to prevent execution through an attempt-controlled interpreter (decisions.md, Q-2).
 
 ## Protected areas
 

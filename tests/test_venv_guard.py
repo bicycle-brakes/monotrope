@@ -67,6 +67,8 @@ def _tree(base: Path, *, framework: bool, environment: bool, name: str = "tree")
         venv.EnvBuilder(with_pip=False, symlinks=True).create(root / ".venv")
         site = next((root / ".venv" / "lib").glob("python*/site-packages"))
         (site / "yaml.py").write_text('WHERE = "checkout environment"\n', encoding="utf-8")
+        for name in ("jinja2", "pydantic"):
+            (site / f"{name}.py").write_text("", encoding="utf-8")
     return root
 
 
@@ -358,7 +360,7 @@ def test_exported_kit_contains_guard(tmp_path: Path) -> None:
     assert loaded.returncode == 0, loaded.stderr
 
 
-def test_active_environment_missing_dependency_has_no_absent_environment_hint(tmp_path: Path) -> None:
+def test_active_environment_missing_dependency_reports_hint(tmp_path: Path) -> None:
     root = _tree(tmp_path, framework=True, environment=True)
     site = next((root / ".venv" / "lib").glob("python*/site-packages"))
     (site / "yaml.py").unlink()
@@ -368,7 +370,7 @@ def test_active_environment_missing_dependency_has_no_absent_environment_hint(tm
 
     assert result.returncode == 1
     assert "No module named 'yaml'" in result.stderr
-    assert "make venv" not in result.stderr
+    assert "make venv" in result.stderr
 
 
 def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) -> None:
@@ -394,3 +396,41 @@ def test_guards_from_two_checkouts_replace_process_at_most_once(tmp_path: Path) 
 
     assert result.returncode == 0, result.stderr
     assert int(counter.read_text()) <= 2
+
+
+def test_foreign_marker_allows_checkout_entry(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    script = _write(root, "tool.py", "import venv_guard\nimport yaml\nprint(yaml.WHERE)\n")
+    result = _run([SYSTEM_PYTHON, str(script)], tmp_path, extra_env={MARKER: "/foreign/.venv"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "checkout environment"
+
+
+def test_available_dependencies_keep_selected_interpreter(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    packages = tmp_path / "packages"
+    packages.mkdir()
+    for name in THIRD_PARTY:
+        (packages / f"{name}.py").write_text("", encoding="utf-8")
+    script = _write(root, "tool.py", "import sys\nimport venv_guard\nprint(sys.prefix)\n")
+    result = _run([sys.executable, str(script)], tmp_path, extra_env={"PYTHONPATH": str(packages)})
+    assert result.returncode == 0, result.stderr
+    assert os.path.realpath(result.stdout.strip()) == os.path.realpath(sys.prefix)
+
+
+def test_unreplayable_or_broken_environment_reports_hint(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    script = _write(root, "tool.py", "import venv_guard\nimport yaml\n")
+    result = _run([sys.executable, "-S", str(script)], tmp_path)
+    assert result.returncode == 1
+    assert "make venv" in result.stderr
+
+
+def test_roster_missing_yaml_is_not_swallowed(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=False)
+    (root / "provenance.yaml").write_text("roles: {}\n", encoding="utf-8")
+    (root / "scripts" / "ramp_valves.py").write_text((SCRIPTS / "ramp_valves.py").read_text(), encoding="utf-8")
+    (root / "scripts" / "_verdict.py").write_text((SCRIPTS / "_verdict.py").read_text(), encoding="utf-8")
+    result = _run([sys.executable, "-S", "-c", "import ramp_valves; ramp_valves._roster_handles()"], root / "scripts")
+    assert result.returncode != 0
+    assert "make venv" in result.stderr

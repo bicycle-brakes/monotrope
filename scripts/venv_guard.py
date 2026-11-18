@@ -10,12 +10,12 @@ the dependency is imported lazily. The module uses the standard library only, so
 What it does, in order:
 
 1. The checkout is the parent of the directory this file lives in, never the current directory. When its
-   `.venv/bin/python3` is usable and the process does not already run in that environment, the process is replaced
+   `.venv/bin/python3` is usable, a dependency is missing and the process does not already run there, it is replaced
    by that interpreter with the original command line (`sys.orig_argv`): the same script or `-m` module, the same
    arguments, working directory, standard streams and exit status. An importing script is therefore never replaced
    by the module it imports — the replacement restarts whatever the caller originally ran. A marker in the
    environment names the environment already entered, so no invocation loops.
-2. Otherwise the process stays where it is. In a framework checkout (it carries `pyproject.toml` and
+2. In a framework checkout (it carries `pyproject.toml` and
    `requirements-ci.txt`, which the kit does not) an uncaught missing PyYAML, Jinja2 or pydantic gets one extra
    line after its traceback telling the caller to run `make venv`; the exit status and every other error stay as
    they were.
@@ -25,6 +25,7 @@ What it does, in order:
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -33,7 +34,7 @@ CHECKOUT = Path(__file__).resolve().parent.parent
 VENV = CHECKOUT / ".venv"
 MARKER = "VENV_GUARD_ENTERED"
 DEPENDENCIES = frozenset({"yaml", "jinja2", "pydantic"})
-HINT = "venv-guard: the dependency '{name}' is missing and this checkout has no usable .venv - run `make venv`."
+HINT = "venv-guard: the dependency '{name}' is missing and this checkout has a missing or unusable environment - run `make venv`."
 
 
 def _usable(python: Path) -> bool:
@@ -91,11 +92,11 @@ def _install_hint() -> None:
 def ensure() -> None:
     """Enter the checkout's environment when there is one; otherwise explain, in a framework checkout only."""
     python = VENV / "bin" / "python3"
-    if _usable(python) and not _active() and MARKER not in os.environ:
-        _reexec(python)
-    # Only an absent or unusable environment warrants the missing-environment hint.
-    if not _usable(python) and _is_framework_checkout():
+    if _is_framework_checkout():
         _install_hint()
+    missing = any(importlib.util.find_spec(name) is None for name in DEPENDENCIES)
+    if missing and _usable(python) and not _active() and os.environ.get(MARKER) != str(VENV):
+        _reexec(python)
 
 
 ensure()

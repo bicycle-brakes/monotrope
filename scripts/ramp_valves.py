@@ -118,10 +118,10 @@ def _roster_handles() -> set[str]:
     karte = REPO_ROOT / "provenance.yaml"
     if not karte.exists():
         return set()
-    try:
-        import venv_guard  # noqa: F401
-        import yaml
+    import venv_guard  # noqa: F401
+    import yaml
 
+    try:
         daten = yaml.safe_load(karte.read_text(encoding="utf-8")) or {}
     except Exception:
         return set()

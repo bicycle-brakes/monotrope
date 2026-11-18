@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-s55e
@@ -86,4 +86,4 @@ Derived strictly from the holders listed above — the concrete set depends on t
 - `plans/changes/archive/2026-11-06-red-first-install/` — the stage-2 runner's red-first path and how a scratch checkout gets `.venv`-equivalents.
 - `plans/changes/archive/2026-11-06-pi-pin/` — the other half of the before-verify setup named in `AGENTS.md`:151 (`tools/pi/install.sh`, bead coding-harness-hs0o).
 
-`plans/specs/` holds no living specs (only `.gitkeep`), and no active sibling change folder exists under `plans/changes/` besides this one.
+`plans/specs/` holds no living specs (only `.gitkeep`), and sibling change folders include `bd-1-3-4`, `flaky-swarm-leak-test`, and `swarm-test-speed` (2026-11-18).
