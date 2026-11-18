@@ -28,23 +28,23 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 
 ## Terms
 
-**Record key:** the change name and digest identifying one worktree's state directory. **Supersede:** archive the selected old loop record and account for it before a fresh run.
+**Record key:** the change name and digest identifying one worktree's state directory. **Supersede:** archive the selected old loop record and account for it before a fresh run. **Other worktree keys:** keys derived from the currently listed worktrees of this repository; removed worktrees and other repositories are excluded.
 
 ## Acceptance criteria
 
 1. When any no-record refusal for the loop, restart, stage retirement, preparation or triage finds active loop records for the same change under other worktree keys in the current state directory, it names each such key.
    *Refuted by:* a matching key is omitted, or another change's key or an archive is named.
-2. When the maintainer runs `release-loop <change> --restart --supersedes <key> --reason <text>` for eligible other-worktree records, repeating `--supersedes <key>` for every active other key, the runner writes one `Loop restarted: <date> after round <N> — ...` accounting line to the current findings naming each key, each record’s round-number range and archive path expressed as `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<dir>`, the count of all pending review-loop audit calls since the last release or restart, and the reason; N is the highest superseded round.
+2. When the maintainer runs `release-loop <change> --restart --supersedes <key> --reason <text>` for eligible other-worktree records, repeating `--supersedes <key>` for every active other key, the runner writes one `Loop restarted: <date> after round <N> — ...` accounting line to the current findings naming each key, each record’s round-number range and archive subdirectory expressed as `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/<key>`, the count of all pending review-loop audit calls since the last release or restart, and the reason; N is the highest superseded round.
    *Refuted by:* the line is absent, duplicated, or misstates any of those facts.
 3. When supersession succeeds, all selected records and the other non-research entries that release would delete, including `availability.json`, are preserved unchanged in one unique archive directory under `<state>/coding-harness/stage2-superseded/`, and are no longer active at their old keys.
    *Refuted by:* its contents are lost or altered, or the old key can continue that record.
 4. When supersession succeeds, the next review loop starts fresh and each subsequent round, including after release, is numbered N plus the number of rounds run since the restart plus one.
    *Refuted by:* the old snapshot or consumed stages are reused, or a round is misnumbered or a prior round number recurs.
-5. If the requested key is invalid, belongs to another change or the current worktree, is missing without an unfinished archived supersession or unreadable, the complete active and unfinished key set is not named, no audit call is pending, the current worktree has an active record, the reason is blank, or the flags are incompatible, supersession refuses without changing findings or any record.
+5. If the requested key is invalid, belongs to another change or the current worktree, is missing without an unfinished archived supersession or unreadable, the complete active and unfinished key set is not named, the current worktree has an active record, the reason is blank, or the flags are incompatible, supersession refuses without changing findings or any record.
    *Refuted by:* an invalid request succeeds or changes findings or record state.
 6. While either worktree's loop record is in use, supersession does not alter it or its findings.
    *Refuted by:* a competing run and supersession can both change either protected record or findings.
-7. If supersession is interrupted or an archive or write fails, retry safely completes without losing records or duplicating accounting, using a staged archive with a manifest of the complete key set and the superseding worktree key, finalized before accounting; retry completes only the same key set started by that worktree.
+7. If supersession is interrupted or an archive or write fails and its key set and readability remain unchanged, retry safely completes without losing records or duplicating accounting, using a staged archive with a manifest of the complete key set and the superseding worktree key, finalized before accounting; retry completes only the same key set started by that worktree.
    *Refuted by:* a fault leaves the record irretrievable, a restart line while its record remains active at the old key, duplicate accounting on retry, an omitted key after a partial move, or one worktree completing another worktree’s archive.
 8. When a loop record is superseded, research state, research receipts and probe audits beside it remain at their original key unchanged.
    *Refuted by:* any such item moves, disappears or changes.
@@ -65,6 +65,10 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
     *Refuted by:* the brake ignores an applicable fresh round or counts an earlier round.
 16. When a supersession archive is retried, its accounting line is matched to the archive by its directory name.
     *Refuted by:* a retry matches a different archive or duplicates the line.
+17. When a later plain restart follows supersession, its restart floor is the highest round number ever assigned, including clean rounds without findings and the previous restart floor.
+    *Refuted by:* the line understates that number or a later round repeats a number.
+18. When the named eligible active records have no pending audit calls, supersession is allowed and the accounting line reports zero calls.
+    *Refuted by:* the command refuses solely for the lack of calls or reports a nonzero count.
 
 ## Non-goals
 
@@ -72,6 +76,8 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 - Recover a record that is actually lost or stored in another state directory.
 - Change research state, availability receipt binding, phase-6 verdict rules or the model ladder.
 - Amend an architecture decision record.
+- Recover or abandon an interrupted supersession whose key set changes or whose remaining record becomes unreadable; the follow-up is coding-harness-0aht (abandon or roll back an interrupted supersession).
+- Discover records of removed worktrees or other repositories.
 
 ## Protected areas
 
@@ -87,4 +93,4 @@ Other changes' records and worktrees, and the research state associated with eit
 
 ## Open decisions
 
-None open. [DETAIL] The accepted details S-1 through S-13 are recorded in `decisions.md`; they make the agreed restart measurable. A six-hour phase-4 appetite is a reversible stop for this bounded change; it includes repair rounds and leaves the agreed scope unchanged.
+None open. [DETAIL] The accepted details S-1 through S-18 are recorded in `decisions.md`; they make the agreed restart measurable. A six-hour phase-4 appetite is a reversible stop for this bounded change; it includes repair rounds and leaves the agreed scope unchanged.
