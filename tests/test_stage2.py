@@ -1489,7 +1489,7 @@ def test_supersede_starts_fresh_after_old_round_numbers(world: World) -> None:
     assert "## Round 1" not in record and "## Round 2" not in record
     state = stage2.read_state(record, "")
     assert state is not None and state["consumed"] == ["free"], "the archived snapshot was reused"
-    decide_record(world, status="taken — test_a", broke="yes")
+    decide_record(world, status=FIXED, broke="yes")
     stage2.append(world.findings, VERDICT)
     assert world.run("release-loop") == 0
     assert stage2.rounds_run(None, world.text()) == 3, "the released run lost the superseded rounds"
@@ -1514,13 +1514,15 @@ def test_supersede_rejects_invalid_requests_without_changes(world: World, capsys
     outside.mkdir(parents=True)
     shutil.copy(record, outside / "loop.md")
 
+    standing = {"bytes": original}  # what the foreign record holds right now, whatever the case planted
+
     def refuses(argv: list[str], fragment: str) -> None:
         assert world.run("release-loop", "demo", *argv) == 2, argv
         assert fragment in capsys.readouterr().err, argv
         assert not world.findings.exists() or world.text() == "", argv
         assert not archive_base().exists() or not any(archive_base().iterdir()), argv
-        if foreign_record_path_exists(other):
-            assert record.read_bytes() == original, argv
+        assert foreign_record_path_exists(other), f"the refused request removed the foreign record: {argv}"
+        assert record.read_bytes() == standing["bytes"], argv
 
     malformed = ["--restart", "--supersedes", "demo", "--reason", "why"]
     refuses(malformed, "no record key of demo")
@@ -1543,8 +1545,10 @@ def test_supersede_rejects_invalid_requests_without_changes(world: World, capsys
     refuses(["--restart", "--supersedes", key, "--reason", "why"], "takes every active other-worktree key")
     refuses(["--restart", "--supersedes", other_key, "--reason", "why"], "takes every active other-worktree key")
     # An unreadable record: the bytes stand, the reading fails.
-    record.write_bytes(b"\xff\xfe not utf-8")
+    standing["bytes"] = b"\xff\xfe not utf-8"
+    record.write_bytes(standing["bytes"])
     refuses(["--restart", "--supersedes", key, "--supersedes", other_key, "--reason", "why"], "cannot be read")
+    standing["bytes"] = original
     record.write_bytes(original)
     # An active record of this worktree.
     world.write_record([("L9-9", "taken — test_a", "no")])
@@ -1805,9 +1809,9 @@ def test_supersede_repair_brake_uses_fresh_rounds(world: World, capsys) -> None:
     # Round 5 takes the fresh run's free stage, round 6 the Flash stage: two members each.
     world.script(pi=[{"stdout": rows(1)}] * (2 * len(TEST_FREE)))
     assert world.run("review-loop") == 0, "the brake counted the superseded or released rounds"
-    decide_record(world, status="taken — test_a", broke="yes", origin="fix-r1")
+    decide_record(world, status=FIXED, broke="yes", origin="fix-r1")
     assert world.run("review-loop") == 0, "the brake fired one fresh fix-r round early"
-    decide_record(world, status="taken — test_a", broke="yes", origin="fix-r2")
+    decide_record(world, status=FIXED, broke="yes", origin="fix-r2")
     capsys.readouterr()
     assert world.run("review-loop") == 2, "two fresh fix-r rounds did not stop the loop"
     assert "rounds 5 and 6 accepted only findings" in capsys.readouterr().err

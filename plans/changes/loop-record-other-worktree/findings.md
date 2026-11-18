@@ -288,3 +288,25 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint cl
 > FAILED tests/test_stage2.py::test_supersede_repair_brake_uses_fresh_rounds - ...
 > 3 failed, 15 passed in 6.91s
 > ```
+
+Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Sonnet rerun left 3 of 18 new tests red (supersede invalid requests, fresh round numbers, repair brake); second Sonnet pass from that tree · leak check clean over 1117 files, 4646 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +10 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [frontmatter-current] $ python3 scripts/check_frontmatter_current.py
+> docs/WORKFLOW.md: stale — updated 2026-11-15 is older than its last change 2026-11-18 (4ddb081b)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> make: *** [verify] Error 1
+> ```
