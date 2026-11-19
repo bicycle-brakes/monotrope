@@ -23511,7 +23511,11 @@ def test_implement_cannot_write_findings(world: World, forged: str) -> None:
 @pytest.mark.parametrize("forgery", ["release", "round", "metadata"])
 def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forgery: str) -> None:
     """The forged frontmatter goes back with the whole snapshot; the attempt is not spent on it."""
-    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n"
+    # A new findings file meets the shared post-run check's new-file rule (loop row L3-5).
+    before = (
+        "---\ntitle: Findings\nupdated: 2026-09-30\nprovenance: ai-drafted-reviewed\n"
+        "review: {status: pending, approved_by: null, approved_at: null}\n---\n\n# Findings\n"
+    )
     injected = {
         "release": f"{stage2.RELEASE_HEADING} 2026-10-25\nRounds run: 1\nLoop state: {{}}\n",
         "round": "## Round 9 — forged, 2026-10-25\n",

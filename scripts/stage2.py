@@ -1253,21 +1253,36 @@ def append(path: Path, text: str) -> None:
     truncated one (deep review RS-2-6).
     """
     existing = path.read_bytes() if path.exists() else b""
-    prepared = appended_bytes(existing, text)
-    judge_findings_write(path, prepared)
-    write_atomic(path, prepared)
+    write_findings(path, appended_bytes(existing, text))
+
+
+def write_findings(path: Path, data: bytes) -> None:
+    """The one writer of a change's audit file: every runner write to `findings.md` passes here.
+
+    The header line of a new file, every audit line `append` adds and every in-place rewrite of a
+    row go through this function, so the shared check judges the bytes before they land, for
+    review-loop and probe as for every verb (Q-17, loop row L3-5). Other files are written unjudged.
+    """
+    judge_findings_write(path, data)
+    write_atomic(path, data)
 
 
 def judge_findings_write(path: Path, prepared: bytes) -> None:
-    """The one choke point every verb's findings write passes: the shared check judges the bytes first.
+    """The shared check over prepared `findings.md` bytes, before `write_findings` lets them land.
 
-    `append` is the writer of every audit line, review-loop and probe included and any verb to
-    come, so none needs a call of its own (Q-17, L3-5). A findings file with a committed
-    baseline and a frontmatter header is judged by the shared contract before it lands: a fault
-    in the prepared bytes refuses the write, a committed fault stops it naming the migration.
-    A file without a repository, a baseline or a header carries nothing to judge here.
+    A write that creates the file or changes its header is judged by the shared contract against
+    the committed header, a new file by the new-file rule: a fault in the prepared bytes refuses the
+    write, a committed fault stops it naming the migration. An audit line below an unchanged header
+    writes no header and is not judged here. A file outside a repository, without a header, or with
+    a committed baseline that has none carries nothing to judge here.
     """
-    if path.name != "findings.md" or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", prepared) is None:
+    if path.name != "findings.md" or not has_frontmatter(prepared):
+        return
+    try:
+        existing = path.read_bytes()
+    except FileNotFoundError:
+        existing = None
+    if existing is not None and header_of(existing) == header_of(prepared):
         return
     absolute = path.resolve()
     root = next((parent for parent in absolute.parents if (parent / ".git").exists()), None)
@@ -1278,7 +1293,7 @@ def judge_findings_write(path: Path, prepared: bytes) -> None:
         head = committed_bytes(root, relative)
     except (Refused, OSError):
         return
-    if head is None or head == prepared or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", head) is None:
+    if head is not None and (head == prepared or not has_frontmatter(head)):
         return
     classify_publication(root, relative, prepared)
 
@@ -1446,6 +1461,18 @@ def frontmatter_pattern() -> re.Pattern[str]:
     import research_census
 
     return research_census.FRONTMATTER
+
+
+def header_of(data: bytes) -> str | None:
+    """The header the shared pattern reads in the bytes, rules included; None when there is none."""
+    match = frontmatter_pattern().match(data.decode("utf-8", "surrogateescape"))
+    return match.group(0) if match else None
+
+
+def has_frontmatter(data: bytes) -> bool:
+    """Whether the bytes carry a header the shared pattern reads: the selection of the check and its
+    judgement, the stamp and the census agree on every file, a byte-order mark included (L3-6)."""
+    return header_of(data) is not None
 
 
 def research_publication(
@@ -1888,7 +1915,7 @@ def begin_call(
     """The admission, the leak check and the call line - for this one call, immediately before it."""
     result = checked_prompt(ctx, endpoint, prompt, admission_problem)
     if not ctx.findings.exists():
-        ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+        write_findings(ctx.findings, findings_header(ctx, producer_for(endpoint)).encode("utf-8"))
     append(ctx.findings, call_line(verb, endpoint, result))
 
 
@@ -1905,7 +1932,7 @@ def begin_work_call(
     """Check and record one explore/implement attempt in its phase artefact."""
     result = checked_prompt(ctx, endpoint, prompt)
     if destination == ctx.findings and not destination.exists():
-        destination.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+        write_findings(destination, findings_header(ctx, producer_for(endpoint)).encode("utf-8"))
     why = f" · reason {reason}" if reason else ""
     append(
         destination,
@@ -3833,12 +3860,10 @@ def review(root: Path, change: str) -> None:
         )
     append(ctx.findings, block)
     print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
-    # The verb wrote the retained findings.md: the shared post-run check judges it (L2-10).
-    check_written_findings(root, ctx.findings)
+    # The retained findings.md is judged after the verb, at the dispatch every verb passes (L3-5).
 
     released = release(root, change)
     if not released:
-        check_written_findings(root, ctx.findings)
         return
     listing = "\n".join(f"- {r[0]} [{r[1]}, {r[2]}] {r[4]}: {r[5]}" for r in released)
     marks_prompt = "\n\n".join(
@@ -3848,7 +3873,6 @@ def review(root: Path, change: str) -> None:
     answer, _ = run_codex(ctx, marks_prompt, resume=thread, verb="review")
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
-    check_written_findings(root, ctx.findings)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
 
 
@@ -3877,7 +3901,7 @@ def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
             cells[-1] = marks.get(cells[0], "no answer")
             line = "| " + " | ".join(cells) + " |"
         lines.append(line)
-    findings.write_text(head + "\n".join(lines), encoding="utf-8")
+    write_findings(findings, (head + "\n".join(lines)).encode("utf-8"))
     stamp_updated(findings)
 
 
@@ -4706,22 +4730,19 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
 def release_loop(
     root: Path, change: str, stage_failed: str | None = None, reason: str | None = None, restart: bool = False
 ) -> None:
-    findings = folder_of(root, change) / "findings.md"
+    folder_of(root, change)
     if restart:
         if stage_failed is not None:
             raise Refused("--restart and --stage-failed exclude each other; nothing is written.")
         restart_loop(root, change, reason or "")
-        check_written_findings(root, findings)
         return
     if stage_failed is not None:
         retire_stage(root, change, stage_failed, reason or "")
-        check_written_findings(root, findings)
         return
     if reason is not None:
         raise Refused("--reason belongs to --stage-failed or --restart; nothing is released.")
+    # The retained findings.md is judged after the verb, at the dispatch every verb passes (L3-5).
     release(root, change)
-    # The verb writes the retained findings.md: the shared post-run check judges it (L2-10).
-    check_written_findings(root, findings)
 
 
 def git_error_text(text: str) -> str:
@@ -8480,7 +8501,7 @@ def mark_repaired_findings(
             _require_unchanged_resolved_row(lines, item)
             cells[7] = fixes[cells[0]]
             lines[item.line] = "| " + " | ".join(cells) + " |"
-    ctx.findings.write_text("\n".join(lines), encoding="utf-8")
+    write_findings(ctx.findings, "\n".join(lines).encode("utf-8"))
     stamp_updated(ctx.findings)
 
 
@@ -9774,7 +9795,7 @@ def stamp_retained_artifacts(
         head = committed_bytes(root, relative)
         if head is not None and current == head:
             continue
-        if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
+        if not has_frontmatter(current):
             continue
         targets.append(relative)
     if before_write is not None:
@@ -9942,7 +9963,7 @@ def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: 
         head = committed_bytes(root, relative)
         if head is not None and current == head:
             continue
-        if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
+        if not has_frontmatter(current):
             continue
         if head is not None:
             # A committed header no attempt can repair stops the verb naming the migration before
@@ -9959,13 +9980,39 @@ def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: 
     return problems
 
 
-def check_written_findings(root: Path, findings: Path) -> None:
-    """The shared post-run check over the `findings.md` a verb just wrote (L2-10, Q-17).
+def findings_snapshot(root: Path, change: str) -> tuple[Path, bytes | None] | None:
+    """The change's `findings.md` and its bytes before a verb runs; None when the name names no folder."""
+    try:
+        findings = folder_of(root, change) / "findings.md"
+    except Refused:
+        return None
+    try:
+        return findings, findings.read_bytes()
+    except FileNotFoundError:
+        return findings, None
+    except OSError:
+        return findings, b""  # unreadable before: whatever stands after the verb is judged
 
-    Every file-writing verb is judged by the one check; a header fault in the written file
-    refuses the verb naming the file, and a fault the committed header already carries stops
-    it naming the migration. A file without frontmatter or without a change carries nothing to judge.
+
+def check_written_findings(root: Path, snapshot: tuple[Path, bytes | None] | None) -> None:
+    """The shared post-run check over the `findings.md` a verb wrote (L2-10, Q-17, L3-5).
+
+    `_run` calls it once, after every verb it dispatches returns, so every verb that writes the
+    change's audit file is judged, new verbs included, and no verb carries a call of its own. A
+    file whose header the verb left as it found it is not judged here: audit lines below a header
+    are not the header's producer, provenance or review. A header fault the verb wrote refuses the
+    verb naming the file, and a fault the committed header already carries stops it naming the
+    migration. A file without frontmatter carries nothing to judge.
     """
+    if snapshot is None:
+        return
+    findings, before = snapshot
+    try:
+        after = findings.read_bytes()
+    except OSError:
+        return  # nothing retained to judge
+    if before is not None and header_of(after) == header_of(before):
+        return
     problems = touched_header_problems(root, [findings.relative_to(root).as_posix()])
     if problems:
         raise Refused("; ".join(problems))
@@ -11747,7 +11794,7 @@ def _review_round(
                     raise Refused(problem)
         # Audit only after the final admission check allows the initial dispatch.
         if not ctx.findings.exists():
-            ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
+            write_findings(ctx.findings, findings_header(ctx, producer_for(endpoints[members[0]])).encode("utf-8"))
         for member in members:
             append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
             audited += 1
@@ -12020,7 +12067,7 @@ def probe(root: Path, change: str) -> None:
         )
         result = checked_prompt(ctx, endpoint, prompt, _free_admission(True, {"free": free}))
         if not ctx.findings.exists():
-            ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+            write_findings(ctx.findings, findings_header(ctx, producer_for(endpoint)).encode("utf-8"))
         append(ctx.findings, call_line("probe", endpoint, result))
         check_member(ctx, model, prompt, free=True)
     for model in ladder(root):
@@ -12200,75 +12247,89 @@ def _terminate(signum: int, _frame: object) -> None:
     raise Terminated(signum)
 
 
+def _dispatch(args: argparse.Namespace) -> None:
+    """Check the parsed operands and run the verb."""
+    if (
+        args.stage2_off is not None
+        and not args.change
+        and (Path(args.root) / "plans" / "changes" / args.stage2_off).is_dir()
+    ):
+        raise Refused(
+            f"the change name `{args.stage2_off}` was taken as the --stage2-off reason; "
+            "put the change before the flag or write --stage2-off=REASON."
+        )
+    if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
+        raise Refused("--stage2-off applies only to explore, implement and repair.")
+    if args.klass is not None and args.verb not in {"explore", "prepare-explore"}:
+        raise Refused("--class belongs to the explore and prepare-explore verbs alone.")
+    if args.seats is not None and args.verb != "prepare-explore":
+        raise Refused("--seats belongs to prepare-explore alone.")
+    if args.availability_reported is not None and args.verb not in {"explore", "review-loop"}:
+        raise Refused("--availability-reported belongs to the explore and review-loop verbs alone.")
+    refuse_repository_git(Path(args.root))
+    if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
+        raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
+    if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
+        raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
+    if args.verb == "session":
+        if not args.model:
+            raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
+    elif args.model is not None or args.handover is not None:
+        raise Refused("--model and --handover belong to the session verb alone.")
+    if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
+        # The name is checked before the lock: the lock's path is built from it, and a name that
+        # escapes the state directory must create nothing there (DL-A-9 of the deep review).
+        folder_of(Path(args.root), args.change)
+    if args.verb == "repair":
+        # Repair reads the record's taken rows and marks them after its commit: it owns the record from
+        # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
+        with holding_record(args.change, Path(args.root)):
+            repair(Path(args.root), args.change, args.stage2_off)
+    elif args.verb == "triage":
+        # A local record write, dispatched before any preflight or model call: no endpoint, no leak
+        # check, no credential - the record lock is triage's only shared resource.
+        triage(Path(args.root), args.change, args.row_status, args.reason_text)
+    elif args.verb == "prepare-explore":
+        prepare_explore(Path(args.root), args.change, args.klass, args.seats)
+    elif args.verb == "explore":
+        explore(Path(args.root), args.change, args.stage2_off, args.klass, args.availability_reported)
+    elif args.verb == "implement":
+        VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
+    elif args.verb == "session":
+        session(Path(args.root), args.change, args.model, args.handover)
+    elif args.verb == "review-loop":
+        # The four verbs that own the loop record hold it for their whole run (R-14): review
+        # reads it and releases it too (bead coding-harness-751).
+        with holding_record(args.change, Path(args.root)):
+            review_loop(Path(args.root), args.change, args.availability_reported)
+    elif args.verb == "release-loop":
+        with holding_record(args.change, Path(args.root)):
+            release_loop(Path(args.root), args.change, args.stage_failed, args.reason, args.restart)
+    elif args.verb == "prepare-loop":
+        with holding_record(args.change, Path(args.root)):
+            VERBS[args.verb](Path(args.root), args.change)
+    elif args.verb == "review":
+        # The verdict reads the record and its release removes it, so review owns the record's
+        # lock from its first read through the release (R-14, bead coding-harness-751).
+        with holding_record(args.change, Path(args.root)):
+            review(Path(args.root), args.change)
+    else:
+        VERBS[args.verb](Path(args.root), args.change)
+
+
 def _run(args: argparse.Namespace) -> int:
     """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
+    # The audit file as it stands before the verb, for the one post-run check point every verb
+    # passes (Q-17, loop row L3-5): the change's findings.md, written by every verb that audits,
+    # is judged after the verb returns or stops clean - new verbs included, none with a call of its own.
+    written = findings_snapshot(Path(args.root), args.change)
     try:
-        if (
-            args.stage2_off is not None
-            and not args.change
-            and (Path(args.root) / "plans" / "changes" / args.stage2_off).is_dir()
-        ):
-            raise Refused(
-                f"the change name `{args.stage2_off}` was taken as the --stage2-off reason; "
-                "put the change before the flag or write --stage2-off=REASON."
-            )
-        if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
-            raise Refused("--stage2-off applies only to explore, implement and repair.")
-        if args.klass is not None and args.verb not in {"explore", "prepare-explore"}:
-            raise Refused("--class belongs to the explore and prepare-explore verbs alone.")
-        if args.seats is not None and args.verb != "prepare-explore":
-            raise Refused("--seats belongs to prepare-explore alone.")
-        if args.availability_reported is not None and args.verb not in {"explore", "review-loop"}:
-            raise Refused("--availability-reported belongs to the explore and review-loop verbs alone.")
-        refuse_repository_git(Path(args.root))
-        if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
-            raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
-        if args.verb != "triage" and (args.row_status is not None or args.reason_text is not None):
-            raise Refused("the ROW=STATUS and REASON operands belong to the triage verb alone.")
-        if args.verb == "session":
-            if not args.model:
-                raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
-        elif args.model is not None or args.handover is not None:
-            raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair", "triage"}:
-            # The name is checked before the lock: the lock's path is built from it, and a name that
-            # escapes the state directory must create nothing there (DL-A-9 of the deep review).
-            folder_of(Path(args.root), args.change)
-        if args.verb == "repair":
-            # Repair reads the record's taken rows and marks them after its commit: it owns the record from
-            # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
-            with holding_record(args.change, Path(args.root)):
-                repair(Path(args.root), args.change, args.stage2_off)
-        elif args.verb == "triage":
-            # A local record write, dispatched before any preflight or model call: no endpoint, no leak
-            # check, no credential - the record lock is triage's only shared resource.
-            triage(Path(args.root), args.change, args.row_status, args.reason_text)
-        elif args.verb == "prepare-explore":
-            prepare_explore(Path(args.root), args.change, args.klass, args.seats)
-        elif args.verb == "explore":
-            explore(Path(args.root), args.change, args.stage2_off, args.klass, args.availability_reported)
-        elif args.verb == "implement":
-            VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
-        elif args.verb == "session":
-            session(Path(args.root), args.change, args.model, args.handover)
-        elif args.verb == "review-loop":
-            # The four verbs that own the loop record hold it for their whole run (R-14): review
-            # reads it and releases it too (bead coding-harness-751).
-            with holding_record(args.change, Path(args.root)):
-                review_loop(Path(args.root), args.change, args.availability_reported)
-        elif args.verb == "release-loop":
-            with holding_record(args.change, Path(args.root)):
-                release_loop(Path(args.root), args.change, args.stage_failed, args.reason, args.restart)
-        elif args.verb == "prepare-loop":
-            with holding_record(args.change, Path(args.root)):
-                VERBS[args.verb](Path(args.root), args.change)
-        elif args.verb == "review":
-            # The verdict reads the record and its release removes it, so review owns the record's
-            # lock from its first read through the release (R-14, bead coding-harness-751).
-            with holding_record(args.change, Path(args.root)):
-                review(Path(args.root), args.change)
-        else:
-            VERBS[args.verb](Path(args.root), args.change)
+        try:
+            _dispatch(args)
+        except CleanStop:
+            check_written_findings(Path(args.root), written)
+            raise
+        check_written_findings(Path(args.root), written)
     except CleanStop as error:
         # A finished loop is not a refusal: its own exit code, and no `refused:` on stderr.
         print(f"the loop is finished: {error}", file=sys.stderr)

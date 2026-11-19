@@ -1225,8 +1225,10 @@ def test_swarm_publication_runs_the_shared_check_first(repo, monkeypatch):
         run.publish("complete")
 
 
-def test_release_loop_runs_the_shared_check_on_findings(repo, monkeypatch):
+def test_release_loop_runs_the_shared_check_on_findings(repo, monkeypatch, tmp_path, capsys):
     # Loop row L2-10: a header fault in the findings.md a release wrote refuses the verb.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
     def fake_release(root, _change):
         _write(
             root,
@@ -1236,8 +1238,8 @@ def test_release_loop_runs_the_shared_check_on_findings(repo, monkeypatch):
         return []
 
     monkeypatch.setattr(stage2, "release", fake_release)
-    with pytest.raises(stage2.Refused, match="findings.md"):
-        stage2.release_loop(repo, "demo")
+    assert stage2.main(["release-loop", "demo", "--root", str(repo)]) == 2
+    assert "findings.md" in capsys.readouterr().err
 
 
 def test_committed_header_fault_stops_every_verb_naming_the_migration(repo):
@@ -1385,7 +1387,7 @@ def test_implement_refuses_a_rewritten_committed_producer(drop):
 
 
 def test_findings_write_passes_the_one_shared_check(repo):
-    # Loop row L3-5: every verb writes its audit lines through `append`, which judges the bytes first.
+    # Loop row L3-5: every runner write to findings.md goes through `write_findings`, which judges a header it changes.
     relative = "plans/changes/demo/findings.md"
     committed = (
         "---\n"
@@ -1397,16 +1399,14 @@ def test_findings_write_passes_the_one_shared_check(repo):
     )
     _commit_file(repo, relative, committed, "seed findings")
     path = repo / relative
-    path.write_text(committed.replace("ai-drafted-reviewed", "human-written"), encoding="utf-8")
     before = path.read_bytes()
     try:
-        stage2.append(path, "Stage-2 call: probe")
+        stage2.write_findings(path, committed.replace("ai-drafted-reviewed", "human-written").encode("utf-8"))
     except stage2.Refused:
         pass
     else:
         pytest.fail("a findings write with a changed provenance class passed the choke point")
     assert path.read_bytes() == before, "the refused write landed"
-    path.write_text(committed, encoding="utf-8")
     stage2.append(path, "Stage-2 call: probe")
     assert "Stage-2 call: probe" in path.read_text(encoding="utf-8")
 
@@ -1433,3 +1433,51 @@ def test_block_mapping_deeper_than_two_spaces_stays_valid_yaml():
     added = {"kind": "llm-session", "name": "pi", "version": "2026-11-11"}
     result = stage2.retained_producer_field(field, [*earlier, added])
     assert yaml.safe_load(result) == [*earlier, added]
+
+
+@pytest.mark.parametrize("verb", ["probe", "review-loop", "future-verb"])
+def test_every_dispatched_verb_passes_the_one_post_run_check(repo, monkeypatch, tmp_path, capsys, verb):
+    # Loop row L3-5: the post-run check runs once at the dispatch every verb passes, so probe,
+    # review-loop and any verb added later are judged with no call of their own.
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    faulty = f"---\ntitle: Findings\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Findings\n"
+
+    def writes_faulty_findings(root, *_args):
+        _write(root, "plans/changes/demo/findings.md", faulty)
+
+    def writes_nothing(*_args):
+        return None
+
+    for fake, expected in ((writes_nothing, 0), (writes_faulty_findings, 2)):
+        if verb == "review-loop":
+            monkeypatch.setattr(stage2, "review_loop", fake)
+        else:
+            monkeypatch.setitem(stage2.VERBS, verb, fake)  # a verb added later: no call of its own
+        assert stage2.main([verb, "demo", "--root", str(repo)]) == expected, verb
+    assert "findings.md" in capsys.readouterr().err
+
+
+def test_a_new_findings_file_is_judged_before_it_lands(repo):
+    # Loop row L3-5: the header line of a new findings.md goes through the one judged writer too.
+    path = repo / "plans/changes/demo/findings.md"
+    faulty = f"---\ntitle: Findings\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Findings\n"
+    with pytest.raises(stage2.Refused, match="findings.md"):
+        stage2.write_findings(path, faulty.encode("utf-8"))
+    assert not path.exists(), "the refused header landed"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "﻿---\ntitle: A\n---\n\nBody.\n",
+        "---\r\ntitle: A\r\n---\r\n",
+        "---\ntitle: A\n\nNo closing rule.\n",
+        "# No header\n",
+    ],
+)
+def test_selection_and_census_read_one_frontmatter_pattern(text):
+    # Loop row L3-6: the check's file selection, its stamp and the census agree on every file.
+    import research_census
+
+    assert stage2.has_frontmatter(text.encode("utf-8")) == (research_census.FRONTMATTER.match(text) is not None)
+    assert stage2.frontmatter_pattern() is research_census.FRONTMATTER
