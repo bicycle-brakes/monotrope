@@ -206,3 +206,51 @@ Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1119 files, 4704 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4707 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/findings_per_model.py` +3 -1
+> - `tests/test_findings_per_model.py` +24 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_findings_per_model.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L4-1: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-1-20261119T025106043788Z-218a726b.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1119 files, 4707 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_findings_per_model.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-2-20261119T025106043788Z-218a726b.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1119 files, 4707 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/findings_reader.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_finding_duplicates.py`, `tests/test_findings_per_model.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L4-1: tests/test_findings_per_model.py::test_phase6_calls_after_block_are_not_preceding: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-3-20261119T025106043788Z-218a726b.md
+> ```
