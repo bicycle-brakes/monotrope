@@ -955,3 +955,5 @@ Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model minimax-m
 Loop attempt: 2026-11-19 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
 
 Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1115 files, 4727 commits, 12 rules.
