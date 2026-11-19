@@ -157,3 +157,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-19 17:28:20–17:53:06 UTC, 1487 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-19 17:53:17–17:54:14 UTC, 57 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-19 17:54:25–17:59:42 UTC, 317 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-19 about 18:02–18:56 UTC, about 54 min — repair · orchestrator hand finishing of round 2 (Opus subagent): committed-fault stop narrowed to unreadable headers (criterion 14, loop row L2-12), three fixtures meet the checks L2-4 and L2-10 added, two full `make verify` runs · measured by hand from commit and log times; the start is approximate
