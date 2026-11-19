@@ -1296,7 +1296,7 @@ def _run_two_attempts(repo, monkeypatch, verb, first_write, second_write, verdic
         return "done", "thread"
 
     monkeypatch.setattr(stage2, "run_codex", run_step)
-    monkeypatch.setattr(stage2, "run_work_model", lambda *a, **k: run_step()[0])
+    monkeypatch.setattr(stage2, "run_work_model", lambda *_a, **_k: run_step()[0])
     monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: next(answers))
     ctx = _ctx(repo)
     baseline = _git(repo, "rev-parse", "HEAD")
@@ -1364,7 +1364,7 @@ def test_run_judges_every_retained_touched_file_not_only_this_attempts(repo, mon
     )
 
 
-def test_unmeasured_attempt_still_judges_retained_files(repo, monkeypatch):
+def test_unmeasured_attempt_still_judges_retained_files(repo):
     # Loop row L3-4, second part: a failed changed-file measurement skips neither judgement nor stamp silently.
     bad = f"---\ntitle: Bad\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Bad\n"
     _write(repo, "plans/changes/demo/bad.md", bad)

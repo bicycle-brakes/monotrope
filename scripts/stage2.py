@@ -1269,7 +1269,7 @@ def judge_findings_write(path: Path, prepared: bytes) -> None:
     """
     if path.name != "findings.md" or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", prepared) is None:
         return
-    absolute = Path(os.path.abspath(path))
+    absolute = path.resolve()
     root = next((parent for parent in absolute.parents if (parent / ".git").exists()), None)
     if root is None:
         return
