@@ -21,6 +21,7 @@ between the rule and the call.
     python3 scripts/stage2.py explore      <change>   # the swarm or GLM Flash by class, phase 1
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
+    python3 scripts/stage2.py --spec-review-inventory # which changes lack a current spec review (the morning inventory)
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
@@ -3653,20 +3654,647 @@ def legacy_completed(status: str) -> bool:
     return any(marker in lowered for marker in LEGACY_FIXED)
 
 
-def spec_review(root: Path, change: str) -> None:
-    """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
+# ---------------------------------------------------------------------------
+# The mandatory spec review (bead coding-harness-ttic)
+# ---------------------------------------------------------------------------
 
-    The call is a headless Claude Code run with read-only tools and no session
-    kept: the reviewer is recorded by the rows alone, so phase 6 starts a fresh
-    Codex session where no phase-2a session was recorded.
+
+# The day the fingerprint rule took hold, fixed in code: an undigested block (one without a
+# `Spec fingerprint:` line) qualifies only when its heading day lies strictly before this day,
+# and only while it is current against the last committed spec change (spec criteria 11 and 12).
+LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 19)
+# A spec's body bytes: everything after the front matter header. The fingerprint and the legacy
+# currency compare exactly these bytes, so a front-matter-only edit never invalidates a review
+# and a body edit always does.
+FRONT_MATTER = re.compile(rb"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
+FINGERPRINT_LINE = re.compile(r"^Spec fingerprint: (sha256:[0-9a-f]{64})$", re.M)
+PHASE2A_DAY = re.compile(r"^## Phase 2a — .+, (\d{4}-\d{2}-\d{2})$")
+# The runner call line a qualifying block carries directly above its heading (spec terms).
+SPEC_AUDIT_LINE = re.compile(
+    r"Stage-2 call, \d{4}-\d{2}-\d{2}: spec-review(?: · attempt [1-9]\d* · route [a-z0-9-]+)?"
+    r" · endpoint (?P<endpoint>[a-z0-9-]+) · model (?P<model>[A-Za-z0-9_./:+-]+)(?: · reason [^\r\n]+)?"
+    r" · leak check clean over \d+ files, \d+ commits, \d+ rules\."
+)
+NO_FINDING_ANSWER = "No finding."
+# An Opus call that follows a fallback review stands for the fallback's round, not for a new one.
+RECHECK_MARKER = "Opus re-check of the fallback review, same round"
+
+
+def spec_body_of(data: bytes) -> bytes:
+    """The spec's body bytes: everything after the front matter header."""
+    return FRONT_MATTER.sub(b"", data, count=1)
+
+
+def spec_body_bytes(spec: Path) -> bytes:
+    """The spec file's body bytes, read fresh."""
+    return spec_body_of(spec.read_bytes())
+
+
+def spec_body_fingerprint(spec: Path) -> str:
+    """The SHA-256 fingerprint of the spec's body bytes, as a review block records it."""
+    return "sha256:" + hashlib.sha256(spec_body_bytes(spec)).hexdigest()
+
+
+def spec_review_prompt(root: Path, change: str, body: bytes) -> str:
+    """The 2a prompt carrying exactly the spec body the review must read (spec criterion 10)."""
+    extra = "## The spec body under review\n\n" + body.decode("utf-8")
+    return phase_prompt(root, "02a-spec-review.md", change, extra)
+
+
+def spec_review_call_config(root: Path) -> dict:
+    """The centrally configured spec-review call settings (spec criteria 13 and 15).
+
+    Defaults: a 30-minute call limit, a 30-second pause before the single retry, and no
+    fallback model - the fallback runs only when declared. The top-level `spec_review:`
+    block of `model-endpoints.yaml` overrides each in one place: `call_limit_minutes` (the
+    call limit in minutes), `pause_seconds` (the retry pause), `fallback_endpoint` (the
+    fallback reviews through the runner's own Pi) and `fallback_model`. The model is read
+    at call time, so a later configuration change never invalidates a written block: the
+    block records the model declared when it was written.
+    """
+    settings: dict = {
+        "timeout_seconds": 30 * 60,
+        "pause_seconds": 30,
+        "fallback_endpoint": OPENCODE,
+        "fallback_model": None,
+    }
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        raise Refused(f"model-endpoints.yaml cannot be read ({error}).") from error
+    block = data.get("spec_review")
+    if block is None:
+        return settings
+    if not isinstance(block, dict):
+        raise Refused("the `spec_review:` block of model-endpoints.yaml is not a field mapping; repair it.")
+    minutes = block.get("call_limit_minutes")
+    if minutes is not None and (not isinstance(minutes, int) or isinstance(minutes, bool) or minutes <= 0):
+        raise Refused("spec_review's `call_limit_minutes` must be a positive whole number of minutes.")
+    if minutes is not None:
+        settings["timeout_seconds"] = minutes * 60
+    seconds = block.get("pause_seconds")
+    if seconds is not None and (not isinstance(seconds, int) or isinstance(seconds, bool) or seconds < 0):
+        raise Refused("spec_review's `pause_seconds` must be a whole number of seconds.")
+    if seconds is not None:
+        settings["pause_seconds"] = seconds
+    endpoint = block.get("fallback_endpoint")
+    if endpoint is not None:
+        if not isinstance(endpoint, str) or not endpoint.strip():
+            raise Refused("spec_review's `fallback_endpoint` must name an endpoint.")
+        settings["fallback_endpoint"] = endpoint.strip()
+    model = block.get("fallback_model")
+    if model is not None:
+        if not isinstance(model, str) or not model.strip():
+            raise Refused("spec_review's `fallback_model` must name a model id.")
+        settings["fallback_model"] = model.strip()
+    return settings
+
+
+@dataclass(frozen=True)
+class SpecReviewBlock:
+    """One `## Phase 2a` block of findings.md, read back for qualification and admission."""
+
+    heading: str
+    audit: str | None
+    rows: list[dict[str, str]]
+    rest: str
+    fingerprint: str | None
+    table_readable: bool
+    clean: bool
+
+    @property
+    def heading_day(self) -> str | None:
+        found = PHASE2A_DAY.match(self.heading)
+        return found.group(1) if found else None
+
+    @property
+    def audit_matches(self) -> bool:
+        """The audit line names spec-review and the same model as the heading (spec terms)."""
+        if self.audit is None:
+            return False
+        found = SPEC_AUDIT_LINE.fullmatch(self.audit)
+        if found is None:
+            return False
+        model = found.group("model")
+        if self.heading.startswith("## Phase 2a — Opus 5.5"):
+            return model == OPUS[1]
+        if self.heading.startswith("## Phase 2a — fallback "):
+            named = self.heading[len("## Phase 2a — fallback ") :].rsplit(",", 1)[0].strip()
+            return named == model
+        return False
+
+    @property
+    def is_fallback(self) -> bool:
+        return self.heading.startswith("## Phase 2a — fallback ")
+
+    @property
+    def is_recheck(self) -> bool:
+        return RECHECK_MARKER in self.heading
+
+    @property
+    def readable_answer(self) -> bool:
+        return self.table_readable and (bool(self.rows) or self.clean)
+
+
+def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], bool]:
+    """The rows of a stored findings table and whether every table line reads (spec terms).
+
+    The runner's own table has nine cells; a row whose finding carries an unescaped `|` has
+    more. A six-cell line reads as a row without a recorded status (a hand-pasted row). The
+    ambiguity mark may sit where the severity stands (spec terms). Anything else that is a
+    table line - a three-cell line, a row without a severity - makes the whole table
+    unreadable: one unparseable line spoils the block.
+    """
+    rows: list[dict[str, str]] = []
+    for line in body_text.splitlines():
+        cells = split_row(line)
+        if cells is None:
+            continue
+        if _furniture(cells) or not any(cell.strip() for cell in cells):
+            continue
+        severity = cells[1].upper() in SEVERITIES or cells[1].startswith("[AMBIGUITY]")
+        if len(cells) >= 9 and severity:
+            rows.append(
+                {
+                    "id": cells[0],
+                    "severity": cells[1],
+                    "finding": " \\| ".join(cells[5:-3]),
+                    "status": cells[-2],
+                }
+            )
+        elif len(cells) == 6 and severity:
+            rows.append({"id": cells[0], "severity": cells[1], "finding": cells[5], "status": "open"})
+        else:
+            return [], False
+    return rows, True
+
+
+def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
+    """Every `## Phase 2a` block of findings.md, in file order (spec terms).
+
+    The matching audit line must stand directly above the heading; the runner writes audit
+    line and block in one append, so it does. The block is clean when it says no finding was
+    reported beside the quoted exact answer; anything else without rows is prose and does not
+    qualify.
+    """
+    blocks: list[SpecReviewBlock] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("## Phase 2a"):
+            continue
+        audit = None
+        if index > 0 and lines[index - 1].startswith("Stage-2 call, "):
+            audit = lines[index - 1].strip()
+        body: list[str] = []
+        for following in lines[index + 1 :]:
+            if following.startswith("## "):
+                break
+            body.append(following)
+        body_text = "\n".join(body).strip()
+        rows, table_readable = _stored_rows(body_text)
+        found = FINGERPRINT_LINE.search(body_text)
+        clean = (
+            not rows
+            and NOT_ROWS_NOTE in body_text
+            and any(quoted.strip() == "> No finding." for quoted in body_text.splitlines())
+        )
+        blocks.append(
+            SpecReviewBlock(
+                heading=line,
+                audit=audit,
+                rows=rows,
+                rest=body_text,
+                fingerprint=found.group(1) if found else None,
+                table_readable=table_readable,
+                clean=clean,
+            )
+        )
+    return blocks
+
+
+def open_ambiguity_row(block: SpecReviewBlock) -> str | None:
+    """The ID of the block's open ambiguity row, or None (spec terms).
+
+    A row is open when its Status begins `open`; an answer quoted beside it does not close
+    it. The mark may sit in the Severity or the Finding cell.
+    """
+    for row in block.rows:
+        marked = row["severity"].startswith("[AMBIGUITY]") or row["finding"].startswith("[AMBIGUITY]")
+        if marked and row["status"].lower().startswith("open"):
+            return row["id"]
+    return None
+
+
+def review_rounds(blocks: list[SpecReviewBlock]) -> int:
+    """How many spec-review rounds have run, from the qualifying blocks (spec criteria 3 and 17).
+
+    A fallback and its Opus re-check stand for one round: the re-check replaces the fallback's
+    review, so it adds no round of its own.
+    """
+    rounds = 0
+    awaiting_recheck = False
+    for block in blocks:
+        if block.is_recheck and awaiting_recheck:
+            awaiting_recheck = False
+            continue
+        rounds += 1
+        awaiting_recheck = block.is_fallback
+    return rounds
+
+
+def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
+    """The UTC committer day of the last commit that touched the change's spec.md (spec criterion 12).
+
+    A spec never committed has no day: legacy currency cannot be measured and the legacy
+    block does not qualify.
+    """
+    line = _git_output(root, "log", "-1", "--format=%cI", "--", f"plans/changes/{change}/spec.md").strip()
+    return dt.date.fromisoformat(line[:10]) if line else None
+
+
+def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None:
+    """Why a legacy (undigested) spec-review block is no longer current, or None (spec criterion 12).
+
+    Its heading day must not predate the last committed spec-change day (the committer date
+    in UTC), and the spec body on disk must still be the committed body: an uncommitted body
+    edit makes the review stale, a front-matter-only edit does not.
+    """
+    committed = spec_last_commit_day(root, change)
+    if committed is None:
+        return "the spec has no committed change the review could be measured against"
+    if day < committed:
+        return f"it predates the spec's last committed change of {committed.isoformat()}"
+    try:
+        disk = spec_body_bytes(root / "plans" / "changes" / change / "spec.md")
+    except (OSError, UnicodeDecodeError) as error:
+        return f"the spec body cannot be read ({error})"
+    head = spec_body_of(_git_output(root, "show", f"HEAD:plans/changes/{change}/spec.md").encode("utf-8"))
+    if disk != head:
+        return "the spec body changed on disk without a commit after it"
+    return None
+
+
+def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecReviewBlock], str]:
+    """The change's qualifying spec-review blocks, in findings order, and the blocks left out.
+
+    Qualifying (spec terms): an Opus 5.5 or declared-fallback block with readable rows or the
+    exact `No finding.` answer, its matching runner call line directly above the heading, and
+    - written on or after the fixed rule day - the `Spec fingerprint:` line. An undigested
+    block qualifies only from before that day, and then only while it is current against the
+    last committed spec change.
+    """
+    kept: list[SpecReviewBlock] = []
+    left_out: list[str] = []
+    for block in spec_review_blocks(text):
+        day = block.heading_day
+        named = day or "an undated block"
+        if not block.audit_matches:
+            left_out.append(f"{named} has no matching runner call line directly above its heading")
+            continue
+        if not block.readable_answer:
+            left_out.append(f"{named} is no readable review (rows or the exact `No finding.` answer)")
+            continue
+        if block.fingerprint is None:
+            if day is None:
+                left_out.append(f"{named} carries no fingerprint and no day")
+                continue
+            try:
+                written = dt.date.fromisoformat(day)
+            except ValueError:
+                left_out.append(f"{named} has an unreadable day")
+                continue
+            if written >= LEGACY_SPEC_REVIEW_DAY:
+                left_out.append(f"the block of {day} was written on or after the fingerprint rule and carries none")
+                continue
+            problem = legacy_currency_problem(root, change, written)
+            if problem is not None:
+                left_out.append(f"the legacy block of {day} is not current: {problem}")
+                continue
+        kept.append(block)
+    return kept, "; ".join(left_out)
+
+
+@dataclass(frozen=True)
+class ReviewAdmission:
+    """The outcome of the spec-review admission one change faces before a model starts."""
+
+    klass: str | None = None
+    class_problem: str | None = None
+    review_problem: str | None = None
+    left_out: str = ""
+    rounds: int = 0
+    recheck: bool = False
+
+
+def review_admission(root: Path, change: str) -> ReviewAdmission:
+    """Why the change may not start a model yet, or the admission that lets it (spec criteria 4-9, 18-19).
+
+    One check for every implement route and for the morning inventory: the class must be
+    stated and agreeing, a spike stands outside the review rule, and a bounded, feature or
+    architectural change needs a qualifying, current spec review with no open ambiguity -
+    after three rounds a changed spec body is admitted on the review it has, an open
+    ambiguity never is. A previously implemented change faces the same check again.
+    """
+    try:
+        klass = declared_class(root, change, None)
+    except Refused as error:
+        return ReviewAdmission(class_problem=str(error))
+    if klass == "spike":
+        return ReviewAdmission(klass=klass)
+    folder = root / "plans" / "changes" / change
+    findings = folder / "findings.md"
+    try:
+        text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+    except (OSError, UnicodeDecodeError) as error:
+        return ReviewAdmission(
+            klass=klass, review_problem=f"plans/changes/{change}/findings.md cannot be read ({error})."
+        )
+    try:
+        current = spec_body_fingerprint(folder / "spec.md")
+    except (OSError, UnicodeDecodeError) as error:
+        return ReviewAdmission(klass=klass, review_problem=f"plans/changes/{change}/spec.md cannot be read ({error}).")
+    kept, left_out = qualifying_reviews(root, change, text)
+    if not kept:
+        detail = f" The blocks read were left out: {left_out}." if left_out else ""
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            review_problem=(
+                f"no qualifying spec review exists for {change}: run `python3 scripts/stage2.py spec-review "
+                f"{change}` first - a review qualifies as an Opus 5.5 or declared-fallback block with readable "
+                f"rows or the exact `No finding.` answer and its matching runner call line directly above it.{detail}"
+            ),
+        )
+    newest = kept[-1]
+    rounds = review_rounds(kept)
+    ambiguity = open_ambiguity_row(newest)
+    if ambiguity is not None:
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            rounds=rounds,
+            review_problem=(
+                f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; "
+                "settle the row and review the spec again before a model starts."
+            ),
+        )
+    stale: str | None = None
+    if newest.fingerprint is not None and newest.fingerprint != current:
+        stale = (
+            f"it names {newest.fingerprint} and the spec body on disk hashes to {current}; "
+            "the spec body changed after the review"
+        )
+    if stale is not None and rounds < 3:
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            rounds=rounds,
+            review_problem=(
+                f"the newest qualifying spec review of {change} is stale: {stale}. Run "
+                f"`python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
+                "spec-review rounds have run)."
+            ),
+        )
+    return ReviewAdmission(klass=klass, left_out=left_out, rounds=rounds, recheck=stale is None and newest.is_fallback)
+
+
+def readable_review(answer: str) -> list[list[str]]:
+    """The rows of a readable spec-review answer; `CallFailed` on anything else (spec terms).
+
+    Readable: six-cell rows, or the exact answer `No finding.` Prose, a refusal, a failed
+    call, or one unparseable table line is not.
+    """
+    rows, rest = parse_rows(answer)
+    if rows:
+        return rows
+    if answer.strip() == NO_FINDING_ANSWER and not any(split_row(line) is not None for line in rest.splitlines()):
+        return []
+    raise CallFailed("the answer is neither six-cell findings nor exactly `No finding.`")
+
+
+def pause(seconds: int) -> None:
+    """The configured wait between a failed spec-review call and its single retry.
+
+    The wait happens inside `threading`'s own frames, the way the runner's step
+    timeouts wait inside `subprocess`'s: the runner acquires no clock reading
+    here, and the clock boundary (`clock_now`) stays the only reader.
+    """
+    threading.Event().wait(seconds)
+
+
+def fourth_round_authorized(root: Path, change: str) -> bool:
+    """Whether decisions.md records the maintainer's authorization for a fourth review round (spec criterion 3)."""
+    try:
+        text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    lowered = text.lower()
+    return "fourth" in lowered and "authoriz" in lowered
+
+
+def write_review_block(
+    ctx: Context,
+    endpoint: tuple[str, str, str | None],
+    result: object,
+    heading: str,
+    fingerprint: str | None,
+    rows: list[list[str]],
+    answer: str,
+    reviewer: str,
+) -> None:
+    """The runner's own spec-review evidence: audit line and block in one append.
+
+    One append puts the audit line directly above the heading, where the block's qualification
+    reads it; a failed call writes nothing, so no audit line stands without its block.
+    """
+    if not ctx.findings.exists():
+        ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+    parts = [f"{call_line('spec-review', endpoint, result)}\n{heading}"]
+    if fingerprint is not None:
+        parts.append(f"Spec fingerprint: {fingerprint}")
+    parts.append(answer_block(rows, answer, reviewer))
+    append(ctx.findings, "\n\n".join(parts))
+
+
+def run_fallback_review(
+    ctx: Context, config: dict, opus_failure: CallFailed
+) -> tuple[bytes, list[list[str]], str, tuple[str, str, str | None], object]:
+    """The declared fallback review through Pi, after the Opus route failed twice (spec criteria 13-15).
+
+    The leak check runs first and a BLOCK still refuses - no fallback call starts. The
+    fallback reads the spec body fresh at its own call start, and the body on disk must still
+    be those bytes when the call ends. A failed or unreadable fallback fails the whole call.
+    """
+    if config["fallback_model"] is None:
+        raise CallFailed(
+            f"the Opus review produced no readable review ({opus_failure}); no fallback model is declared "
+            "in model-endpoints.yaml's `spec_review` block, so no fallback call starts."
+        )
+    endpoint = (str(config["fallback_endpoint"]), str(config["fallback_model"]), None)
+    if endpoint[0] != OPENCODE:
+        raise CallFailed(
+            f"the spec review's fallback endpoint must be {OPENCODE}, where the runner's Pi reviews; "
+            f"{endpoint[0]} is not."
+        )
+    problem = terms_problem(endpoint_entry(ctx.root), endpoint[1])
+    if problem is not None:
+        raise CallFailed(f"the fallback review is not admitted on its declared terms: {problem}")
+    body = spec_body_bytes(ctx.folder / "spec.md")
+    prompt = spec_review_prompt(ctx.root, ctx.change, body)
+    result = checked_prompt(ctx, endpoint, prompt)
+    require_pi()
+    discovery = discover_free(ctx.root, allow_empty=True)
+    ctx.models_store = discovery.get("models_store")
+    try:
+        answer = run_reviewer(
+            ctx,
+            endpoint[1],
+            prompt,
+            reviewer_key(),
+            free=True,
+            timeout_seconds=int(config["timeout_seconds"]),
+        )
+    except CallFailed as error:
+        raise CallFailed(
+            f"the Opus review produced no readable review ({opus_failure}) and the fallback review "
+            f"failed too ({error})."
+        ) from error
+    rows = readable_review(answer)
+    if spec_body_bytes(ctx.folder / "spec.md") != body:
+        raise CallFailed(
+            "the spec body changed during the fallback review; no block is written for bytes the reviewer did not read."
+        )
+    return body, rows, answer, endpoint, result
+
+
+def spec_review(root: Path, change: str) -> None:
+    """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016, bead coding-harness-ttic).
+
+    The prompt carries exactly the spec body under review, and the block records its SHA-256;
+    the body on disk must still be those bytes when the call ends. A call that fails, runs
+    over the configured limit, or answers unreadably is retried once after the configured
+    pause; then the declared fallback reviews through Pi, its leak check first. A fallback
+    review is re-checked by Opus in the same round on the next call; a fourth round runs only
+    when decisions.md records the maintainer's authorization.
     """
     ctx = preflight(root, change, OPUS)
-    prompt = phase_prompt(root, "02a-spec-review.md", change)
-    begin_call(ctx, "spec-review", OPUS, prompt)
-    answer = run_work_model(ctx, prompt, OPUS, writable=False)
-    rows, _ = parse_rows(answer)
-    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
+    config = spec_review_call_config(root)
+    findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    kept, _left_out = qualifying_reviews(root, change, findings_text)
+    rounds = review_rounds(kept)
+    recheck = False
+    if kept:
+        newest = kept[-1]
+        try:
+            current = spec_body_fingerprint(ctx.folder / "spec.md")
+        except (OSError, UnicodeDecodeError) as error:
+            raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
+        newest_current = newest.fingerprint is None or newest.fingerprint == current
+        recheck = newest_current and newest.is_fallback
+    if not recheck and rounds >= 3 and not fourth_round_authorized(root, change):
+        raise Refused(
+            f"three spec-review rounds have run for {change}; a fourth round runs only when "
+            f"plans/changes/{change}/decisions.md records the maintainer's authorization for it, "
+            "or the change is re-sliced."
+        )
+    spec = ctx.folder / "spec.md"
+    body = spec_body_bytes(spec)
+    prompt = spec_review_prompt(root, change, body)
+    fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
+    limit = f"the spec review's limit of {config['timeout_seconds'] // 60:g} minutes"
+    result = checked_prompt(ctx, OPUS, prompt)
+    failure: CallFailed | None = None
+    rows: list[list[str]] = []
+    answer = ""
+    try:
+        answer = run_work_model(
+            ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit
+        )
+        rows = readable_review(answer)
+    except CallFailed as error:
+        failure = error
+    if failure is not None:
+        print(
+            f"spec-review: the Opus call produced no readable review ({failure}); "
+            f"one retry follows after {config['pause_seconds']} seconds."
+        )
+        pause(int(config["pause_seconds"]))
+        result = checked_prompt(ctx, OPUS, prompt)
+        try:
+            answer = run_work_model(
+                ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit
+            )
+            rows = readable_review(answer)
+            failure = None
+        except CallFailed as retry_error:
+            body, rows, answer, fallback_endpoint, fallback_result = run_fallback_review(ctx, config, retry_error)
+            fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
+            heading = f"## Phase 2a — fallback {config['fallback_model']}, {today()}"
+            write_review_block(
+                ctx,
+                fallback_endpoint,
+                fallback_result,
+                heading,
+                fingerprint,
+                rows,
+                answer,
+                str(config["fallback_model"]),
+            )
+            print(f"spec-review: the fallback review is appended to {ctx.findings.relative_to(root)}")
+            return
+    if spec_body_bytes(spec) != body:
+        raise CallFailed(
+            "the spec body changed during the review; no block is written for bytes the reviewer did not read."
+        )
+    heading = f"## Phase 2a — Opus 5.5, {today()}"
+    if recheck:
+        heading = f"## Phase 2a — Opus 5.5 ({RECHECK_MARKER}), {today()}"
+    write_review_block(ctx, OPUS, result, heading, fingerprint, rows, answer, "Opus")
     print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
+
+
+def spec_review_inventory(root: Path) -> int:
+    """`--spec-review-inventory`: the morning inventory of missing spec reviews (spec criteria 16-17).
+
+    Every non-archived change folder with a `spec.md` - implemented changes included - is
+    measured with the same admission implement faces. Groups: changes whose class is missing,
+    invalid or disagreeing; changes failing the review check, the three-round exception
+    applied; and changes whose newest current qualifying review is a fallback, named for an
+    Opus re-check in the next day session - the re-check replaces the fallback review in the
+    same round. Spikes and folders without a spec stand outside. A change that cannot be read
+    is reported, never silently omitted.
+    """
+    base = root / "plans" / "changes"
+    class_refused: list[str] = []
+    review_refused: list[str] = []
+    rechecks: list[str] = []
+    folders = []
+    if base.is_dir():
+        folders = sorted(entry for entry in base.iterdir() if entry.is_dir() and entry.name != "archive")
+    for folder in folders:
+        name = folder.name
+        if not (folder / "spec.md").is_file():
+            continue
+        admission = review_admission(root, name)
+        if admission.class_problem is not None:
+            class_refused.append(f"{name} ({admission.class_problem})")
+        elif admission.review_problem is not None:
+            review_refused.append(f"{name} ({admission.review_problem})")
+        elif admission.recheck:
+            rechecks.append(name)
+    print("Spec-review inventory — changes without a current spec review:")
+    if class_refused:
+        print("\nClass refused (missing, invalid or disagreeing):")
+        print("\n".join(f"- {line}" for line in class_refused))
+    if review_refused:
+        print("\nReview missing, unreadable, stale or ambiguous:")
+        print("\n".join(f"- {line}" for line in review_refused))
+    if rechecks:
+        print("\nFallback review to re-check with Opus in the next day session (same round):")
+        print("\n".join(f"- {line}" for line in rechecks))
+    if not (class_refused or review_refused or rechecks):
+        print("\nNone. Every change with a spec holds a current qualifying review.")
+    return 0
 
 
 def recorded_2a_session(text: str) -> str | None:
@@ -10049,6 +10677,13 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+    # The class statement and the current spec review (bead coding-harness-ttic): one admission
+    # for every route, checked before a model starts; a spike reaches the existing checks.
+    admission = review_admission(root, change)
+    if admission.class_problem is not None:
+        raise Refused(admission.class_problem)
+    if admission.review_problem is not None:
+        raise Refused(admission.review_problem)
     if stage2_off is None:
         key = read_secret("GLM_KEY")
         if key is None:
@@ -11286,7 +11921,9 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
+    parser.add_argument(
+        "verb", nargs="?", default="", help="the runner verb (`--spec-review-inventory` runs without one)"
+    )
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "row_status",
@@ -11367,6 +12004,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
+    parser.add_argument(
+        "--spec-review-inventory",
+        action="store_true",
+        help="no verb: report which changes lack a current spec review (the morning inventory)",
+    )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     _LAUNCH_STOPPED.clear()
@@ -11398,6 +12040,41 @@ def _terminate(signum: int, _frame: object) -> None:
 def _run(args: argparse.Namespace) -> int:
     """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
     try:
+        if args.spec_review_inventory:
+            if args.verb or args.change:
+                raise Refused("--spec-review-inventory takes no verb and no change; it measures every change itself.")
+            if (
+                any(
+                    value is not None
+                    for value in (
+                        args.stage2_off,
+                        args.klass,
+                        args.seats,
+                        args.availability_reported,
+                        args.model,
+                        args.handover,
+                        args.stage_failed,
+                        args.reason,
+                        args.row_status,
+                        args.reason_text,
+                    )
+                )
+                or args.restart
+            ):
+                raise Refused("--spec-review-inventory takes no other option.")
+            refuse_repository_git(Path(args.root))
+            return spec_review_inventory(Path(args.root))
+        if not args.verb:
+            raise Refused("name a verb, or run --spec-review-inventory for the morning inventory.")
+        # argparse validates an explicit verb against `choices`, and its default against
+        # them too, so a verb-less call - the inventory's shape - would never parse; the
+        # one verb check stands here instead, where the inventory branch has already run.
+        known = sorted([*VERBS, "session", "prepare-explore"])
+        if args.verb not in known:
+            raise Refused(
+                f"`{args.verb}` is no verb of this runner; choose from {', '.join(known)}, "
+                "or run --spec-review-inventory without one."
+            )
         if (
             args.stage2_off is not None
             and not args.change

@@ -63,11 +63,15 @@ make verify
 - 16: tests/test_stage2.py::test_morning_inventory_uses_review_admission — A review or class refusal with a spec is missing, a folder without a spec is listed, or an exempt spike is listed as review-refused.
 - 17: tests/test_stage2.py::test_morning_inventory_names_fallback_rechecks — A current fallback is omitted, its Opus re-check consumes another round, or a later current Opus review remains listed.
 - 18: tests/test_stage2.py::test_implement_rechecks_previously_implemented_change — Earlier implementation exempts the later call.
-- 19: not yet written tests/test_stage2.py::test_final_draft_after_three_spec_review_rounds — A changed body is refused after three rounds or accepted before three rounds; an open ambiguity must still refuse.
+- 19: tests/test_stage2.py::test_final_draft_after_three_spec_review_rounds — A changed body is refused after three rounds or accepted before three rounds; an open ambiguity must still refuse.
 
 ## Runner route — 2026-11-18
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1; starts from the plan.
+
+## Runner route — 2026-11-19
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
 
@@ -77,3 +81,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refu
 2026-11-18 15:31:47–15:33:54 UTC, 126 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-18 21:56:19–22:17:41 UTC, 1283 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-19 15:38:12–15:42:11 UTC, 239 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-19 16:16:50–17:43:15 UTC, 5185 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 17:43:25–18:43:27 UTC, 3602 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 18:43:40–19:21:34 UTC, 2275 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

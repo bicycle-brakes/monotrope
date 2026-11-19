@@ -161,6 +161,9 @@ previous = read_records(log)
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
+# A bare string step answers with that string on standard output, like a dict
+# step's `stdout` field; every reader below expects a dict.
+steps = [step if isinstance(step, dict) else {"stdout": step} for step in steps]
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
 # A step that names a `model` is kept for the call that asks for that model, so
@@ -732,6 +735,13 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     venv_ruff(w)
     venv_pytest(w)
     w.script()
+    # The mandatory spec review (bead coding-harness-ttic): the fixture carries one qualifying,
+    # current review in findings.md, committed, so every implement call the suite makes is
+    # admitted and the work verbs' clean-tree requirement holds. A test that needs another
+    # history overwrites the file or unlinks it.
+    w.write_findings(opus_review_block(w))
+    git(root, "add", "-A")
+    git(root, "commit", "--quiet", "-m", "seeded spec review")
     return w
 
 
@@ -1480,16 +1490,21 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     ],
     ids=["three-cells", "five-cells", "short-table"],
 )
-def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
-    """Malformed spec tables stay visible; malformed loop answers fail without a clean round."""
-    world.script(claude=[{"stdout": answer}], pi=[{"stdout": answer}])
-    assert world.run("spec-review") == 0
+def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(
+    world: World, answer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed table is no review: the spec-review retries and falls back, and nothing lands; the loop fails."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    before = world.text()
+    world.script(claude=[{"stdout": answer}, {"stdout": answer}], pi=[{"stdout": answer}])
+    assert world.run("spec-review") == 1
+    assert len(world.calls("claude")) == 2 and len(world.reviews("pi")) == 1
+    assert world.text() == before, "a malformed answer was kept as review evidence"
+    assert "reported no finding" not in world.text()
+    world.script(pi=[{"stdout": answer}])
     assert world.run("review-loop") == 1
     assert not world.record().exists()
-    text = world.text()
-    assert "reported no finding" not in text
-    assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
-    assert answer.splitlines()[-1] in text
 
 
 def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
@@ -1512,12 +1527,14 @@ def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
 @pytest.mark.parametrize("verb", sorted(stage2.VERBS))
 @pytest.mark.parametrize("change", [None, "missing", "..", "a/b"])
 def test_no_change_or_a_missing_folder_refuses_every_verb(world: World, verb: str, change: str | None) -> None:
+    before = world.findings.read_bytes() if world.findings.exists() else None
     assert world.run(verb, change) == 2
     assert world.calls() == []
-    assert not world.findings.exists()
+    assert (world.findings.read_bytes() if world.findings.exists() else None) == before
 
 
 def test_a_leak_refuses_the_call(world: World) -> None:
+    before = world.findings.read_bytes()
     (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
     for verb in ("spec-review", "review", "review-loop", "probe"):
         assert world.run(verb) == 2
@@ -1525,7 +1542,7 @@ def test_a_leak_refuses_the_call(world: World) -> None:
     # call that carries content starts.
     assert world.calls("claude") == [] and world.calls("codex") == []
     assert world.reviews("pi") == [], "a reviewer call started despite the leak"
-    assert not world.findings.exists()
+    assert world.findings.read_bytes() == before, "a refusal wrote findings"
 
 
 def test_each_call_runs_its_own_leak_check(world: World) -> None:
@@ -1722,6 +1739,7 @@ def test_every_call_leaves_its_line_in_findings(world: World) -> None:
 
 
 def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) -> None:
+    world.findings.unlink()
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -1889,7 +1907,9 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
     assert "seed fact" in before and "seed fact" in text
     assert "## Runner exploration" in text and "Fact from `src/app.py`" in text
     assert "attempt 1 · route flash" in text and "model glm-5.3-flash" in text
-    assert not world.findings.exists()
+    assert "attempt 1 · route flash" not in world.findings.read_text(encoding="utf-8"), (
+        "the exploration wrote findings, not research"
+    )
 
 
 def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
@@ -3508,7 +3528,7 @@ def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(
     assert code == 0 and prompt is not None
     assert len(world.calls("codex")) == 2
     assert git(world.root, "log", "-1", "--pretty=%s").startswith("docs(demo): draft spec and plan")
-    assert world.text().count("leak check clean") == 2
+    assert minus_seeded_review(world).count("leak check clean") == 2
 
 
 def test_diagnostic_redaction_refuses_an_unusable_denylist(
@@ -3741,7 +3761,8 @@ def test_moved_head_diagnostics_protect_file_evidence(
 
 
 def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
-    world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
+    dirt = world.findings.read_text(encoding="utf-8") + "\nEarlier failed attempt.\n"
+    world.findings.write_text(dirt, encoding="utf-8")
     successful_implementation(world)
     assert world.run("implement") == 0
     assert git(world.root, "status", "--porcelain") == ""
@@ -3750,7 +3771,14 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
 
 def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World) -> None:
     # Repair L2-1. Planted fault: `producer_for` falls through to `pi` for the GLM endpoints.
-    assert not world.findings.exists()
+    # The review precondition exempts a spike (spec criterion 5), so a spike is the one
+    # implement run that still creates the findings file the attempt writes its evidence into.
+    world.findings.unlink()
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", "class: spike"), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spike stands outside the review rule")
     successful_implementation(world)
     assert world.run("implement") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -3851,10 +3879,15 @@ def commit_decisions(world: World, body: str, message: str) -> str:
 
 
 def assert_no_dispatch(world: World, capsys: pytest.CaptureFixture[str]) -> str:
-    """A refusal before the first model call: no call, no attempt entry, no audit line."""
+    """A refusal before the first model call: no call, no attempt entry, no audit line.
+
+    The fixture seeds one qualifying spec review, so "nothing written" reads as: no call, and
+    findings.md without a second audit line beside the seed's own.
+    """
     error = capsys.readouterr().err
     assert world.calls() == [], "a model call started on refused input"
-    assert not world.findings.exists(), "an attempt entry was written"
+    text = world.text() if world.findings.exists() else ""
+    assert text.count("Stage-2 call,") <= 1, "an attempt entry was written"
     assert "Stage-2 call" not in error
     return error
 
@@ -3922,7 +3955,7 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
 def test_a_findings_file_the_draft_creates_names_codex(world: World) -> None:
     # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
     draft_world(world)
-    assert not world.findings.exists()
+    world.findings.unlink()
     passing_draft(world)
     assert world.run("draft") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -5918,7 +5951,7 @@ def test_quoted_reader_lines_count_for_no_reader(world: World) -> None:
     ):
         assert pattern.findall(text) == pattern.findall(without) == []
     assert stage2_runs.measure(text) == stage2_runs.measure(without)
-    assert stage2_runs.measure(text).calls == [("implement", True), ("implement", True)]
+    assert stage2_runs.measure(minus_seeded_review(world, text)).calls == [("implement", True), ("implement", True)]
     assert "Stage-2 session, 2026-10-11: probe` +1 -0" in text, "the name's separator did not split the entry"
 
 
@@ -6584,7 +6617,7 @@ def test_a_findings_file_without_a_header_is_left_without_one(world: World) -> N
 def test_a_spec_without_a_bead_refuses(world: World) -> None:
     (world.root / "plans" / "changes" / "demo" / "spec.md").write_text("---\ntitle: Spec\n---\n", encoding="utf-8")
     assert world.run("spec-review") == 2
-    assert world.calls() == [] and not world.findings.exists()
+    assert world.calls() == []
 
 
 def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
@@ -6750,7 +6783,8 @@ def test_a_pi_off_the_pin_is_refused(
         assert handed["timeout"] == 0.5 and handed["outcome"] == "timeout", handed
     assert world.calls() == [], "a call started"
     assert not world.record().exists()
-    assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
+    text = world.text() if world.findings.exists() else ""
+    assert text.count("Stage-2 call,") <= 1, "a call line was written"
     assert "leak check" not in capsys.readouterr().out.lower(), "the leak check ran before the pin"
 
 
@@ -6827,7 +6861,7 @@ def test_a_refused_attempt_keeps_the_findings_a_human_touched(world: World) -> N
     """P2 of the #192 review: the restore keeps the verb's own allowed set, not only the baseline."""
     findings = world.root / "plans" / "changes" / "demo" / "findings.md"
     findings.parent.mkdir(parents=True, exist_ok=True)
-    findings.write_text("a human note\n", encoding="utf-8")
+    findings.write_text("a human note\n\n" + opus_review_block(world) + "\n", encoding="utf-8")
     world.script(
         claude=[
             {
@@ -7734,12 +7768,24 @@ def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
     assert len(world.calls("pi")) == 7, "one discovery plus two free and three paid members were expected"
 
 
-def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
-    world.script(claude=[{"stdout": "An opening remark.\n" + rows(1)}, {"stdout": "No finding at all."}])
+def test_an_answer_that_is_not_rows_is_kept(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(
+        claude=[
+            {"stdout": "An opening remark.\n" + rows(1)},
+            {"stdout": "No finding at all."},
+            {"stdout": "No finding at all."},
+        ],
+        pi=["No finding."],
+    )
     assert world.run("spec-review") == 0
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
     assert world.run("spec-review") == 0
-    assert "No finding at all." in world.text() and "Opus reported no finding." in world.text()
+    # The second call's answer is no readable review; after the single retry the declared
+    # fallback answers the exact clean form, and its block names the model declared at write.
+    assert f"{TEST_LADDER[0]} reported no finding." in world.text()
+    assert "> No finding." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
 
 
 def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: World) -> None:
@@ -7760,11 +7806,13 @@ def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: Worl
     ],
     ids=["empty-answer", "non-zero-exit"],
 )
-def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict) -> None:
-    world.script(claude=[step])
+def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    before = world.text()
+    world.script(claude=[step, step], pi=[{"exit": 1}])
     assert world.run("spec-review") == 1
-    text = world.text()
-    assert "Reviewer session" not in text and "## Phase 2a" not in text and "X1" not in text
+    assert world.text() == before, "a failed call left rows or an audit line in findings"
 
 
 def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
@@ -7785,7 +7833,7 @@ def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
 
 def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World) -> None:
     # Criterion 29. Planted fault: the producer map stays at `codex` or `pi`.
-    assert not world.findings.exists()
+    world.findings.unlink()
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -7803,6 +7851,610 @@ def commit_review_findings(world: World) -> None:
 def seed_2a_session(world: World, session: str = "T1") -> None:
     """A findings.md whose last phase-2a block is a Codex one with its session line (criteria 30 and 31)."""
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex {session}")
+
+
+# ---------------------------------------------------------------------------
+# The mandatory spec review (bead coding-harness-ttic, spec criteria 1-19)
+# ---------------------------------------------------------------------------
+
+# The heading day every seeded block carries: inside the fingerprint rule, so no seeded block
+# falls into the legacy comparison (which would read the fixture's real commit days).
+FIXED_REVIEW_DAY = "2026-11-19"
+
+
+def current_fingerprint(world: World) -> str:
+    """The fingerprint of the demo spec's body bytes as they stand on disk."""
+    return stage2.spec_body_fingerprint(world.root / "plans" / "changes" / "demo" / "spec.md")
+
+
+def review_audit_line(model: str, endpoint: str = "claude-code-plan") -> str:
+    """The runner call line a seeded block carries directly above its heading (spec terms)."""
+    return (
+        f"Stage-2 call, {FIXED_REVIEW_DAY}: spec-review · endpoint {endpoint} · model {model} · "
+        "leak check clean over 4 files, 2 commits, 12 rules."
+    )
+
+
+def review_table(count: int, reviewer: str) -> str:
+    """A stored findings table of `count` open rows, one criterion each, as the runner writes them."""
+    table_rows = [
+        [f"R{n}", "MAJOR", "SPEC", f"criterion {n}", f"spec.md:{n}", f"FB{n} unique body", reviewer, "open", "—"]
+        for n in range(1, count + 1)
+    ]
+    return stage2.render_table(stage2.ROW_COLUMNS, table_rows)
+
+
+def opus_review_block(
+    world: World, count: int = 1, *, day: str = FIXED_REVIEW_DAY, fingerprint: str | None = "current"
+) -> str:
+    """A seeded Opus review block: audit line, heading, the fingerprint line when one stands, the table.
+
+    `fingerprint="current"` digests the spec's body as it stands now; `None` seeds an undigested
+    legacy block; any other string plants a fingerprint the current body cannot match.
+    """
+    mark = current_fingerprint(world) if fingerprint == "current" else fingerprint
+    parts = []
+    if mark is not None:
+        parts.append(f"Spec fingerprint: {mark}")
+    parts.append(review_table(count, "Opus 5.5"))
+    return f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n" + "\n\n".join(parts)
+
+
+def minus_seeded_review(world: World, text: str | None = None) -> str:
+    """The findings text without the fixture's seeded review block (audit line, heading, fingerprint, table).
+
+    Tests that count runner audit lines or look for table text measure the calls they made, not
+    the review the `world` fixture seeds so that every implement call is admitted.
+    """
+    return (world.text() if text is None else text).replace(opus_review_block(world), "")
+
+
+def clean_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded clean review in the runner's own shape: the exact `No finding.` answer, quoted."""
+    body = stage2.answer_block([], "No finding.", "Opus")
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\n\n{body}"
+    )
+
+
+def fallback_review_block(world: World, model: str, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded fallback review: its audit line names the Pi endpoint and the model declared at write."""
+    parts = [f"Spec fingerprint: {current_fingerprint(world)}", review_table(count, model)]
+    return f"{review_audit_line(model, 'opencode-go')}\n## Phase 2a — fallback {model}, {day}\n\n" + "\n\n".join(parts)
+
+
+def opus_recheck_block(world: World, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """The Opus re-check of a fallback review, headed as the same round (spec criterion 17)."""
+    parts = [f"Spec fingerprint: {current_fingerprint(world)}", review_table(count, "Opus 5.5")]
+    heading = f"## Phase 2a — Opus 5.5 ({stage2.RECHECK_MARKER}), {day}"
+    return f"{review_audit_line(stage2.OPUS[1])}\n{heading}\n\n" + "\n\n".join(parts)
+
+
+def ambiguity_review_block(world: World, *, status: str = "open", day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded review whose newest row carries the `[AMBIGUITY]` mark where the severity stands."""
+    table_rows = [
+        [
+            "R1",
+            "[AMBIGUITY] round scope",
+            "SPEC",
+            "criterion 1",
+            "spec.md:1",
+            "Is the boundary the right one?",
+            "Opus 5.5",
+            status,
+            "—",
+        ],
+    ]
+    table = stage2.render_table(stage2.ROW_COLUMNS, table_rows)
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\n\n{table}"
+    )
+
+
+def unreadable_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded block whose table carries one line no reader can parse: the whole block spoils."""
+    table = review_table(1, "Opus 5.5") + "\n| only | three | cells |"
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\n\n{table}"
+    )
+
+
+def seed_review_rounds(world: World, rounds: int, *, stale_newest: bool = False, recheck: bool = False) -> None:
+    """Findings that hold `rounds` qualifying review rounds (spec criteria 3, 17 and 19)."""
+    blocks = [opus_review_block(world, 1) for _ in range(rounds)]
+    if stale_newest and blocks:
+        blocks[-1] = opus_review_block(world, 1, fingerprint="sha256:" + "0" * 64)
+    if recheck and blocks:
+        blocks[-1] = fallback_review_block(world, TEST_LADDER[0])
+        blocks.append(opus_recheck_block(world, 1))
+    world.write_findings(*blocks)
+
+
+def pin_spec_review(world: World, model: str = TEST_LADDER[0], minutes: int = 30, pause_seconds: int = 30) -> None:
+    """Declare the fallback model and the call settings in the world's `spec_review` block (spec criteria 13 and 15)."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["spec_review"] = {
+        "call_limit_minutes": minutes,
+        "pause_seconds": pause_seconds,
+        "fallback_endpoint": "opencode-go",
+        "fallback_model": model,
+    }
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def commit_at(
+    world: World, monkeypatch: pytest.MonkeyPatch, day: dt.date, message: str = "a committed spec change"
+) -> None:
+    """Commit a front-matter-only spec edit under the given UTC committer day (spec criterion 12)."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8")
+    spec.write_text(text.replace("bead: demo-1\n", f"bead: demo-1\nnote: {day.isoformat()}\n"), encoding="utf-8")
+    stamp = f"{day.isoformat()}T12:00:00+00:00"
+    monkeypatch.setenv("GIT_COMMITTER_DATE", stamp)
+    monkeypatch.setenv("GIT_AUTHOR_DATE", stamp)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", message)
+    monkeypatch.delenv("GIT_COMMITTER_DATE", raising=False)
+    monkeypatch.delenv("GIT_AUTHOR_DATE", raising=False)
+
+
+def spec_review_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    """Criterion 1: the chain names the spec-review step before the plan card; the final draft stays unfenced."""
+    problems: list[str] = []
+    chain = re.search(r"A drafted change runs in this order:\n\n(.*?)\n\n", workflow, re.S)
+    if chain is None:
+        return ["docs/WORKFLOW.md no longer states the draft chain in one ordered list."]
+    steps = chain.group(1)
+    review = re.search(r"\d+\. `python3 scripts/stage2\.py spec-review <change>`", steps)
+    card = re.search(r"\d+\. The plan card reaches the maintainer", steps)
+    if review is None:
+        problems.append("the draft chain no longer names the spec-review step.")
+    if card is None:
+        problems.append("the draft chain no longer names the plan card.")
+    if review is not None and card is not None and review.start() > card.start():
+        problems.append("the spec-review step no longer stands before the plan card.")
+    lines = agents.splitlines()
+    review_row = next((index for index, line in enumerate(lines) if line.startswith("| 2a |")), None)
+    card_row = next((index for index, line in enumerate(lines) if line.startswith("| 3 | Plan")), None)
+    if review_row is None or card_row is None or review_row > card_row:
+        problems.append("AGENTS.md's phase table no longer puts Spec-Review before Plan.")
+    if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
+        problems.append("the final draft after three rounds is fenced behind another review.")
+    return problems
+
+
+def test_doctrine_requires_review_before_card() -> None:
+    """Criterion 1: the live chain keeps the spec-review step before the card, and no text fences the final draft."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert spec_review_doctrine_problems(workflow, agents) == []
+    wounded = re.sub(r"\n\d+\. `python3 scripts/stage2\.py spec-review <change>`[^\n]*\n[^\n]*", "\n", workflow)
+    assert spec_review_doctrine_problems(wounded, agents), "a chain without the spec-review step must go red"
+
+
+def spec_review_spike_problems(workflow: str) -> list[str]:
+    """Criterion 2: the class table keeps the spike outside the spec review."""
+    found = re.search(r"^\| a one-sentence change, a `spike` \| ([^|]+) \|", workflow, re.M)
+    if found is None:
+        return ["the class table no longer carries the spike row."]
+    cell = found.group(1)
+    if "no stage 2" in cell or "no spec review" in cell:
+        return []
+    return ["the spike row's spec-review cell no longer keeps the spike outside the review."]
+
+
+def test_doctrine_exempts_spike() -> None:
+    """Criterion 2: the live table exempts the spike; a spike row that requires the review goes red."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert spec_review_spike_problems(workflow) == []
+    planted = workflow.replace(
+        "| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | Opus 5.5, required |"
+    )
+    assert spec_review_spike_problems(planted), "a spike row that requires the review must go red"
+
+
+def spec_review_repeat_problems(workflow: str) -> list[str]:
+    """Criterion 3: no text lets a fourth round run without the maintainer or fences the final draft."""
+    problems: list[str] = []
+    if re.search(r"a fourth (?:spec-)?review round[^.]*runs without[^.]*authoriz", workflow, re.I):
+        problems.append("the text admits a fourth review round without the maintainer's authorization.")
+    if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
+        problems.append("the final draft after three rounds is fenced behind another review.")
+    return problems
+
+
+def test_doctrine_repeats_review_after_edit() -> None:
+    """Criterion 3: the live text leaves the fourth round to the maintainer and the final draft unfenced."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert spec_review_repeat_problems(workflow) == []
+    planted = (
+        workflow
+        + "\nA fourth spec-review round runs without the maintainer's authorization when the loop demands it.\n"
+    )
+    assert spec_review_repeat_problems(planted), "an unauthorized fourth round must go red"
+
+
+@pytest.mark.parametrize(
+    ("replacement", "expected"),
+    [("class: unplanned", "states the class 'unplanned'"), ("", "no class is stated")],
+    ids=["invalid-class", "missing-class"],
+)
+def test_implement_refuses_unknown_class(
+    world: World, replacement: str, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4 (spec): an unknown or missing class refuses implement before any model starts."""
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", replacement), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a class statement the runner cannot accept")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_implement_exempts_spike_from_spec_review(world: World) -> None:
+    """Criterion 5 (spec): a spike reaches the existing implement checks without any review evidence."""
+    world.findings.unlink()
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", "class: spike"), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spike stands outside the review rule")
+    successful_implementation(world)
+    assert world.run("implement") == 0
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        ("unlink", "no qualifying spec review exists"),
+        ("unaudited", "no matching runner call line"),
+        ("codex", "no qualifying spec review exists"),
+        ("unreadable", "is no readable review"),
+        ("stale", "is stale"),
+    ],
+    ids=["missing", "unaudited", "codex-block", "unreadable-table", "stale-fingerprint"],
+)
+def test_implement_refuses_missing_stale_or_unreadable_review(
+    world: World, seed: str, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 6 (spec): a missing, unaudited, Codex, unreadable or stale review refuses implement."""
+    if seed == "unlink":
+        world.findings.unlink()
+    elif seed == "unaudited":
+        world.write_findings(opus_review_block(world).split("\n", 1)[1])
+    elif seed == "codex":
+        seed_2a_session(world)
+    elif seed == "unreadable":
+        world.write_findings(unreadable_review_block(world))
+    else:
+        world.write_findings(opus_review_block(world, fingerprint="sha256:" + "0" * 64))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", f"a review that does not qualify ({seed})")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_implement_names_open_review_ambiguity(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7 (spec): an open ambiguity row refuses implement and names the row."""
+    world.write_findings(ambiguity_review_block(world))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a review with an open ambiguity")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "open ambiguity row R1" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_implement_accepts_current_review(world: World) -> None:
+    """Criterion 8 (spec): the fixture's current qualifying review admits the standing green implement call."""
+    successful_implementation(world)
+    assert world.run("implement") == 0
+
+
+@pytest.mark.parametrize(
+    ("strip_findings", "expected"),
+    [(True, "no qualifying spec review exists"), (False, "no class is stated")],
+    ids=["review-missing", "class-missing"],
+)
+def test_stage2_off_enforces_review(
+    world: World, strip_findings: bool, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 9 (spec): --stage2-off keeps both the class and the review preconditions."""
+    if strip_findings:
+        world.findings.unlink()
+    else:
+        world.research.write_text(
+            world.research.read_text(encoding="utf-8").replace("\nclass: bounded", ""), encoding="utf-8"
+        )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "the offline route keeps the preconditions")
+    successful_implementation(world)
+    assert world.run("implement", "demo", "--stage2-off", "offline test") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_spec_review_fingerprints_reviewed_bytes(world: World) -> None:
+    """Criterion 10 (spec): the block digests the body bytes, and the prompt carried exactly those bytes."""
+    world.script(claude=[{"stdout": rows(2)}])
+    assert world.run("spec-review") == 0
+    fingerprint = current_fingerprint(world)
+    assert f"Spec fingerprint: {fingerprint}" in world.text()
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert "## The spec body under review" in prompt
+    assert "# Spec" in prompt
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8").replace("title: Spec\n", "title: Spec v2\n"), encoding="utf-8")
+    assert stage2.spec_body_fingerprint(spec) == fingerprint, "a front-matter-only edit is no body change"
+
+
+@pytest.mark.parametrize(
+    ("edit", "current"),
+    [("body", False), ("front-matter", True)],
+    ids=["body-edit", "header-edit"],
+)
+def test_review_currency_rejects_changed_bytes(world: World, edit: str, current: bool) -> None:
+    """Criterion 11 (spec): the fingerprint reads body bytes; a header-only edit never goes stale."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8")
+    if edit == "body":
+        spec.write_text(text + "\nA later body sentence.\n", encoding="utf-8")
+    else:
+        spec.write_text(text.replace("title: Spec\n", "title: Spec v2\n"), encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is current
+    if not current:
+        assert "is stale" in admission.review_problem
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("current", None),
+        ("predates", "predates the spec's last committed change"),
+        ("cutoff-day", "was written on or after the fingerprint rule and carries none"),
+        ("dirty-body", "changed on disk without a commit"),
+        ("header-only", None),
+    ],
+)
+def test_legacy_review_currency_by_day(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str, expected: str | None
+) -> None:
+    """Criterion 12 (spec): a legacy block is measured against the committed day and the disk body."""
+    cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
+    world.findings.unlink()
+    if case == "cutoff-day":
+        world.write_findings(opus_review_block(world, day=cutoff.isoformat(), fingerprint=None))
+    else:
+        if case == "predates":
+            commit_day, block_day = cutoff - dt.timedelta(days=9), cutoff - dt.timedelta(days=10)
+        else:
+            commit_day = block_day = cutoff - dt.timedelta(days=4)
+        commit_at(world, monkeypatch, commit_day)
+        world.write_findings(opus_review_block(world, day=block_day.isoformat(), fingerprint=None))
+        spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+        text = spec.read_text(encoding="utf-8")
+        if case == "dirty-body":
+            spec.write_text(text + "More body.\n", encoding="utf-8")
+        elif case == "header-only":
+            spec.write_text(text.replace("title: Spec", "title: Spec v2"), encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is (expected is None)
+    if expected is not None:
+        assert expected in admission.review_problem
+
+
+@pytest.mark.parametrize(
+    "step",
+    [{"exit": 1}, {"stdout": ""}, {"stdout": "A refusal in prose."}],
+    ids=["nonzero-exit", "empty-answer", "unreadable-answer"],
+)
+def test_spec_review_retries_then_falls_back(
+    world: World, monkeypatch: pytest.MonkeyPatch, step: dict, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 13 (spec): one retry after the configured pause, then the declared fallback through Pi."""
+    defaults = stage2.spec_review_call_config(world.root)
+    assert defaults["timeout_seconds"] == 30 * 60 and defaults["pause_seconds"] == 30
+    assert defaults["fallback_model"] is None, "no fallback is declared before the configuration names one"
+    pin_spec_review(world)
+    waits: list[int] = []
+    monkeypatch.setattr(stage2, "pause", waits.append)
+    world.script(claude=[step, step], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    assert waits == [30]
+    assert len(world.calls("claude")) == 2 and len(world.reviews("pi")) == 1
+    assert f"## Phase 2a — fallback {TEST_LADDER[0]}, " in world.text()
+    assert f"Spec fingerprint: {current_fingerprint(world)}" in world.text()
+    assert stage2.spec_review_call_config(world.root)["timeout_seconds"] == defaults["timeout_seconds"]
+    assert "no fallback" not in capsys.readouterr().err
+
+
+def test_fallback_spec_review_honours_leak_check(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 14 (spec): a leak BLOCK stops the fallback too; no Pi call starts."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(claude=[{"exit": 1}, {"exit": 1, "plant": {"src/leak.txt": f"{LEAK}\n"}}], pi=[rows(1)])
+    before = world.text()
+    assert world.run("spec-review") == 2
+    assert "the leak check is not clean" in capsys.readouterr().err
+    assert world.reviews("pi") == []
+    assert world.text() == before, "a blocked fallback wrote findings"
+
+
+@pytest.mark.parametrize("redeclare", [False, True], ids=["same-declaration", "changed-declaration"])
+def test_fallback_review_is_marked(world: World, monkeypatch: pytest.MonkeyPatch, redeclare: bool) -> None:
+    """Criterion 15 (spec): the fallback block names the model declared at write; redeclaring keeps it qualifying."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(claude=[{"exit": 1}, {"exit": 1}], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    blocks = stage2.spec_review_blocks(world.text())
+    assert len(blocks) == 2
+    newest = blocks[-1]
+    assert newest.is_fallback and newest.audit_matches
+    assert newest.fingerprint == current_fingerprint(world)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None and admission.recheck
+    if redeclare:
+        pin_spec_review(world, model=TEST_LADDER[1])
+        assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+def test_morning_inventory_uses_review_admission(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 16 (spec): the inventory groups class and review refusals; spikes and spec-less folders stand out."""
+    base = world.root / "plans" / "changes"
+    for name, research_class in (("late", "bounded"), ("unclassified", None), ("spiked", "spike")):
+        folder = base / name
+        folder.mkdir()
+        header = f"---\ntitle: Spec {name}\nbead: other-{name}\n"
+        if name == "late":
+            header += "implementation_status: implemented\n"
+        (folder / "spec.md").write_text(header + "---\n\n# Spec\n", encoding="utf-8")
+        if research_class is not None:
+            (folder / "research.md").write_text(
+                f"---\ntitle: Research {name}\nbead: other-{name}\nclass: {research_class}\n---\n\n# Research\n",
+                encoding="utf-8",
+            )
+    (base / "nospec").mkdir()
+    (base / "nospec" / "research.md").write_text(
+        "---\ntitle: Research nospec\nbead: other-nospec\nclass: bounded\n---\n\n# Research\n", encoding="utf-8"
+    )
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    class_group = out.split("Class refused (missing, invalid or disagreeing):", 1)[-1].split("\n\n", 1)[0]
+    review_group = out.split("Review missing, unreadable, stale or ambiguous:", 1)[-1].split("\n\n", 1)[0]
+    assert "\n- late (" in review_group
+    assert "\n- unclassified (" in class_group
+    assert "spiked" not in out and "nospec" not in out and "\n- demo" not in out
+
+
+def test_morning_inventory_names_fallback_rechecks(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 17 (spec): a current fallback is named for the Opus re-check, and the re-check costs no round."""
+    world.write_findings(fallback_review_block(world, TEST_LADDER[0]))
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    recheck_group = out.split("Fallback review to re-check with Opus in the next day session (same round):", 1)[-1]
+    assert "\n- demo" in recheck_group.split("\n\n", 1)[0]
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    blocks = stage2.spec_review_blocks(world.text())
+    assert blocks[-1].is_recheck and not blocks[-1].is_fallback
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None and admission.rounds == 1
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "\n- demo\n" not in capsys.readouterr().out
+
+
+def test_implement_rechecks_previously_implemented_change(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 18 (spec): a later implement call faces the same review precondition again."""
+    world.findings.unlink()
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8").replace(
+        "bead: demo-1\n", "bead: demo-1\nimplementation_status: implemented\n"
+    )
+    spec.write_text(text, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an implemented change without review evidence")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "no qualifying spec review exists" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize(
+    ("rounds", "ambiguity", "admitted"),
+    [(3, False, True), (2, False, False), (3, True, False)],
+    ids=["final-draft", "before-three-rounds", "ambiguity-still-refuses"],
+)
+def test_final_draft_after_three_spec_review_rounds(
+    world: World,
+    rounds: int,
+    ambiguity: bool,
+    admitted: bool,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Criterion 19 (spec): after three rounds a changed body is admitted; before them not; an ambiguity never."""
+    if ambiguity:
+        seed_review_rounds(world, rounds - 1)
+        world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    else:
+        seed_review_rounds(world, rounds)
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nA late body sentence.\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "the body changed after the newest review")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is admitted
+    successful_implementation(world)
+    if admitted:
+        assert world.run("implement") == 0
+    else:
+        assert world.run("implement") == 2
+        assert ("open ambiguity row R1" if ambiguity else "is stale") in capsys.readouterr().err
+        assert world.calls() == []
+
+
+def test_a_review_whose_bytes_change_mid_call_writes_no_block(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10's guard: a body that changes while the reviewer reads writes no block for bytes unread."""
+    original = stage2.run_work_model
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+
+    def editing(_ctx, _prompt, endpoint, writable, **kwargs):
+        text = spec.read_text(encoding="utf-8")
+        spec.write_text(text.replace("# Spec\n", "# Spec\n\nA sentence the reviewer did not read.\n"), encoding="utf-8")
+        return original(_ctx, _prompt, endpoint, writable, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_work_model", editing)
+    before = world.text()
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 1
+    assert "changed during the review" in capsys.readouterr().err
+    assert world.text() == before, "a block was written for bytes the reviewer did not read"
+
+
+def test_spec_review_caps_the_fourth_round_without_authorization(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3's runner half: three rounds cap the verb until decisions.md records the maintainer's say."""
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert "fourth round" in capsys.readouterr().err
+    assert world.calls() == []
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        "# Decisions\n\nThe maintainer authorized a fourth spec-review round for demo (S-9).\n", encoding="utf-8"
+    )
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    assert len(stage2.spec_review_blocks(world.text())) == 4
+
+
+def test_the_morning_inventory_takes_no_verb(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """The inventory is no verb and takes no verb and no change: it measures every change itself."""
+    assert stage2.main(["--spec-review-inventory", "demo", "--root", str(world.root)]) == 2
+    assert "--spec-review-inventory takes no verb" in capsys.readouterr().err
+    assert stage2.main(["draft", "--spec-review-inventory", "--root", str(world.root)]) == 2
+    assert stage2.main(["--root", str(world.root)]) == 2
+    assert "name a verb" in capsys.readouterr().err
+
+
+def test_the_morning_inventory_reports_a_clean_world(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """The inventory names nothing when every change with a spec holds a current qualifying review."""
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "None. Every change with a spec holds a current qualifying review." in capsys.readouterr().out
 
 
 def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
@@ -8978,7 +9630,7 @@ def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, mon
     assert len(world.reviews("pi")) == 2
     text = world.text()
     assert "audit calls: 2" in text
-    assert text.count("Stage-2 call,") == 2
+    assert text.count("Stage-2 call,") == 3, "the two loop calls plus the fixture's seeded review"
     assert "was asked again with the format reminder" not in text
     assert "was asked again with the format reminder" not in capsys.readouterr().err
     assert not world.record().exists()
@@ -9745,7 +10397,7 @@ def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
         assert argv[argv.index("--tools") + 1] == "read,grep,find,ls"
         assert stage2.READ_REQUEST in call["prompt_file"]
     assert [rung_of(call) for call in paid_calls] == list(TEST_LADDER)
-    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    lines = [line for line in minus_seeded_review(world).splitlines() if line.startswith("Stage-2 call,")]
     assert len(lines) == 5, "a member call ran without its own declaration and leak check"
 
 
@@ -9770,7 +10422,7 @@ def test_the_probe_continues_after_member_failures(
     assert f"probe: 4 members answered: {', '.join(answered)}" in output.out
     assert f"probe: 1 members failed: {failed}" in output.out
     assert "failed:" in output.err
-    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    lines = [line for line in minus_seeded_review(world).splitlines() if line.startswith("Stage-2 call,")]
     assert len(lines) == len(members), "continuation bypassed a member's declaration/leak check"
 
 
@@ -10510,9 +11162,10 @@ def test_repair_with_nothing_taken_refuses_before_any_call(
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
     seed_tests(world)
     world.write_record([("L1-1", "rejected — out of scope", "")])
+    findings_before = world.findings.read_bytes()
     world.script(claude=[{"stdout": "must not run"}])
     assert world.run("repair") == 2
-    assert world.calls() == [] and not world.findings.exists()
+    assert world.calls() == [] and world.findings.read_bytes() == findings_before
     assert "no row is taken" in capsys.readouterr().err
     shutil.rmtree(world.record().parent)
     assert world.run("repair") == 2
@@ -11772,6 +12425,7 @@ def test_a_leak_in_a_taken_row_stops_the_repair_without_fallback(world: World) -
     """Criterion 10. Planted fault: the rows outside the scanned prompt, or a fallback after the BLOCK."""
     seed_tests(world)
     world.write_record([("L1-1", "taken — test_a", "no")], finding=f"leak {LEAK}")
+    findings_before = world.findings.read_bytes()
     world.script(
         codex=[{"stdout": "must not run"}] * 3,
         claude=[{"stdout": "must not run"}] * 3,
@@ -11779,7 +12433,7 @@ def test_a_leak_in_a_taken_row_stops_the_repair_without_fallback(world: World) -
     )
     assert world.run("repair") == 2
     assert world.calls() == []
-    assert not world.findings.exists()
+    assert world.findings.read_bytes() == findings_before, "a leak refusal wrote findings"
 
 
 @pytest.mark.parametrize(("blocked", "calls_before"), [(2, 1), (3, 2)])
@@ -11849,7 +12503,7 @@ def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) 
             world.text(),
             re.M,
         ), attempt
-    assert stage2_runs.measure(world.text()).calls == [("repair", True)] * 3
+    assert stage2_runs.measure(minus_seeded_review(world)).calls == [("repair", True)] * 3
 
 
 @pytest.mark.parametrize(("attempt", "earlier"), [(2, 1), (3, 1), (3, 2)])
@@ -13049,7 +13703,7 @@ def test_empty_attempt_keeps_rejected_records(world: World, verb: str) -> None:
     entries = runner_entries(world.plan)
     assert len(entries) == 3
     assert all("rejected" in line and "accepted" not in line for line in entries)
-    assert world.text().count("Stage-2 call,") == 3
+    assert world.text().count("Stage-2 call,") == 4, "the three attempts plus the fixture's seeded review"
     if held is not None:
         assert world.record().read_text(encoding="utf-8") == held, "a repair row was marked without a fix"
 
@@ -13151,7 +13805,7 @@ def test_runner_ledger_clearing_cannot_qualify_a_retry(
     entries = runner_entries(world.plan)
     assert len(entries) == 3
     assert all("rejected" in line and "accepted" not in line for line in entries)
-    assert world.text().count("Stage-2 call,") == 3
+    assert world.text().count("Stage-2 call,") == 4, "the three attempts plus the fixture's seeded review"
     text = world.text()
     assert text.count(stage2.NO_WORK) == 2, text
     # The retained test stayed across the retries; each retry's clearing (counted above) shows the
@@ -19177,7 +19831,7 @@ def test_repair_starts_no_review_call(world: World) -> None:
     assert 'sandbox_mode="workspace-write"' in call["argv"] and "resume" not in call["argv"]
     assert "Write only your verdict now." not in prompt_of(call)
     assert world.calls("pi") == []
-    assert "Phase 6" not in world.text() and "Broke a test" not in world.text()
+    assert "Phase 6" not in world.text() and "Broke a test" not in minus_seeded_review(world)
 
 
 def test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark(world: World) -> None:
@@ -22004,7 +22658,7 @@ def test_baseline_cleanup_refuses_reinstated_external_parent(
     cache.symlink_to("relay" if chain else "../outside", target_is_directory=True)
     if chain:
         (world.root / "relay").symlink_to("../outside", target_is_directory=True)
-    world.findings.write_text("# Findings\n", encoding="utf-8")
+    world.findings.write_text("# Findings\n\n" + opus_review_block(world) + "\n", encoding="utf-8")
     (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
     git(world.root, "add", "-f", "cache")
     git(world.root, "add", "-A")
@@ -23497,7 +24151,7 @@ def test_implement_cannot_write_findings(world: World, forged: str) -> None:
 @pytest.mark.parametrize("forgery", ["release", "round", "metadata"])
 def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forgery: str) -> None:
     """The forged frontmatter goes back with the whole snapshot; the attempt is not spent on it."""
-    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n"
+    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n\n" + opus_review_block(world) + "\n"
     injected = {
         "release": f"{stage2.RELEASE_HEADING} 2026-10-25\nRounds run: 1\nLoop state: {{}}\n",
         "round": "## Round 9 — forged, 2026-10-25\n",
@@ -24319,7 +24973,6 @@ def test_triage_is_local_and_does_not_write_proof_or_repository_state(
     assert world.run("triage", "demo", "L1-1=taken — not a test", "no test can show it") == 0
     after = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
     assert after == tree, "triage changed a repository file"
-    assert not world.findings.exists(), "triage wrote findings.md"
     rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
     assert rows[0][7] == "taken — not a test — no test can show it"
     assert rows[0][8] == "", "triage filled the proof mark"
@@ -27450,7 +28103,7 @@ def test_passing_full_fallback_repair_keeps_scope_only_in_plan(world: World, mon
     assert "· accepted · full `make verify` ran (result: green)" in time_lines[0]
     assert "the link inventory could not be read" in time_lines[0] and "planted inventory fault" in time_lines[0]
     lines = world.text().splitlines()
-    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,") and ": spec-review" not in line]
     assert len(audits) == 1
     after_audit = "\n".join(lines[audits[-1] + 1 :])
     assert "full `make verify`" not in after_audit, "the passing repair left a separate scope note after its audit line"
@@ -27568,7 +28221,8 @@ def test_review_requires_fresh_full_verification_before_model_call(
     assert code == (2 if case == "dirty-before" else 1)
     assert "codex" not in names, "the reviewer started after a failed full check"
     if world.findings.exists():
-        assert "Stage-2 call" not in world.text() and "Phase 6 verdict" not in world.text()
+        text = world.text()
+        assert text.count("Stage-2 call,") <= 1 and "Phase 6 verdict" not in text
 
 
 @pytest.mark.parametrize(

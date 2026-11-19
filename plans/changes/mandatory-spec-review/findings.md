@@ -301,3 +301,220 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint cl
 Stage-2 call, 2026-11-19: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4762 commits, 12 rules.
 
 Stage-2 call, 2026-11-19: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu) · leak check clean over 1114 files, 4766 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1114 files, 4770 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/mandatory-spec-review/plan.md` +1 -1
+> - `scripts/stage2.py` +674 -10
+> - `tests/test_stage2.py` +675 -33
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>     self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = ArgumentParser(prog='-c', usage=None, description='stage2.py - the one way this repository starts a foreign model.\n\n...2 refused.\n', formatter_class=<class 'argparse.RawDescriptionHelpFormatter'>, conflict_handler='error', add_help=True)
+> status = 2
+> message = "-c: error: argument verb: invalid choice: 'demo' (choose from draft, explore, implement, prepare-explore, prepare-loop, probe, release-loop, repair, review, review-loop, session, spec-review, triage)\n"
+>
+>     def exit(self, status=0, message=None):
+>         if message:
+>             self._print_message(message, _sys.stderr)
+> >       _sys.exit(status)
+> E       SystemExit: 2
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/argparse.py:2637: SystemExit
+> ----------------------------- Captured stderr call -----------------------------
+> usage: -c [-h] [--stage2-off [REASON]] [--model MODEL]
+>           [--class {spike,bounded,feature,architectural}]
+>           [--availability-reported ID] [--seats TRIO=MODELS]
+>           [--handover HANDOVER] [--stage-failed MODEL] [--reason TEXT]
+>           [--restart] [--spec-review-inventory]
+>           [{draft,explore,implement,prepare-explore,prepare-loop,probe,release-loop,repair,review,review-loop,session,spec-review,triage}]
+>           [change] [ROW=STATUS] [REASON]
+> -c: error: argument verb: invalid choice: 'demo' (choose from draft, explore, implement, prepare-explore, prepare-loop, probe, release-loop, repair, review, review-loop, session, spec-review, triage)
+> ____________ test_spec_review_retries_then_falls_back[empty-answer] ____________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw7/test_spec_review_retries_then_0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10835ff80>
+> step = {'stdout': ''}
+> capsys = <_pytest.capture.CaptureFixture object at 0x108713ef0>
+>
+>     @pytest.mark.parametrize(
+>         "step",
+>         [{"exit": 1}, {"stdout": ""}, {"stdout": "A refusal in prose."}],
+>         ids=["nonzero-exit", "empty-answer", "unreadable-answer"],
+>     )
+>     def test_spec_review_retries_then_falls_back(
+>         world: World, monkeypatch: pytest.MonkeyPatch, step: dict, capsys: pytest.CaptureFixture[str]
+>     ) -> None:
+>         """Criterion 13 (spec): one retry after the configured pause, then the declared fallback through Pi."""
+>         defaults = stage2.spec_review_call_config(world.root)
+>         assert defaults["timeout_seconds"] == 30 * 60 and defaults["pause_seconds"] == 30
+>         assert defaults["fallback_model"] is None, "no fallback is declared before the configuration names one"
+>         pin_spez_review(world)
+>         waits: list[int] = []
+>         monkeypatch.setattr(stage2, "pause", waits.append)
+>         world.script(claude=[step, step], pi=[rows(1)])
+> >       assert world.run("spec-review") == 0
+> E       AssertionError: assert 2 == 0
+> E        +  where 2 = run('spec-review')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw7/test_spec_review_retries_then_0/state')).run
+>
+> tests/test_stage2.py:8260: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> spec-review: the Opus call produced no readable review (claude call failed: the answer is empty); one retry follows after 30 seconds.
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 30 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw7/test_spec_review_retries_then_0/bin/pin-pi --version ended 1; it is not the pinned 1.5.0; no call starts:                              ^^^^^^^^^^^^^^^^^^^^
+>   File "/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2181/popen-gw7/test_spec_review_retries_then_0/bin/pin-pi", line 205, in fits
+>     return step_.get("model") is None or model_of(a) == step_["model"]
+>            ^^^^^^^^^
+> AttributeError: 'str' object has no attribute 'get'.
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_an_answer_that_is_not_rows_is_kept - Assert...
+> FAILED tests/test_stage2.py::test_explore_uses_flash_read_only_and_appends_research
+> FAILED tests/test_stage2.py::test_morning_inventory_uses_review_admission - S...
+> FAILED tests/test_stage2.py::test_fallback_review_is_marked[same-declaration]
+> FAILED tests/test_stage2.py::test_fallback_review_is_marked[changed-declaration]
+> FAILED tests/test_stage2.py::test_spec_review_retries_then_falls_back[nonzero-exit]
+> FAILED tests/test_stage2.py::test_morning_inventory_names_fallback_rechecks
+> FAILED tests/test_stage2.py::test_the_morning_inventory_reports_a_clean_world
+> FAILED tests/test_stage2.py::test_spec_review_retries_then_falls_back[unreadable-answer]
+> FAILED tests/test_stage2.py::test_the_morning_inventory_takes_no_verb - Syste...
+> FAILED tests/test_stage2.py::test_spec_review_retries_then_falls_back[empty-answer]
+> 11 failed, 117 passed in 13.24s
+> ```
+
+Stage-2 call, 2026-11-19: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1114 files, 4796 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/mandatory-spec-review/plan.md` +1 -1
+> - `scripts/stage2.py` +28 -17
+> - `tests/test_stage2.py` +17 -14
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 935 lines of this gate left out …]
+>         world.findings.write_text(before, encoding="utf-8")
+>         world.script(
+>             claude=[
+>                 {
+>                     "stdout": "implemented",
+>                     "plant": {
+>                         "src/app.py": "value = 2\n",
+>                         "plans/changes/demo/findings.md": before.replace(
+>                             "title: Findings\n", "title: Findings\n" + injected
+>                         ),
+>                     },
+>                 }
+>             ],
+>             make=[{"stdout": "green\n"}],
+>         )
+> >       assert world.run("implement") == 0
+> E       AssertionError: assert 2 == 0
+> E        +  where 2 = run('implement')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/32652/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/32652/pytest-of-mikypiky/pytest-1/popen-gw1/test_implement_cannot_forge_lo2/state')).run
+>
+> tests/test_stage2.py:24167: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> refused: no qualifying spec review exists for demo: run `python3 scripts/stage2.py spec-review demo` first - a review qualifies as an Opus 5.5 or declared-fallback block with readable rows or the exact `No finding.` answer and its matching runner call line directly above it.
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=34444) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/tests/test_stage2.py:24405: DeprecationWarning: This process (pid=34439) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry
+> FAILED tests/test_stage2.py::test_a_refused_attempt_keeps_the_findings_a_human_touched
+> FAILED tests/test_stage2.py::test_each_repair_attempt_leaves_an_audit_line_the_count_reads
+> FAILED tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader - A...
+> FAILED tests/test_stage2.py::test_repair_starts_no_review_call - AssertionErr...
+> FAILED tests/test_stage2.py::test_baseline_cleanup_refuses_reinstated_external_parent[direct-run]
+> FAILED tests/test_stage2.py::test_baseline_cleanup_refuses_reinstated_external_parent[baseline-chain-run]
+> FAILED tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[unavailable-first-free]
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[unavailable-first-paid]
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[unavailable-last-paid]
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[empty-answer-first-free]
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[empty-answer-first-paid]
+> FAILED tests/test_stage2.py::test_the_probe_continues_after_member_failures[empty-answer-last-paid]
+> FAILED tests/test_stage2.py::test_passing_full_fallback_repair_keeps_scope_only_in_plan
+> FAILED tests/test_stage2_fail_fast.py::test_findings_restore_notice_matches_the_verdict
+> FAILED tests/test_stage2.py::test_implement_cannot_forge_loop_lines_in_the_frontmatter[release]
+> FAILED tests/test_stage2.py::test_implement_cannot_forge_loop_lines_in_the_frontmatter[round]
+> FAILED tests/test_stage2.py::test_implement_cannot_forge_loop_lines_in_the_frontmatter[metadata]
+> 19 failed, 6339 passed, 17 skipped, 5 warnings in 633.07s (0:10:33)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47090 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-11-19: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1114 files, 4810 commits, 12 rules.
