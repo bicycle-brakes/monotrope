@@ -122,3 +122,47 @@ answer is stored and published with the outcome `ok`, its dropped entries in
 a `filtered` list beside it; the store reuses it on resume like any `ok`
 record, and the filtering is deterministic, so a resumed run publishes the
 same gap. Reason: `require_ok` and the reuse rule stay unchanged.
+
+Spec-review round 2 rows, decided by the orchestrator with reasons (same
+rule). Facts read on 2026-11-19: `claude_command` launches every Claude seat
+with `--output-format text` (`scripts/stage2_research_run.py`); the installed
+Claude Code 2.1.328 offers `--json-schema` and `--output-format json`;
+`check_research_handoff.py` checks a fence only by its kind (`KINDS`, line 54);
+the locked dependencies hold no JSON Schema validator.
+
+[DETAIL] **S-9 (reading a schema-enforced Claude answer)**: a Claude finder
+call runs with `--output-format json --json-schema <schema>`; the runner takes
+the answer from the result's `structured_output` field and stores that object,
+serialised, as the record's answer; the envelope (session id, cost) is not
+published. A non-zero exit or an error result stays a failed call
+(criterion 13); exit 0 without `structured_output` is an invalid report
+(criterion 12). Only finder calls change; every other seat keeps
+`--output-format text`. Reason: the schema is only enforced in the
+structured field, and the outcome mapping keeps today's two stop paths.
+
+[DETAIL] **S-10 (blank values)**: every required string (`path`,
+`reference`, `reason`, `not_read`) must hold a non-whitespace character; a
+blank one drops the entry. Reason: one rule for all fields, stated once in
+the schema; a path of spaces can never resolve at merge.
+
+[DETAIL] **S-11 (the partial fence of a filtered record)**: the fence for a
+filtered `ok` record holds the seat (`slot_id`), the outcome and the
+`filtered` list (category, original entry, errors), without the raw answer.
+Records that are not `ok` keep today's fence. Reason: the retained entries
+already appear in the map; republishing the raw answer would show every
+dropped entry twice and retained ones outside the map.
+
+[DETAIL] **S-12 (where the schema text goes)**: the runner appends the schema
+to the one shared finder prompt, so all three seats keep one prompt and one
+`prompt_sha256`; `prompts/research-swarm/finder.md` drops its prose
+description of the entry format and points to the appended schema. Reason:
+Q-3 says the format exists once; a Claude seat seeing the schema in both
+prompt and flag is harmless, two prompt variants are not.
+
+[DETAIL] **S-13 (where the schema lives and what reads it)**: the schema is a
+JSON file beside the finder prompt
+(`prompts/research-swarm/finder-locator.schema.json`); a small interpreter in
+`scripts/stage2_research_map.py` reads the few keywords the file uses and
+refuses any other keyword, so a schema edit cannot be silently ignored. No
+new dependency. Reason: a JSON file is language-neutral (the long-term Rust
+direction), and the keyword refusal makes criterion 3 testable.
