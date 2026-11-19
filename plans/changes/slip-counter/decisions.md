@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -271,3 +271,30 @@ fourth review runs; the final draft works these in.
 - **S-27, a moved targeted check.** Its identity covers its start tree and
   its end tree; a full run on either is a possible match, and the runs
   concerned are incomplete (principle).
+
+## Agent decisions on review-loop round 11 — 2026-11-19
+
+The maintainer was asked whether legacy and change-less full runs appear on
+the outside line under `--change NAME` and answered that this cannot be
+judged from the maintainer's seat (2026-11-19), so the orchestrator decides
+it as a detail with reasons.
+
+[DETAIL] **L11-2 (the outside line under `--change`)**: under `--change
+NAME` the outside line still counts legacy and change-less full runs of the
+repository in the interval, labelled "not change-scoped"; the spec Boundary
+sentence ("only where … requested change scope can be established") is
+aligned with it. Reason: a filtered report must not hide what it could not
+measure (S-4 B, a complete report names what lies outside), and the taken
+rows L7-1 and L10-2 already build on it; the label keeps the reader from
+taking those runs for this change's.
+
+[DETAIL] **L11-1 (the targeted history on a machine without a repair)**:
+the version-2 full-run writer creates the empty targeted history, so a
+missing history means a removed file, as the Boundary and the reader
+contract promise. Reason: the alternative, rewriting the promise, would make
+"unavailable" the normal state of every machine that has not repaired yet.
+
+[DETAIL] **L11-3 (interval of the unattributed count)** and **L11-4 (the
+handover paragraph names the repair-only source)**: taken as reported.
+Reason: AC 8 and decisions Q-7 already say so; the code and the lane-facing
+document lag behind.
