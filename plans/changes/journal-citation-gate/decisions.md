@@ -104,3 +104,20 @@ existing verdicts and messages do not change, and the journal-date check
 uses those spans. This adds `scripts/check_research_handoff.py` and its tests
 to the files this change touches. Reason: a second envelope parser would be
 the side route house rule 9 forbids.
+
+Spec-review round 3 rows (S-11 BLOCKER, S-12), decided by the orchestrator
+as a provisional agent decision in the autonomous run of 2026-11-19 (the
+maintainer's rule sends a BLOCKER after round 3 to the maintainer; the grant
+for this run allows a provisional decision, marked here for confirmation).
+No fourth review round runs (the final-draft rule of mandatory-spec-review
+Q-10 and finder-partial-report Q-4).
+
+[DETAIL] **S-11, S-12 (one general normalisation instead of a list)**: the
+target is first cut at its last path character: every trailing character
+outside the path alphabet `A-Z a-z 0-9 . _ / -` and `*` is dropped (quotes,
+typographic apostrophes, punctuation of any kind). Then a trailing run of
+`*` or `_` is emphasis only when the part before it ends in a file name with
+an extension (`.md`); otherwise a `*` anywhere in the target makes it a
+pattern (`2026-11-*`, `coding-harness-*`, `*.md`). Reason: a closed list of
+characters invites a new row for every typographic variant; a path alphabet
+does not, and a glob stays a glob while an emphasised file stays a citation.
