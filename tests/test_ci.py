@@ -1345,6 +1345,7 @@ def _runner_tree_files(tree: Path) -> Path:
     shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
     shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_run.py", tree / "scripts" / "verify_run.py")
+    shutil.copy(REPO_ROOT / "scripts" / "venv_guard.py", tree / "scripts" / "venv_guard.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_lock.py", tree / "scripts" / "verify_lock.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_duration.py", tree / "scripts" / "verify_duration.py")
     _git_in(tree, "init")

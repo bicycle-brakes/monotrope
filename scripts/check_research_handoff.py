@@ -41,6 +41,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
+import venv_guard  # noqa: F401
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

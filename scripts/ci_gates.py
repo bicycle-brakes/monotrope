@@ -34,6 +34,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -96,6 +97,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Local command — `make archive` and the post-merge procedure in prompts/07-commit.md run it; "
         "it moves completed change folders by design, so CI never does "
         "(tests/test_archive_closed_changes.py runs it)"
+    ),
+    "venv_guard.py": (
+        "Library — imported by every script before its first third-party import (bead coding-harness-s55e); "
+        "tests/test_venv_guard.py runs it"
     ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
