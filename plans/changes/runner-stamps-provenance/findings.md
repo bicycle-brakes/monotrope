@@ -897,3 +897,9 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261118T221211185329Z-a96880dd.md
 > ````
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1115 files, 4777 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1115 files, 4777 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1115 files, 4778 commits, 12 rules.
