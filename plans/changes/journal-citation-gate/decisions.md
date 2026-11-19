@@ -52,3 +52,29 @@ text that cites no journal file, we decided that patterns and runner-written
 record blocks are not citations, to achieve a check that stays red only for a
 hand-written undated citation, accepting that a runner block is trusted not
 to cite a journal file undated by hand — 2026-11-19
+
+## Decided by the agent
+
+Spec-review round 1 rows, decided by the orchestrator with reasons
+(maintainer rule of 2026-11-18: details are decided with reasons; autonomous
+run of 2026-11-19: provisional, the maintainer confirms or reverts).
+
+[DETAIL] **S-2 (what `*` means)**: a target is a pattern only when a `*`
+remains after trailing Markdown emphasis markers (`*`, `_`) are stripped; an
+emphasised concrete path is judged like any other. Reason: Q-1 keeps a
+hand-written undated citation red, emphasised or not.
+
+[DETAIL] **S-1 (an elided target)**: a target that is an elision (`…` or
+`...`) after the same stripping is a placeholder like `<…>`. Reason: an
+elision names no file, so it cannot cite one undated; the case is this
+change's own runner-written research.md.
+
+[DETAIL] **S-3, S-4, S-5 (what counts as a runner record)**: only a
+well-formed research-swarm/v2 run envelope in a change's `research.md`
+(active or archived) is exempt, as a whole, including its runner-written text
+outside the fences; well-formed means exactly what
+`scripts/check_research_handoff.py` already accepts, read through that one
+reader, not a second parser. Any other file, and an envelope the handoff
+reader refuses, is scanned as usual. Reason: the runner writes envelopes only
+there (WORKFLOW.md), one reader keeps the two checks in step (house rule 9),
+and Q-1 meant all machine-written text of the record.
