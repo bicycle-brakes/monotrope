@@ -24,7 +24,24 @@ GUARD = SCRIPTS / "venv_guard.py"
 KIT = SCRIPTS / "kit"
 MARKER = "VENV_GUARD_ENTERED"
 THIRD_PARTY = frozenset({"yaml", "jinja2", "pydantic"})
+# The caller's interpreter: a bare environment of the running Python, without the stubs and without any site
+# package of the host. The base interpreter alone is not enough: a hosted CI installs PyYAML into it, and then the
+# guard rightly finds nothing missing and never restarts (PR #415, CI run of 2026-11-19). Set per module below.
 SYSTEM_PYTHON = str(getattr(sys, "_base_executable", None) or sys.executable)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _bare_system_python(tmp_path_factory: pytest.TempPathFactory) -> None:
+    global SYSTEM_PYTHON
+    base = tmp_path_factory.mktemp("system-python")
+    venv.EnvBuilder(with_pip=False, symlinks=True, system_site_packages=False).create(base)
+    SYSTEM_PYTHON = str(base / "bin" / "python3")
+    probe_result = subprocess.run(
+        [SYSTEM_PYTHON, "-c", "import importlib.util, sys; sys.exit(importlib.util.find_spec('yaml') is not None)"],
+        capture_output=True,
+        timeout=60,
+    )
+    assert probe_result.returncode == 0, "the bare caller interpreter must not import PyYAML"
 
 sys.path.insert(0, str(KIT))
 import probe  # noqa: E402
