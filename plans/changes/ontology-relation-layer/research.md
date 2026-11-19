@@ -80,12 +80,19 @@ Limits: seven evidence-backed claims per report, 4 000 characters of evidence
 per claim, no network and no tracker on the repository seats, and a leak check
 before every call.
 
-**Provenance note.** `produced_by` is deliberately absent. The closed program
-vocabulary the research runner accepts is `RESEARCH_PROGRAMS` in
-`scripts/stage2.py:1385` — `claude-code`, `codex`, `pi`, `stage2-research-swarm`.
-This session ran in OpenCode, which that set does not name, and a borrowed
-program name would be a false provenance. The class `ai-drafted-reviewed`
-carries the fact; the gap itself is a finding, listed under "What is unclear".
+**Provenance note.** The header's `produced_by` holds two entries, both
+`stage2-research-swarm` (versions 2026-11-18 and 2026-11-19). The research
+runner wrote them when it appended its run records, the sections below
+"Research swarm (ADR 0020)". The hand-written sections above those records
+have no producer entry. They came from an OpenCode session, and the closed
+program vocabulary the research runner accepts, `RESEARCH_PROGRAMS` in
+`scripts/stage2.py:1385` (`claude-code`, `codex`, `pi`,
+`stage2-research-swarm`), does not name OpenCode; a borrowed program name would
+be a false provenance. For that part the class `ai-drafted-reviewed` carries
+the fact until bead coding-harness-uo6s (no honest producer name for an
+OpenCode session) gives OpenCode a name; the gap itself is listed under "What
+is unclear". This paragraph was corrected on 2026-11-19 by the maintainer's
+answer Q-11 in `decisions.md`; it had said that `produced_by` was absent.
 
 ## The question, stated as a gap
 
@@ -283,7 +290,8 @@ or lower at the head of the change.
 - Whether `RESEARCH_PROGRAMS` in `scripts/stage2.py:1385` should admit a session
   that is not one of its four programs. It refused this artefact's
   `produced_by` record ("no program evidence for historical producer"), which
-  is why the header states only the class. An honest provenance needs a name
+  is why the hand-written part has no producer entry; the header's two entries
+  name the research runner (see "Provenance note"). An honest provenance needs a name
   for the harness the work ran in.
 
 ## Research swarm (ADR 0020)
