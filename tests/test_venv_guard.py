@@ -43,6 +43,7 @@ def _bare_system_python(tmp_path_factory: pytest.TempPathFactory) -> None:
     )
     assert probe_result.returncode == 0, "the bare caller interpreter must not import PyYAML"
 
+
 sys.path.insert(0, str(KIT))
 import probe  # noqa: E402
 
