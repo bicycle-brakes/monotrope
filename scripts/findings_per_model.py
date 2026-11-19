@@ -171,7 +171,9 @@ def jsonl_records(
     records: list[dict[str, object]] = [{"type": "metadata", "commit": sha, "complete": complete}]
     records += models
     records += [
-        {"type": "finding", "change": finding.change, "id": finding.id} for finding in findings if finding.model is None
+        {"type": "finding", "change": finding.change, "id": finding.id}
+        for finding in findings
+        if finding.model is None and not finding.duplicate
     ]
     records += [{"type": "gap", "path": gap.path, "id": gap.id, "reason": gap.reason} for gap in gaps]
     return records

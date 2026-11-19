@@ -254,3 +254,7 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > - L4-1: tests/test_findings_per_model.py::test_phase6_calls_after_block_are_not_preceding: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-3-20261119T025106043788Z-218a726b.md
 > ```
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4708 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged

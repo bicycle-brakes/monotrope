@@ -272,6 +272,15 @@ def test_duplicate_credits_each_named_original():
     assert "glm-5.3-flash" not in by_model, "an unattributed root's credit moved to a duplicate's model"
 
 
+def test_jsonl_excludes_unattributed_duplicates():
+    result = read(doc(PHASE6, p6row("F-1", "fixed"), p6row("F-2", "rejected — duplicate of F-1")))
+    assert not result.gaps
+    records = fpm.jsonl_records("a" * 40, True, fpm.totals_of(result.findings), result.findings, result.gaps)
+    assert [record for record in records if record["type"] == "finding"] == [
+        {"type": "finding", "change": "c1", "id": "F-1"}
+    ], "only the unattributed root should be listed"
+
+
 # --- criteria 10-13 ------------------------------------------------------------------
 
 
