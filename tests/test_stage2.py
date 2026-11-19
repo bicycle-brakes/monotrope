@@ -23737,7 +23737,12 @@ def test_the_release_reconcile_refreshes_the_findings_date(world: World, monkeyp
     world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
     world.write_findings(VERDICT)
     crash_the_release_after_the_append(world, monkeypatch)
-    world.findings.write_text("---\nupdated: 2000-01-01\n---\n\n" + world.text(), encoding="utf-8")
+    # The header meets the new-file contract: release-loop judges the findings.md it writes (L2-10).
+    world.findings.write_text(
+        "---\nupdated: 2000-01-01\nprovenance: ai-drafted-reviewed\n"
+        "review: {status: pending, approved_by: null, approved_at: null}\n---\n\n" + world.text(),
+        encoding="utf-8",
+    )
     world.record().write_text(
         world.record().read_text(encoding="utf-8").replace("taken — test_a", FIXED), encoding="utf-8"
     )

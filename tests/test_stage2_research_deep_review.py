@@ -289,10 +289,25 @@ def test_publication_uses_frozen_research_despite_prepublication_edit(sworld: Sw
     assert [call["kind"] for call in sworld.calls()] == ["judge"]
 
 
+def skeleton_dated(day: str) -> str:
+    """The swarm skeleton dated before the pinned publication day.
+
+    The shared pre-publication check judges the prepared bytes (loop row L2-4), so a skeleton
+    dated by the real clock after the pinned `today` would be refused as out of date order.
+    """
+    import datetime as dt
+
+    text = swarm.swarm_skeleton()
+    template_day = dt.date.today().isoformat()
+    for field in ("date", "last_reviewed", "updated"):
+        text = text.replace(f"\n{field}: {template_day}\n", f"\n{field}: {day}\n", 1)
+    return text
+
+
 @pytest.mark.parametrize("published", [True, False])
 def test_resume_reuses_publication_bytes_and_day(sworld: SwarmWorld, monkeypatch, published) -> None:
     # L1-9/L2-1: resume retains the first producer day and prefix, but stamps updated on publication.
-    sworld.research.write_text(swarm.swarm_skeleton(), encoding="utf-8")
+    sworld.research.write_text(skeleton_dated("2026-11-01"), encoding="utf-8")
     sworld.commit()
     monkeypatch.setattr(stage2, "today", lambda: "2026-11-04")
     sworld.complete(judge=[{"exit": 1}])
@@ -833,7 +848,7 @@ def test_next_day_swarm_resume_passes_research_census(sworld: SwarmWorld, monkey
 def test_producer_history_survives_swarm_resume(sworld: SwarmWorld, monkeypatch):
     import yaml
 
-    text = swarm.swarm_skeleton().replace(
+    text = skeleton_dated("2026-11-01").replace(
         "provenance: human-written\n",
         "provenance: ai-drafted-reviewed\n"
         'produced_by: {kind: llm-session, name: codex, version: "2026-11-04", model: "gpt-6.1-sol"}\n',
