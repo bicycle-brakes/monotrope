@@ -311,7 +311,6 @@ class TargetedRun:
     """One targeted check's comparison evidence, recorded around its execution."""
 
     run_id: str | None  # None: the start row was refused; nothing of this run is recorded
-    tree: str | None  # the identity captured before the checks ran
     started: float  # the monotonic reading at the start, for the end row's seconds
     notes: list[str] = field(default_factory=list)  # diagnostics of refused appends, for the runner to report
 
@@ -351,8 +350,8 @@ def begin_targeted_run(root: Path, change: str | None, tree: str | None) -> Targ
         append_event(event, targeted_history_path())
     except StorageUnusable as unusable:
         notes.append(f"the targeted run was not recorded: {unusable}")
-        return TargetedRun(run_id=None, tree=tree, started=monotonic(), notes=notes)
-    return TargetedRun(run_id=event["run_id"], tree=tree, started=monotonic(), notes=notes)
+        return TargetedRun(run_id=None, started=monotonic(), notes=notes)
+    return TargetedRun(run_id=event["run_id"], started=monotonic(), notes=notes)
 
 
 def finish_targeted_run(evidence: TargetedRun, tree_after: str | None, outcome: str | None) -> list[str]:
@@ -768,7 +767,6 @@ class _Tally:
 
     checks: list[_Check] = field(default_factory=list)
     selected: int = 0  # runs the scope selects; none at all leaves nothing observed
-    extra_incomplete: int = 0  # selected runs incomplete without taking part in a pairing
     outside: int = 0  # attributable legacy or change-less full runs
     unattributed: int = 0  # recognizable legacy runs without enough scope evidence
     partial: bool = False
@@ -855,7 +853,7 @@ def _collect(
         outside = legacy or (kind == "full" and change is None)
         selected = in_bounds and named
         if outside:
-            if in_bounds:
+            if in_bounds and run_id not in damaged:
                 if args.change is None:
                     tally.selected += 1
                 tally.outside += 1
@@ -974,7 +972,7 @@ def _pair(checks: list[_Check], orphans: list[_Check]) -> tuple[int, int, int, s
         ):
             promoted.add(full.run_id)
             promoted.update(check.run_id for check in between)
-            if predecessor is not None:
+            if predecessor is not None and not (predecessor.kind == "full" and predecessor.verdict == "red"):
                 promoted.add(predecessor.run_id)
         elif full.selected:
             undecided += 1  # the intervening full run may have been green: the signal stays undecided
@@ -1088,12 +1086,12 @@ def cmd_slips(args: argparse.Namespace) -> int:
     slips, flaky, undecided, promoted = _pair(tally.checks, orphan_checks)
     pending = [check for check in tally.checks if check.selected]
     gaps = sum(1 for check in pending if not check.certain or check.run_id in promoted)
-    uncountable = tally.extra_incomplete + gaps
+    uncountable = gaps
 
     scope = f"change {args.change}" if args.change is not None else "change all"
     lower = since.isoformat() if since is not None else "none"
     upper = until.isoformat() if until is not None else "none"
-    print(f"repository {current_repository} · {scope} · since {lower} · until {upper}")
+    print(f"repository {current_repository or 'unavailable'} · {scope} · since {lower} · until {upper}")
     outside_label = " (not change-scoped)" if args.change is not None else ""
     if not tally.selected:
         # Nothing of this scope was measured: an observed absence needs runs.

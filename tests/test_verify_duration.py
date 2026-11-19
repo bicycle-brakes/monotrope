@@ -2162,3 +2162,42 @@ def test_unattributed_legacy_obeys_interval(tmp_path, monkeypatch, capsys):
     assert "unattributed outside runs: 1" not in out, out
     code, out, _ = _slips(capsys, "--since", _at("05:00"))
     assert code == 0 and "unattributed outside runs: 1" in out, out
+
+
+def test_decided_red_predecessor_is_not_incomplete(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    for first_kind in ("full", "targeted"):
+        events = _check("first", first_kind, _at("08:00"), _at("08:30"), "green", repository)
+        events += _check("decided", "full", _at("09:00"), _at("10:00"), "red", repository)
+        events += _check("moved", "targeted", _at("10:15"), _at("10:45"), "green", repository, end_tree="other")
+        events += _check("later", "full", _at("10:50"), _at("11:00"), "red", repository)
+        _write_history(tmp_path / "state", events)
+        code, out, _ = _slips(capsys)
+        assert code == 1 and "incomplete/not countable runs: 2" in out, out
+        assert "incomplete run: decided " not in out, out
+        assert ("flaky-test signals: 1" if first_kind == "full" else "slips: 1") in out, out
+
+
+def test_unused_measurement_fields_are_absent():
+    assert "extra_incomplete" not in verify_duration._Tally.__dataclass_fields__
+    assert "tree" not in verify_duration.TargetedRun.__dataclass_fields__
+
+
+def test_damaged_legacy_run_is_not_selected_or_outside(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = [
+        _run_start("bad", utc=_at("09:00"), repository=repository),
+        _run_end("bad", utc=_at("09:10"), verdict="invalid"),
+    ]
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "0 runs selected, no statement possible" in out, out
+    assert "outside the count:" not in out, out
+
+
+def test_unavailable_repository_scope_is_named(tmp_path, monkeypatch, capsys):
+    _measured_repo(tmp_path, monkeypatch)
+    monkeypatch.setattr(verify_duration, "_common_git_dir", lambda _root=None: None)
+    _write_history(tmp_path / "state", [])
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "repository unavailable" in out, out
