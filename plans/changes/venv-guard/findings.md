@@ -730,9 +730,32 @@ Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R4 | MAJOR | SPEC | base | scripts/venv_guard.py:67 | When a caller uses `python -S` and the checkout’s usable `.venv` contains the missing dependency, the replacement retains `-S`, which disables the virtual environment’s site-packages. The import still fails instead of using the available dependency. [Acceptance criterion 1] | Codex | taken — maintainer 2026-11-19 (answer A): the replacement drops -S, since its purpose is the environment's site-packages | no |
-| R5 | MAJOR | SPEC | base | tests/test_venv_guard.py:258 | The check accepts `result = print("started")` before `import venv_guard`, because it treats every assignment as harmless. If the guard restarts the script, the message is printed twice. This is new evidence for the previously fixed finding about repeated effects: the check also misses calls inside assignments, decorators and class bodies. [Boundary; acceptance criterion 1] | Codex | taken — decisions.md Q-4 (maintainer 2026-11-19, answer A): every call before the guard counts as an effect, also inside assignments, decorators and class bodies; scripts/kit/probe.py sets its path constants after the guard | no |
-| R6 | MAJOR | SPEC | base | tests/test_venv_guard.py:195 | A script containing `import yaml, venv_guard` passes the guard-order check because the statement contains `venv_guard`, although Python imports `yaml` first. A caller missing PyYAML therefore fails before the guard can select the checkout environment. [Acceptance criterion 5] | Codex | taken — decisions.md Q-4: the guard import is a statement of its own, before any other non-standard import | no |
+| R4 | MAJOR | SPEC | base | scripts/venv_guard.py:67 | When a caller uses `python -S` and the checkout’s usable `.venv` contains the missing dependency, the replacement retains `-S`, which disables the virtual environment’s site-packages. The import still fails instead of using the available dependency. [Acceptance criterion 1] | Codex | fixed — tests/test_venv_guard.py::test_site_disabled_invocation_enters_checkout_environment | no |
+| R5 | MAJOR | SPEC | base | tests/test_venv_guard.py:258 | The check accepts `result = print("started")` before `import venv_guard`, because it treats every assignment as harmless. If the guard restarts the script, the message is printed twice. This is new evidence for the previously fixed finding about repeated effects: the check also misses calls inside assignments, decorators and class bodies. [Boundary; acceptance criterion 1] | Codex | fixed — tests/test_venv_guard.py::test_guard_check_detects_calls_in_early_definitions | no |
+| R6 | MAJOR | SPEC | base | tests/test_venv_guard.py:195 | A script containing `import yaml, venv_guard` passes the guard-order check because the statement contains `venv_guard`, although Python imports `yaml` first. A caller missing PyYAML therefore fails before the guard can select the checkout environment. [Acceptance criterion 5] | Codex | fixed — tests/test_venv_guard.py::test_guard_check_rejects_combined_guard_import | no |
 
 Phase 6 verdict: codex 01a1f32a-d3b9-7020-a7bf-a427c7c3287e, 2026-11-19
 Reviewer session: codex 01a1f32a-d3b9-7020-a7bf-a427c7c3287e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4744 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/kit/probe.py` +4 -4
+> - `scripts/venv_guard.py` +16 -1
+> - `tests/test_venv_guard.py` +50 -3
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_adoption.py`, `tests/test_archive_closed_changes.py`, `tests/test_bead_render.py`, `tests/test_check_adr_answers.py`, `tests/test_check_criterion_ledger.py`, `tests/test_check_interview_minimums.py`, `tests/test_check_question_context.py`, `tests/test_explore_provenance.py`, `tests/test_frontmatter_current.py`, `tests/test_gate_machinery.py`, `tests/test_harness_decide_adr.py`, `tests/test_harness_time_log.py`, `tests/test_kit.py`, `tests/test_lock.py`, `tests/test_pi_contract.py`, `tests/test_pr_sync.py`, `tests/test_ramp_valves.py`, `tests/test_regelwerk.py`, `tests/test_research_capture.py`, `tests/test_research_currency.py`, `tests/test_research_handoff.py`, `tests/test_run_report.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_research_judge.py`, `tests/test_stage2_research_limits.py`, `tests/test_stage2_research_map.py`, `tests/test_stage2_research_refs.py`, `tests/test_stage2_research_report.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_templates.py`, `tests/test_this_repository_adoption.py`, `tests/test_touch_map.py`, `tests/test_venv_guard.py`, `tests/test_verify_cheap_first.py`, `tests/test_workflow_entry.py`; extra ruff targets none beyond the cheap checks; gates `leerprobe` (block), `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - R5: tests/test_venv_guard.py::test_guard_check_detects_calls_in_early_definitions: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - R6: tests/test_venv_guard.py::test_guard_check_rejects_combined_guard_import: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-1-20261119T135909817451Z-066cb004.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4745 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged

@@ -63,8 +63,23 @@ def _reexec(python: Path) -> None:
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(OSError, ValueError):
             stream.flush()
+    # Remove -S only from interpreter options, never from the script arguments.
+    options = command[1:]
+    index = 0
+    while index < len(options):
+        arg = options[index]
+        if arg in ("-c", "-m", "--") or not arg.startswith("-") or arg == "-":
+            break
+        if arg.startswith("-") and not arg.startswith(("--", "-W", "-X")) and "S" in arg:
+            options[index] = arg.replace("S", "")
+            if options[index] == "-":
+                options.pop(index)
+                continue
+        if arg in ("-W", "-X"):
+            index += 1
+        index += 1
     try:
-        os.execv(str(python), [str(python), *command[1:]])
+        os.execv(str(python), [str(python), *options])
     except OSError:
         os.environ.pop(MARKER, None)
 

@@ -191,79 +191,16 @@ def test_kit_without_environment_preserves_behavior(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _is_guard(statement: ast.stmt) -> bool:
-    return isinstance(statement, ast.Import) and any(alias.name == "venv_guard" for alias in statement.names)
-
-
 def _third_party(statement: ast.stmt) -> list[str]:
-    if isinstance(statement, ast.Import):
-        names = [alias.name.split(".")[0] for alias in statement.names]
-    elif isinstance(statement, ast.ImportFrom) and statement.level == 0 and statement.module:
-        names = [statement.module.split(".")[0]]
-    else:
-        return []
-    return [name for name in names if name in THIRD_PARTY]
+    return probe._third_party(statement)
 
 
 def unguarded_imports(source: str) -> list[tuple[int, str]]:
-    """Direct imports of a guarded dependency with no `import venv_guard` before them.
-
-    A guard counts when it is a statement of the same block or of an enclosing one and stands earlier: a comment,
-    a string or a guard buried in a branch that does not enclose the import is no guard.
-    """
-    problems: list[tuple[int, str]] = []
-
-    def blocks(statement: ast.stmt) -> list[list[ast.stmt]]:
-        found = [getattr(statement, field) for field in ("body", "orelse", "finalbody") if hasattr(statement, field)]
-        found += [handler.body for handler in getattr(statement, "handlers", [])]
-        found += [case.body for case in getattr(statement, "cases", [])]
-        return [block for block in found if isinstance(block, list)]
-
-    def walk(block: list[ast.stmt], guarded: bool) -> None:
-        for statement in block:
-            if _is_guard(statement):
-                guarded = True
-            elif not guarded:
-                problems.extend((statement.lineno, name) for name in _third_party(statement))
-            for inner in blocks(statement):
-                walk(inner, guarded)
-
-    walk(ast.parse(source).body, False)
-    return problems
-
-
-def _is_path_setup(statement: ast.stmt) -> bool:
-    """`sys.path.insert(...)` / `sys.path.append(...)`: the one effect a nested script needs to reach the guard."""
-    if not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)):
-        return False
-    function = statement.value.func
-    return (
-        isinstance(function, ast.Attribute)
-        and function.attr in ("insert", "append")
-        and ast.unparse(function.value) == "sys.path"
-    )
+    return probe.unguarded_imports(source)
 
 
 def effects_before_guard(source: str) -> list[int]:
-    """Lines of top-level statements with an effect that stand before the script's top-level guard (Q-4).
-
-    A restart replays the whole entry script, so anything that prints or acts before the guard runs twice. Imports,
-    docstrings, definitions, plain assignments and the `sys.path` setup are no effect. A script whose guard is not a
-    top-level statement (a lazy import inside a function) has no start-up position to check.
-    """
-    lines: list[int] = []
-    for statement in ast.parse(source).body:
-        if _is_guard(statement):
-            return lines
-        no_effect = ast.Import | ast.ImportFrom | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Assign
-        harmless = (
-            isinstance(statement, no_effect | ast.AnnAssign)
-            or (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
-            or _is_path_setup(statement)
-        )
-        if not harmless:
-            lines.append(statement.lineno)
-    return []
+    return probe.effects_before_guard(source)
 
 
 # Declared exemptions: a script that must not carry the guard, with its reason.
@@ -401,7 +338,7 @@ def _guarded_scripts() -> list[str]:
     guarded = []
     for path in sorted(SCRIPTS.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        if any(_is_guard(node) for node in ast.walk(tree) if isinstance(node, ast.stmt)):
+        if any(probe._is_guard(node) for node in ast.walk(tree) if isinstance(node, ast.stmt)):
             guarded.append(path.relative_to(REPO_ROOT).as_posix())
     return guarded
 
@@ -501,6 +438,8 @@ def test_available_dependencies_keep_selected_interpreter(tmp_path: Path) -> Non
 def test_unreplayable_or_broken_environment_reports_hint(tmp_path: Path) -> None:
     root = _tree(tmp_path, framework=True, environment=True)
     script = _write(root, "tool.py", "import venv_guard\nimport yaml\n")
+    site = next((root / ".venv" / "lib").glob("python*/site-packages"))
+    (site / "yaml.py").unlink()
     result = _run([sys.executable, "-S", str(script)], tmp_path)
     assert result.returncode == 1
     assert "make venv" in result.stderr
@@ -548,3 +487,35 @@ def test_reentered_process_does_not_pass_marker_to_child(tmp_path: Path) -> None
     result = _run([SYSTEM_PYTHON, str(parent)], tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "checkout environment"
+
+
+def test_site_disabled_invocation_enters_checkout_environment(tmp_path: Path) -> None:
+    root = _tree(tmp_path, framework=True, environment=True)
+    script = _write(root, "tool.py", "import venv_guard\nimport yaml\nprint(yaml.WHERE)\n")
+    for flag in ("-S", "-sS"):
+        result = _run([sys.executable, flag, str(script), "-S"], tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "checkout environment"
+
+
+def test_guard_check_detects_calls_in_early_definitions() -> None:
+    for source in (
+        "result = print('started')\nimport venv_guard\n",
+        "@decorate()\ndef f(): pass\nimport venv_guard\n",
+        "class C:\n    value = print('started')\nimport venv_guard\n",
+    ):
+        try:
+            result = effects_before_guard(source)
+        except AttributeError:
+            pytest.fail("the guard check must detect calls before the guard")
+        assert result, source
+
+
+def test_guard_check_rejects_combined_guard_import() -> None:
+    try:
+        first = unguarded_imports("import yaml, venv_guard\n")
+        second = unguarded_imports("import venv_guard, yaml\n")
+    except AttributeError:
+        pytest.fail("the guard check must reject combined imports")
+    assert first
+    assert second
