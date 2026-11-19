@@ -51,7 +51,7 @@ On 2026-11-16 the workflow-start command failed when the system Python lacked Py
 
 ## Boundaries
 
-The Omnigent policy script is exempt from the guard because it also runs under Omnigent’s own Python. The trusted registry mirror excludes `.venv` to prevent execution through an attempt-controlled interpreter (decisions.md, Q-2).
+A restart replays the whole entry script, so the automated check of criterion 5 also requires the guard import to precede every top-level statement with an effect in a guarded script under `scripts/` (decisions.md, Q-4). A caller outside `scripts/` that prints or acts before importing a guarded module is outside that check: its earlier effect repeats once when the guard restarts it. The Omnigent policy script is exempt from the guard because it also runs under Omnigent’s own Python. The trusted registry mirror excludes `.venv` to prevent execution through an attempt-controlled interpreter (decisions.md, Q-2).
 
 ## Protected areas
 

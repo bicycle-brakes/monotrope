@@ -522,8 +522,8 @@ Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | R1 | MAJOR | SPEC | base | scripts/venv_guard.py:104 | When the caller’s interpreter already has PyYAML, Jinja2 and pydantic, a script continues under that interpreter even if the checkout has a usable `.venv`. The required checkout interpreter is therefore not used. [Acceptance criterion 1] | Codex | rejected — decisions.md Q-3 (maintainer, 2026-11-18) accepts that an interpreter which already carries PyYAML, Jinja2 and pydantic runs outside the lock; criterion 1 is aligned with Q-3 by an orchestrator hand edit of spec.md | — |
-| R2 | MAJOR | SPEC | base | scripts/venv_guard.py:59 | When an entry script prints output or performs another action before importing a guarded module, re-execution starts the entry script again. For example, a line printed before the import appears twice instead of once. [Acceptance criteria 1 and 6] | Codex | taken — decisions.md Q-4: extend the criterion-5 check so the guard import precedes every top-level statement with an effect in a guarded script; name callers outside scripts/ as a Boundary in spec.md | no |
-| R3 | MAJOR | SPEC | base | tests/test_venv_guard.py:203 | A new unguarded `import yaml` inside a `match` case passes the automated check: its block walker does not visit case bodies. The check therefore cannot enforce the guard for all direct imports under `scripts/`. [Acceptance criterion 5] | Codex | taken | no |
+| R2 | MAJOR | SPEC | base | scripts/venv_guard.py:59 | When an entry script prints output or performs another action before importing a guarded module, re-execution starts the entry script again. For example, a line printed before the import appears twice instead of once. [Acceptance criteria 1 and 6] | Codex | fixed — orchestrator hand finish of Sonnet repair attempt 3 (ruff SIM101 merge only): tests/test_venv_guard.py::test_the_guard_check_rejects_effects_before_the_guard; Boundary in spec.md | no |
+| R3 | MAJOR | SPEC | base | tests/test_venv_guard.py:203 | A new unguarded `import yaml` inside a `match` case passes the automated check: its block walker does not visit case bodies. The check therefore cannot enforce the guard for all direct imports under `scripts/`. [Acceptance criterion 5] | Codex | fixed — orchestrator hand finish of Sonnet repair attempt 3 (ruff SIM101 merge only): tests/test_venv_guard.py::test_guard_check_visits_match_cases | no |
 
 Phase 6 verdict: codex 01a1f2d1-dc8c-7db0-ba64-b8dad04fdc9b, 2026-11-19
 Reviewer session: codex 01a1f2d1-dc8c-7db0-ba64-b8dad04fdc9b — a fresh session reviewed: no phase-2a session was recorded
@@ -659,4 +659,67 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 2 errors.
 > No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-3-20261119T080207420916Z-112dc25a.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4742 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-1-20261119T084545957362Z-c7422ab7.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4742 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/venv-guard/spec.md` +2 -0
+> - `tests/test_venv_guard.py` +7 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_venv_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - R2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-2-20261119T084545957362Z-c7422ab7.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1116 files, 4742 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/venv-guard/spec.md` +1 -1
+> - `tests/test_venv_guard.py` +68 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_venv_guard.py:259:13: SIM101 Multiple `isinstance` calls for `statement`, merge into a single call
+>     |
+> 257 |               return lines
+> 258 |           harmless = (
+> 259 | /             isinstance(statement, ast.Import | ast.ImportFrom | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+> 260 | |             or isinstance(statement, ast.Assign | ast.AnnAssign)
+> 261 | |             or (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
+> 262 | |             or _is_path_setup(statement)
+>     | |________________________________________^ SIM101
+> 263 |           )
+> 264 |           if not harmless:
+>     |
+>     = help: Merge `isinstance` calls for `statement`
+>
+> Found 1 error.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-3-20261119T084545957362Z-c7422ab7.md
 > ```

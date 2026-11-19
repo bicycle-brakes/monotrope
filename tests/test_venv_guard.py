@@ -216,6 +216,7 @@ def unguarded_imports(source: str) -> list[tuple[int, str]]:
     def blocks(statement: ast.stmt) -> list[list[ast.stmt]]:
         found = [getattr(statement, field) for field in ("body", "orelse", "finalbody") if hasattr(statement, field)]
         found += [handler.body for handler in getattr(statement, "handlers", [])]
+        found += [case.body for case in getattr(statement, "cases", [])]
         return [block for block in found if isinstance(block, list)]
 
     def walk(block: list[ast.stmt], guarded: bool) -> None:
@@ -231,6 +232,40 @@ def unguarded_imports(source: str) -> list[tuple[int, str]]:
     return problems
 
 
+def _is_path_setup(statement: ast.stmt) -> bool:
+    """`sys.path.insert(...)` / `sys.path.append(...)`: the one effect a nested script needs to reach the guard."""
+    if not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)):
+        return False
+    function = statement.value.func
+    return (
+        isinstance(function, ast.Attribute)
+        and function.attr in ("insert", "append")
+        and ast.unparse(function.value) == "sys.path"
+    )
+
+
+def effects_before_guard(source: str) -> list[int]:
+    """Lines of top-level statements with an effect that stand before the script's top-level guard (Q-4).
+
+    A restart replays the whole entry script, so anything that prints or acts before the guard runs twice. Imports,
+    docstrings, definitions, plain assignments and the `sys.path` setup are no effect. A script whose guard is not a
+    top-level statement (a lazy import inside a function) has no start-up position to check.
+    """
+    lines: list[int] = []
+    for statement in ast.parse(source).body:
+        if _is_guard(statement):
+            return lines
+        no_effect = ast.Import | ast.ImportFrom | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Assign
+        harmless = (
+            isinstance(statement, no_effect | ast.AnnAssign)
+            or (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
+            or _is_path_setup(statement)
+        )
+        if not harmless:
+            lines.append(statement.lineno)
+    return []
+
+
 # Declared exemptions: a script that must not carry the guard, with its reason.
 NOT_GUARDED = {
     "scripts/omnigent_policy.py": "runs under Omnigent's own Python, never re-executed into the checkout's .venv",
@@ -242,6 +277,7 @@ def test_all_third_party_imports_are_guarded() -> None:
     assert SCRIPTS / "kit" / "probe.py" in files, "the scan must reach nested directories"
     importing: list[str] = []
     unguarded: list[str] = []
+    acting_first: list[str] = []
     for path in files:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)
@@ -251,8 +287,47 @@ def test_all_third_party_imports_are_guarded() -> None:
         if name in NOT_GUARDED:
             continue
         unguarded += [f"{name}:{line} {dependency}" for line, dependency in unguarded_imports(source)]
+        if path != GUARD:
+            acting_first += [f"{name}:{line}" for line in effects_before_guard(source)]
     assert "scripts/harness.py" in importing and "scripts/omnigent_policy.py" in importing, importing
     assert not unguarded, "third-party import without an earlier `import venv_guard`: " + ", ".join(unguarded)
+    assert not acting_first, "statement with an effect before the guard (a restart would repeat it): " + ", ".join(
+        acting_first
+    )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'print("hi")\nimport venv_guard\n',
+        "import os\nos.makedirs('x')\nimport venv_guard\n",
+        "for i in range(2):\n    pass\nimport venv_guard\n",
+        "if True:\n    pass\nimport venv_guard\n",
+        "main()\nimport venv_guard\n",
+    ],
+)
+def test_the_guard_check_rejects_effects_before_the_guard(source: str) -> None:
+    assert effects_before_guard(source), source
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        '"""doc"""\nfrom __future__ import annotations\nimport os\nimport venv_guard\nprint("x")\n',
+        "import sys\nROOT = 1\nsys.path.insert(0, 'x')\nimport venv_guard\nprint('x')\n",
+        "def f():\n    print('x')\n\n\nimport venv_guard\n",
+        "print('no top-level guard')\n",
+        "def load():\n    import venv_guard\n",
+    ],
+)
+def test_the_guard_check_accepts_a_guard_ahead_of_every_effect(source: str) -> None:
+    assert not effects_before_guard(source), source
+
+
+def test_guard_check_visits_match_cases() -> None:
+    source = "match value:\n    case 1:\n        import yaml\n"
+    assert unguarded_imports(source) == [(3, "yaml")]
+    assert not unguarded_imports("import venv_guard\n" + source)
 
 
 @pytest.mark.parametrize(
