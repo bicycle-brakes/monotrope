@@ -71,12 +71,12 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
 14. When a Claude finder call succeeds, the runner reads its JSON envelope's `structured_output` object and stores the serialized object as the answer, excluding the envelope.
     *Refuted by:* storing the envelope or result text, or failing to use the structured object.
     *Basis:* decisions.md, agent detail S-9.
-15. If a Claude finder call exits successfully without `structured_output`, it is classified as an invalid report and stops before merge.
+15. If a Claude finder call exits successfully without `structured_output` and has not ended at a turn, budget or API limit, it is classified as an invalid report and stops before merge.
     *Refuted by:* accepting the answer or classifying it as a failed call.
     *Basis:* decisions.md, agent detail S-9.
-16. If a Claude finder call exits nonzero or returns an error result, it retains the failed-call outcome.
-    *Refuted by:* classifying it as an invalid report or accepting it.
-    *Basis:* decisions.md, agent detail S-9.
+16. If a Claude finder call exits nonzero or its result identifies a turn, budget or API limit before the model answered, it retains the failed-call outcome.
+    *Refuted by:* classifying such a process or limit failure as an invalid report or accepting it.
+    *Basis:* decisions.md, agent details S-9 and S-15.
 17. When a filtered `ok` finder record is published as a partial fence, the fence contains its slot, outcome and filtered list without the raw answer.
     *Refuted by:* an omitted field or the raw answer in that fence.
     *Basis:* decisions.md, agent detail S-11.
@@ -89,6 +89,22 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
 20. When a non-finder Claude seat is launched, it retains text output format.
     *Refuted by:* a non-finder Claude call requesting JSON output.
     *Basis:* decisions.md, agent detail S-9.
+
+21. When a Claude finder record stores stdout, it contains only the envelope's `result` text or is empty, including on failure paths.
+    *Refuted by:* stored or published stdout containing the envelope, session ID or cost.
+    *Basis:* decisions.md, agent detail S-14.
+22. When finder validation checks an answer, it derives the outer shape as well as entry rules from the schema, and a violation inside a category array item is an entry fault while another schema violation is an outer fault.
+    *Refuted by:* an outer schema rule being ignored or a violation being assigned to the wrong boundary.
+    *Basis:* decisions.md, agent detail S-16.
+23. If the schema file is missing, invalid JSON or contains an unsupported keyword, the run ends incomplete with a reason naming the file before any finder call starts.
+    *Refuted by:* a finder call starting or the run blaming a finder or omitting the schema file from the reason.
+    *Basis:* decisions.md, agent detail S-17.
+24. When the schema contains `description`, `title` or `$schema` annotations, validation accepts and ignores them and the schema descriptions convey the exact-symbol-or-section reference rules, excluding line numbers, bare paths and prose.
+    *Refuted by:* an annotation being rejected or enforced, or the reference guidance being absent from the schema seen by a finder.
+    *Basis:* decisions.md, agent detail S-18.
+25. When a locator field passes the schema's type, closed-field and non-whitespace checks, its path and reference form remains subject to existing merge resolution rather than new finder filtering rules.
+    *Refuted by:* a nonblank locator being filtered solely for its path or reference form or bypassing existing merge resolution.
+    *Basis:* decisions.md, agent detail S-19.
 
 ## Non-goals
 
@@ -113,10 +129,11 @@ Security and leak checks, availability selection, model configuration and other 
 None open.
 
 - [DETAIL] The locator schema lives beside the finder prompt; a small interpreter refuses unsupported keywords, avoiding a dependency while preventing silent divergence.
-- [DETAIL] The schema is appended to the shared finder prompt, replacing duplicate prose; all seats retain one prompt and hash.
+- [DETAIL] The schema is appended to the shared finder prompt; descriptions retain the exact-reference guidance, and all seats retain one prompt and hash.
 - [DETAIL] Claude finder answers use the structured output field; the envelope is excluded to avoid publishing session and cost data.
 - [DETAIL] The filtered success fence contains only slot, outcome and filtered entries; the retained answer already appears in the map.
 - [DETAIL] Required strings must contain a non-whitespace character, so whitespace cannot masquerade as a usable value.
+- [DETAIL] Schema category names are checked against the merge categories so the existing merge contract cannot silently diverge.
 - [DETAIL] The four-hour phase-4 appetite includes repairs; no appetite was stated and this is a bounded runner change.
 - [DETAIL] Duplicate JSON keys and non-finite values invalidate the outer answer: the existing parser cannot identify a reliable entry boundary after rejecting them.
 - [DETAIL] The fixed marker is attributed to the finder seat in the retained report; the existing merge treats the runner-supplied marker as report data, preserving its exact-union contract.
