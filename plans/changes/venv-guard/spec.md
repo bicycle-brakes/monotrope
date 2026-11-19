@@ -28,7 +28,7 @@ On 2026-11-16 the workflow-start command failed when the system Python lacked Py
 
 ## Acceptance criteria
 
-1. When a script reaches a third-party dependency and the checkout has a usable `.venv` interpreter, its invocation runs under that checkout's interpreter, retaining its arguments, working directory, output and exit status.
+1. When a script reaches a third-party dependency that the current interpreter lacks and the checkout has a usable `.venv` interpreter, its invocation runs under that checkout's interpreter, retaining its arguments, working directory, output and exit status; an interpreter that already carries the dependencies continues (decisions.md Q-3).
    *Refuted by:* A system-Python invocation fails on a dependency or changes its observable invocation behavior despite a usable checkout environment.
 2. When the invocation already runs under that checkout's interpreter, it continues without repeated re-execution.
    *Refuted by:* An invocation loops or starts a replacement process unnecessarily.
