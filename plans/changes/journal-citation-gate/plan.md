@@ -31,7 +31,8 @@ Starts unless you say stop.
 1. In `scripts/check_research_handoff.py`, expose character spans from opening marker through the end of the closing marker on each parsed run through `parse_text`, without a second parser; preserve callers, existing verdicts and messages, including line handling for LF, CRLF, CR and Unicode separators; if parsing a research file fails, the citation check scans that file without exemptions.
 2. In `tests/test_provenance.py`, retain tracked Markdown scanning and date, empty-target and placeholder rules; apply the spec's elision, possessive, path-alphabet and `.md` emphasis normalisation before checking patterns and dates. Exempt whole reader-accepted envelopes only in active or archived change research files. Scan all other text, including malformed files and other paths.
 3. In `tests/test_provenance.py` and `tests/test_research_handoff.py`, test the shared reader and citation check with real-shaped envelopes, prose inside and outside, multiple envelopes including a valid run followed by a malformed run, parse-level success even when whole-change validation fails, malformed and forged envelopes, quoted emphasis and typographic possessives, trailing wildcard patterns, marker-only targets, placeholders, Unicode and mixed line endings, and mutations. Keep the existing enforcer and its mutation proof.
-4. Do not touch `decisions/gates.yaml`, `docs/governance/regelwerk.md`, runner code, journal records, or unrelated provenance checks; no held path needs an orchestrator bootstrap edit.
+4. In `tests/test_provenance.py`, exempt an active or archived change's `findings.md` as a whole and make the failure message name `<file>:<line>` with one fixed reason instead of the cited target (agent detail S-13).
+5. Do not touch `decisions/gates.yaml`, `docs/governance/regelwerk.md`, runner code, journal records, or unrelated provenance checks; no held path needs an orchestrator bootstrap edit.
 
 Verification:
 
@@ -47,6 +48,8 @@ make verify
 - 4: tests/test_provenance.py::test_existing_exemptions_and_elisions — a dated target, marker-only directory, placeholder or elision is reported after normalisation.
 - 5: tests/test_provenance.py::test_malformed_or_forged_envelopes_remain_scannable — a malformed envelope or one outside change research hides a citation, or a valid run remains exempt in a file with a malformed run.
 - 5: tests/test_research_handoff.py::test_envelope_spans_share_reader_validation — spans differ from accepted marker boundaries, parsing verdicts or messages change, or mixed line endings and Unicode shift a span.
+- 6: tests/test_provenance.py::test_change_findings_are_runner_records — an undated path in a change's `findings.md` is reported, or the same text in another file passes.
+- 7: tests/test_provenance.py::test_failure_message_never_repeats_the_target — the message carries the cited target or quoting it creates a new hit.
 
 ## Runner route — 2026-11-19
 
@@ -61,3 +64,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-19 17:47:12–18:17:19 UTC, 1807 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-19 18:17:31–18:28:24 UTC, 653 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-19 18:28:35–18:29:17 UTC, 42 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-19 18:35–19:05 UTC — implement · hand finish · route orchestrator · model claude-opus-5-5 · accepted · root cause: review row S-6 quotes an emphasised undated example and each failed attempt's record quoted the message back; fix by agent detail S-13 (findings.md exempt, message without target) · measured by the orchestrator

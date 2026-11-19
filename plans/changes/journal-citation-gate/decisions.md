@@ -121,3 +121,23 @@ an extension (`.md`); otherwise a `*` anywhere in the target makes it a
 pattern (`2026-11-*`, `coding-harness-*`, `*.md`). Reason: a closed list of
 characters invites a new row for every typographic variant; a path alphabet
 does not, and a glob stays a glob while an emphasised file stays a citation.
+
+Implementation hand finish, decided by the orchestrator as a provisional
+agent decision in the autonomous run of 2026-11-19 (the maintainer asked for
+a sustainable fix; the maintainer confirms or reverts).
+
+[DETAIL] **S-13 (a change's findings.md and the failure message)**: three
+implement attempts stayed red for one cause outside the code. Review row S-6
+in this change's `findings.md` explains the rule with an emphasised, undated
+handover path, which the decided normalisation reports; each failed attempt's
+runner record then quoted the test's message, which repeated the target, so
+every attempt added new hits and no implementation could go green. (a) The
+check's failure message names each hit as `<file>:<line>` with one fixed
+reason and never repeats the cited target, so quoting a red run into a record
+cannot create a new hit. (b) A change's `findings.md` (active or archived) is
+a runner record as a whole and is exempt, like the well-formed research-swarm
+envelopes; every other file is scanned as before. Reason: review verdicts,
+loop rows and attempt records in `findings.md` are written by the runner and
+hand repairs only change a Status cell, so Q-1's exemption of runner-written
+record blocks covers it; and a message that repeats its own finding makes the
+record of a failure a new failure.

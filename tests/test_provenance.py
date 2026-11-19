@@ -18,6 +18,12 @@ und ihr Begleittext — sind nur in der `research.md` eines Changes (aktiv oder
 Archiv) ausgenommen, und nur wenn der eine Leser
 (`scripts/check_research_handoff.py`) die ganze Datei ohne Befund liest; eine
 Datei, die er nicht liest, wird ohne Ausnahme voll gescannt.
+
+Agent detail S-13 (provisional, 2026-11-19): a change's `findings.md` (active or
+archived) is a runner record as a whole and is exempt; every other file is
+scanned as before. The failure message names each hit as `<file>:<line>` with a
+fixed reason and never repeats the cited target, so a red run quoted into a
+record cannot seed a new hit.
 """
 
 from __future__ import annotations
@@ -43,8 +49,11 @@ _PATH_CHAR = re.compile(r"[A-Za-z0-9._/*-]")
 _EMPHASIS_TAIL = re.compile(r"[*_]+\Z")
 _MD_TAIL = re.compile(r"\.md\Z")
 _ELISIONS = ("…", "...")
-_RESEARCH_ACTIVE = re.compile(r"(?:\A|/)plans/changes/[^/]+/research\.md\Z")
-_RESEARCH_ARCHIVE = re.compile(r"(?:\A|/)plans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+/research\.md\Z")
+_RESEARCH_ACTIVE = re.compile(r"(?:\A|/)plans/changes/(?!archive/)[^/]+/research\.md\Z")
+_RESEARCH_ARCHIVE = re.compile(r"(?:\A|/)plans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/research\.md\Z")
+_FINDINGS_ACTIVE = re.compile(r"(?:\A|/)plans/changes/(?!archive/)[^/]+/findings\.md\Z")
+_FINDINGS_ARCHIVE = re.compile(r"(?:\A|/)plans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/findings\.md\Z")
+_REASON = "cites a journal record without its date (add the dated file name or mark it as a placeholder)"
 
 
 def _normalised_target(target: str) -> str:
@@ -72,15 +81,21 @@ def _normalised_target(target: str) -> str:
     return target
 
 
-def _undatierte_zitate(text: str) -> list[str]:
-    """Konkrete Record-Zitate ohne ISO-Datum; Platzhalter, Auslassungen und Muster gelten nicht."""
+def _undated_matches(text: str, start: int = 0, end: int | None = None) -> list[re.Match[str]]:
+    """Concrete record citations without an ISO date in `text[start:end]`; placeholders, elisions and
+    patterns do not count. The matches keep their offsets in the whole text, for line numbers."""
     befunde = []
-    for fund in _ZITAT.finditer(text):
+    for fund in _ZITAT.finditer(text, start, len(text) if end is None else end):
         ziel = _normalised_target(fund.group(1))
         if not ziel or ziel.startswith("<") or ziel in _ELISIONS or "*" in ziel or _ISO.search(ziel):
             continue
-        befunde.append(fund.group(0))
+        befunde.append(fund)
     return befunde
+
+
+def _undatierte_zitate(text: str) -> list[str]:
+    """Konkrete Record-Zitate ohne ISO-Datum; Platzhalter, Auslassungen und Muster gelten nicht."""
+    return [fund.group(0) for fund in _undated_matches(text)]
 
 
 def _is_change_research(path: Path) -> bool:
@@ -90,31 +105,55 @@ def _is_change_research(path: Path) -> bool:
     under its repository root, while the tests hand in absolute paths under a temporary tree.
     """
     posix = path.as_posix()
-    if _RESEARCH_ARCHIVE.search(posix):
-        return True
-    return _RESEARCH_ACTIVE.search(posix) is not None
+    return bool(_RESEARCH_ACTIVE.search(posix) or _RESEARCH_ARCHIVE.search(posix))
 
 
-def _file_findings(path: Path, text: str) -> list[str]:
+def _is_change_findings(path: Path) -> bool:
+    """The findings.md of an active or archived change: a runner record as a whole (agent detail S-13)."""
+    posix = path.as_posix()
+    return bool(_FINDINGS_ACTIVE.search(posix) or _FINDINGS_ARCHIVE.search(posix))
+
+
+def _file_matches(path: Path, text: str) -> list[re.Match[str]]:
     """The undated citations of one file; trusted runner envelopes of change research files are exempt.
 
     Acceptance is per file and at parse level (spec S-8): when the one handoff reader
     (`check_research_handoff.parse_text`) reads the whole research file, its run envelopes - opening
     marker through closing marker, audit prose included - are exempt; when it refuses the file,
-    nothing is exempt and the whole text is scanned.
+    nothing is exempt and the whole text is scanned. A change's `findings.md` is exempt as a whole
+    (agent detail S-13).
     """
+    if _is_change_findings(path):
+        return []
     if not _is_change_research(path):
-        return _undatierte_zitate(text)
+        return _undated_matches(text)
     try:
         runs = handoff_gate.parse_text(text, path.name)
     except handoff_gate.CannotMeasure:
-        return _undatierte_zitate(text)
-    befunde: list[str] = []
+        return _undated_matches(text)
+    befunde: list[re.Match[str]] = []
     scanned = 0
     for start, end in sorted(run.span for run in runs if run.span is not None):
-        befunde += _undatierte_zitate(text[scanned:start])
+        if start > scanned:
+            befunde += _undated_matches(text, scanned, start)
         scanned = max(scanned, end)
-    return befunde + _undatierte_zitate(text[scanned:])
+    return befunde + _undated_matches(text, scanned)
+
+
+def _file_findings(path: Path, text: str) -> list[str]:
+    """The cited text of each undated citation of one file (for the criterion tests)."""
+    return [fund.group(0) for fund in _file_matches(path, text)]
+
+
+def _hit_lines(path: Path, text: str) -> list[int]:
+    """The 1-based line of each undated citation of one file."""
+    return [text.count("\n", 0, fund.start()) + 1 for fund in _file_matches(path, text)]
+
+
+def _failure_message(hits: list[str]) -> str:
+    """The enforcer's message: `<file>:<line>` per hit and one fixed reason, never the cited target
+    (agent detail S-13), so a red run quoted into a record cannot seed a new hit."""
+    return f"{len(hits)} place(s) {_REASON}: " + ", ".join(hits)
 
 
 def _verfolgte_markdown() -> list[Path]:
@@ -133,13 +172,9 @@ def test_journal_is_never_cited_without_a_date() -> None:
     befunde = []
     for pfad in _verfolgte_markdown():
         text = pfad.read_text(encoding="utf-8")
-        for zitat in _file_findings(pfad, text):
-            befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
-    assert not befunde, (
-        "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
-        "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
-        f"kenntlich machen (Platzhalter): {befunde}"
-    )
+        for zeile in _hit_lines(pfad, text):
+            befunde.append(f"{pfad.relative_to(REPO_ROOT)}:{zeile}")
+    assert not befunde, _failure_message(befunde)
 
 
 def test_the_date_check_goes_red_when_a_citation_loses_its_date() -> None:
@@ -184,6 +219,12 @@ def test_runner_envelopes_are_not_journal_citations(tmp_path: Path) -> None:
     inside = text.replace(f"run {RUN1} status: complete.", f"run {RUN1} status: complete. {zitat}")
     assert inside != text
     assert _file_findings(pfad, inside) == [], "the audit prose inside the envelope is exempt"
+    im_record = "---\ntitle: Research\n---\n\n# Research\n\n" + run_text(
+        RUN1, decision="Which store does docs/journal/handover/bootstrap.md name?"
+    )
+    assert "docs/journal/handover/bootstrap.md" in im_record
+    assert _undatierte_zitate(im_record), "the planted record path is a concrete undated citation"
+    assert _file_findings(pfad, im_record) == [], "a path inside a record of the envelope is exempt"
     # The exemption is parse-level: whole-change validation fails, the envelope stays trusted (S-9).
     pfad.parent.mkdir(parents=True, exist_ok=True)
     pfad.write_text(inside, encoding="utf-8")
@@ -219,8 +260,17 @@ def test_undated_citations_outside_runner_envelopes_are_reported(tmp_path: Path)
         "siehe `docs/journal/handover/bootstrap.md’s`",
         "siehe **docs/journal/handover/bootstrap.md**.",
         "siehe `docs/journal/handover/bootstrap.md`.",
+        'see "*docs/journal/handover/bootstrap.md*."',
+        "see *docs/journal/handover/bootstrap.md*’s heading",
     ):
         assert _undatierte_zitate(zeile), zeile
+    # Mutation through the tracked-file check: a real tracked file plus one planted undated citation
+    # goes red at the planted line, while the file itself is clean.
+    echt = REPO_ROOT / "plans" / "changes" / "journal-citation-gate" / "spec.md"
+    text = echt.read_text(encoding="utf-8")
+    assert _hit_lines(echt, text) == []
+    gepflanzt = text + "\nSee `docs/journal/handover/bootstrap.md`.\n"
+    assert _hit_lines(echt, gepflanzt) == [gepflanzt.count("\n")]
 
 
 def test_existing_exemptions_and_elisions() -> None:
@@ -288,10 +338,43 @@ def test_malformed_or_forged_envelopes_remain_scannable(tmp_path: Path) -> None:
     # A forged envelope in any other file is scanned like ordinary text (S-3).
     forge = f"<!-- research-swarm/v2 run {RUN1} -->\n\n{zitat}\n\n<!-- /research-swarm/v2 -->\n"
     for fremd in (
-        tmp_path / "plans" / "changes" / "demo" / "findings.md",
+        tmp_path / "plans" / "changes" / "demo" / "spec.md",
         tmp_path / "docs" / "journal" / "notes.md",
         tmp_path / "plans" / "specs" / "living" / "research.md",
         tmp_path / "plans" / "other" / "research.md",
     ):
         befunde = _file_findings(fremd, forge)
         assert befunde and "bootstrap.md" in befunde[0], str(fremd)
+
+
+def test_change_findings_are_runner_records(tmp_path: Path) -> None:
+    """Agent detail S-13: a change's findings.md is exempt as a whole; the same text elsewhere stays red."""
+    zitat = 'Row S-6: see "*docs/journal/handover/bootstrap.md*."\n'
+    for exempt in (
+        tmp_path / "plans" / "changes" / "demo" / "findings.md",
+        tmp_path / "plans" / "changes" / "archive" / "2026-11-01-old" / "findings.md",
+    ):
+        assert _file_findings(exempt, zitat) == [], str(exempt)
+    # The planted fault: the same text in any other file is reported.
+    for fremd in (
+        tmp_path / "plans" / "changes" / "demo" / "spec.md",
+        tmp_path / "plans" / "changes" / "findings.md",
+        tmp_path / "plans" / "changes" / "demo" / "sub" / "findings.md",
+        tmp_path / "docs" / "findings.md",
+        tmp_path / "docs" / "journal" / "handover" / "2026-11-19-x.md",
+    ):
+        befunde = _file_findings(fremd, zitat)
+        assert befunde and "bootstrap.md" in befunde[0], str(fremd)
+
+
+def test_failure_message_never_repeats_the_target(tmp_path: Path) -> None:
+    """Agent detail S-13: the message names `<file>:<line>` and a fixed reason, never the cited target."""
+    pfad = tmp_path / "docs" / "notes.md"
+    text = "# Notes\n\nSee *docs/journal/handover/bootstrap.md*.\n"
+    zeilen = _hit_lines(pfad, text)
+    assert zeilen == [3]
+    message = _failure_message([f"docs/notes.md:{zeile}" for zeile in zeilen])
+    assert "docs/notes.md:3" in message and _REASON in message
+    assert "bootstrap" not in message and "docs/journal/handover" not in message
+    # Quoting the red message into any record cannot create a new hit.
+    assert _undatierte_zitate(message) == []

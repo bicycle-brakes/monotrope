@@ -51,6 +51,12 @@ On 2026-11-19 the existing tracked-Markdown check treats a glob and paths in run
 5. When text is outside an active or archived change's `research.md`, or `parse_text` raises for the file, the journal-date check scans that text without envelope exemptions.
    *Refuted by:* a forged envelope in another file, a nested or unclosed envelope, or a mismatched manifest hides an undated concrete path; or a good envelope is exempt when another envelope in the same file makes parsing fail.
    *Basis:* decisions.md#Q-1 and details S-3 and S-4.
+6. When a citation stands in an active or archived change's `findings.md`, the journal-date check does not report it; the same text in any other file is scanned as before.
+   *Refuted by:* an undated path in a change's `findings.md` is reported, or the same path in a spec, a handover or a `findings.md` outside a change folder passes.
+   *Basis:* decisions.md, agent detail S-13.
+7. When the journal-date check fails, its message names each hit as `<file>:<line>` with one fixed reason and never repeats the cited target.
+   *Refuted by:* the message for an undated citation contains the cited path, or quoting the message into a file creates a new hit.
+   *Basis:* decisions.md, agent detail S-13.
 
 ## Non-goals
 
