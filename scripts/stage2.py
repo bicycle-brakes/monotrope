@@ -33,7 +33,6 @@ between the rule and the call.
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
-    python3 scripts/stage2.py --spec-review-inventory  # changes whose spec review implement would refuse; no model
 
 A fresh loop run and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
@@ -3654,429 +3653,20 @@ def legacy_completed(status: str) -> bool:
     return any(marker in lowered for marker in LEGACY_FIXED)
 
 
-# ---------------------------------------------------------------------------
-# The spec review as a precondition of implement (bead coding-harness-ttic)
-# ---------------------------------------------------------------------------
-
-# The day this rule was built: a review block written by the earlier runner carries no fingerprint, and
-# only one whose heading day lies strictly before this day may still qualify by its day (legacy block).
-SPEC_REVIEW_FIXED_DAY = "2026-11-18"
-# The initial central settings; `model-endpoints.yaml`'s optional top-level `spec_review` mapping
-# (`timeout_seconds`, `retry_pause_seconds`, `fallback_model`) replaces any of them in one place.
-SPEC_REVIEW_TIMEOUT_SECONDS = 30 * 60
-SPEC_REVIEW_PAUSE_SECONDS = 30
-SPEC_REVIEW_FALLBACK_MODEL = "deepseek-v4.1-flash"
-# The classes whose implement needs a current review; a spike is exempt.
-REVIEWED_CLASSES = ("bounded", "feature", "architectural")
-SPEC_FRONT_MATTER = re.compile(rb"---\n(.*?)\n---(?:\n|$)", re.S)
-SPEC_HEADING = re.compile(r"## Phase 2a — (Opus 5\.5|Fallback (\S+)), (\d{4}-\d{2}-\d{2})")
-SPEC_AUDIT = re.compile(
-    r"Stage-2 call, \d{4}-\d{2}-\d{2}: spec-review · endpoint (\S+) · model (\S+) · leak check clean over .*"
-)
-SPEC_DIGEST_LINE = re.compile(r"Reviewed spec body SHA-256: ([0-9a-f]{64})")
-SPEC_NO_FINDING_LINE = re.compile(r"(?:Opus|Fallback) reported no finding\.")
-
-
-@dataclass(frozen=True)
-class SpecReviewSettings:
-    timeout: int
-    pause: int
-    fallback: str
-
-
-def spec_review_settings(root: Path) -> SpecReviewSettings:
-    """The call timeout, the retry pause and the fallback model, from the one central declaration."""
-    try:
-        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        raise Refused("model-endpoints.yaml cannot be read") from None
-    declared = data.get("spec_review") if isinstance(data, dict) else None
-    if declared is None:
-        declared = {}
-    if not isinstance(declared, dict):
-        raise Refused("model-endpoints.yaml: `spec_review` must be a mapping.")
-    numbers = {}
-    for key, default, least in (
-        ("timeout_seconds", SPEC_REVIEW_TIMEOUT_SECONDS, 1),
-        ("retry_pause_seconds", SPEC_REVIEW_PAUSE_SECONDS, 0),
-    ):
-        value = declared.get(key, default)
-        if isinstance(value, bool) or not isinstance(value, int) or value < least:
-            raise Refused(f"model-endpoints.yaml: spec_review.{key} must be a whole number of at least {least}.")
-        numbers[key] = value
-    model = declared.get("fallback_model", SPEC_REVIEW_FALLBACK_MODEL)
-    if not isinstance(model, str) or not MODEL_ID.fullmatch(model):
-        raise Refused("model-endpoints.yaml: spec_review.fallback_model must be a model id.")
-    return SpecReviewSettings(numbers["timeout_seconds"], numbers["retry_pause_seconds"], model)
-
-
-def spec_review_pause(seconds: float) -> None:
-    """The wait before the one Opus retry (a seam for tests); no clock function is read here."""
-    threading.Event().wait(seconds)
-
-
-def spec_bytes(root: Path, change: str) -> bytes:
-    path = root / "plans" / "changes" / change / "spec.md"
-    try:
-        return path.read_bytes()
-    except OSError as error:
-        raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
-
-
-def spec_body(data: bytes) -> bytes:
-    """The spec's bytes after its front matter: what the review reads and its fingerprint covers."""
-    match = SPEC_FRONT_MATTER.match(data)
-    return data[match.end() :] if match else data
-
-
-def readable_review_answer(answer: str) -> bool:
-    """Exactly `No finding.`, or six-cell rows with no other table line: anything else is unreadable."""
-    if answer.strip() == "No finding.":
-        return True
-    rows, rest = parse_rows(answer)
-    return bool(rows) and not any(split_row(line) is not None for line in rest.splitlines())
-
-
-@dataclass(frozen=True)
-class SpecReview:
-    """One qualifying review block: who wrote it, on which day, over which bytes, with which rows."""
-
-    kind: str  # "opus" or "fallback"
-    model: str
-    day: str
-    digest: str | None
-    rows: tuple[tuple[str, ...], ...]
-
-
-def _review_body(lines: list[str]) -> tuple[str | None, tuple[tuple[str, ...], ...]] | None:
-    """The fingerprint and rows of a block, or None when the block is not readable.
-
-    Readable is nine-cell rows, or the runner's no-finding line over the quoted answer `No finding.`.
-    One table line that is neither a row nor table furniture - quoted or not - makes the whole block unreadable.
-    """
-    digest = None
-    rows: list[tuple[str, ...]] = []
-    quoted: list[str] = []
-    said_none = False
-    for line in lines:
-        text = line.strip()
-        if not text:
-            continue
-        found = SPEC_DIGEST_LINE.fullmatch(text)
-        if found:
-            digest = found.group(1)
-            continue
-        cells = split_row(line)
-        if cells is not None:
-            if _furniture(cells) or not any(cells):
-                continue
-            if len(cells) != len(ROW_COLUMNS):
-                return None
-            rows.append(tuple(cells))
-            continue
-        if text.startswith(">"):
-            inner = text[1:].strip()
-            if split_row(inner) is not None:
-                return None
-            quoted.append(inner)
-            continue
-        if SPEC_NO_FINDING_LINE.fullmatch(text):
-            said_none = True
-        elif text.endswith("that are not six-cell rows; they are kept as they came."):
-            return None
-    if rows or (said_none and quoted == ["No finding."]):
-        return digest, tuple(rows)
-    return None
-
-
-def spec_review_blocks(text: str) -> list[SpecReview]:
-    """The readable Opus and fallback blocks, in file order, each preceded directly by its audit line.
-
-    A Codex block, a hand-held one, one whose audit line names another model, and one that is not readable
-    are left out. The audit line is the runner's observable provenance, not proof of authorship.
-    """
-    lines = text.splitlines()
-    found = []
-    for index, line in enumerate(lines):
-        head = SPEC_HEADING.fullmatch(line)
-        if head is None:
-            continue
-        before = index - 1
-        while before >= 0 and not lines[before].strip():
-            before -= 1
-        audit = SPEC_AUDIT.fullmatch(lines[before]) if before >= 0 else None
-        if audit is None:
-            continue
-        kind, model = ("opus", OPUS[1]) if head.group(1) == "Opus 5.5" else ("fallback", head.group(2))
-        endpoint = OPUS[0] if kind == "opus" else OPENCODE
-        if audit.group(1) != endpoint or audit.group(2) != model:
-            continue
-        body = []
-        for follow in lines[index + 1 :]:
-            if follow.startswith("## "):
-                break
-            body.append(follow)
-        parsed = _review_body(body)
-        if parsed is not None:
-            found.append(SpecReview(kind, model, head.group(3), parsed[0], parsed[1]))
-    return found
-
-
-def spec_last_commit_day(root: Path, rel: str) -> str | None:
-    """The UTC committer day of the last commit that touched the file, or None without one."""
-    try:
-        done = run_git(root, "log", "-1", "--format=%ct", "--", rel, text=True, errors="replace", allow={128: r".*"})
-    except subprocess.TimeoutExpired as error:
-        raise Refused("git log did not finish in time") from error
-    stamp = str(done.stdout).strip()
-    if done.returncode != 0 or not stamp.isdigit():
-        return None
-    return dt.datetime.fromtimestamp(int(stamp), dt.UTC).date().isoformat()
-
-
-def spec_committed_body(root: Path, rel: str) -> bytes | None:
-    """The body of the spec at HEAD, or None when HEAD holds none."""
-    try:
-        done = run_git(root, "show", f"HEAD:{rel}", allow={128: r".*"})
-    except subprocess.TimeoutExpired as error:
-        raise Refused("git show did not finish in time") from error
-    return spec_body(bytes(done.stdout)) if done.returncode == 0 else None
-
-
-def legacy_review_current(root: Path, change: str, review: SpecReview, body: bytes) -> bool:
-    """A block without a fingerprint is current only by its day, and only over a clean spec body."""
-    rel = f"plans/changes/{change}/spec.md"
-    committed = spec_committed_body(root, rel)
-    if committed is None or committed != body:
-        return False
-    commit_day = spec_last_commit_day(root, rel)
-    return commit_day is not None and review.day >= commit_day
-
-
-@dataclass(frozen=True)
-class SpecReviewState:
-    """What the review precondition finds: the refusal text, if any, and the newest current review."""
-
-    problem: str | None
-    newest: SpecReview | None
-
-
-def spec_review_state(root: Path, change: str) -> SpecReviewState:
-    """The one review check, shared by implement and the morning inventory."""
-    body = spec_body(spec_bytes(root, change))
-    findings = root / "plans" / "changes" / change / "findings.md"
-    try:
-        text = findings.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        text = ""
-    except (OSError, UnicodeDecodeError) as error:
-        raise Refused(f"plans/changes/{change}/findings.md cannot be read ({error}).") from error
-    digest = hashlib.sha256(body).hexdigest()
-    qualifying = [
-        review for review in spec_review_blocks(text) if review.digest is not None or review.day < SPEC_REVIEW_FIXED_DAY
-    ]
-    current = [
-        review
-        for review in qualifying
-        if (review.digest == digest if review.digest is not None else legacy_review_current(root, change, review, body))
-    ]
-    remedy = f"run `python3 scripts/stage2.py spec-review {change}` before implement"
-    if not current:
-        if qualifying:
-            return SpecReviewState(
-                f"the spec of {change} changed after its newest qualifying spec review; {remedy}.", None
-            )
-        return SpecReviewState(
-            f"plans/changes/{change}/findings.md holds no readable spec review that the runner wrote "
-            f"(an Opus 5.5 or fallback block with its spec-review audit line); {remedy}.",
-            None,
-        )
-    newest = current[-1]
-    for row in newest.rows:
-        if (row[1].startswith("[AMBIGUITY]") or row[5].startswith("[AMBIGUITY]")) and row[7].lower().startswith("open"):
-            return SpecReviewState(
-                f"the newest spec review of {change} leaves the ambiguity {row[0]} open ({row[5]}); "
-                "settle it, edit the spec and review again before implement.",
-                newest,
-            )
-    return SpecReviewState(None, newest)
-
-
-def implement_class(root: Path, change: str) -> str:
-    """The change's declared class for implement, or the refusal that says how to repair the declarations."""
-    try:
-        return declared_class(root, change, None)
-    except Refused as error:
-        raise Refused(
-            f"{error} Add or repair the class declarations (`class:` in plans/changes/{change}/research.md "
-            "and spec.md) before implement."
-        ) from None
-
-
-def spec_review_admission(root: Path, change: str) -> None:
-    """The precondition of every implement route, before any model starts: the class, then the review."""
-    folder_of(root, change)
-    if implement_class(root, change) not in REVIEWED_CLASSES:
-        return  # a spike is exempt
-    state = spec_review_state(root, change)
-    if state.problem:
-        raise Refused(state.problem)
-
-
-def spec_review_inventory(root: Path) -> str:
-    """The non-archived changes with a spec that implement would refuse, plus the fallback re-checks."""
-    base = root / "plans" / "changes"
-    try:
-        folders = sorted(
-            (folder for folder in base.iterdir() if folder.is_dir() and (folder / "spec.md").is_file()),
-            key=lambda folder: folder.name,
-        )
-    except OSError as error:
-        raise Refused(f"plans/changes/ cannot be listed ({error}).") from error
-    review: list[str] = []
-    classes: list[str] = []
-    recheck: list[str] = []
-    for folder in folders:
-        change = folder.name
-        if change == "archive":
-            continue
-        try:
-            klass = declared_class(root, change, None)
-        except Refused as error:
-            classes.append(f"- {change}: {error}")
-            continue
-        if klass not in REVIEWED_CLASSES:
-            continue
-        try:
-            state = spec_review_state(root, change)
-        except Refused as error:
-            review.append(f"- {change} ({klass}): error: {error}")
-            continue
-        if state.problem:
-            review.append(f"- {change} ({klass}): {state.problem}")
-        if state.newest is not None and state.newest.kind == "fallback":
-            recheck.append(
-                f"- {change} ({klass}): the newest current review is the fallback {state.newest.model}; "
-                "re-check it with Opus 5.5 in the next day session (the same round)."
-            )
-
-    def group(title: str, entries: list[str]) -> str:
-        return "\n".join([title, *(entries or ["- none"])])
-
-    return "\n\n".join(
-        [
-            group("Changes implement refuses for a missing, stale, unreadable or ambiguous spec review:", review),
-            group("Changes with a missing, invalid or disagreeing class:", classes),
-            group("Changes whose newest current spec review is a fallback (Opus 5.5 re-check due):", recheck),
-        ]
-    )
-
-
-def spec_review_prompt(ctx: Context, body: bytes) -> str:
-    try:
-        text = body.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise Refused(f"plans/changes/{ctx.change}/spec.md is not UTF-8 text ({error}).") from error
-    extra = (
-        f"## The spec under review (the bytes of plans/changes/{ctx.change}/spec.md after its front matter)\n\n{text}"
-    )
-    return phase_prompt(ctx.root, "02a-spec-review.md", ctx.change, extra)
-
-
-def spec_review_call(
-    ctx: Context, endpoint: tuple[str, str, str | None], call: Callable[[str], str]
-) -> tuple[str, str]:
-    """One checked review call; its answer and the SHA-256 of the spec body bytes the prompt carried.
-
-    The body is read once into the prompt and read again after the call: a spec edited while the review
-    ran is nothing the review read, so no block is recorded for it. An answer that is neither rows nor
-    exactly `No finding.` fails the call.
-    """
-    body = spec_body(spec_bytes(ctx.root, ctx.change))
-    prompt = spec_review_prompt(ctx, body)
-    begin_call(ctx, "spec-review", endpoint, prompt)
-    answer = call(prompt)
-    if spec_body(spec_bytes(ctx.root, ctx.change)) != body:
-        raise CallFailed("the spec body changed while the review ran; no review was recorded.")
-    if not readable_review_answer(answer):
-        raise MalformedAnswer(answer)
-    return answer, hashlib.sha256(body).hexdigest()
-
-
-def write_spec_review(ctx: Context, title: str, reviewer: str, digest: str, answer: str) -> None:
-    rows, _ = parse_rows(answer)
-    append(
-        ctx.findings,
-        f"## Phase 2a — {title}, {today()}\n\nReviewed spec body SHA-256: {digest}\n\n"
-        f"{answer_block(rows, answer, reviewer)}",
-    )
-    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(ctx.root)}")
-
-
-def spec_review_fallback(ctx: Context, settings: SpecReviewSettings, reasons: list[str]) -> None:
-    """The declared DeepSeek model through Pi, after the Opus attempt and its retry failed.
-
-    The foreign-call leak check runs for this call as for every other; a BLOCK refuses it and no
-    further model starts. The model declared at this moment is the one the block records.
-    """
-    model = settings.fallback
-    endpoint = (OPENCODE, model, "max")
-    print(
-        f"spec-review: Opus 5.5 failed twice ({'; '.join(reasons)}); the declared fallback {model} reviews.",
-        file=sys.stderr,
-    )
-    key = reviewer_key()
-    problem = entry_problem(ctx.root, OPENCODE)
-    if problem:
-        raise Refused(problem)
-    require_pi()
-    fctx = preflight(ctx.root, ctx.change, endpoint)
-
-    def call(prompt: str) -> str:
-        discovery = discover_free(ctx.root, allow_empty=True)
-        fctx.models_store = discovery.get("models_store")
-        return run_reviewer(fctx, model, prompt, key, deadline=monotonic_now() + settings.timeout)
-
-    try:
-        answer, digest = spec_review_call(fctx, endpoint, call)
-    except CallFailed as error:
-        raise CallFailed(
-            f"Opus 5.5 failed twice ({'; '.join(reasons)}) and the fallback {model} failed: {error}"
-        ) from error
-    write_spec_review(ctx, f"Fallback {model}", "Fallback", digest, answer)
-
-
 def spec_review(root: Path, change: str) -> None:
     """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
 
     The call is a headless Claude Code run with read-only tools and no session
     kept: the reviewer is recorded by the rows alone, so phase 6 starts a fresh
-    Codex session where no phase-2a session was recorded. The spec's body is in
-    the prompt and its SHA-256 fingerprint heads the block (bead coding-harness-ttic).
-    A call that exits nonzero, times out, answers nothing or answers unreadably is retried
-    once after the configured pause, then the configured DeepSeek fallback reviews.
+    Codex session where no phase-2a session was recorded.
     """
     ctx = preflight(root, change, OPUS)
-    settings = spec_review_settings(root)
-    reasons: list[str] = []
-    limit = f"the spec review limit of {settings.timeout} seconds"
-
-    def opus(prompt: str) -> str:
-        return run_work_model(ctx, prompt, OPUS, writable=False, timeout=settings.timeout, limit=limit)
-
-    for attempt in (1, 2):
-        if attempt == 2:
-            spec_review_pause(settings.pause)
-        try:
-            answer, digest = spec_review_call(ctx, OPUS, opus)
-        except NotStarted:
-            raise
-        except CallFailed as error:
-            reasons.append(str(error))
-            continue
-        write_spec_review(ctx, "Opus 5.5", "Opus", digest, answer)
-        return
-    spec_review_fallback(ctx, settings, reasons)
+    prompt = phase_prompt(root, "02a-spec-review.md", change)
+    begin_call(ctx, "spec-review", OPUS, prompt)
+    answer = run_work_model(ctx, prompt, OPUS, writable=False)
+    rows, _ = parse_rows(answer)
+    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
+    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
 
 
 def recorded_2a_session(text: str) -> str | None:
@@ -10451,12 +10041,7 @@ def run_attempts(
 
 
 def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 4: Flash, one Flash repair and Sonnet fallback, checked and committed by the runner.
-
-    The class and a current, unambiguous spec review are preconditions of every route, `--stage2-off`
-    and a change implemented before included; only a spike is exempt (bead coding-harness-ttic).
-    """
-    spec_review_admission(root, change)
+    """Phase 4: Flash, one Flash repair and Sonnet fallback, checked and committed by the runner."""
     first = SONNET if stage2_off is not None else GLM_FLASH
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
@@ -11701,12 +11286,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", nargs="?", default=None, choices=sorted([*VERBS, "session", "prepare-explore"]))
-    parser.add_argument(
-        "--spec-review-inventory",
-        action="store_true",
-        help="print the changes whose spec review implement would refuse and the fallback re-checks; no model",
-    )
+    parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "row_status",
@@ -11789,8 +11369,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if args.verb is None and not args.spec_review_inventory:
-        parser.error("the following arguments are required: verb")
     _LAUNCH_STOPPED.clear()
     # SIGTERM, SIGHUP and SIGQUIT stop the run like Ctrl-C: the running programs' groups are
     # killed before the exit (DL-B-5, F6-8). The handlers are the runner's only while main runs,
@@ -11820,12 +11398,6 @@ def _terminate(signum: int, _frame: object) -> None:
 def _run(args: argparse.Namespace) -> int:
     """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
     try:
-        if args.spec_review_inventory:
-            if args.verb is not None or args.change or args.stage2_off is not None:
-                raise Refused("--spec-review-inventory takes no verb, change or other option.")
-            refuse_repository_git(Path(args.root))
-            print(spec_review_inventory(Path(args.root)))
-            return 0
         if (
             args.stage2_off is not None
             and not args.change
