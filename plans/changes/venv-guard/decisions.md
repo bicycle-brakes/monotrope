@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-s55e
@@ -108,3 +108,23 @@ message" is left to the spec draft, which must keep both conditions true at
 once; it is not a new decision because both behaviours were stated by the
 maintainer. Reason: the two stated behaviours meet only at "no `.venv`", and
 the kit fallback is the binding one there.
+
+## Q-4 · The guard comes first
+
+asked: 2026-11-19
+answer: "A: Guard zuerst (Empf.)" — in English: the automated check of criterion 5 also requires that the guard import precedes every top-level statement with an effect in a guarded script under `scripts/`; the spec names the remaining case (a caller outside `scripts/` that acts before importing a guarded module) as a boundary.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: phase-6 finding R2 of venv-guard, the third finding of the re-exec mechanism.
+  Intention: a re-exec restarts the entry script, so an effect before the guarded import happens twice; Codex judged this not repairable in general, and a Sonnet heuristic failed ruff.
+  Today: the guard runs at import time of a guarded module.
+  Repository change: tests/test_venv_guard.py (the check of criterion 5) and a Boundary in spec.md.
+  Architecture change: the guard is the first thing a guarded script does, enforced at the one check every script already passes.
+  Options shown: A guard first (recommended); B heuristic that skips the re-exec after an effect; C name the limit and repair only R3.
+
+In the context of a re-exec that repeats effects run before the guarded
+import, facing a third finding of that mechanism, we decided that the check
+of criterion 5 requires the guard before any top-level effect in guarded
+scripts, to achieve a rule that turns red instead of a heuristic, accepting
+that callers outside `scripts/` are named as a boundary — 2026-11-19
