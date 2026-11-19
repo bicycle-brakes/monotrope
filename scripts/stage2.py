@@ -9878,18 +9878,14 @@ def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: 
             continue
         if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
+        if head is not None:
+            # A committed header no attempt can repair stops the verb naming the migration before
+            # the working-tree judgement, on every verb and fault kind (L2-12).
+            refuse_committed_header_fault(root, relative)
         try:
-            file_problems = header_problems(relative, head, current, runner_reset=runner_reset)
-            if file_problems and head is not None:
-                # A fault the committed header already carries is the migration's, on every verb
-                # (L2-12): the verb stops instead of spending a route.
-                committed = header_problems(relative, head, head)
-                if set(file_problems) <= set(committed):
-                    raise CommittedRecordFault(
-                        "; ".join(sorted(set(file_problems)))
-                        + "; the committed header is faulty, the migration owns it (bead coding-harness-2i7x)"
-                    )
-            problems.extend(file_problems)
+            # A readable baseline the census contract rejects is no committed fault: an attempt
+            # that preserves it fails here and spends its route (criterion 14).
+            problems.extend(header_problems(relative, head, current, runner_reset=runner_reset))
         except CommittedRecordFault:
             raise
         except Exception as error:  # any read or YAML failure is this file's finding (EP6-14)
