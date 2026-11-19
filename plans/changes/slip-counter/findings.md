@@ -734,3 +734,214 @@ Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1115 files, 4721 commits, 12 rules.
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1115 files, 4721 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4722 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +3 -1
+> - `scripts/stage2.py` +1 -5
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 75 lines of this gate left out …]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ............................................                             [100%]
+> =================================== FAILURES ===================================
+> _____________ test_implement_targeted_check_writes_no_slip_history _____________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/slip-counter/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/52508/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/52508/pytest-of-mikypiky/pytest-1/popen-gw2/test_implement_targeted_check_0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109f659a0>
+>
+>     def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         commands = targeted_mode(monkeypatch)
+>         world.script(claude=[dict(COVERED_IMPLEMENT)])
+>         assert world.run("implement") == 0, world.text()
+>         assert commands.of("gate")
+> >       assert slip_history(world) == []
+> E       AssertionError: assert [{'admission_...e786fd', ...}] == []
+> E         
+> E         Left contains 2 more items, first extra item: {'admission_id': None, 'admission_reused': None, 'admission_wait_seconds': None, 'change': 'demo', ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:28792: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=53784) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/slip-counter/tests/test_stage2.py:23761: DeprecationWarning: This process (pid=53787) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_implement_targeted_check_writes_no_slip_history
+> 1 failed, 6434 passed, 17 skipped, 5 warnings in 590.94s (0:09:50)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47379 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-1-20261119T034830724979Z-ea3aa8cd.md
+> ````
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4723 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ...................................F.....                                [100%]
+> =================================== FAILURES ===================================
+> _____________ test_implement_targeted_check_writes_no_slip_history _____________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/slip-counter/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2025/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2025/popen-gw0/test_implement_targeted_check_0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10875ff80>
+>
+>     def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         commands = targeted_mode(monkeypatch)
+>         world.script(claude=[dict(COVERED_IMPLEMENT)])
+>         assert world.run("implement") == 0, world.text()
+>         assert commands.of("gate")
+> >       assert slip_history(world) == []
+> E       AssertionError: assert [{'admission_...e786fd', ...}] == []
+> E         
+> E         Left contains 2 more items, first extra item: {'admission_id': None, 'admission_reused': None, 'admission_wait_seconds': None, 'change': 'demo', ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:28792: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_implement_targeted_check_writes_no_slip_history
+> 1 failed, 40 passed in 4.69s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-2-20261119T034830724979Z-ea3aa8cd.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4724 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ...................................F.....                                [100%]
+> =================================== FAILURES ===================================
+> _____________ test_implement_targeted_check_writes_no_slip_history _____________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/slip-counter/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2026/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2026/popen-gw0/test_implement_targeted_check_0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1088180b0>
+>
+>     def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         commands = targeted_mode(monkeypatch)
+>         world.script(claude=[dict(COVERED_IMPLEMENT)])
+>         assert world.run("implement") == 0, world.text()
+>         assert commands.of("gate")
+> >       assert slip_history(world) == []
+> E       AssertionError: assert [{'admission_...e786fd', ...}] == []
+> E         
+> E         Left contains 2 more items, first extra item: {'admission_id': None, 'admission_reused': None, 'admission_wait_seconds': None, 'change': 'demo', ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:28792: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 29 files, 2 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_implement_targeted_check_writes_no_slip_history
+> 1 failed, 40 passed in 4.89s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-3-20261119T034830724979Z-ea3aa8cd.md
+> ```
