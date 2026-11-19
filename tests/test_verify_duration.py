@@ -1698,10 +1698,10 @@ def test_slips_report_legacy_and_changeless_outside_count(
     code, out, _ = _slips(capsys)
     assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
     assert "outside the count: 2 legacy or change-less full runs; unattributed outside runs: 1" in out, out
-    # A change scope cannot establish a legacy run's change: both legacy runs become unattributed.
+    # A change scope still reports excluded runs attributable to this repository.
     code, out, _ = _slips(capsys, "--change", "demo")
     assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
-    assert "unattributed outside runs: 2" in out, out
+    assert "outside the count: 2 legacy or change-less full runs; unattributed outside runs: 1" in out, out
 
 
 def test_old_duration_reader_accepts_additive_version_one_fields(
@@ -1790,6 +1790,24 @@ def test_orphan_full_end_respects_comparison_marker(
     code, out, _ = _slips(capsys, "--since", "2026-11-13T12:30:00+00:00")
     assert code == 0 and "slips: 0; incomplete/not countable runs: 0" in out, out
     assert "lost-2" not in out, out
+
+
+def test_legacy_orphan_outside_count_respects_interval(tmp_path, monkeypatch, capsys):
+    """A pre-marker orphan is counted only within the requested completion interval."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(
+        tmp_path / "state",
+        [
+            _run_end("lost", utc=_at("06:00")),
+            *_slip_events(repository),
+        ],
+    )
+    _, out, _ = _slips(capsys, "--since", "2026-11-13T06:00:00+00:00")
+    assert "unattributed outside runs: 1" in out, out
+    _, out, _ = _slips(capsys, "--since", "2026-11-13T06:01:00+00:00")
+    assert "unattributed outside runs: 1" not in out, out
+    _, out, _ = _slips(capsys, "--until", "2026-11-13T06:00:00+00:00")
+    assert "unattributed outside runs: 1" not in out, out
 
 
 def test_identical_completion_retry_collapses(

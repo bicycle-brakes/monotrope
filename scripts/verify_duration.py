@@ -850,11 +850,8 @@ def _collect(
         selected = in_bounds and named
         if outside:
             if in_bounds:
-                if legacy and args.change is not None:
-                    tally.unattributed += 1
-                elif named:
-                    tally.selected += 1
-                    tally.outside += 1
+                tally.selected += 1
+                tally.outside += 1
             # Outside runs still may interrupt a pair, but never count as incomplete.
             selected = False
         elif selected:
@@ -1036,7 +1033,13 @@ def cmd_slips(args: argparse.Namespace) -> int:
     for source, orphans in (("duration", duration_orphans), ("targeted", targeted_orphans)):
         for position, event, finding in orphans:
             if source == "duration" and (marker is None or position < marker):
-                if event["event"] == RUN_END:
+                completion = _instant(event.get("utc"))
+                if (
+                    event["event"] == RUN_END
+                    and completion is not None
+                    and (since is None or completion >= since)
+                    and (until is None or completion < until)
+                ):
                     tally.unattributed += 1  # a legacy start lost before any marker: outside the count
                 continue
             completion = _instant(event.get("utc"))

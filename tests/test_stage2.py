@@ -28475,7 +28475,7 @@ def slips_report(world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
 def test_slip_history_captures_targeted_and_full_evidence(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """Criterion 3. Planted fault: the real runner path from a targeted attempt to the phase-6 full
+    """Criteria 4 and 5. Planted fault: the real runner path from a targeted attempt to the phase-6 full
     check yields no comparable pair, or the history gains a persisted slip record.
 
     The repair's targeted check records its start and completion through the
@@ -28600,7 +28600,7 @@ def test_slip_comparison_tree_leaves_out_only_the_changes_bookkeeping(world: Wor
 def test_slip_history_never_records_unfinished_targeted_green(
     world: World, monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
-    """Criterion 3. Planted fault: a red, interrupted, timed-out or failed-to-start targeted check,
+    """Criterion 4. Planted fault: a red, interrupted, timed-out or failed-to-start targeted check,
     or one whose inputs moved under it, leaves green comparable evidence in the history.
 
     The cheap checks run the same command kinds before the targeted check, so
@@ -28665,7 +28665,7 @@ def test_slip_history_never_records_unfinished_targeted_green(
 def test_slip_measurement_failure_preserves_verification_result(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Criterion 7. Planted fault: a refused history write changes the attempt's verdict, or it
+    """Criterion 11. Planted fault: a refused history write changes the attempt's verdict, or it
     disappears without a diagnostic."""
     repair_world(world)
     refused = "the history file refuses the write: planted"
