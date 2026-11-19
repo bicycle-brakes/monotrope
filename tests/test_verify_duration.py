@@ -1701,7 +1701,9 @@ def test_slips_report_legacy_and_changeless_outside_count(
     # A change scope still reports excluded runs attributable to this repository.
     code, out, _ = _slips(capsys, "--change", "demo")
     assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
-    assert "outside the count: 2 legacy or change-less full runs; unattributed outside runs: 1" in out, out
+    assert (
+        "outside the count: 2 legacy or change-less full runs (not change-scoped); unattributed outside runs: 1" in out
+    ), out
 
 
 def test_change_scope_with_only_outside_runs_has_no_measurement(
@@ -2123,3 +2125,40 @@ def test_uncertain_targeted_between_full_checks_marks_predecessor(tmp_path, monk
     _write_history(tmp_path / "state", events)
     code, out, _ = _slips(capsys)
     assert code == 1 and "incomplete/not countable runs: 2" in out, out
+
+
+def test_full_writer_creates_targeted_history(monkeypatch, capsys):
+    """A first version-2 full record establishes both histories without truncating either."""
+    monkeypatch.setenv(verify_duration.KIND_ENV, "full")
+    monkeypatch.setenv(verify_duration.CHANGE_ENV, "demo")
+    monkeypatch.setenv(verify_duration.TREE_ENV, TREE)
+    code, _, err = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0, err
+    path = verify_duration.targeted_history_path()
+    assert path.exists() and path.read_bytes() == b""
+    path.write_text("existing evidence\n")
+    code, _, err = _run(capsys, "start", "--job", "verify", "--placement", "local")
+    assert code == 0 and path.read_text() == "existing evidence\n", err
+
+
+def test_change_outside_count_is_labelled_not_scoped(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(
+        tmp_path / "state",
+        [*_check("old", "full", _at("07:00"), _at("07:10"), "red", repository, change=None), *_slip_events(repository)],
+    )
+    code, out, _ = _slips(capsys, "--change", "demo")
+    assert code == 0 and "not change-scoped" in out, out
+
+
+def test_unattributed_legacy_obeys_interval(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    ghost = _run_start("ghost", utc=_at("05:00"), repository=repository)
+    ghost.pop("common_git_dir")
+    _write_history(tmp_path / "state", [ghost, _run_end("ghost", utc=_at("05:10")), *_slip_events(repository)])
+    code, out, _ = _slips(capsys, "--since", _at("06:00"))
+    assert code == 0 and "unattributed outside runs: 1" not in out, out
+    code, out, _ = _slips(capsys, "--until", _at("05:00"))
+    assert "unattributed outside runs: 1" not in out, out
+    code, out, _ = _slips(capsys, "--since", _at("05:00"))
+    assert code == 0 and "unattributed outside runs: 1" in out, out

@@ -415,6 +415,11 @@ def cmd_start(args: argparse.Namespace) -> int:
         **_comparison_fields(),
     }
     append_event(event)
+    if event.get("comparison_version") == COMPARISON_VERSION:
+        try:
+            os.close(_open_history(targeted_history_path()))
+        except (StorageUnusable, OSError) as error:
+            _log(f"the targeted history could not be created: {error}")
     print(event["run_id"])
     return 0
 
@@ -818,7 +823,8 @@ def _collect(
         )
         if not located:
             if legacy and run_id not in damaged and moment is not None:
-                tally.unattributed += 1  # a legacy run that names no repository cannot be assigned to one
+                if (since is None or moment >= since) and (until is None or moment < until):
+                    tally.unattributed += 1  # its repository cannot be assigned
             else:
                 # Damaged or unassignable evidence: the measurement stays
                 # partial and no run is invented for it.
@@ -1088,12 +1094,13 @@ def cmd_slips(args: argparse.Namespace) -> int:
     lower = since.isoformat() if since is not None else "none"
     upper = until.isoformat() if until is not None else "none"
     print(f"repository {current_repository} · {scope} · since {lower} · until {upper}")
+    outside_label = " (not change-scoped)" if args.change is not None else ""
     if not tally.selected:
         # Nothing of this scope was measured: an observed absence needs runs.
         print("0 runs selected, no statement possible")
         if tally.outside or tally.unattributed:
             print(
-                f"outside the count: {tally.outside} legacy or change-less full runs; "
+                f"outside the count: {tally.outside} legacy or change-less full runs{outside_label}; "
                 f"unattributed outside runs: {tally.unattributed}"
             )
         for finding in tally.findings:
@@ -1109,7 +1116,7 @@ def cmd_slips(args: argparse.Namespace) -> int:
         print(f"flaky-test signals: {flaky}; undecided flaky-test signals: {undecided}")
     if tally.outside or tally.unattributed:
         print(
-            f"outside the count: {tally.outside} legacy or change-less full runs; "
+            f"outside the count: {tally.outside} legacy or change-less full runs{outside_label}; "
             f"unattributed outside runs: {tally.unattributed}"
         )
     for finding in tally.findings:

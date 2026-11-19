@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.7
@@ -147,7 +147,8 @@ reconstructed. The targeted history is created at the first version-2 runner rec
 
 Legacy is a record format: a well-formed version-1 start/end pair without comparison evidence is legacy wherever it appears, including after a version-2 marker. The outer duration event stays version 1; a version-2 comparison marker in an additive full-start field distinguishes orphan ends by position in that history. An orphan end before the first marker is outside the count; one after it is damaged and makes selections it could belong to partial. An end completing before the lower interval bound cannot belong to that selection; its unknown repository can be any repository. A report without bounds remains partial after such an end, and a damaged line with no timestamp makes every report partial; `--since` can exclude a timestamped end. If the first new start is lost before any marker is written, its orphan end is indistinguishable from legacy and can be classified outside the count. Legacy and change-less full runs are outside
 the slip population (decisions Q-9). Count them on the outside line only where
-repository, start time and requested change scope can be established. Report
+repository and start time can be established; under a requested change, label
+them as not change-scoped. Report
 recognizable legacy runs without enough scope evidence separately as unattributed
 outside runs; these do not make the slip measurement partial. An unknown
 change on a non-legacy targeted run is not presumed to be a change-less full run.
