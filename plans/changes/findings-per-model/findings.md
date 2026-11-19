@@ -258,3 +258,5 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4708 commits, 12 rules.
 
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1119 files, 4709 commits, 12 rules.
