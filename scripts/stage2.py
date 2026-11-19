@@ -6261,6 +6261,9 @@ def _gate_argv(command: str, pinned: str) -> list[str]:
     """The launch vector of one gate, with its first `python3` resolved to the pinned interpreter.
 
     The substitution is the shell runner's `${cmd/python3/$PYTHON}`: the first occurrence, once.
+    Every gate, plain or not, starts under the shared `verify_run.shell_argv` as the shell entry
+    point starts it, so a missing or non-executable program is the shell's 127 or 126 gate verdict,
+    never a launch failure (decisions.md Q-9).
     """
     resolved = command.replace("python3", shlex.quote(pinned), 1)
     return verify_run.shell_argv(resolved)

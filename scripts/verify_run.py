@@ -366,10 +366,12 @@ def worker_default() -> int | None:
 
 
 def shell_argv(resolved: str) -> list[str]:
-    """The one shell every scheduler consumer runs a non-plain gate command under.
+    """The one shell every scheduler consumer runs every gate command under.
 
     The shell entry point and Stage 2 share it, so a gate command reads alike on
-    both paths (loop row L3-4); `sh` is the shell both ran before the scheduler.
+    both paths (loop row L3-4) and a missing or non-executable program is the
+    shell's own 127 or 126 verdict on both (decisions.md Q-9); `sh` is the shell
+    both ran before the scheduler.
     """
     return ["sh", "-c", resolved]
 

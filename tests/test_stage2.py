@@ -105,6 +105,13 @@ REAL_SH = shutil.which("sh") or "/bin/sh"
 # The world's document gate, a seconds member of the verify job that the full check launches itself;
 # the `bash` stand-in answers exactly this vector from the scenario's `docs` steps.
 DOCS_ARGV = ["scripts/verify_all.sh", "--job", "docs"]
+# The world's two gate commands as its gate list declares them. Each starts as `sh -c <command>`
+# (decisions.md Q-9); the `sh` stand-in hands these, and any other `make` gate, to the real sh, so
+# `make` and the `bash` document vector reach their own stand-ins.
+WORLD_GATE_COMMANDS = ["make verify", " ".join(["bash", *DOCS_ARGV])]
+# The launch vectors of those two gates, as the runner hands them to `launch`.
+FULL_CHECK_ARGV = ["sh", "-c", WORLD_GATE_COMMANDS[0]]
+DOCS_GATE_ARGV = ["sh", "-c", WORLD_GATE_COMMANDS[1]]
 
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
@@ -144,10 +151,11 @@ asked = RETIRED & set(scenario).union(
 if asked:
     sys.stderr.write("stage2-stand-in: retired timing keys are not served: " + ", ".join(sorted(asked)) + "\\n")
     sys.exit(97)
-# The world's gate list declares its document subset as a plain gate, `bash scripts/verify_all.sh
-# --job docs` (bead coding-harness-bxxt.6): the full check's scheduler launches it before the
-# protected `make verify`, and its steps are keyed `docs`, so no other bash call consumes them. The
-# vector comes from the test module's `DOCS_ARGV` (`World.script` writes it).
+# The world's gate list declares its document subset as the gate `bash scripts/verify_all.sh
+# --job docs` (bead coding-harness-bxxt.6): the full check's scheduler launches it under `sh -c`
+# before the protected `make verify`, the `sh` stand-in below hands it to the real sh, and its steps
+# are keyed `docs`, so no other bash call consumes them. The vector comes from the test module's
+# `DOCS_ARGV` (`World.script` writes it).
 docs_argv = scenario.get("_docs_argv") or []
 docs_check = alias == "bash" and bool(docs_argv) and argv == docs_argv
 if alias == "bash" and not docs_check:
@@ -158,6 +166,19 @@ if alias == "bash" and not docs_check:
         sys.stderr.write("stage2-stand-in: a scripted bash step is not served\\n")
         sys.exit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
+# Every gate starts as `sh -c <command>` (decisions.md Q-9), the world's own gates included. A gate
+# that names a program with its own stand-in here (any `make` gate, the `bash` document vector)
+# runs under the real sh, so that program's stand-in records the call and serves its scripted `make`
+# or `docs` steps exactly as the shell entry point's `sh` would reach it. Any other `sh` call stays
+# this stand-in's: it records and answers from the scenario's `sh` steps.
+world_gates = scenario.get("_world_gates") or []
+if (
+    alias == "sh"
+    and len(argv) == 2
+    and argv[0] == "-c"
+    and (argv[1] in world_gates or argv[1].split()[:1] == ["make"])
+):
+    os.execv(scenario["_sh"], [scenario["_sh"], *argv])
 log = here / "calls.jsonl"
 
 
@@ -366,7 +387,14 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(read_records(log))
-        scenario = {**steps, "_since": since, "_docs_argv": DOCS_ARGV, "_bash": REAL_BASH}
+        scenario = {
+            **steps,
+            "_since": since,
+            "_docs_argv": DOCS_ARGV,
+            "_bash": REAL_BASH,
+            "_sh": REAL_SH,
+            "_world_gates": WORLD_GATE_COMMANDS,
+        }
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
@@ -2725,23 +2753,21 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
 def _gate_launch(command: list[str]) -> str | None:
     """The gate command a scheduler launch started, or None for any other launch (a tool, git, a model).
 
-    A gate with shell syntax starts as `bash -c <command>`; a plain one starts as its own vector — the
-    world's full check as `make verify`, its document subset as `bash scripts/verify_all.sh --job docs`.
+    Every gate starts as `sh -c <command>` (decisions.md Q-9) — the world's full check as
+    `sh -c "make verify"`, its document subset as `sh -c "bash scripts/verify_all.sh --job docs"`.
     """
     if command[1:2] == ["-c"]:
         return command[2]
-    if list(command) in (["make", "verify"], ["bash", *DOCS_ARGV]):
-        return " ".join(command)
     return None
 
 
 def _real_gate_shell(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Launch every non-plain gate under the real sh instead of the world's stand-in.
+    """Launch every gate under the real sh instead of the world's stand-in.
 
-    A non-plain gate runs under `sh -c` (`verify_run.shell_argv`, loop row L3-4); the world's `sh`
-    stand-in records the call and answers green without running it, so a test that reads what the
-    gate wrote must reach the real shell. The vector keeps its `-c` shape, so `_gate_launch` still
-    reads it as a gate.
+    Every gate runs under `sh -c` (`verify_run.shell_argv`, loop row L3-4, decisions.md Q-9); the
+    world's `sh` stand-in records any gate but the world's own two and answers green without running
+    it, so a test that reads what the gate wrote must reach the real shell. The vector keeps its `-c`
+    shape, so `_gate_launch` still reads it as a gate.
     """
     monkeypatch.setattr(stage2.verify_run, "shell_argv", lambda resolved: [REAL_SH, "-c", resolved])
 
@@ -4058,7 +4084,7 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     original_launch = stage2.launch
 
     def no_make(command, root, env, secret=None, **kwargs):
-        if command[:2] == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             if unusable_denylist:
                 set_denylist("")
             raise stage2.CallFailed(f"make could not be started: {LEAK}")
@@ -4871,7 +4897,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
     # `LocalCommands` still records every local command, `make` included, instead of running it.
-    assert [record["command"] for record in commands.of("make")] == [["make", "verify"]], (
+    assert [record["command"] for record in commands.of("make")] == [FULL_CHECK_ARGV], (
         "repair skipped required full fallback"
     )
     assert "verification-scope.txt" in world.plan.read_text(encoding="utf-8"), (
@@ -6118,7 +6144,7 @@ def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit
     original_launch = stage2.launch
 
     def no_make(command, root, env, secret=None, **kwargs):
-        if command[:2] == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             raise stage2.CallFailed(f"make could not be started: [Errno 2] no such file {KEY}")
         return original_launch(command, root, env, secret, **kwargs)
 
@@ -7403,7 +7429,8 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     gate_limits = [
         timeout
         for name, timeout, limit in seen
-        if name == "make" and limit == "the runner's step limit after 7 minutes"
+        # Every gate starts under `sh -c` (decisions.md Q-9), the world's `make verify` included.
+        if name == "sh" and limit == "the runner's step limit after 7 minutes"
     ]
     assert gate_limits and all(0 < timeout <= 7 * 60 for timeout in gate_limits), seen
     assert all(timeout is not None for _, timeout, _ in seen), seen
@@ -7415,7 +7442,7 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     original = stage2.launch
 
     def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
-        if command == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
@@ -25251,7 +25278,7 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     seen: list[str] = []
 
     def record(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             seen.append(git(root, "ls-files"))
         return original_launch(command, root, env, secret, **kwargs)
 
@@ -25295,7 +25322,7 @@ def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
     seen = []
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             listed = subprocess.run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
             seen.append(set(os.fsdecode(listed).split("\0")))
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -25337,7 +25364,7 @@ def test_make_verify_preserves_raw_byte_paths_and_drops_both_entries(
         return original_run(command, *args, **kwargs)
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             listed = original_run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
             seen.append(set(listed.split(b"\0")))
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -25414,7 +25441,7 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
     original_launch = stage2.launch
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             if failure == "index.lock":
                 lock.write_text("interrupted Git operation\n")
             if verification == "timeout":
@@ -26290,7 +26317,7 @@ def test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify(
         return real_prepare(*args, **kwargs)
 
     def watching_launch(command, *args, **kwargs):
-        if command == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             assert_ready("verify")
         return real_launch(command, *args, **kwargs)
 
@@ -27054,6 +27081,12 @@ class LocalCommands:
             return "ruff"
         if program.endswith(".venv/bin/python3") and command[1:3] == ["-m", "pytest"]:
             return "pytest"
+        # The world's full check keeps its own kind, and its document gate still reaches the
+        # `bash` stand-in's `docs` steps, now that both start under `sh -c` (decisions.md Q-9).
+        if list(command) == FULL_CHECK_ARGV:
+            return "make"
+        if list(command) == DOCS_GATE_ARGV:
+            return None
         if program == "sh" and command[1:2] == ["-c"]:
             return "gate"
         if program == "make":
@@ -27963,7 +27996,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
     real = stage2.launch
 
     def launch(command, cwd, env, *args, **kwargs):
-        if command[0] != "make":
+        if list(command) != FULL_CHECK_ARGV:
             return real(command, cwd, env, *args, **kwargs)
         if case == "head-moved":
             git(Path(cwd), "commit", "--quiet", "--allow-empty", "-m", "moved while the check ran")
@@ -28074,7 +28107,7 @@ def test_review_admits_only_runner_audit_changes_outside_phase6(
     real = stage2.launch
 
     def launch(command, cwd, env, *args, **kwargs):
-        if command[0] == "make":
+        if list(command) == FULL_CHECK_ARGV:
             if case in ("audit-moved", "new-audit-during-check"):
                 world.findings.write_bytes(body + b"\n" + audit.encode() + b"\n")
             elif case == "index-moved":
@@ -28973,8 +29006,11 @@ def test_full_verify_gate_uses_worktree_pinned_ruff(
         return SimpleNamespace(exit_code=0)
 
     monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    # The gate's shell is found on `PATH`, as the shell entry point's `sh` is (decisions.md Q-9), so
+    # the planted `PATH` keeps the real shell's directory behind the global tool directory.
+    gate_path = os.pathsep.join([str(global_bin), str(Path(REAL_SH).parent)])
     try:
-        out, err, code = stage2._scheduled_verify(root, {"PATH": str(global_bin)}, "verify")
+        out, err, code = stage2._scheduled_verify(root, {"PATH": gate_path}, "verify")
     except stage2.CallFailed as error:
         pytest.fail(f"the pinned gate command must start: {error}")
     assert code == 0, out + err
@@ -29112,14 +29148,19 @@ def test_malformed_gate_list_fails_the_runner_check_with_a_diagnostic(world: Wor
 
 
 def test_scheduled_gate_shell_is_the_shell_entry_points():
-    # Criterion 10 (loop row L3-4). Planted fault: Stage 2 runs a non-plain gate command under another
-    # shell than `make verify`'s executor, so a shell-specific command reads differently on the two paths.
+    # Criterion 10 (loop row L3-4, decisions.md Q-9). Planted fault: Stage 2 runs a gate command under
+    # another shell than `make verify`'s executor, or starts a plain command as its own vector, so a
+    # shell-specific command reads differently on the two paths and a missing or non-executable
+    # program aborts the check instead of returning the shell's 127 or 126.
     import verify_run
 
     command = 'FOO=1 python3 -c "print(1)" | cat'
     argv = stage2._gate_argv(command, "/pinned/python")
     assert argv == verify_run.shell_argv('FOO=1 /pinned/python -c "print(1)" | cat')
     assert argv[0] == "sh"
+    for plain in ("make verify", "python3 scripts/check.py --strict", "./plain-gate"):
+        resolved = plain.replace("python3", "/pinned/python", 1)
+        assert stage2._gate_argv(plain, "/pinned/python") == verify_run.shell_argv(resolved), plain
 
 
 @pytest.mark.parametrize("enforcement", ["block", "report"])
