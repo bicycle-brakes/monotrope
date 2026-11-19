@@ -76,3 +76,126 @@ Stage-2 call, 2026-11-19: spec-review · endpoint claude-code-plan · model clau
 | S-12 | MINOR | SPEC | base | plans/changes/journal-citation-gate/spec.md:33, spec.md:37, spec.md:43, spec.md:50; decisions.md:39, decisions.md:62-65 | [AMBIGUITY] "Concrete" (AC3, AC5) is not defined, and normalisation strips a glob's trailing wildcard. Take a handover glob that ends in `*`, such as the target `2026-11-*` or `coding-harness-*`. It becomes `2026-11-` or `coding-harness-`. No `*` remains, so AC1 does not apply. The result is not empty, does not start with `<`, is not an elision and holds no full ISO date, so AC4 does not apply either. Reading A ("concrete" means anything AC1 and AC4 do not exempt): AC3 reports the glob, although Q-1 in the maintainer's words leaves out any target that "contains `*`", and a glob names no file. Reading B ("concrete" means a target that names one file): the glob passes, but the spec gives no rule that tells a trailing glob wildcard apart from a trailing emphasis marker (`bootstrap.md*`), which S-2 keeps red. Grep finds no such target in tracked Markdown today. No refutation case uses a glob that ends in `*`. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-19: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1118 files, 4797 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1118 files, 4798 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/journal-citation-gate/plan.md` +6 -6
+> - `scripts/check_research_handoff.py` +23 -2
+> - `tests/test_provenance.py` +228 -4
+> - `tests/test_research_handoff.py` +50 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_provenance.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......F                                                                  [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/journal-citation-gate/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _file_findings(pfad, text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."']
+> E       assert not ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."']
+>
+> tests/test_provenance.py:138: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 6 passed in 0.85s
+> ```
+
+Stage-2 call, 2026-11-19: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1118 files, 4805 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/journal-citation-gate/plan.md` +6 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......F                                                                  [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/journal-citation-gate/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _file_findings(pfad, text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\'', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\'']
+> E       assert not ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."', 'plans/changes/journal-cita...andover/bootstrap.md*."\'', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\'']
+>
+> tests/test_provenance.py:138: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 6 passed in 0.73s
+> ```
+
+Stage-2 call, 2026-11-19: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1118 files, 4807 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/journal-citation-gate/plan.md` +6 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......F                                                                  [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/journal-citation-gate/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _file_findings(pfad, text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\'', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\'', 'plans/changes/journal-citation-gate/fi [… 432 characters left out …]
+> E       assert not ['plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."', 'plans/changes/journal-cita...trap.md*."\\\'\'', 'plans/changes/journal-citation-gate/findings.md: docs/journal/handover/bootstrap.md*."\\\'\'', ...]
+>
+> tests/test_provenance.py:138: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 6 passed in 0.59s
+> ```

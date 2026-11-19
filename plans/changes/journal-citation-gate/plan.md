@@ -41,12 +41,16 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_provenance.py::test_patterns_are_not_journal_citations — a glob ending in `*` or containing `*.md` is reported.
-- 2: not yet written tests/test_provenance.py::test_runner_envelopes_are_not_journal_citations — a path inside a parseable envelope or its audit prose is reported, including when later whole-change validation fails.
-- 3: not yet written tests/test_provenance.py::test_undated_citations_outside_runner_envelopes_are_reported — an undated path or one with emphasis followed by a closing quote or typographic possessive passes through the tracked-file check.
-- 4: not yet written tests/test_provenance.py::test_existing_exemptions_and_elisions — a dated target, marker-only directory, placeholder or elision is reported after normalisation.
-- 5: not yet written tests/test_provenance.py::test_malformed_or_forged_envelopes_remain_scannable — a malformed envelope or one outside change research hides a citation, or a valid run remains exempt in a file with a malformed run.
-- 5: not yet written tests/test_research_handoff.py::test_envelope_spans_share_reader_validation — spans differ from accepted marker boundaries, parsing verdicts or messages change, or mixed line endings and Unicode shift a span.
+- 1: tests/test_provenance.py::test_patterns_are_not_journal_citations — a glob ending in `*` or containing `*.md` is reported.
+- 2: tests/test_provenance.py::test_runner_envelopes_are_not_journal_citations — a path inside a parseable envelope or its audit prose is reported, including when later whole-change validation fails.
+- 3: tests/test_provenance.py::test_undated_citations_outside_runner_envelopes_are_reported — an undated path or one with emphasis followed by a closing quote or typographic possessive passes through the tracked-file check.
+- 4: tests/test_provenance.py::test_existing_exemptions_and_elisions — a dated target, marker-only directory, placeholder or elision is reported after normalisation.
+- 5: tests/test_provenance.py::test_malformed_or_forged_envelopes_remain_scannable — a malformed envelope or one outside change research hides a citation, or a valid run remains exempt in a file with a malformed run.
+- 5: tests/test_research_handoff.py::test_envelope_spans_share_reader_validation — spans differ from accepted marker boundaries, parsing verdicts or messages change, or mixed line endings and Unicode shift a span.
+
+## Runner route — 2026-11-19
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
 
@@ -54,3 +58,6 @@ make verify
 2026-11-19 17:32:49–17:34:36 UTC, 107 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-19 17:38:50–17:40:25 UTC, 95 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-19 17:44:44–17:46:57 UTC, 134 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-19 17:47:12–18:17:19 UTC, 1807 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 18:17:31–18:28:24 UTC, 653 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 18:28:35–18:29:17 UTC, 42 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
