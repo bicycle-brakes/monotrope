@@ -723,3 +723,16 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-3-20261119T084545957362Z-c7422ab7.md
 > ```
+
+Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4743 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R4 | MAJOR | SPEC | base | scripts/venv_guard.py:67 | When a caller uses `python -S` and the checkout’s usable `.venv` contains the missing dependency, the replacement retains `-S`, which disables the virtual environment’s site-packages. The import still fails instead of using the available dependency. [Acceptance criterion 1] | Codex | taken — maintainer 2026-11-19 (answer A): the replacement drops -S, since its purpose is the environment's site-packages | no |
+| R5 | MAJOR | SPEC | base | tests/test_venv_guard.py:258 | The check accepts `result = print("started")` before `import venv_guard`, because it treats every assignment as harmless. If the guard restarts the script, the message is printed twice. This is new evidence for the previously fixed finding about repeated effects: the check also misses calls inside assignments, decorators and class bodies. [Boundary; acceptance criterion 1] | Codex | taken — decisions.md Q-4 (maintainer 2026-11-19, answer A): every call before the guard counts as an effect, also inside assignments, decorators and class bodies; scripts/kit/probe.py sets its path constants after the guard | no |
+| R6 | MAJOR | SPEC | base | tests/test_venv_guard.py:195 | A script containing `import yaml, venv_guard` passes the guard-order check because the statement contains `venv_guard`, although Python imports `yaml` first. A caller missing PyYAML therefore fails before the guard can select the checkout environment. [Acceptance criterion 5] | Codex | taken — decisions.md Q-4: the guard import is a statement of its own, before any other non-standard import | no |
+
+Phase 6 verdict: codex 01a1f32a-d3b9-7020-a7bf-a427c7c3287e, 2026-11-19
+Reviewer session: codex 01a1f32a-d3b9-7020-a7bf-a427c7c3287e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
