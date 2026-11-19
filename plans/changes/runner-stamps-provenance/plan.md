@@ -134,6 +134,10 @@ found and changed:
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-19
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -158,3 +162,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-19 17:53:17–17:54:14 UTC, 57 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-19 17:54:25–17:59:42 UTC, 317 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-19 about 18:02–18:56 UTC, about 54 min — repair · orchestrator hand finishing of round 2 (Opus subagent): committed-fault stop narrowed to unreadable headers (criterion 14, loop row L2-12), three fixtures meet the checks L2-4 and L2-10 added, two full `make verify` runs · measured by hand from commit and log times; the start is approximate
+2026-11-19 21:59:08–22:00:33 UTC, 85 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 22:00:46–22:01:48 UTC, 62 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 22:02:00–22:05:04 UTC, 185 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

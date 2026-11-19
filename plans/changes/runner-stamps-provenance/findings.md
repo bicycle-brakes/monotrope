@@ -1163,3 +1163,86 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > 2 failed, 32 passed in 2.70s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261119T172809818792Z-df95c364.md
 > ```
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1115 files, 4818 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4818 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-1-20261119T215855192121Z-e0fe28da.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4818 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-2-20261119T215855192121Z-e0fe28da.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4818 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +116 -35
+> - `tests/test_runner_stamps_provenance.py` +165 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/stage2.py:1272:21: PTH100 `os.path.abspath()` should be replaced by `Path.resolve()`
+>      |
+> 1270 |     if path.name != "findings.md" or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", prepared) is None:
+> 1271 |         return
+> 1272 |     absolute = Path(os.path.abspath(path))
+>      |                     ^^^^^^^^^^^^^^^ PTH100
+> 1273 |     root = next((parent for parent in absolute.parents if (parent / ".git").exists()), None)
+> 1274 |     if root is None:
+>      |
+>
+> tests/test_runner_stamps_provenance.py:1299:59: ARG005 Unused lambda argument: `a`
+>      |
+> 1298 |     monkeypatch.setattr(stage2, "run_codex", run_step)
+> 1299 |     monkeypatch.setattr(stage2, "run_work_model", lambda *a, **k: run_step()[0])
+>      |                                                           ^ ARG005
+> 1300 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: next(answers))
+> 1301 |     ctx = _ctx(repo)
+>      |
+>
+> tests/test_runner_stamps_provenance.py:1299:64: ARG005 Unused lambda argument: `k`
+>      |
+> 1298 |     monkeypatch.setattr(stage2, "run_codex", run_step)
+> 1299 |     monkeypatch.setattr(stage2, "run_work_model", lambda *a, **k: run_step()[0])
+>      |                                                                ^ ARG005
+> 1300 |     monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: next(answers))
+> 1301 |     ctx = _ctx(repo)
+>      |
+>
+> tests/test_runner_stamps_provenance.py:1367:63: ARG001 Unused function argument: `monkeypatch`
+>      |
+> 1367 | def test_unmeasured_attempt_still_judges_retained_files(repo, monkeypatch):
+>      |                                                               ^^^^^^^^^^^ ARG001
+> 1368 |     # Loop row L3-4, second part: a failed changed-file measurement skips neither judgement nor stamp silently.
+> 1369 |     bad = f"---\ntitle: Bad\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Bad\n"
+>      |
+>
+> Found 4 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261119T215855192121Z-e0fe28da.md
+> ```

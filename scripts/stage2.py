@@ -1253,7 +1253,34 @@ def append(path: Path, text: str) -> None:
     truncated one (deep review RS-2-6).
     """
     existing = path.read_bytes() if path.exists() else b""
-    write_atomic(path, appended_bytes(existing, text))
+    prepared = appended_bytes(existing, text)
+    judge_findings_write(path, prepared)
+    write_atomic(path, prepared)
+
+
+def judge_findings_write(path: Path, prepared: bytes) -> None:
+    """The one choke point every verb's findings write passes: the shared check judges the bytes first.
+
+    `append` is the writer of every audit line, review-loop and probe included and any verb to
+    come, so none needs a call of its own (Q-17, L3-5). A findings file with a committed
+    baseline and a frontmatter header is judged by the shared contract before it lands: a fault
+    in the prepared bytes refuses the write, a committed fault stops it naming the migration.
+    A file without a repository, a baseline or a header carries nothing to judge here.
+    """
+    if path.name != "findings.md" or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", prepared) is None:
+        return
+    absolute = Path(os.path.abspath(path))
+    root = next((parent for parent in absolute.parents if (parent / ".git").exists()), None)
+    if root is None:
+        return
+    relative = absolute.relative_to(root).as_posix()
+    try:
+        head = committed_bytes(root, relative)
+    except (Refused, OSError):
+        return
+    if head is None or head == prepared or re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", head) is None:
+        return
+    classify_publication(root, relative, prepared)
 
 
 def write_atomic(path: Path, data: bytes) -> None:
@@ -1410,6 +1437,17 @@ def research_producer_field(records: list[dict]) -> str:
     return "produced_by: [" + ", ".join(inline(record) for record in records) + "]"
 
 
+def frontmatter_pattern() -> re.Pattern[str]:
+    """The one frontmatter pattern, the census's own: both halves of a check read the same bytes.
+
+    A byte-order mark before the opening rule is part of it, so a BOM-marked artifact is stamped
+    and judged the way it is selected (L3-6). Imported at call time: the census reads this module back.
+    """
+    import research_census
+
+    return research_census.FRONTMATTER
+
+
 def research_publication(
     existing: bytes, *, producer: str, day: str, model: str | None = None, baseline_field: str | None = None
 ) -> bytes:
@@ -1432,7 +1470,7 @@ def research_publication(
         text = existing.decode("utf-8")
     except UnicodeDecodeError as error:
         raise Refused("research publication refused: research is not UTF-8") from error
-    header = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    header = frontmatter_pattern().match(text)
     if header is None:
         raise Refused("research publication requires frontmatter")
     start, end = header.span(1)
@@ -9418,7 +9456,7 @@ def committed_producer_field(root: Path, relative: str) -> str | None:
     head = committed_bytes(root, relative)
     if head is None:
         return None
-    match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+    match = frontmatter_pattern().match(head.decode("utf-8", "surrogateescape"))
     if match is None:
         return None
     try:
@@ -9446,7 +9484,7 @@ def refuse_committed_header_fault(root: Path, relative: str) -> None:
     head = committed_bytes(root, relative)
     if head is None:
         return
-    match = re.match(r"\A﻿?---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+    match = frontmatter_pattern().match(head.decode("utf-8", "surrogateescape"))
     if match is not None:
         block = match.group(1)
         try:
@@ -9526,8 +9564,13 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
         item_indent = indent
         flow_items = first.lstrip().startswith("- {")
     else:
-        # A block mapping: its first line becomes the first sequence item, at column 0.
+        # A block mapping: its first line becomes the first sequence item, at column 0, and every
+        # further line moves with it to the item's content column, so a mapping indented deeper
+        # than two spaces stays valid YAML. At the usual two spaces the later lines keep their bytes.
         lines[0] = "- " + first[len(indent) :]
+        lines[1:] = [
+            "  " + line[len(indent) :] if line.strip() and line.startswith(indent) else line for line in lines[1:]
+        ]
         item_indent = ""
         flow_items = False
     for record in added:
@@ -9562,7 +9605,7 @@ def _unowned_content(text: str, *keys: str) -> str | None:
     stand together, so a change anywhere outside the named fields differs. None when the
     document has no readable frontmatter.
     """
-    match = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+    match = frontmatter_pattern().match(text)
     if match is None:
         return None
     try:
@@ -9610,7 +9653,7 @@ def stamp_artifact(
         raise Refused(f"{relative}: cannot be stamped safely (not UTF-8)") from error
     except OSError as error:
         raise Refused(f"{relative}: cannot be stamped safely ({error})") from error
-    match = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+    match = frontmatter_pattern().match(text)
     if match is None:
         raise Refused(f"{relative}: cannot be stamped safely (no frontmatter)")
     start, end = match.span(1)
@@ -9645,7 +9688,7 @@ def stamp_artifact(
     head = committed_bytes(root, relative)
     head_block = None
     if head is not None:
-        head_match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+        head_match = frontmatter_pattern().match(head.decode("utf-8", "surrogateescape"))
         head_block = head_match.group(1) if head_match else None
         if head_block is not None and not isinstance(yaml.safe_load(head_block), dict):
             head_block = None  # prose between two rules is no committed header (L2-6)
@@ -9750,6 +9793,20 @@ def changed_relative_paths(root: Path, before: str, after: str) -> list[str]:
     return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
 
 
+def retained_changed_paths(root: Path) -> list[str]:
+    """The paths the working tree holds changed against HEAD, untracked ones included, ignored ones not.
+
+    The fallback when an attempt's own changed files cannot be measured: what the tree retains is
+    still judged by the shared check. An unreadable listing is no paths; the caller's attempt
+    already fails on its failed measurement.
+    """
+    try:
+        raw = _git_bytes(root, "ls-files", "-m", "-o", "--exclude-standard", "-z")
+    except (Refused, OSError):
+        return []
+    return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
+
+
 def header_problems(relative: str, baseline: bytes | None, current: bytes, *, runner_reset: bool = False) -> list[str]:
     """The shared post-run judgement for one touched file, as lines that name the file.
 
@@ -9822,6 +9879,15 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes, *, ru
                 baseline_header = None
     provenance = header.get("provenance")
     review = header.get("review")
+    if isinstance(baseline_header, dict) and baseline_header.get("produced_by") is not None:
+        # A producer record a session wrote is never trusted (Q-10, Q-17): every record the commit
+        # holds must stand unchanged, on implement as on every verb. A dropped or rewritten one is a fault.
+        def as_records(value: object) -> list:
+            return value if isinstance(value, list) else [value]
+
+        kept = as_records(header.get("produced_by"))
+        if any(record not in kept for record in as_records(baseline_header["produced_by"])):
+            problems.append(f"{relative}: produced_by: a committed producer record was rewritten or dropped")
     if baseline_header is None or not isinstance(baseline_header, dict):
         # A new file (criterion 11): ai-drafted-reviewed provenance and a pending review; a new
         # ADR may keep its human-decided provenance, its review still pending.
@@ -10006,6 +10072,10 @@ def run_attempts(
         if path.is_file():
             prompt_input(path, inputs)
     diagnostics: list[str] = []
+    # The contributions earlier attempts of this run stamped into retained files, and every file the
+    # run retained: a later attempt starts on the tree a failed one left (criteria 4 and 7).
+    contributions: dict[str, list[dict]] = {}
+    run_touched: set[str] = set()
     record: list[str] = []
     scope_record: list[str] = []  # targeted verification: the passing attempt's mode, selected checks and result
     # The tests pytest reported as failed in the attempt before; the next cheap run selects them too.
@@ -10323,38 +10393,49 @@ def run_attempts(
             stamp_notices: list[str] = []
             stamp_problems: list[str] = []
             findings_rel = ctx.findings.relative_to(root).as_posix()
-            if unmeasured is None and work_unmeasured is None:
-                try:
-                    # The measurement itself stands inside the guard: a failed comparison fails this
-                    # attempt like any unmeasured one and never ends the verb (criterion 10).
+            runner_owned = (findings_rel, "plans/INDEX.md", ctx.plan.relative_to(root).as_posix())
+            try:
+                # The measurement itself stands inside the guard: a failed comparison fails this
+                # attempt like any unmeasured one and never ends the verb (criterion 10).
+                if unmeasured is None and work_unmeasured is None:
                     candidates = [
                         path
                         for path in changed_relative_paths(root, before, after)
                         if path not in (findings_rel, "plans/INDEX.md")
                     ]
-                    if verb == "repair":
-                        # The stamp writes into the change folder, so its whole batch stands checked
-                        # before its first write, as every recovery write does: a parent replaced by a
-                        # link since the call refuses unwritten.
-                        stamp_notices = stamp_retained_artifacts(
-                            root,
-                            candidates,
-                            producer=producer_for(endpoint),
-                            model=endpoint[1],
-                            day=today(),
-                            before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
-                        )
-                    # Only a verb that stamps may reset an approval; elsewhere a reset is a fault (L2-9).
-                    stamp_problems = touched_header_problems(root, candidates, runner_reset=verb == "repair")
-                except (CommittedRecordFault, RestorationRefused):
-                    # A committed header no route can stamp stops the verb; the migration owns it
-                    # (spec, criterion 15). A safety refusal propagates unwritten. The attempt's own
-                    # entry still stands, rejected.
-                    raise
-                except (Refused, OSError) as error:
-                    # The stamp or the check refused an artifact: the attempt fails before any
-                    # check runs on it, and the next available route may do better (criterion 6).
-                    stamp_problems = [protect_diagnostics(str(error), key)]
+                else:
+                    # Which files this attempt changed is unknown, so nothing is stamped; what the
+                    # tree retains is still judged, never skipped (criterion 4, L3-4).
+                    candidates = []
+                    run_touched.update(path for path in retained_changed_paths(root) if path not in runner_owned)
+                run_touched.update(candidates)
+                if verb == "repair":
+                    # The stamp writes into the change folder, so its whole batch stands checked
+                    # before its first write, as every recovery write does: a parent replaced by a
+                    # link since the call refuses unwritten. The run's ledger carries the records
+                    # earlier attempts stamped, so every measured contribution stays (criterion 7, L3-2).
+                    stamp_notices = stamp_retained_artifacts(
+                        root,
+                        candidates,
+                        producer=producer_for(endpoint),
+                        model=endpoint[1],
+                        day=today(),
+                        ledger=contributions,
+                        before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
+                    )
+                # Every file the run retained is judged, not only this attempt's own changes
+                # (criterion 4, L3-4). Only a verb that stamps may reset an approval; elsewhere a
+                # reset is a fault (L2-9).
+                stamp_problems = touched_header_problems(root, sorted(run_touched), runner_reset=verb == "repair")
+            except (CommittedRecordFault, RestorationRefused):
+                # A committed header no route can stamp stops the verb; the migration owns it
+                # (spec, criterion 15). A safety refusal propagates unwritten. The attempt's own
+                # entry still stands, rejected.
+                raise
+            except (Refused, OSError) as error:
+                # The stamp or the check refused an artifact: the attempt fails before any
+                # check runs on it, and the next available route may do better (criterion 6).
+                stamp_problems = [protect_diagnostics(str(error), key)]
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             scope_lines: list[str] = []

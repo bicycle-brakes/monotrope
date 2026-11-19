@@ -1268,3 +1268,168 @@ def test_committed_duplicate_producer_stops_the_stamp_as_a_committed_fault(repo)
         pytest.fail(f"a committed fault was reported as an attempt fault: {error}")
     else:
         pytest.fail("the stamp accepted a committed duplicate producer field")
+
+
+NOTES_PATH = "plans/changes/demo/notes.md"
+NOTES_SEED = (
+    "---\n"
+    'title: "Notes — demo"\n'
+    "status: draft\n"
+    "updated: 2026-11-10\n"
+    "provenance: ai-drafted-reviewed\n"
+    'produced_by: {kind: llm-session, name: codex, version: "2026-11-10", model: "gpt-6.1-terra"}\n'
+    f"review: {PENDING_REVIEW}\n"
+    "tags: [notes]\n"
+    "---\n"
+    "\n"
+    "# Notes\n"
+)
+
+
+def _run_two_attempts(repo, monkeypatch, verb, first_write, second_write, verdicts):
+    """Run `verb` through two routes (Codex, then the stage-1 Sonnet); each writes through its callable."""
+    steps = iter([first_write, second_write])
+    answers = iter(verdicts)
+
+    def run_step(*_a, **_k):
+        next(steps)(repo)
+        return "done", "thread"
+
+    monkeypatch.setattr(stage2, "run_codex", run_step)
+    monkeypatch.setattr(stage2, "run_work_model", lambda *a, **k: run_step()[0])
+    monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: next(answers))
+    ctx = _ctx(repo)
+    baseline = _git(repo, "rev-parse", "HEAD")
+    stage2.run_attempts(
+        ctx,
+        verb,
+        [(stage2.CODEX, None, "codex", None), (stage2.SONNET, None, "stage-1", "the first attempt failed")],
+        _build_prompt(ctx),
+        baseline,
+        None,
+        None,
+        commit_message="test run",
+        closing="stopped",
+        tools={},
+        verify_mode="targeted",
+    )
+
+
+def test_repair_keeps_every_measured_contribution_of_the_run(repo, monkeypatch):
+    # Loop row L3-2: a retained document a failed repair attempt stamped keeps that record when a
+    # later attempt edits it again; the route passes the run's ledger to the stamp.
+    _commit_file(repo, NOTES_PATH, NOTES_SEED, "seed notes")
+    day = stage2.today()
+
+    def first(root):
+        _write(root, NOTES_PATH, NOTES_SEED + "\nFirst attempt line.\n")
+
+    def second(root):
+        text = (root / NOTES_PATH).read_text(encoding="utf-8")
+        _write(root, NOTES_PATH, text + "\nSecond attempt line.\n")
+
+    _run_two_attempts(repo, monkeypatch, "repair", first, second, [["a check failed"], []])
+    records = _records(_header_at(repo, NOTES_PATH)["produced_by"])
+    first_record = {
+        "kind": "llm-session",
+        "name": stage2.producer_for(stage2.CODEX),
+        "version": day,
+        "model": stage2.CODEX[1],
+    }
+    second_record = {
+        "kind": "llm-session",
+        "name": stage2.producer_for(stage2.SONNET),
+        "version": day,
+        "model": stage2.SONNET[1],
+    }
+    assert first_record in records, f"the rejected attempt's measured record was overwritten: {records}"
+    assert second_record in records, records
+
+
+def test_run_judges_every_retained_touched_file_not_only_this_attempts(repo, monkeypatch):
+    # Loop row L3-4: a file a rejected attempt left with a faulty header stays judged when a later
+    # attempt changes other files only.
+    bad = f"---\ntitle: Bad\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Bad\n"
+
+    def first(root):
+        _write(root, "plans/changes/demo/bad.md", bad)
+
+    def second(root):
+        _write(root, "plans/changes/demo/other.txt", "plain text, no header\n")
+
+    with pytest.raises(stage2.CallFailed):
+        _run_two_attempts(repo, monkeypatch, "implement", first, second, [[], []])
+    assert not _git(repo, "log", "--format=%s", "-1").startswith("test run"), (
+        "the faulty retained file was committed by a later attempt's checkpoint"
+    )
+
+
+def test_unmeasured_attempt_still_judges_retained_files(repo, monkeypatch):
+    # Loop row L3-4, second part: a failed changed-file measurement skips neither judgement nor stamp silently.
+    bad = f"---\ntitle: Bad\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Bad\n"
+    _write(repo, "plans/changes/demo/bad.md", bad)
+    assert any("bad.md" in path for path in stage2.retained_changed_paths(repo))
+    problems = stage2.touched_header_problems(repo, stage2.retained_changed_paths(repo))
+    assert any("bad.md" in problem for problem in problems), problems
+
+
+@pytest.mark.parametrize("drop", [False, True])
+def test_implement_refuses_a_rewritten_committed_producer(drop):
+    # Loop row L3-3: a session-written produced_by is never trusted on any verb.
+    current = SPEC_SEED.replace(
+        'produced_by: {kind: llm-session, name: codex, version: "2026-11-10", model: "gpt-6.1-terra"}\n',
+        "" if drop else 'produced_by: {kind: llm-session, name: pi, version: "2026-11-18", model: "other-model"}\n',
+    )
+    problems = stage2.header_problems(SPEC_PATH, SPEC_SEED.encode("utf-8"), current.encode("utf-8"))
+    assert any("committed producer record was rewritten or dropped" in problem for problem in problems), problems
+
+
+def test_findings_write_passes_the_one_shared_check(repo):
+    # Loop row L3-5: every verb writes its audit lines through `append`, which judges the bytes first.
+    relative = "plans/changes/demo/findings.md"
+    committed = (
+        "---\n"
+        'title: "Findings — demo"\n'
+        "provenance: ai-drafted-reviewed\n"
+        f"review: {PENDING_REVIEW}\n"
+        "updated: 2026-11-10\n"
+        "---\n\n# Findings — demo\n"
+    )
+    _commit_file(repo, relative, committed, "seed findings")
+    path = repo / relative
+    path.write_text(committed.replace("ai-drafted-reviewed", "human-written"), encoding="utf-8")
+    before = path.read_bytes()
+    try:
+        stage2.append(path, "Stage-2 call: probe")
+    except stage2.Refused:
+        pass
+    else:
+        pytest.fail("a findings write with a changed provenance class passed the choke point")
+    assert path.read_bytes() == before, "the refused write landed"
+    path.write_text(committed, encoding="utf-8")
+    stage2.append(path, "Stage-2 call: probe")
+    assert "Stage-2 call: probe" in path.read_text(encoding="utf-8")
+
+
+def test_byte_order_mark_is_stamped_and_judged(repo):
+    # Loop row L3-6: both halves of the check read one frontmatter pattern, the census's own.
+    bom = "﻿" + SPEC_SEED
+    _commit_file(repo, SPEC_PATH, bom, "seed a BOM-marked spec")
+    _write(repo, SPEC_PATH, bom.replace("stand here.", "stand here, changed."))
+    day = stage2.today()
+    try:
+        stage2.stamp_artifact(repo, SPEC_PATH, producer="codex", model="gpt-6.1-terra", day=day)
+    except stage2.Refused as error:
+        pytest.fail(f"a BOM-marked artifact could not be stamped: {error}")
+    stamped = (repo / SPEC_PATH).read_bytes()
+    assert stamped.startswith(b"\xef\xbb\xbf---\n")
+    assert stage2.touched_header_problems(repo, [SPEC_PATH], runner_reset=True) == []
+
+
+def test_block_mapping_deeper_than_two_spaces_stays_valid_yaml():
+    # Loop row L3-7: the conversion re-indents every line of the committed record.
+    field = '\n    kind: llm-session\n    name: codex\n    version: "2026-11-10"'
+    earlier = stage2.parse_producer_records(field, "test")
+    added = {"kind": "llm-session", "name": "pi", "version": "2026-11-11"}
+    result = stage2.retained_producer_field(field, [*earlier, added])
+    assert yaml.safe_load(result) == [*earlier, added]
