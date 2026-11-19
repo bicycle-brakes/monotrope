@@ -83,6 +83,26 @@ harness allows it and to teach the Go path the same in its own bead, to
 achieve format errors that cannot arise on Claude seats and cost only single
 entries elsewhere, accepting a second change to the Pi path — 2026-11-19
 
+## Q-4 · How the spec review ends after round 3
+
+asked: 2026-11-19
+answer: "A: Selbst entscheiden" — in English: the orchestrator decides the round-3 rows S-14..S-19 as details with reasons, the spec and plan are redrafted, and no fourth review round runs; the phase-4b review loop and phase 6 check the result.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the end of the phase-2a spec review of this change.
+  Intention: the maintainer's rule of 2026-11-18 sends a spec-changing ambiguity left after round 3 to the maintainer.
+  Today: round 3 returned six rows (S-14..S-19), no BLOCKER; S-15 shows criteria 15 and 16 contradicting each other for a Claude call that exits 0 with an error result.
+  Repository change: decisions.md, a redrafted spec.md and plan.md.
+  Architecture change: none beyond the spec.
+  Options shown: A decide as details, no fourth round (recommended); B the same plus a fourth round; C re-slice the Claude output reading into its own change.
+
+In the context of a third spec-review round that still found ambiguities but
+no BLOCKER, facing one more round that has so far always raised new rows, we
+decided to settle the rows as reasoned details and move to implementation,
+to achieve a finished spec without an open-ended review, accepting that the
+last spec edit is first checked by the review loop and phase 6 — 2026-11-19
+
 ## Decided by the agent
 
 Spec-review round 1 rows that Q-2 and Q-3 leave open, decided by the
@@ -166,3 +186,48 @@ JSON file beside the finder prompt
 refuses any other keyword, so a schema edit cannot be silently ignored. No
 new dependency. Reason: a JSON file is language-neutral (the long-term Rust
 direction), and the keyword refusal makes criterion 3 testable.
+
+Spec-review round 3 rows, decided by the orchestrator with reasons (Q-4).
+
+[DETAIL] **S-15 (exit 0 with an error result)**: a Claude finder call whose
+result reports that no schema-conforming answer was produced (exit 0, no
+`structured_output`, whatever `is_error` or `subtype` says) is an invalid
+report (criterion 15); only a non-zero exit, or a result that ends before
+the model answered (`subtype` naming a turn, budget or API limit), is a
+failed call (criterion 16). Reason: a format failure must not read as a
+process failure, which is the incident this change repairs.
+
+[DETAIL] **S-14 (stdout of a rejected Claude finder record)**: on every path
+the stored `stdout` of a Claude finder call holds only the envelope's
+`result` text, or nothing; the session id and the cost are never stored or
+published. Reason: the S-9 rule must hold on the failure paths too.
+
+[DETAIL] **S-16 (the outer shape and the schema)**: finder validation reads
+the whole answer shape (the four category names, non-empty lists, closed
+properties) from the schema; the merged-map validation keeps `CATEGORIES`, and
+a test holds the schema's category names equal to `CATEGORIES`. A violation
+inside an item of a category array is an entry fault (dropped); every other
+violation is an outer fault (stop). Reason: one source for the finder format,
+and the test closes the divergence the row names.
+
+[DETAIL] **S-17 (a bad schema)**: the schema is loaded and checked when the
+finder prompt is built, before any call starts; a missing file, invalid JSON
+or an unsupported keyword ends the run incomplete with a reason naming the
+schema file, and no finder call runs. Reason: a harness fault must not be
+blamed on the seats.
+
+[DETAIL] **S-18 (annotations)**: `description`, `title` and `$schema` are
+supported annotations that validation ignores; the reference rules of
+`finder.md` ("exact symbol or section", "line numbers, bare paths and prose
+are not references") move into the schema's `description` strings, so every
+seat sees them in the schema. Reason: these rules guard the incident itself
+and must reach Claude seats through the enforced schema.
+
+[DETAIL] **S-19 (field form)**: the schema checks type, closed fields and a
+non-whitespace character only; the form of `path` and `reference` stays
+checked at merge as today (an unresolved locator). Reason: new form rules
+are outside this repair.
+
+[DETAIL] **Plan order (orchestrator note)**: the orchestrator creates the
+schema file and the `finder.md` edit (held paths) before the implementation
+attempt, not after, so the code reads the real file from the start.
