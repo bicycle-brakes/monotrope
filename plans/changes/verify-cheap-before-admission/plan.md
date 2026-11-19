@@ -292,3 +292,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-19 15:33:52–15:55:52 UTC, 1320 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-19 15:56:44–16:14:17 UTC, 1053 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-19 16:14:30–16:29:54 UTC, 924 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-19 16:33–17:28 UTC, about 55 min — repair F6-1 · hand finish by an Opus subagent (orchestrator hand edit 219f1c73) after the three rejected attempts · full `make verify` green (21 gates; markdownlint red as report only, on files outside this change) · start estimated from the subagent's first test run, not measured by the runner
