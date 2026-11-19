@@ -1,0 +1,54 @@
+---
+title: "Decisions — journal-citation-gate"
+category: decisions
+status: draft
+implementation_status: none
+date: 2026-11-19
+created: 2026-11-19
+last_reviewed: 2026-11-19
+updated: 2026-11-19
+supersedes: null
+superseded_by: null
+bead: coding-harness-x9ed
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-19"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [decisions, provenance]
+---
+
+# journal-citation-gate — Decisions
+
+Class: bounded (bead coding-harness-x9ed; one answered question is owed —
+Q-1 below, answered by the maintainer on 2026-11-19 in the conversation).
+
+The explore (research.md, route flash) could not read the bead and studied a
+new gate; the problem is narrower. The check is the existing test
+`tests/test_provenance.py::test_journal_is_never_cited_without_a_date`, the
+named enforcer of rule RB-P5 (`docs/governance/regelwerk.md`, § P). On
+2026-11-19 it is red in two places where nobody cites a journal file by hand:
+a journal path inside the runner-appended `research-swarm/v2` record blocks of
+`plans/changes/ontology-relation-layer/research.md` (PR #411), and the glob
+`docs/journal/handover/*.md` inside a phase-2a review row of
+`plans/changes/runner-stamps-provenance/findings.md` (bead
+coding-harness-f9sv).
+
+## Q-1 · What the journal-date check leaves out
+
+asked: 2026-11-19
+answer: "A: Muster + Runner-Blöcke" — in English: the check leaves out a citation whose target is a pattern or placeholder (it contains `*` or starts with `<`) and every citation inside a runner-written research-swarm record block; a hand-written citation of a journal file without its date stays red.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the RB-P5 check reports machine-written text as undated journal citations.
+  Intention: it turns PR #411 and the runner-stamps-provenance lane red although no one cites a journal file without its date there.
+  Today: the test scans every tracked Markdown file for `docs/journal/handover/<target>` and exempts only targets starting with `<`; it flags a JSON-escaped path in the research-swarm record blocks and the glob `docs/journal/handover/*.md` in a review row.
+  Repository change: tests/test_provenance.py and a mutation test that goes red when a real undated citation slips through.
+  Architecture change: none.
+  Options shown: A patterns and runner blocks are exempt (recommended); B only patterns, the runner writes its paths differently; C only the runner changes and the review row is edited.
+
+In the context of the RB-P5 date check, facing reports on machine-written
+text that cites no journal file, we decided that patterns and runner-written
+record blocks are not citations, to achieve a check that stays red only for a
+hand-written undated citation, accepting that a runner block is trusted not
+to cite a journal file undated by hand — 2026-11-19
