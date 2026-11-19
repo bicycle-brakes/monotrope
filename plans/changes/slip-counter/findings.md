@@ -726,3 +726,7 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 12 errors.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-3-20261119T032425115108Z-bfbdd23f.md
 > ```
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4719 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged

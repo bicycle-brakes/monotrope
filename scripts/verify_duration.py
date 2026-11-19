@@ -850,7 +850,8 @@ def _collect(
         selected = in_bounds and named
         if outside:
             if in_bounds:
-                tally.selected += 1
+                if args.change is None:
+                    tally.selected += 1
                 tally.outside += 1
             # Outside runs still may interrupt a pair, but never count as incomplete.
             selected = False

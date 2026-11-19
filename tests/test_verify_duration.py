@@ -1704,6 +1704,21 @@ def test_slips_report_legacy_and_changeless_outside_count(
     assert "outside the count: 2 legacy or change-less full runs; unattributed outside runs: 1" in out, out
 
 
+def test_change_scope_with_only_outside_runs_has_no_measurement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Outside runs cannot turn an unmatched change into a measured zero."""
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(
+        tmp_path / "state",
+        [*_check("cl", "full", _at("07:00"), _at("07:10"), "red", repository, change=None)],
+    )
+    code, out, _ = _slips(capsys, "--change", "missing")
+    assert code == 1, out
+    assert "0 runs selected, no statement possible" in out, out
+    assert "slips: 0" not in out, out
+
+
 def test_old_duration_reader_accepts_additive_version_one_fields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
