@@ -122,6 +122,13 @@ found and changed:
   was repaired in the saved repair tree (8b49b3d3); the output side, the shared post-run check for
   files outside active research, still let it pass and now refuses it
   (`test_duplicate_key_in_producer_list_is_output_fault`).
+- Full `make verify` at f8736e23 (2026-11-19): 1 failed, 6349 passed, 17 skipped. The one red is
+  `tests/test_provenance.py::test_journal_is_never_cited_without_a_date` on row F-35 of this
+  change's `findings.md` (the glob `docs/journal/handover/*.md`, committed unchanged from the
+  phase-2a review in f9f7f070). It is not a hand-finish change; whether the row text or the gate
+  changes is left to the orchestrator.
+- Loop row L1-2 is marked `fixed — tests/test_runner_stamps_provenance.py::test_duplicate_key_in_producer_list_is_output_fault`,
+  Broke a test `no`, in the loop record (backup beside it).
 
 ## Time used
 
@@ -142,3 +149,4 @@ found and changed:
 2026-11-18 22:12:21–22:27:16 UTC, 895 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-18 22:27:25–23:04:11 UTC, 2206 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-18 23:04:19–23:13:51 UTC, 571 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-19 15:31–15:59 and 16:17–16:38 UTC, 49 min — implement · orchestrator hand finishing (Opus subagent, maintainer's answer A of 2026-11-19): fixtures, four stamp faults, loop row L1-2 output side, full `make verify` · measured by hand from the scratch files and test-run timestamps; a session pause lies between the two spans
