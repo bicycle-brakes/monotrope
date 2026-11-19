@@ -113,6 +113,10 @@ jobs:
         id: dangling-beads
         if: ${{ !cancelled() }}
         run: python3 scripts/check_dangling_bead_ids.py
+      - name: New or changed duplicate rows use the one canonical form
+        id: finding-duplicates
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_finding_duplicates.py
       - name: Every interview decision stays mapped; every amendment has its ADR
         id: decision-continuity
         if: ${{ !cancelled() }}
