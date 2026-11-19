@@ -130,6 +130,10 @@ found and changed:
 - Loop row L1-2 is marked `fixed — tests/test_runner_stamps_provenance.py::test_duplicate_key_in_producer_list_is_output_fault`,
   Broke a test `no`, in the loop record (backup beside it).
 
+## Runner route — 2026-11-19
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -150,3 +154,6 @@ found and changed:
 2026-11-18 22:27:25–23:04:11 UTC, 2206 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-18 23:04:19–23:13:51 UTC, 571 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-19 15:31–15:59 and 16:17–16:38 UTC, 49 min — implement · orchestrator hand finishing (Opus subagent, maintainer's answer A of 2026-11-19): fixtures, four stamp faults, loop row L1-2 output side, full `make verify` · measured by hand from the scratch files and test-run timestamps; a session pause lies between the two spans
+2026-11-19 17:28:20–17:53:06 UTC, 1487 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 17:53:17–17:54:14 UTC, 57 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 17:54:25–17:59:42 UTC, 317 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

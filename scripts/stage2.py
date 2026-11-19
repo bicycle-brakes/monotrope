@@ -3795,9 +3795,12 @@ def review(root: Path, change: str) -> None:
         )
     append(ctx.findings, block)
     print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+    # The verb wrote the retained findings.md: the shared post-run check judges it (L2-10).
+    check_written_findings(root, ctx.findings)
 
     released = release(root, change)
     if not released:
+        check_written_findings(root, ctx.findings)
         return
     listing = "\n".join(f"- {r[0]} [{r[1]}, {r[2]}] {r[4]}: {r[5]}" for r in released)
     marks_prompt = "\n\n".join(
@@ -3807,6 +3810,7 @@ def review(root: Path, change: str) -> None:
     answer, _ = run_codex(ctx, marks_prompt, resume=thread, verb="review")
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
+    check_written_findings(root, ctx.findings)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
 
 
@@ -4664,17 +4668,22 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
 def release_loop(
     root: Path, change: str, stage_failed: str | None = None, reason: str | None = None, restart: bool = False
 ) -> None:
+    findings = folder_of(root, change) / "findings.md"
     if restart:
         if stage_failed is not None:
             raise Refused("--restart and --stage-failed exclude each other; nothing is written.")
         restart_loop(root, change, reason or "")
+        check_written_findings(root, findings)
         return
     if stage_failed is not None:
         retire_stage(root, change, stage_failed, reason or "")
+        check_written_findings(root, findings)
         return
     if reason is not None:
         raise Refused("--reason belongs to --stage-failed or --restart; nothing is released.")
     release(root, change)
+    # The verb writes the retained findings.md: the shared post-run check judges it (L2-10).
+    check_written_findings(root, findings)
 
 
 def git_error_text(text: str) -> str:
@@ -9412,6 +9421,12 @@ def committed_producer_field(root: Path, relative: str) -> str | None:
     match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
     if match is None:
         return None
+    try:
+        loaded = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        loaded = {}  # unreadable YAML: the field read below reports it as the committed fault it is
+    if loaded is None or isinstance(loaded, str):
+        return None  # a document opening with a rule carries no committed header (L2-6)
     field = _field_value_raw(match.group(1), "produced_by", relative)
     if field is not None:
         # The field must be readable now: a committed fault stops the verb here, before a route is spent.
@@ -9424,7 +9439,29 @@ def refuse_committed_header_fault(root: Path, relative: str) -> None:
 
     A producer field the committed baseline carries but no stamp can read is the stock
     migration's to fix (bead coding-harness-2i7x); retrying it on another route only burns one.
+    Every kind of committed fault stands here, so a verb stops the same way whichever kind it
+    meets (L2-12): an unreadable or non-mapping header, a YAML anchor or alias, a `produced_by`
+    held more than once, and an unreadable producer field.
     """
+    head = committed_bytes(root, relative)
+    if head is None:
+        return
+    match = re.match(r"\A﻿?---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
+    if match is not None:
+        block = match.group(1)
+        try:
+            for token in yaml.scan(block):
+                if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                    raise _committed_fault(relative, f"YAML anchor or alias {token.value!r} in the header")
+            loaded = yaml.safe_load(block)
+            if loaded is None or isinstance(loaded, str):
+                return  # a document opening with a rule, not a committed header (L2-6)
+            if not isinstance(loaded, dict):
+                raise _committed_fault(relative, "the header is not a mapping")
+            if len(_header_field_spans(block, "produced_by")) > 1:
+                raise _committed_fault(relative, "produced_by is held more than once")
+        except (ValueError, yaml.YAMLError) as error:
+            raise _committed_fault(relative, f"invalid YAML ({error})") from None
     committed_producer_field(root, relative)
 
 
@@ -9439,13 +9476,13 @@ def inline_producer_record(record: dict) -> str:
     )
 
 
-def _block_record_lines(record: dict, eol: str) -> str:
+def _block_record_lines(record: dict, eol: str, indent: str = "") -> str:
     """One producer record as a compact sequence item: `- kind: ...` then the further keys."""
     lines = []
     for index, (key, value) in enumerate(record.items()):
         prefix = "- " if index == 0 else "  "
         rendered = json.dumps(value) if key in {"version", "model"} else value
-        lines.append(f"{prefix}{key}: {rendered}")
+        lines.append(f"{indent}{prefix}{key}: {rendered}")
     return eol.join(lines)
 
 
@@ -9483,9 +9520,21 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
     lines = body.replace("\r\n", "\n").split("\n")
     first = lines[0]
     indent = first[: len(first) - len(first.lstrip(" "))]
-    lines[0] = "- " + first[len(indent) :]
+    if first.lstrip().startswith("- "):
+        # A block sequence already: its items keep their bytes and the new records follow at the
+        # same indentation, in the form of the first item (L2-2); nothing is re-prefixed.
+        item_indent = indent
+        flow_items = first.lstrip().startswith("- {")
+    else:
+        # A block mapping: its first line becomes the first sequence item, at column 0.
+        lines[0] = "- " + first[len(indent) :]
+        item_indent = ""
+        flow_items = False
     for record in added:
-        lines.append(_block_record_lines(record, eol))
+        if flow_items:
+            lines.append(f"{item_indent}- {inline_producer_record(record)}")
+        else:
+            lines.append(_block_record_lines(record, eol, item_indent))
     return eol + eol.join(lines)
 
 
@@ -9552,6 +9601,9 @@ def stamp_artifact(
     safely, naming the artifact (criterion 6).
     """
     path = root / relative
+    # A committed fault no route can stamp stops the verb before any working-tree check can
+    # fail this attempt generically (L2-12): the migration owns that header.
+    refuse_committed_header_fault(root, relative)
     try:
         text = path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as error:
@@ -9595,6 +9647,8 @@ def stamp_artifact(
     if head is not None:
         head_match = re.match(r"\A---\r?\n(.*?)\r?\n---", head.decode("utf-8", "surrogateescape"), re.S)
         head_block = head_match.group(1) if head_match else None
+        if head_block is not None and not isinstance(yaml.safe_load(head_block), dict):
+            head_block = None  # prose between two rules is no committed header (L2-6)
     notice: str | None = None
     if head_block is not None:
         committed_review = _field_value_raw(head_block, "review", relative)
@@ -9696,7 +9750,7 @@ def changed_relative_paths(root: Path, before: str, after: str) -> list[str]:
     return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
 
 
-def header_problems(relative: str, baseline: bytes | None, current: bytes) -> list[str]:
+def header_problems(relative: str, baseline: bytes | None, current: bytes, *, runner_reset: bool = False) -> list[str]:
     """The shared post-run judgement for one touched file, as lines that name the file.
 
     Active research is judged by the census contract itself, so a draft or repair result that
@@ -9704,6 +9758,10 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
     Every other file is judged on producer records, the provenance class and the review state
     against the committed baseline (criteria 4, 11, 12); its other fields stay with their own
     gates. A file without `produced_by` is not rejected solely for its absence.
+
+    `runner_reset` says the verb stamps, so the runner itself may have reset a committed
+    approval beside a document change (criterion 8); on a verb that does not stamp, such a
+    reset is a fault (L2-9).
     """
     import research_census  # the census reads this module back, so the import stands at call time
 
@@ -9752,11 +9810,16 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
             try:
                 baseline_header = yaml.safe_load(base_match.group(1))
             except (yaml.YAMLError, ValueError):
+                # The committed header itself cannot be judged: a stock fault, never this attempt's,
+                # so the verb stops and names the migration on every verb (L2-12).
+                raise _committed_fault(relative, "the header is not valid YAML") from None
+            if baseline_header is not None and not isinstance(baseline_header, dict | str):
+                raise _committed_fault(relative, "the header is not a mapping")
+            if not isinstance(baseline_header, dict):
+                # A block that reads as prose (or as nothing) between two `---` lines is a
+                # document opening with a rule, not a committed header: with no header to fault,
+                # the file falls through to the new-header judgement below (L2-6).
                 baseline_header = None
-        if baseline_header is None or not isinstance(baseline_header, dict):
-            # The committed header itself cannot be judged: a stock fault, never this attempt's.
-            problems.append(f"{relative}: the committed header cannot be read safely")
-            return problems
     provenance = header.get("provenance")
     review = header.get("review")
     if baseline_header is None or not isinstance(baseline_header, dict):
@@ -9779,7 +9842,13 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
         if _is_approval(review) and not _is_approval(baseline_review):
             problems.append(f"{relative}: review: an approval the commit does not carry is refused")
         elif review == research_census.PENDING and _is_approval(baseline_review):
-            if body_changed:
+            if not runner_reset:
+                # No stamp ran on this verb, so the runner made no reset: a session stripped the
+                # committed approval itself, and no findings entry would name its approver (L2-9).
+                problems.append(
+                    f"{relative}: review: a committed approval may not be reset by a verb that does not stamp"
+                )
+            elif body_changed:
                 # The runner's own reset stands exactly beside such a change (criterion 8).
                 pass
             else:
@@ -9791,7 +9860,7 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
     return problems
 
 
-def touched_header_problems(root: Path, candidates: list[str]) -> list[str]:
+def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: bool = False) -> list[str]:
     """The shared check over every touched file with frontmatter, each failing file named.
 
     One judgement for every file-writing verb, implement included and the writing verbs to
@@ -9810,10 +9879,34 @@ def touched_header_problems(root: Path, candidates: list[str]) -> list[str]:
         if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
         try:
-            problems.extend(header_problems(relative, head, current))
+            file_problems = header_problems(relative, head, current, runner_reset=runner_reset)
+            if file_problems and head is not None:
+                # A fault the committed header already carries is the migration's, on every verb
+                # (L2-12): the verb stops instead of spending a route.
+                committed = header_problems(relative, head, head)
+                if set(file_problems) <= set(committed):
+                    raise CommittedRecordFault(
+                        "; ".join(sorted(set(file_problems)))
+                        + "; the committed header is faulty, the migration owns it (bead coding-harness-2i7x)"
+                    )
+            problems.extend(file_problems)
+        except CommittedRecordFault:
+            raise
         except Exception as error:  # any read or YAML failure is this file's finding (EP6-14)
             problems.append(f"{relative}: unreadable metadata ({type(error).__name__}: {error})")
     return problems
+
+
+def check_written_findings(root: Path, findings: Path) -> None:
+    """The shared post-run check over the `findings.md` a verb just wrote (L2-10, Q-17).
+
+    Every file-writing verb is judged by the one check; a header fault in the written file
+    refuses the verb naming the file, and a fault the committed header already carries stops
+    it naming the migration. A file without frontmatter or without a change carries nothing to judge.
+    """
+    problems = touched_header_problems(root, [findings.relative_to(root).as_posix()])
+    if problems:
+        raise Refused("; ".join(problems))
 
 
 def classify_publication(root: Path, relative: str, prepared: bytes) -> None:
@@ -9829,7 +9922,10 @@ def classify_publication(root: Path, relative: str, prepared: bytes) -> None:
         return
     committed = header_problems(relative, head, head) if head is not None else []
     if problems and set(problems) <= set(committed):
-        raise CommittedRecordFault("; ".join(sorted(set(problems))))
+        raise CommittedRecordFault(
+            "; ".join(sorted(set(problems)))
+            + "; the committed header is faulty, the migration owns it (bead coding-harness-2i7x)"
+        )
     raise Refused("; ".join(sorted(set(problems))))
 
 
@@ -10252,7 +10348,8 @@ def run_attempts(
                             day=today(),
                             before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
                         )
-                    stamp_problems = touched_header_problems(root, candidates)
+                    # Only a verb that stamps may reset an approval; elsewhere a reset is a fault (L2-9).
+                    stamp_problems = touched_header_problems(root, candidates, runner_reset=verb == "repair")
                 except (CommittedRecordFault, RestorationRefused):
                     # A committed header no route can stamp stops the verb; the migration owns it
                     # (spec, criterion 15). A safety refusal propagates unwritten. The attempt's own
@@ -10947,6 +11044,7 @@ def draft(root: Path, change: str) -> None:
     # The contributions earlier attempts of this run stamped into retained files: the next attempt
     # starts on the tree a failed one left, so its stamp extends them (criterion 7).
     contributions: dict[str, list[dict]] = {}
+    aliases = alias_baseline(root, baseline, ignored_before)
     for attempt, (endpoint, route, reason) in enumerate(routes, 1):
         key = None
         if endpoint == GLM:
@@ -11046,7 +11144,16 @@ def draft(root: Path, change: str) -> None:
                     "its producer contribution cannot be attributed"
                 )
             # Only the files this attempt's own model call changed carry its record (criterion 7).
-            stamped_now = [path for path in changed_by_attempt if path in set(kept_relative)]
+            # findings.md is the runner's audit file and plans/INDEX.md a derived rendering: neither
+            # carries a model contribution (L2-14), as in run_attempts.
+            findings_rel = ctx.findings.relative_to(root).as_posix()
+            stamped_now = [
+                path
+                for path in changed_by_attempt
+                if path in set(kept_relative) and path not in (findings_rel, "plans/INDEX.md")
+            ]
+            # The stamp writes into the change folder, so its whole batch stands checked before its
+            # first write, as in repair: a parent replaced by a link since the call refuses (L2-5).
             stamp_notices = stamp_retained_artifacts(
                 root,
                 stamped_now,
@@ -11054,14 +11161,21 @@ def draft(root: Path, change: str) -> None:
                 model=endpoint[1],
                 day=today(),
                 ledger=contributions,
+                before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
             )
-            stamp_problems = touched_header_problems(root, kept_relative)
-        except CommittedRecordFault:
+            stamp_problems = touched_header_problems(
+                root,
+                [path for path in kept_relative if path not in (findings_rel, "plans/INDEX.md")],
+                runner_reset=True,
+            )
+        except (CommittedRecordFault, RestorationRefused):
             raise
         except (Refused, OSError) as error:
             stamp_problems = [protect_diagnostics(str(error), key)]
         if stamp_problems:
-            # The attempt fails before any document check reads its files (criterion 6).
+            # The attempt fails before any document check reads its files (criterion 6). The reset
+            # notices of a stamp that already ran stand in this block too, as in the repair path,
+            # so a failed attempt's reset still names the former approver (L2-3, criterion 8).
             problems, owed = list(stamp_problems), False
             scope = "document checks did not run: the producer stamp or header check refused the attempt first"
         else:
@@ -11070,7 +11184,14 @@ def draft(root: Path, change: str) -> None:
             # The scope evidence stands first, as in every verb's block; the next attempt starts on
             # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).
             listing = protect_diagnostics(
-                "\n".join([f"- {SCOPE_LABEL}: {scope}", *(f"- {problem}" for problem in problems)]), key
+                "\n".join(
+                    [
+                        f"- {SCOPE_LABEL}: {scope}",
+                        *(f"- {STAMP_LABEL}: {line}" for line in stamp_notices),
+                        *(f"- {problem}" for problem in problems),
+                    ]
+                ),
+                key,
             )
             files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")

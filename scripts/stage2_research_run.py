@@ -1762,6 +1762,10 @@ class Run:
         """
         assert self.store is not None and self.run_id is not None
         prepared = self.publication_bytes
+        # The shared check judges the prepared publication before anything is bound or written
+        # (criterion 15, L2-4): an output-side fault refuses the publication, and a committed
+        # fault stops the run naming the header migration.
+        self.runner.classify_publication(self.root, self.research_rel, prepared)
 
         def bind(text: str) -> None:
             addition = text.rstrip().encode() + b"\n"

@@ -25,6 +25,24 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 
+
+def test_block_sequence_retains_prior_record_bytes():
+    field = '\n- {kind: llm-session, name: codex, version: "2026-11-04"}'
+    earlier = stage2.parse_producer_records(field, "test")
+    added = {"kind": "llm-session", "name": "pi", "version": "2026-11-05"}
+    result = stage2.retained_producer_field(field, [*earlier, added])
+    assert result.startswith(field + "\n")
+    assert yaml.safe_load(result) == [*earlier, added]
+
+
+def test_header_added_to_committed_headerless_file_is_new():
+    current = (
+        b"---\nprovenance: ai-drafted-reviewed\n"
+        b"review: {status: pending, approved_by: null, approved_at: null}\n---\nBody\n"
+    )
+    assert stage2.header_problems("plans/example.md", b"Body\n", current) == []
+
+
 SPEC_SEED = (
     "---\n"
     'title: "Spec — demo"\n'
@@ -889,14 +907,14 @@ def test_committed_baseline_controls_approval():
     assert stage2.header_problems(relative, pending.encode(), invented.encode()) == [
         f"{relative}: review: an approval the commit does not carry is refused"
     ]
-    # The runner's own reset beside a real document change stands.
+    # The runner's own reset beside a real document change stands, on a verb that stamps.
     reset = approved.replace("Body.", "Body, changed naming AGENTS.md.").replace(
         f"review: {APPROVED_REVIEW}", f"review: {PENDING_REVIEW}"
     )
-    assert stage2.header_problems(relative, approved.encode(), reset.encode()) == []
+    assert stage2.header_problems(relative, approved.encode(), reset.encode(), runner_reset=True) == []
     # The same reset without a document change is refused.
     bare_reset = approved.replace(f"review: {APPROVED_REVIEW}", f"review: {PENDING_REVIEW}")
-    assert stage2.header_problems(relative, approved.encode(), bare_reset.encode()) == [
+    assert stage2.header_problems(relative, approved.encode(), bare_reset.encode(), runner_reset=True) == [
         f"{relative}: review: reset without a document change outside `produced_by` and `updated`"
     ]
     # A provenance class is measured against the committed class.
@@ -1062,3 +1080,191 @@ def test_prepublication_failure_routing(repo, monkeypatch):
     assert "## Runner exploration" not in text, "rejected output is never published"
     assert "provenance: human-written" in text, "the attempt's own fault never lands in the tree"
     assert model_calls == [1], "the model-output fault spent its one route, then refused"
+
+
+SPEC_PATH = "plans/changes/demo/spec.md"
+
+
+def test_indented_block_sequence_grows_without_reprefix():
+    # Loop row L2-2: a committed block sequence keeps every earlier record's bytes; the new record
+    # joins at the sequence's own indentation, never as a second `- ` prefix or at column 0.
+    field = (
+        '\n  - {kind: llm-session, name: codex, version: "2026-11-04"}'
+        '\n  - {kind: llm-session, name: pi, version: "2026-11-05"}'
+    )
+    earlier = stage2.parse_producer_records(field, "test")
+    added = {"kind": "llm-session", "name": "claude-code", "version": "2026-11-06", "model": "glm-5.3-flash"}
+    result = stage2.retained_producer_field(field, [*earlier, added])
+    assert result.startswith(field + "\n"), "the earlier records keep their bytes"
+    try:
+        loaded = yaml.safe_load("produced_by:" + result)
+    except yaml.YAMLError as error:
+        pytest.fail(f"the grown block sequence is not valid YAML: {error}")
+    assert loaded["produced_by"] == [*earlier, added]
+
+
+def test_failed_draft_attempt_block_names_the_reset_approver(repo, monkeypatch):
+    # Loop row L2-3: the first attempt's stamp resets the approval and its checks fail; the later
+    # attempt touches nothing. The failed attempt's own block still names the former approver.
+    calls = []
+
+    def fake_run_codex(*_a, **_k):
+        calls.append(1)
+        if len(calls) == 1:
+            _write(
+                repo,
+                SPEC_PATH,
+                SPEC_SEED.replace("The problem and the acceptance criteria stand here.", "A changed problem."),
+            )
+        return "drafted"
+
+    verdicts = iter([(["a planted document check failure"], False, "scope"), ([], False, "scope")])
+    monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+    monkeypatch.setattr(stage2, "verify_draft", lambda *_a, **_k: next(verdicts))
+    stage2.draft(repo, "demo")
+    findings = (repo / "plans/changes/demo/findings.md").read_text(encoding="utf-8")
+    needle = "Producer stamps: Approval reset — plans/changes/demo/spec.md: the committed approval by Michael Peichl"
+    assert needle in findings, "a failed draft attempt's block lists its stamp notices as the repair path does"
+
+
+def test_draft_stamp_refuses_a_replaced_parent_unwritten(repo, monkeypatch, tmp_path):
+    # Loop row L2-5: the draft stamp passes the repair path's recovery preflight. Planted fault:
+    # the change folder is swapped for a link outside the worktree after the call.
+    outside = tmp_path / "outside-change"
+
+    def fake_run_codex(*_a, **_k):
+        _write(repo, SPEC_PATH, SPEC_SEED.replace("stand here.", "stand here, drafted."))
+        return "drafted"
+
+    real_put_back = stage2.put_back
+
+    def swap_after_put_back(*args, **kwargs):
+        result = real_put_back(*args, **kwargs)
+        folder = repo / "plans/changes/demo"
+        if not folder.is_symlink():
+            shutil.copytree(folder, outside)
+            shutil.rmtree(folder)
+            folder.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+    monkeypatch.setattr(stage2, "put_back", swap_after_put_back)
+    monkeypatch.setattr(stage2, "verify_draft", lambda *_a, **_k: pytest.fail("the checks ran after the swap"))
+    with pytest.raises(stage2.RestorationRefused, match="plans/changes/demo"):
+        stage2.draft(repo, "demo")
+    spec = (outside / "spec.md").read_text(encoding="utf-8")
+    assert "stand here, drafted." in spec, "the swap carried the attempt's edit outside"
+    assert _header_of(spec)["produced_by"] == {
+        "kind": "llm-session",
+        "name": "codex",
+        "version": "2026-11-10",
+        "model": "gpt-6.1-terra",
+    }, "the stamp wrote through a parent that escapes the worktree"
+
+
+def test_draft_never_stamps_the_runners_findings_file(repo, monkeypatch):
+    # Loop row L2-14: findings.md and plans/INDEX.md carry no model contribution.
+    stamped: list[str] = []
+    real_stamp = stage2.stamp_retained_artifacts
+
+    def spy(root, candidates, **kwargs):
+        stamped.extend(candidates)
+        return real_stamp(root, candidates, **kwargs)
+
+    def fake_run_codex(*_a, **_k):
+        _write(repo, SPEC_PATH, SPEC_SEED.replace("stand here.", "stand here, drafted."))
+        findings = repo / "plans/changes/demo/findings.md"
+        findings.write_text(findings.read_text(encoding="utf-8") + "\nA drafting session's note.\n", encoding="utf-8")
+        return "drafted"
+
+    monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+    monkeypatch.setattr(stage2, "stamp_retained_artifacts", spy)
+    monkeypatch.setattr(stage2, "verify_draft", lambda *_a, **_k: ([], False, "scope"))
+    stage2.draft(repo, "demo")
+    assert SPEC_PATH in stamped, "the drafted artifact is a stamp candidate"
+    assert "plans/changes/demo/findings.md" not in stamped, "the runner's audit file is never a stamp candidate"
+
+
+def test_committed_headerless_file_given_a_header_is_judged_as_new(repo):
+    # Loop row L2-6: a committed document that opens with a rule and has no header gets a model-written
+    # header; the header is judged as a new one, not reported as an unreadable committed header.
+    relative = "plans/changes/demo/notes.md"
+    _commit_file(repo, relative, "---\nJust a note between two rules\n---\n\nBody.\n", "seed a headerless note")
+    good = f"---\nprovenance: ai-drafted-reviewed\nreview: {PENDING_REVIEW}\n---\n\nBody.\n"
+    _write(repo, relative, good)
+    assert stage2.touched_header_problems(repo, [relative]) == []
+    bad = good.replace("ai-drafted-reviewed", "human-written")
+    _write(repo, relative, bad)
+    problems = stage2.touched_header_problems(repo, [relative])
+    assert any("expected ai-drafted-reviewed on a new file" in problem for problem in problems), problems
+
+
+def test_verb_without_stamp_refuses_a_session_reset_of_an_approval():
+    # Loop row L2-9: only a verb that stamps may reset a committed approval beside a body change.
+    current = SPEC_SEED.replace(APPROVED_REVIEW, PENDING_REVIEW).replace("stand here.", "stand here, changed.")
+    base = SPEC_SEED.encode("utf-8")
+    problems = stage2.header_problems(SPEC_PATH, base, current.encode("utf-8"))
+    assert any("review:" in problem and "does not stamp" in problem for problem in problems), problems
+    assert stage2.header_problems(SPEC_PATH, base, current.encode("utf-8"), runner_reset=True) == []
+
+
+def test_swarm_publication_runs_the_shared_check_first(repo, monkeypatch):
+    # Loop row L2-4: the swarm route judges its prepared publication before anything lands.
+    import stage2_research_run
+
+    run = stage2_research_run.Run(repo, "demo", stage2, "feature", {})
+    run.store = object()
+    run.run_id = "deadbeef"
+    run.publication_bytes = RESEARCH_SEED.replace(
+        "provenance: human-written",
+        "provenance: human-written\n"
+        'produced_by: {kind: llm-session, name: stage2-research-swarm, version: "2026-11-17"}',
+    ).encode("utf-8")
+    monkeypatch.setattr(stage2, "publish_research", lambda *_a, **_k: pytest.fail("a rejected publication landed"))
+    with pytest.raises(stage2.Refused):
+        run.publish("complete")
+
+
+def test_release_loop_runs_the_shared_check_on_findings(repo, monkeypatch):
+    # Loop row L2-10: a header fault in the findings.md a release wrote refuses the verb.
+    def fake_release(root, _change):
+        _write(
+            root,
+            "plans/changes/demo/findings.md",
+            f"---\ntitle: Findings\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n\n# Findings\n",
+        )
+        return []
+
+    monkeypatch.setattr(stage2, "release", fake_release)
+    with pytest.raises(stage2.Refused, match="findings.md"):
+        stage2.release_loop(repo, "demo")
+
+
+def test_committed_header_fault_stops_every_verb_naming_the_migration(repo):
+    # Loop row L2-12, part 1: a committed header that is no mapping stops a verb without a stamp.
+    relative = "plans/changes/demo/notes.md"
+    _commit_file(repo, relative, "---\n- not\n- a mapping\n---\n\nBody.\n", "seed a faulty committed header")
+    _write(repo, relative, "---\n- not\n- a mapping\n---\n\nBody, changed.\n")
+    try:
+        stage2.touched_header_problems(repo, [relative])
+    except stage2.CommittedRecordFault as error:
+        assert "coding-harness-2i7x" in str(error)
+    else:
+        pytest.fail("a committed header fault must stop the verb naming the migration")
+
+
+def test_committed_duplicate_producer_stops_the_stamp_as_a_committed_fault(repo):
+    # Loop row L2-12, part 2: the stamp's working-tree checks never pre-empt the committed fault.
+    first = 'produced_by: {kind: llm-session, name: codex, version: "2026-11-10", model: "gpt-6.1-terra"}\n'
+    second = 'produced_by: {kind: llm-session, name: pi, version: "2026-11-11"}\n'
+    _commit_file(repo, SPEC_PATH, SPEC_SEED.replace(first, first + second), "seed a duplicate producer field")
+    head = stage2.committed_bytes(repo, SPEC_PATH).decode("utf-8")
+    _write(repo, SPEC_PATH, head.replace("stand here.", "stand here, changed."))
+    try:
+        stage2.stamp_artifact(repo, SPEC_PATH, producer="codex", model="gpt-6.1-terra", day=stage2.today())
+    except stage2.CommittedRecordFault as error:
+        assert "coding-harness-2i7x" in str(error)
+    except stage2.Refused as error:
+        pytest.fail(f"a committed fault was reported as an attempt fault: {error}")
+    else:
+        pytest.fail("the stamp accepted a committed duplicate producer field")
