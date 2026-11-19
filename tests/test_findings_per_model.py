@@ -521,6 +521,21 @@ def test_legacy_release_calls_cross_phase6_but_not_previous_release():
     assert found["L2-1"] is None
 
 
+def test_legacy_loop_vendor_matches_unique_review_loop_model():
+    def model(*calls: str, reviewer: str = "GLM") -> str | None:
+        text = doc(*calls, PHASE6, p6row("F-1", "open"), GLM_RELEASE, lrow("L1-1", reviewer, "open"))
+        return next(f.model for f in read(text).findings if f.id == "L1-1")
+
+    loop = call("review-loop", "glm-5.3")
+    review = call("review", "gpt-6.1-sol")
+    assert model(loop, review) == "glm-5.3"
+    assert model(loop, loop, review) == "glm-5.3"
+    assert model(loop, call("review-loop", "glm-5.3-flash"), review) is None
+    assert model(call("review-loop", "gpt-6.1-sol"), review) is None
+    assert model(call("repair", "glm-5.3"), review) is None
+    assert model(loop, review, reviewer="Other") is None
+
+
 def test_historical_statuses_require_dash():
     for status in ("closed", "accepted limit"):
         assert not fr.known_status(status)

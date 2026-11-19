@@ -39,7 +39,7 @@ cycle of markers are gaps (criterion 16).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # The runner's own row shapes (scripts/stage2.py writes them; the mirror is
 # pinned by tests/test_findings_per_model.py::test_row_shapes_match_the_runner).
@@ -179,6 +179,7 @@ class BlockIdentity:
     heading: str | None
     position: int
     preceding_calls: tuple[CallLine, ...]
+    reviewer: str = ""
 
 
 @dataclass
@@ -341,8 +342,8 @@ class AttributionSource:
 class LegacyAttributionSource(AttributionSource):
     """The first implementation: the record's own position decides (decisions F-12, F-21, F-23).
 
-    A released loop block: the nearest directly preceding call line of any verb
-    supplies the model for rows whose Reviewer cell names only a vendor. A
+    A released loop block: exactly one distinct review-loop model belonging to
+    the row’s vendor supplies the model. A
     phase-6 block: the nearest directly preceding call line must itself carry
     the verb exactly ``review`` — any other verb, a call across another
     phase-6 block, or no call leaves the block unattributed.
@@ -357,6 +358,17 @@ class LegacyAttributionSource(AttributionSource):
             return UNATTRIBUTED
         if not block.preceding_calls:
             return UNATTRIBUTED
+        if released:
+            vendor = block.reviewer.strip().lower()
+            models = {
+                call.model
+                for call in block.preceding_calls
+                if vendor
+                and call.verb == "review-loop"
+                and call.model
+                and re.match(rf"^{re.escape(vendor)}(?:[-._+]|\d|$)", call.model.lower())
+            }
+            return next(iter(models)) if len(models) == 1 else UNATTRIBUTED
         nearest = block.preceding_calls[-1]
         if phase6 and nearest.verb != "review":
             return UNATTRIBUTED
@@ -391,7 +403,7 @@ def attribute_rows(parsed: Parsed, *, source: AttributionSource | None = None) -
             if block.kind == "released" and MODEL_NAME.fullmatch(reviewer):
                 model: str | None = reviewer
             else:
-                answer = chosen.attribute(block.identity)
+                answer = chosen.attribute(replace(block.identity, reviewer=reviewer))
                 model = None if answer in (UNATTRIBUTED, "") else answer
             status = status_cell(record.cells) or ""
             identity = block.identity
