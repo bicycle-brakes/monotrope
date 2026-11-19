@@ -283,7 +283,7 @@ def filter_locator_report(report, schema):
     retained, rows = {}, []
     for category, compiled in shape.items():
         values = report[category]
-        if not isinstance(values, list) or not values:
+        if not isinstance(values, list) or len(values) < compiled["min_items"]:
             raise ResearchMapError("locator category needs entries or an explicit not_read marker")
         kept = []
         for index, entry in enumerate(values):

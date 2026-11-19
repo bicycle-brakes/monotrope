@@ -417,6 +417,12 @@ def test_finder_schema_outer_shape_and_entry_fault_boundary():
     for answer in outer:
         with pytest.raises(module().ResearchMapError):
             module().filter_locator_report(answer, schema())
+
+    def demand_two(value):
+        value["properties"]["code"]["minItems"] = 2
+
+    with pytest.raises(module().ResearchMapError):  # the outer minItems rule comes from the schema, not a copy
+        module().filter_locator_report(sample(), altered(demand_two))
     retained, rows = module().filter_locator_report(sample(code=[{"path": "src/app.py"}]), schema())
     assert len(rows) == 1, "a violation inside a category item is an entry fault, not an outer one"
     assert retained["code"] == [{"not_read": module().FILTERED_MARKER}]
