@@ -3360,10 +3360,12 @@ def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
     assert stage2.GATE_END.match(f"── [pytest] {stage2.verify_run.VERDICT_RED}")
 
 
+@pytest.mark.usefixtures("world")
 def test_without_a_red_frame_the_repair_prompt_keeps_the_tail() -> None:
     # runner-red-gate criterion 3. Planted fault: empty diagnostics when nothing is framed.
     # The shared scheduler frames every gate it runs (bead coding-harness-bxxt.6); an unframed red
     # run is one it refused before any gate, so the fallback is proved on the evidence function.
+    # The world fixture gives the evidence scrub its stand-in denylist; without it CI has none.
     evidence = stage2.verify_evidence_text("\n".join(f"make-{n}" for n in range(100)), "", None)
     assert "make-99" in evidence and "make-20" in evidence and "make-19" not in evidence
 
