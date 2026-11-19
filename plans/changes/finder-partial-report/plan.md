@@ -18,27 +18,27 @@ tags: [plan, research-swarm]
 # Plan — finder-partial-report
 
 ```text
-For you:     A malformed finder report gets one correction; valid entries survive a second malformed answer.
-Done when:   Tests prove correction, retained entries, visible gaps and unchanged failure boundaries; make verify passes.
+For you:     Valid finder entries survive malformed neighbours, with one shared format and visible gaps.
+Done when:   Tests prove schema use, filtering, published gaps, resume and unchanged failure boundaries; make verify passes.
 Appetite:    4 hours of phase 4, repairs included; a stop, not an estimate.
-Not now:     Whole-file locators, finder selection and changes to other research stages.
+Not now:     Finder retries, whole-file locators and structured output for all Pi calls.
 Pre-mortem:  suppose it failed: most likely because recovery loses a valid entry or hides a dropped one.
 Starts unless you say stop.
 ```
 
 ## Files and steps
 
-1. Change `scripts/stage2_research_map.py`: expose entry-level recovery for a readable object with exactly the four lists, using the same entry rules as strict validation; retain each valid entry, capture each rejected entry with category and exact error, and use an explicit unread marker for a category emptied by filtering. Keep strict validation and exact-union semantics for normal inputs.
-2. Change `scripts/stage2_research_run.py`: capture the actual validation exception; request one correction from the same seat using the existing dispatch, security, budget and state machinery. Preserve attempts as data; use a valid correction directly or the recovered second report for the logical finder seat, record each dropped entry as a published gap, and feed the resulting three reports to the unchanged exact-union check. Do not recover unreadable outer structure, failed calls or refusals. Ensure interruption and resume do not silently lose the gap or exceed the one-correction limit.
-3. Change `tests/test_stage2_research_map.py` to exercise mixed entries, existing validity rules, empty-after-filter categories and invalid outer structure. Change `tests/test_stage2_swarm.py` to exercise real runner correction, the merge input and published gap, failures, refusal and resume with deterministic stand-ins. Check successful first answers and strict merge rejection remain unchanged.
-4. Update this change's `spec.md` and `plan.md` implementation status, ledger entries and time as work advances. The orchestrator handles derived index regeneration, commits and pull request. No held path is assigned to the implementation attempt.
+1. Change `scripts/stage2_research_map.py`: define one JSON Schema for the existing four nonempty lists and entry rules; use it for strict validation and entry-level filtering, preserving duplicate-key and outer-shape failures, per-entry errors and the fixed empty-after-filter marker in the spec. Keep exact-union validation unchanged.
+2. Change `scripts/stage2_research_run.py`: pass that schema to Claude finder calls and embed it in Pi finder prompts; correctly extract Claude's schema-enforced response through the existing payload path. Filter the first successful answer before merge without a retry, persist `ok` plus `filtered` details, publish them in the manifest and a partial fence, and reuse them on resume. Preserve failure and refusal handling and ensure filtered entries do not enter map gaps.
+3. Change `tests/test_stage2_research_map.py` and `tests/test_stage2_swarm.py`: test the schema, boundaries, merge, publication and resume with deterministic stand-ins, including mixed faults and all-invalid categories. Change `tests/test_stage2_research_deep_review.py` if needed to hold finder prompt separation when the schema is included.
+4. Update this change's `spec.md`, `plan.md` and `findings.md` as work advances. No held path is assigned to the implementation attempt; the orchestrator handles any derived index, commit and pull request.
 
 Explore fallback, 2026-11-19: Stage 1 via `claude-code-plan`, model `claude-haiku-5-5`, because GLM via Z.ai returned `claude-code:unrecognized_model` (research.md).
 
 ## Verification
 
 ```sh
-.venv/bin/python -m pytest tests/test_stage2_research_map.py tests/test_stage2_swarm.py -q
+.venv/bin/python -m pytest tests/test_stage2_research_map.py tests/test_stage2_swarm.py tests/test_stage2_research_deep_review.py -q
 python3 scripts/check_interview_minimums.py --change finder-partial-report
 python3 scripts/validate_change_artefacts.py --check
 make verify
@@ -48,15 +48,21 @@ Do not touch model configuration, security checks, topic validation, prompts, te
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_swarm.py::test_finder_correction_receives_exact_error_once — the wrong error, seat or extra correction is sent.
-- 2: not yet written tests/test_stage2_swarm.py::test_finder_valid_correction_reaches_merge — the merge sees the rejected original instead.
-- 3: not yet written tests/test_stage2_swarm.py::test_finder_partial_correction_reaches_merge — a valid entry disappears, an invalid entry passes, or the merge stops.
-- 3: not yet written tests/test_stage2_research_map.py::test_finder_recovery_filters_entries — recovery drops valid entries or retains malformed ones.
-- 4: not yet written tests/test_stage2_swarm.py::test_finder_partial_gap_is_published_and_resumed — a dropped entry, seat, category or error is absent after publication or resume.
-- 5: not yet written tests/test_stage2_research_map.py::test_finder_recovery_preserves_locator_rules — a locator without a path or exact reference is retained.
-- 6: not yet written tests/test_stage2_swarm.py::test_finder_partial_merge_preserves_exact_union — an altered retained locator or origin passes the merge check.
-- 7: not yet written tests/test_stage2_swarm.py::test_finder_unrecoverable_correction_stops — an unreadable report, failed call or refusal reaches merge.
+- 1: not yet written tests/test_stage2_swarm.py::test_finder_claude_enforces_shared_schema — Claude argv lacks or changes the schema.
+- 2: not yet written tests/test_stage2_swarm.py::test_finder_pi_prompt_contains_shared_schema — Pi receives a different schema.
+- 3: not yet written tests/test_stage2_research_map.py::test_finder_validation_uses_shared_schema — schema and validation diverge.
+- 4: not yet written tests/test_stage2_swarm.py::test_finder_first_answer_filters_without_retry — valid entries disappear, invalid entries reach merge or another call occurs.
+- 5: not yet written tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry — an entry fault survives or its error is absent.
+- 6: not yet written tests/test_stage2_research_map.py::test_finder_filter_marks_emptied_category — the fixed marker is missing or wrong.
+- 7: not yet written tests/test_stage2_swarm.py::test_finder_filtered_gaps_are_published — either publication omits a seat, category, entry or error.
+- 8: not yet written tests/test_stage2_swarm.py::test_finder_filtered_entries_stay_out_of_map_gaps — a rejected entry becomes map evidence.
+- 9: not yet written tests/test_stage2_swarm.py::test_finder_filtered_record_is_stored_ok — the outcome or filtered details are wrong.
+- 10: not yet written tests/test_stage2_swarm.py::test_finder_filtered_record_is_reused_on_resume — resume relaunches or changes the retained answer or gaps.
+- 11: not yet written tests/test_stage2_swarm.py::test_finder_filtered_merge_preserves_exact_union — an altered locator or origin passes.
+- 12: not yet written tests/test_stage2_swarm.py::test_finder_invalid_outer_shape_stops — invalid JSON or outer shape reaches merge.
+- 13: not yet written tests/test_stage2_swarm.py::test_finder_failure_and_refusal_still_stop — a failed or refused call reaches merge.
 
 ## Time used
 
 2026-11-19 14:42:57–14:44:52 UTC, 114 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-19 14:55:55–14:57:56 UTC, 121 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
