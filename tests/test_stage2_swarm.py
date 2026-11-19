@@ -221,7 +221,9 @@ def finder_steps(step: dict | list) -> dict:
         wrapped = {**step, "stdout": claude_finder_envelope(body)}
     else:
         wrapped = step
-    steps = {f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS}
+    steps = {
+        f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS
+    }
     return {**steps, "finder": [dict(step)]}
 
 
