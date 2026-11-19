@@ -1253,13 +1253,14 @@ into a shell. Thirteen verbs exist:
   from `git worktree list` of this repository only — a removed worktree's or
   another repository's record is never adopted. If a removed worktree path is reused, its old
   unarchived record has the same key and can continue; follow-up coding-harness-0aht addresses this
-  limit. Unreadable or symlinked records are named as unreadable and do not block a plain restart;
-  readable active records still require supersession. Each selected record is
+  limit. A plain restart checks records under their locks and reports unreadable or symlinked records;
+  readable active records require supersession. Each selected record is
   read only under its lock. The next `review-loop` here is a fresh run whose
-  rounds continue after the highest superseded round, a later release needs a
+  rounds continue after the highest round ever assigned, a later release needs a
   verdict written after the restart line, and releasing before any fresh round
   fails without writing: the archived run is history, not something this
-  worktree can release again (bead coding-harness-e82i).
+  worktree can release again. The superseded worktree can run `release-loop`: it recognizes
+  the accounting line and records `Loop rows: superseded by <key>` (bead coding-harness-e82i).
 - `triage` — the orchestrator records one already-made decision on the loop
   record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
   '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
@@ -1670,9 +1671,9 @@ of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
 (also the release inside `review`), `prepare-loop`, `triage` and
-`release-loop --stage-failed` refuse. Except for `triage`, they name the record path they
-expected; when active records of the same change stand under other
-worktree keys of this repository in the same state directory, every such key.
+`release-loop --stage-failed` refuse. When unaccounted audit calls reveal a missing record, the
+refusal names the expected record path. When active records of the same change stand under other
+worktree keys of this repository in the same state directory, it names every such key.
 The keys are derived from `git worktree list` alone; records of removed
 worktrees, of other repositories and of other changes are never named, and
 neither is anything already archived. A review-loop call that wrote audit lines and then ended without
@@ -1713,7 +1714,7 @@ command: the staged archive's manifest carries the complete key set and the
 superseding worktree key, the retry matches its accounting line to the archive
 by the archive directory name, and it completes only that worktree's own key
 set. The next `review-loop` in this worktree is a fresh run; its rounds — and
-every later release's — continue after the highest superseded round, a later
+every later release's — continue after the highest round ever assigned, a later
 plain restart takes the highest round ever assigned, the clean stop and the
 repair brake read only the rounds after the restart, and a release before the
 first fresh round fails without writing. A record that is genuinely lost —

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -34,7 +34,7 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 
 1. When any no-record refusal for the loop, restart, stage retirement, preparation or triage finds active loop records for the same change under other worktree keys in the current state directory, it names each such key.
    *Refuted by:* a matching key is omitted, or another change's key or an archive is named.
-2. When the maintainer runs `release-loop <change> --restart --supersedes <key> --reason <text>` for eligible other-worktree records, repeating `--supersedes <key>` for every active other key, the runner writes one `Loop restarted: <date> after round <N> — ...` accounting line to the current findings naming each key, each record’s round-number range and archive subdirectory expressed as `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/<key>`, the count of all pending review-loop audit calls since the last release or restart, and the reason; N is the highest superseded round.
+2. When the maintainer runs `release-loop <change> --restart --supersedes <key> --reason <text>` for eligible other-worktree records, repeating `--supersedes <key>` for every active other key, the runner writes one `Loop restarted: <date> after round <N> — ...` accounting line to the current findings naming each key, each record’s round-number range and archive subdirectory expressed as `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/<key>`, the count of all pending review-loop audit calls since the last release or restart, and the reason; N is the highest round ever assigned, including superseded rounds, released rounds, the current round count and the previous restart floor.
    *Refuted by:* the line is absent, duplicated, or misstates any of those facts.
 3. When supersession succeeds, all selected records and the other non-research entries that release would delete, including `availability.json`, are preserved unchanged in one unique archive directory under `<state>/coding-harness/stage2-superseded/`, and are no longer active at their old keys.
    *Refuted by:* its contents are lost or altered, or the old key can continue that record.

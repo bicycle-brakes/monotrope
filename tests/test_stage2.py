@@ -29198,7 +29198,7 @@ def test_restart_reports_unreadable_foreign_records_without_blocking(world: Worl
         record.write_bytes(b"\xff")
     original = record.read_bytes()
     world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
-    assert "unreadable" in stage2.foreign_record_refusal("demo", world.root).lower()
+    assert key in stage2.foreign_record_refusal("demo", world.root)
     assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 0
     assert key in capsys.readouterr().out
     assert record.read_bytes() == original
@@ -29233,3 +29233,72 @@ def test_foreign_refusal_preserves_message_when_worktree_discovery_fails(world: 
     assert "worktree discovery failed: git unavailable" in refusal
     with pytest.raises(stage2.Refused, match="worktree discovery failed"):
         stage2.restart_loop(world.root, "demo", "continue")
+
+
+def test_supersede_retry_moves_entries_after_record(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    extra = record.parent / "z-extra"
+    extra.write_text("preserved", encoding="utf-8")
+    move = stage2._move_archive_entry
+
+    def fail_after_record(source: Path, target: Path) -> None:
+        if source.name == "z-extra":
+            raise OSError("interrupted")
+        move(source, target)
+
+    monkeypatch.setattr(stage2, "_move_archive_entry", fail_after_record)
+    assert supersede(world, key) == 1
+    monkeypatch.setattr(stage2, "_move_archive_entry", move)
+    assert supersede(world, key) == 0
+    archive = next(archive_base().iterdir())
+    try:
+        archived_extra = (archive / key / "z-extra").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        pytest.fail("retry must archive entries remaining after loop.md moved")
+    assert archived_extra == "preserved"
+    assert not extra.exists()
+
+
+def test_foreign_refusal_never_reads_record(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    original = Path.read_text
+
+    def read(path: Path, *args, **kwargs):
+        if path == record:
+            pytest.fail("foreign record read during discovery")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read)
+    assert key in stage2.foreign_record_refusal("demo", world.root)
+
+
+def test_stage_retirement_names_foreign_key_with_findings(world: World, capsys) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    world.write_findings("No review calls yet.")
+    assert world.run("release-loop", "demo", "--stage-failed", "model", "--reason", "failed") == 2
+    assert key in capsys.readouterr().err
+
+
+def test_superseded_worktree_release_records_superseder(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    own = stage2.record_key("demo", world.root)
+    write_foreign_record(other, [1])
+    old_findings = other / "plans/changes/demo/findings.md"
+    old_findings.parent.mkdir(parents=True, exist_ok=True)
+    old_findings.write_text("# Findings\n\nStage-2 call, 2026-11-18: review-loop · reviewer\n", encoding="utf-8")
+    assert supersede(world, key) == 0
+    try:
+        stage2.release(other, "demo")
+    except stage2.Refused as error:
+        pytest.fail(f"superseded worktree should release honestly: {error}")
+    text = old_findings.read_text(encoding="utf-8")
+    assert f"Loop rows: superseded by {own}" in text
+    stage2.release(other, "demo")
+    assert old_findings.read_text(encoding="utf-8").count("Loop rows: superseded by") == 1

@@ -526,3 +526,26 @@ Loop attempt: 2026-11-19 — no round was written; the review-loop calls above c
 Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1117 files, 4713 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4761 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +7 -7
+> - `plans/changes/loop-record-other-worktree/spec.md` +1 -1
+> - `scripts/stage2.py` +59 -30
+> - `tests/test_stage2.py` +66 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - L6-2: tests/test_stage2.py::test_supersede_retry_moves_entries_after_record: the call of `tests/test_stage2.py::test_supersede_retry_moves_entries_after_record` failed with FileNotFoundError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/loop-record-other-worktree/stage2/attempts/loop-record-other-worktree/attempt-1-20261119T153551633159Z-0b77d6ea.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4778 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
