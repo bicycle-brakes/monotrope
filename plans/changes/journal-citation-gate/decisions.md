@@ -78,3 +78,29 @@ reader, not a second parser. Any other file, and an envelope the handoff
 reader refuses, is scanned as usual. Reason: the runner writes envelopes only
 there (WORKFLOW.md), one reader keeps the two checks in step (house rule 9),
 and Q-1 meant all machine-written text of the record.
+
+Spec-review round 2 rows, decided by the orchestrator with reasons (same
+rule; provisional in the autonomous run of 2026-11-19).
+
+[DETAIL] **S-6, S-7 (stripping)**: before judging a target, trailing
+sentence punctuation (`.`, `:`, `!`, `?`, `'s`, `'`) and trailing emphasis
+markers (`*`, `_`) are stripped repeatedly, in any order; every listed
+condition (empty, `<`, elision, ISO date, remaining `*`) is judged on the
+stripped target. A target of markers only (`*`, `**`) is then empty, a
+directory mention. Reason: a hand-written emphasised citation stays red, and
+a bold directory mention stays a mention.
+
+[DETAIL] **S-8, S-9 (acceptance per file, parse level)**: acceptance is per
+file and at parse level: the envelopes of a `research.md` are exempt when
+`check_research_handoff.parse_text` reads the file without raising; when it
+raises, the whole file is scanned. Reason: one reader unchanged in its
+verdict; a file it cannot parse is already red at the research-handoff gate
+and must be repaired there, not hidden here.
+
+[DETAIL] **S-10 (where the extents come from)**: the one reader in
+`scripts/check_research_handoff.py` additionally returns each run's character
+span (from its opening marker to the end of its closing marker); its
+existing verdicts and messages do not change, and the journal-date check
+uses those spans. This adds `scripts/check_research_handoff.py` and its tests
+to the files this change touches. Reason: a second envelope parser would be
+the side route house rule 9 forbids.
