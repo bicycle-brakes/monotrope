@@ -2650,11 +2650,11 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     programs = ScriptedPrograms(
         monkeypatch,
         clock,
-        [(lambda command: command == ["make", "verify"], {"duration": 1.0, "stdout": "green\n"})],
+        [(lambda command: command == ["sh", "-c", "make verify"], {"duration": 1.0, "stdout": "green\n"})],
     )
     assert stage2.verify_attempt(world.root, world.plan) == []
     assert admissions == ["queued"], "the verification ran without its admission"
-    (make,) = programs.waits(["make", "verify"])
+    (make,) = programs.waits(["sh", "-c", "make verify"])
     assert make["timeout"] == 2.0, "the admission wait consumed the step limit"
     assert make["outcome"] == "completed", "a timely check failed because it queued"
 
@@ -2662,13 +2662,13 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     programs = ScriptedPrograms(
         monkeypatch,
         clock,
-        [(lambda command: command == ["make", "verify"], {"duration": 30.0, "stdout": "too late"})],
+        [(lambda command: command == ["sh", "-c", "make verify"], {"duration": 30.0, "stdout": "too late"})],
     )
     problems = stage2.verify_attempt(world.root, world.plan)
-    (make,) = programs.waits(["make", "verify"])
+    (make,) = programs.waits(["sh", "-c", "make verify"])
     assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
     assert make["outcome"] == "timeout"
-    (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
+    (drain,) = [row for row in programs.of(["sh", "-c", "make verify"]) if row["outcome"] == "drained"]
     assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
 
@@ -28981,6 +28981,37 @@ def test_full_verify_gate_uses_worktree_pinned_ruff(
     assert marker.read_text(encoding="utf-8").strip() == "pinned"
 
 
+def test_non_executable_plain_gate_is_a_gate_result_not_an_abort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row F6-1: a plain gate command that exists but is not executable is that gate's result.
+
+    The shell entry point gets exit 126 from `sh` and goes on by the gate's enforcement; Stage 2
+    must launch every gate the same way, so a later gate still runs. Planted fault: a direct launch
+    of a plain command raises `CallFailed` on `PermissionError` and ends the whole check.
+    """
+    root = tmp_path / "repo"
+    root.mkdir()
+    plain = root / "plain-gate"
+    plain.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    plain.chmod(0o644)
+    results = []
+
+    def schedule(_root, **kwargs):
+        env = {**kwargs["env"], "PATH": os.environ.get("PATH", "")}
+        try:
+            results.append(kwargs["executor"]({}, "./plain-gate", env).returncode)
+        except stage2.CallFailed as error:
+            pytest.fail(f"a non-executable gate must be that gate's result, not an abort: {error}")
+        results.append(kwargs["executor"]({}, "true", env).returncode)
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    stage2._scheduled_verify(root, {"PATH": os.environ.get("PATH", "")}, "verify")
+    assert results[0] == 126, results
+    assert results[1] == 0, "a later gate must still run"
+
+
 def test_scheduled_gate_timeout_is_remaining_allowance(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """The launch contract bounds each gate by the remaining shared execution allowance."""
     now = [100.0]
@@ -29118,6 +29149,42 @@ def test_scheduled_missing_executable_keeps_gate_verdict_and_continues(
     except stage2.CallFailed as error:
         pytest.fail(f"a missing executable must be a gate failure: {error}")
     assert "missing-command" in out and "missing_verify_gate_executable_8f42" in out + err
+    assert later.exists(), out + err
+    assert protected.exists() == (enforcement == "report"), out + err
+    assert (code == 0) == (enforcement == "report"), out + err
+
+
+@pytest.mark.parametrize("enforcement", ["block", "report"])
+def test_scheduled_nonexecutable_gate_keeps_verdict_and_continues(
+    world: World, monkeypatch: pytest.MonkeyPatch, enforcement: str
+) -> None:
+    """A non-executable command is a shell gate failure, not a launcher failure (F6-1)."""
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    template = copy.deepcopy(doc["gates"][0])
+    nonexecutable = world.root / "nonexecutable-gate"
+    nonexecutable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    nonexecutable.chmod(0o644)
+    later = world.state / "later-nonexecutable"
+    protected = world.state / "protected-nonexecutable"
+    gates = []
+    for identifier, command, cost, level in [
+        ("denied-command", "./nonexecutable-gate", "seconds", enforcement),
+        ("later-cheap", f"/usr/bin/touch {later}", "seconds", "block"),
+        ("protected-work", f"/usr/bin/touch {protected}", "minutes", "block"),
+    ]:
+        gate = copy.deepcopy(template)
+        gate.update(id=identifier, command=command, cost=cost, enforcement=level, job="verify")
+        gates.append(gate)
+    doc["gates"] = gates
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, env, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"a non-executable command must return a gate verdict: {error}")
+    assert "denied-command" in out and "nonexecutable-gate" in out + err
     assert later.exists(), out + err
     assert protected.exists() == (enforcement == "report"), out + err
     assert (code == 0) == (enforcement == "report"), out + err

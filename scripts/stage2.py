@@ -6257,30 +6257,12 @@ def verify_evidence_text(out_text: str, err_text: str, key: str | None) -> str:
     return verify_evidence(subprocess.CompletedProcess([], 1, out_text, err_text), key)
 
 
-# A syntactically plain external command may start as a vector, so the runner still resolves its
-# program as it resolved `make verify` before. Shell builtins and reserved words are shell syntax
-# even without quoting or expansion: `:` and `exit 1` must return gate verdicts, not launch errors.
-# Include the POSIX shell words and common sh extensions; a builtin with an external counterpart
-# (notably echo, printf and test) must also keep the shell's own semantics.
-PLAIN_GATE_COMMAND = re.compile(r"[A-Za-z0-9_./:,@%+ -]+")
-SHELL_GATE_WORDS = frozenset(
-    "! . : [ alias bg break case cd command continue coproc declare disown do done echo elif else "
-    "enable esac eval exec exit export false fc fg fi for function getopts hash help history if "
-    "in jobs kill let local logout popd printf pushd pwd read readonly return select set shift "
-    "source test then time times trap true type typeset ulimit umask unalias unset until wait while".split()
-)
-
-
 def _gate_argv(command: str, pinned: str) -> list[str]:
     """The launch vector of one gate, with its first `python3` resolved to the pinned interpreter.
 
     The substitution is the shell runner's `${cmd/python3/$PYTHON}`: the first occurrence, once.
     """
     resolved = command.replace("python3", shlex.quote(pinned), 1)
-    if PLAIN_GATE_COMMAND.fullmatch(command):
-        argv = shlex.split(resolved)
-        if argv and argv[0] not in SHELL_GATE_WORDS:
-            return argv
     return verify_run.shell_argv(resolved)
 
 
@@ -6346,12 +6328,6 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
             if _LAUNCH_STOPPED.is_set() or clock_now().monotonic < budget["deadline"]:
                 raise
             raise StepTimedOut(f"{argv[0]} was stopped by {limit}") from error
-        except CallFailed as error:
-            # A missing gate executable is the shell's command-not-found verdict,
-            # not a failure of the verification launcher itself.
-            if not isinstance(error.__cause__, FileNotFoundError) or argv[0] == "sh":
-                raise
-            return verify_run.GateProcess(127, "", f"{error}\n")
         return verify_run.GateProcess(done.returncode, done.stdout or "", done.stderr or "")
 
     captured_out = io.StringIO()

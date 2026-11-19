@@ -1261,3 +1261,364 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1ef85-c35f-7a21-b46d-c849cf7c11c7, 2026-11-18
 Reviewer session: codex 01a1ef85-c35f-7a21-b46d-c849cf7c11c7 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4760 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +0 -24
+> - `tests/test_stage2.py` +41 -5
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 3272 lines of this gate left out …]
+>         monkeypatch.setattr(stage2, "run_codex", codex)
+>         monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+>         monkeypatch.setattr(stage2, "prompt_input", prompt_input)
+>         monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+>         assert world.run("repair") == 0
+>         calls = repair_calls(world)
+>         assert [call["name"] for call in calls] == ["codex", "codex", "claude"][: failed_attempts + 1]
+>         assert [{k: minus_runner_accounting(v) for k, v in seen.items()} for seen in observed_inputs] == [
+>             {k: minus_runner_accounting(v) for k, v in original.items()}
+>         ] * (failed_attempts + 1)
+>         assert checkpoints == [failed_attempts + 1], "a failed attempt reached the checkpoint"
+>         assert all("resume" not in call["argv"] for call in world.calls("codex"))
+>         final_prompt = prompt_of(calls[-1])
+>         for attempt in range(1, failed_attempts + 1):
+>             route = "codex" if attempt == 1 else "codex-repair"
+>             assert f"Attempt {attempt} ({route}):" in final_prompt
+>             diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
+>             if attempt in corrupted_attempts and preparation_fails:
+>                 assert "Derived-file preparation failed" in diagnostics
+>             else:
+> >               assert "`make verify` exited 1" in diagnostics
+> E               AssertionError: assert '`make verify` exited 1' in '- lifecycle fields: plans/changes/demo/design.md — status, implementation_status; restored snapshotted input\n- lifec.../popen-gw3/test_repair_retry_restores_non9/repo/.git/stage2/attempts/demo/attempt-1-20261119T154046478882Z-785a777f.md'
+>
+> tests/test_stage2.py:11869: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 37 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-n21t_kmj/pytest-of-mikypiky/pytest-1/popen-gw3/test_repair_retry_restores_non9/repo/.git/stage2/attempts/demo/attempt-2-20261119T154046478882Z-785a777f.md
+> repair: verified and committed · route codex-repair · attempt 2
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ________________ test_a_red_section_is_scrubbed_of_the_glm_key _________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-n21t_kmj/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-n21t_kmj/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+>
+>     def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
+>         # runner-red-gate criterion 4. Planted fault: the red section passed unscrubbed.
+>         output = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+> >       prompt = _red_run(world, output)
+>
+> tests/test_stage2.py:3348: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-n21t_kmj/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-n21t_kmj/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+> output = '── [pytest] $ run pytest\nE   AssertionError: token [secret:openai-style-key]\n
+> ── [pytest] RED (block) — der Lauf ist rot.\n'
+>
+> Standard error of the whole run, last lines:
+> [… 47589 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-1-20261119T153338026109Z-41fbcb77.md
+> ````
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4769 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 2536 lines of this gate left out …]
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_long_standard_error_is_0/state'))
+>
+>     def test_a_long_standard_error_is_cut_with_a_marker(world: World) -> None:
+>         # Loop row L2-3 and criterion 5: the standard-error window is bounded and says what it left out.
+>         world.script(
+>             claude=[
+>                 {
+>                     "stdout": "first",
+>                     "plant": {"src/app.py": "value = 2\n"},
+>                     "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+>                 },
+>                 {
+>                     "stdout": "fixed",
+>                     "append": {
+>                         "src/scenario-work.txt": "declared attempt work\n",
+>                         "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+>                     },
+>                 },
+>             ],
+>             make=[
+>                 {
+>                     "stdout": "\n".join(_gate("pytest", ["FAILED x"], "red")),
+>                     "stderr": "\n".join(f"err-{n}" for n in range(100)),
+>                     "exit": 1,
+>                 },
+>                 {"stdout": "green\n"},
+>             ],
+>         )
+>         assert world.run("implement") == 0
+> >       prompt = world.calls("claude")[1]["prompt_file"]
+> E       IndexError: list index out of range
+>
+> tests/test_stage2.py:3265: IndexError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 30 files, 2 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ________________ test_a_red_section_is_scrubbed_of_the_glm_key _________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+>
+>     def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
+>         # runner-red-gate criterion 4. Planted fault: the red section passed unscrubbed.
+>         output = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+> >       prompt = _red_run(world, output)
+>
+> tests/test_stage2.py:3348: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-zcbefkko/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+> output = '── [pytest] $ run pytest\nE   AssertionError: token [secret:openai-style-key]\n
+> ── [pytest] RED (block) — der Lauf ist rot.\n'
+>
+> Standard error of the whole run, last lines:
+> [… 47641 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-2-20261119T153338026109Z-41fbcb77.md
+> ````
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1117 files, 4769 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +29 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-cheap-before-admission/plan.md, plans/changes/verify-cheap-before-admission/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 2567 lines of this gate left out …]
+>             return result
+>     
+>         def begin_work_call(*args, **kwargs):
+>             # Observe bytes without decoding or asserting here, so the baseline shows its actual crash.
+>             observed_inputs.append({relative: (world.root / relative).read_bytes() for relative in original})
+>             real_begin(*args, **kwargs)
+>     
+>         def prompt_input(*args, **kwargs):
+>             assert not repair_calls(world), "a later prompt reread an input after the first model call"
+>             return real_input(*args, **kwargs)
+>     
+>         def checkpoint(*args, **kwargs):
+>             checkpoints.append(len(repair_calls(world)))
+>             real_checkpoint(*args, **kwargs)
+>     
+>         monkeypatch.setattr(stage2, "run_codex", codex)
+>         monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+>         monkeypatch.setattr(stage2, "prompt_input", prompt_input)
+>         monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+>         assert world.run("repair") == 0
+>         calls = repair_calls(world)
+> >       assert [call["name"] for call in calls] == ["codex", "codex", "claude"][: failed_attempts + 1]
+> E       AssertionError: assert ['codex'] == ['codex', 'codex', 'claude']
+> E         
+> E         Right contains 2 more items, first extra item: 'codex'
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:11855: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-6hv9n3su/pytest-of-mikypiky/pytest-1/popen-gw3/test_repair_retry_restores_non1/repo/.git/stage2/attempts/demo/attempt-1-20261119T162010586601Z-9e62d3d9.md
+> repair: verified and committed · route codex · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ________________ test_a_red_section_is_scrubbed_of_the_glm_key _________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-cheap-before-admission/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-6hv9n3su/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-6hv9n3su/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+>
+>     def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
+>         # runner-red-gate criterion 4. Planted fault: the red section passed unscrubbed.
+>         output = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+> >       prompt = _red_run(world, output)
+>
+> tests/test_stage2.py:3348: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-6hv9n3su/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-6hv9n3su/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_red_section_is_scrubbed0/state'))
+> output = '── [pytest] $ run pytest\nE   AssertionError: token [secret:openai-style-key]\n
+> ── [pytest] RED (block) — der Lauf ist rot.\n'
+>
+> Standard error of the whole run, last lines:
+> [… 47693 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-cheap-before-admission/stage2/attempts/verify-cheap-before-admission/attempt-3-20261119T153338026109Z-41fbcb77.md
+> ````
