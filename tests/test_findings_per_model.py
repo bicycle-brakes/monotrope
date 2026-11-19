@@ -571,3 +571,18 @@ def test_detached_main_tip_uses_main_output(tmp_path):
     later = commit(root, {"a": "two"})
     git(root, "checkout", "--detach", "-q")
     assert fpm.output_relative(root, None, later) == f"revisions/{later}.jsonl"
+
+
+def test_explicit_head_uses_default_output(tmp_path, monkeypatch):
+    root, main_sha = repo(tmp_path, {findings_path("c1"): doc(RELEASE, lrow("L1-1", "hy3", "open"))})
+    state = tmp_path / "state"
+    for expected in ("main.jsonl", f"branches/{b'feature/x'.hex()}.jsonl"):
+        _, default = run_report(root, None, monkeypatch, state)
+        _, explicit = run_report(root, "HEAD", monkeypatch, state)
+        assert default[-1] == explicit[-1]
+        assert explicit[-1].strip().endswith(expected)
+        if expected == "main.jsonl":
+            git(root, "checkout", "-q", "-b", "feature/x")
+            commit(root, {"a": "later"})
+    _, historical = run_report(root, main_sha, monkeypatch, state)
+    assert historical[-1].strip().endswith(f"revisions/{main_sha}.jsonl")

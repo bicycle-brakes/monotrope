@@ -62,7 +62,7 @@ def full_commit(root: Path, rev: str) -> str:
 
 def branch_of(root: Path, rev_arg: str | None, sha: str) -> str | None:
     """The branch name the output file follows; None for a revision that is not a branch tip."""
-    if rev_arg is None:
+    if rev_arg is None or rev_arg == "HEAD":
         done = git(root, "symbolic-ref", "--short", "-q", "HEAD")
         if done.returncode == 0:
             return done.stdout.decode().strip()
