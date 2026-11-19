@@ -599,3 +599,130 @@ Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1115 files, 4715 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4717 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/verify_duration.py` +2 -1
+> - `tests/test_verify_duration.py` +14 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L8-3: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-1-20261119T032425115108Z-bfbdd23f.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4717 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_verify_cheap_first.py`, `tests/test_verify_duration.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-2-20261119T032425115108Z-bfbdd23f.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4717 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +25 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+>
+> tests/test_stage2.py:28703:57: ARG005 Unused lambda argument: `args`
+>       |
+> 28702 |     monkeypatch.setattr(stage2, "format_step", lambda *args, **kwargs: None)
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+>       |                                                         ^^^^ ARG005
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+>       |
+>
+> tests/test_stage2.py:28703:65: ARG005 Unused lambda argument: `kwargs`
+>       |
+> 28702 |     monkeypatch.setattr(stage2, "format_step", lambda *args, **kwargs: None)
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+>       |                                                                 ^^^^^^ ARG005
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+>       |
+>
+> tests/test_stage2.py:28704:68: ARG005 Unused lambda argument: `args`
+>       |
+> 28702 |     monkeypatch.setattr(stage2, "format_step", lambda *args, **kwargs: None)
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+>       |                                                                    ^^^^ ARG005
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+> 28706 |     monkeypatch.setattr(
+>       |
+>
+> tests/test_stage2.py:28704:76: ARG005 Unused lambda argument: `kwargs`
+>       |
+> 28702 |     monkeypatch.setattr(stage2, "format_step", lambda *args, **kwargs: None)
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+>       |                                                                            ^^^^^^ ARG005
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+> 28706 |     monkeypatch.setattr(
+>       |
+>
+> tests/test_stage2.py:28705:60: ARG005 Unused lambda argument: `args`
+>       |
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+>       |                                                            ^^^^ ARG005
+> 28706 |     monkeypatch.setattr(
+> 28707 |         stage2, "targeted_selection", lambda *args, **kwargs: types.SimpleNamespace(fallback="planted reason")
+>       |
+>
+> tests/test_stage2.py:28705:68: ARG005 Unused lambda argument: `kwargs`
+>       |
+> 28703 |     monkeypatch.setattr(stage2, "cheap_checks", lambda *args, **kwargs: [])
+> 28704 |     monkeypatch.setattr(stage2, "capture_ledger_clearing", lambda *args, **kwargs: None)
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+>       |                                                                    ^^^^^^ ARG005
+> 28706 |     monkeypatch.setattr(
+> 28707 |         stage2, "targeted_selection", lambda *args, **kwargs: types.SimpleNamespace(fallback="planted reason")
+>       |
+>
+> tests/test_stage2.py:28707:47: ARG005 Unused lambda argument: `args`
+>       |
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+> 28706 |     monkeypatch.setattr(
+> 28707 |         stage2, "targeted_selection", lambda *args, **kwargs: types.SimpleNamespace(fallback="planted reason")
+>       |                                               ^^^^ ARG005
+> 28708 |     )
+> 28709 |     monkeypatch.setattr(stage2, "full_verify", full)
+>       |
+>
+> tests/test_stage2.py:28707:55: ARG005 Unused lambda argument: `kwargs`
+>       |
+> 28705 |     monkeypatch.setattr(stage2, "prepare_derived", lambda *args, **kwargs: [])
+> 28706 |     monkeypatch.setattr(
+> 28707 |         stage2, "targeted_selection", lambda *args, **kwargs: types.SimpleNamespace(fallback="planted reason")
+>       |                                                       ^^^^^^ ARG005
+> 28708 |     )
+> 28709 |     monkeypatch.setattr(stage2, "full_verify", full)
+>       |
+>
+> Found 12 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/slip-counter/stage2/attempts/slip-counter/attempt-3-20261119T032425115108Z-bfbdd23f.md
+> ```

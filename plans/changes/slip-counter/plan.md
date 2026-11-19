@@ -136,6 +136,10 @@ the fix; no real machine history or deliberately failing full suite is needed.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refuses glm-5.3-flash (bead coding-harness-b5pu); the previous Sonnet call ended at claude exit 1.
 
+## Runner route — 2026-11-19
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-14 17:00:12–17:56:17 UTC, 3365 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
@@ -154,3 +158,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM via Z.ai refu
 2026-11-18 22:04:56–22:53:31 UTC, 2915 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it · measured by the runner
 2026-11-18 23:43:24–2026-11-19 00:38:23 UTC, 3299 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-19 03:02:22–03:18:03 UTC, 941 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: the whole tests/test_stage2.py requires full verification until coding-harness-vg9 splits it · measured by the runner
+2026-11-19 03:24:32–03:25:54 UTC, 82 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 03:26:02–03:27:10 UTC, 68 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 03:27:18–03:27:52 UTC, 34 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
