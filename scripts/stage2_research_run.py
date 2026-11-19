@@ -175,9 +175,9 @@ def payload_text(stdout: str) -> str:
 def claude_finder_output(stdout: str) -> tuple[str, dict | None, dict | None]:
     """What a Claude finder record stores, its structured answer, and the result envelope (S-9, S-14).
 
-    The envelope's session id and cost never reach the record: the stored text is the
-    envelope's ``result``, or nothing when the output is no JSON envelope. The answer
-    is the ``structured_output`` object, or None when the call produced none.
+    Return the envelope's ``result`` text (or empty text), its ``structured_output``
+    object when present, and the envelope. The caller stores the structured answer
+    on success and otherwise the result text; session id and cost are not stored.
     """
     try:
         envelope = json.loads((stdout or "").strip())
@@ -780,8 +780,9 @@ class Run:
     def record_claude_finder(self, record: dict, result) -> None:
         """Store a Claude finder answer from the envelope's structured output (S-9, S-14, S-15).
 
-        The record's stdout keeps only the envelope's ``result`` text, never the session
-        or cost fields, on every path. A process success without a structured answer is
+        The record's stdout holds serialized ``structured_output`` on success, otherwise
+        the envelope's ``result`` text or empty text, never session or cost fields.
+        A process success without a structured answer is
         an invalid report (S-15); a result that ends at a turn, budget or API limit
         before the model answered stays a failed call (S-16).
         """

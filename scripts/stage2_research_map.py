@@ -174,7 +174,11 @@ def interpret_locator_schema(value):
     properties, required = value.get("properties"), value.get("required")
     if not isinstance(properties, dict) or not properties:
         raise ResearchMapError("the locator schema needs its category properties")
-    if not isinstance(required, list) or set(required) != set(properties):
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(name, str) for name in required)
+        or set(required) != set(properties)
+    ):
         raise ResearchMapError("the locator schema must require every category")
     categories = {name: _category_schema(name, item) for name, item in properties.items()}
     return {"categories": categories}
@@ -210,7 +214,11 @@ def _entry_form(where, schema):
     properties, required = schema.get("properties"), schema.get("required")
     if not isinstance(properties, dict) or not properties:
         raise ResearchMapError(f"{where} needs its fields")
-    if not isinstance(required, list) or not set(required) <= set(properties):
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(name, str) for name in required)
+        or not set(required) <= set(properties)
+    ):
         raise ResearchMapError(f"{where} must require known fields")
     fields = {name: _field_schema(f"{where} field '{name}'", item) for name, item in properties.items()}
     return {"required": set(required), "fields": fields}
@@ -247,12 +255,12 @@ def _entry_faults(entry, branches):
         faults = [f"the field '{name}' is not part of the entry form" for name in foreign]
         faults += [f"the required field '{name}' is missing" for name in sorted(branch["required"] - set(entry))]
         for name, value in sorted(entry.items()):
-            pattern = branch["fields"].get(name)
-            if pattern is None:  # already faulted as foreign to this form
+            if name not in branch["fields"]:  # already faulted as foreign to this form
                 continue
+            pattern = branch["fields"][name]
             if not isinstance(value, str):
                 faults.append(f"the field '{name}' must be a string")
-            elif pattern.search(value) is None:
+            elif pattern is not None and pattern.search(value) is None:
                 faults.append(f"the field '{name}' does not match the schema pattern")
         if not faults:
             return []

@@ -4707,3 +4707,21 @@ def test_invalid_finder_schema_stops_before_calls(sworld: SwarmWorld, case: str)
     text = sworld.research.read_text(encoding="utf-8")
     assert "incomplete" in status_line(text)
     assert stage2_research_run.LOCATOR_SCHEMA in text, "the reason names the schema file"
+
+
+@pytest.mark.parametrize("location,bad", [("outer", {}), ("outer", []), ("entry", {}), ("entry", [])])
+def test_malformed_required_schema_stops_before_calls(sworld: SwarmWorld, location: str, bad) -> None:
+    path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
+    value = json.loads(schema_text())
+    target = value if location == "outer" else value["properties"]["code"]["items"]["anyOf"][0]
+    target["required"].append(bad)
+    path.write_text(json.dumps(value), encoding="utf-8")
+    try:
+        outcome = sworld.run()
+    except TypeError as error:
+        pytest.fail(f"malformed schema must stop cleanly, not raise TypeError: {error}")
+    assert outcome == 1
+    assert sworld.calls() == []
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    assert stage2_research_run.LOCATOR_SCHEMA in text

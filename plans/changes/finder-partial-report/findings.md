@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-19
 created: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-yd8w
@@ -299,3 +299,7 @@ Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model hy4-flash
 Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4810 commits, 12 rules.
 
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged; plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4816 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged

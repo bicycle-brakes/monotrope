@@ -460,3 +460,13 @@ def test_finder_field_form_is_resolved_at_merge():
     by_reference = {entry["reference"]: entry for entry in result["entries"]}
     assert by_reference["run"]["status"] == "resolved" and result["scope"] == [["code", "src/app.py", "run"]]
     assert by_reference["NoSuch"]["status"] == "unresolved", "the form stays the merge resolution's business"
+
+
+def test_unpatterned_string_field_still_checks_type():
+    value = json.loads(SCHEMA_TEXT)
+    field = value["properties"]["code"]["items"]["anyOf"][0]["properties"]["path"]
+    field.pop("pattern", None)
+    compiled = module().interpret_locator_schema(value)
+    retained, faults = module().filter_locator_report(sample(code=[finder(42)]), compiled)
+    assert faults and "must be a string" in str(faults)
+    assert retained["code"][0].get("not_read")
