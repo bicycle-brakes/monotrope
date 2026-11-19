@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-18
+updated: 2026-11-19
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -636,7 +636,10 @@ never by commit identity, which the checkpoint commit, stamping and audit
 finalization move between the two checks. The comparison tree leaves out the
 change's own `plan.md` and `findings.md`, where the runner's and phase 6's
 bookkeeping lands between the checks; an edit to those two files in between
-goes unseen and can count one slip too many. The full run records its tree
+goes unseen and can count one slip too many. An edit to another change file,
+such as `spec.md`, `decisions.md` or `research.md`, moves the comparison tree
+between the checks; the pair then no longer matches and a slip can go
+uncounted. The full run records its tree
 only at its start, so a tree that moved during a red full run can also count
 one slip too many (follow-up bead coding-harness-cf9h).
 
