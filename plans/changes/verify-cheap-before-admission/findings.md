@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -1257,7 +1257,7 @@ Stage-2 call, 2026-11-18: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Review | scripts/stage2.py::_scheduled_verify | A Stage 2 full check aborts if a plain gate command exists but is not executable: launching it directly raises `CallFailed` on `PermissionError`, so later cheap gates do not run and advisory enforcement is bypassed. The shell entry point instead receives exit 126 as that gate’s result and continues according to its enforcement. [Criteria 2, 6 and 10] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | scripts/stage2.py::_scheduled_verify | A Stage 2 full check aborts if a plain gate command exists but is not executable: launching it directly raises `CallFailed` on `PermissionError`, so later cheap gates do not run and advisory enforcement is bypassed. The shell entry point instead receives exit 126 as that gate’s result and continues according to its enforcement. [Criteria 2, 6 and 10] | Codex | taken — decisions.md Q-9: every gate launches through `verify_run.shell_argv`; remove the direct-launch branch of `_gate_argv` | — |
 
 Phase 6 verdict: codex 01a1ef85-c35f-7a21-b46d-c849cf7c11c7, 2026-11-18
 Reviewer session: codex 01a1ef85-c35f-7a21-b46d-c849cf7c11c7 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

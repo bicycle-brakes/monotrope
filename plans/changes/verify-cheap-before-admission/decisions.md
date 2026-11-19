@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
@@ -146,3 +146,24 @@ decided that the interpreter choice and the temporary-area guard move into
 `scripts/verify_run.py` and both entry points call that one bootstrap, to
 achieve one path that cannot drift again, accepting a larger repair and a
 further phase-6 re-check — 2026-11-18
+
+## Q-9 · One launch path for every gate (phase-6 row F6-1 of the fourth block)
+
+asked: 2026-11-19
+answer: "B: Alles über Shell" — in English: option B, Stage 2 launches every gate through the shared shell (`verify_run.shell_argv`, `sh -c`) as the shell entry point does; the direct-launch branch of `_gate_argv` in `scripts/stage2.py` (the `PLAIN_GATE_COMMAND` and `SHELL_GATE_WORDS` path and its 127 mapping) is removed.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the phase-6 re-check after Q-8 raised F6-1: a plain gate command that exists but is not executable makes Stage 2's direct launch raise CallFailed on PermissionError, while the shell entry point gets exit 126 and continues.
+  Intention: the earlier missing-executable row was the same mechanism (Stage 2 launches plain gates directly, the shell entry point always through `sh -c`); the night rule ends case repair at a further finding of one mechanism.
+  Today: `_gate_argv` launches a command matching `PLAIN_GATE_COMMAND` directly via `shlex.split` and everything else through `verify_run.shell_argv`; the shell entry point uses `shell_argv` for every gate.
+  Repository change: scripts/stage2.py (`_gate_argv`, the 127 mapping in `_scheduled_verify`) and its tests; then a phase-6 re-check.
+  Architecture change: one launch path for gates on both full-check entry points (house rule 9).
+  Options shown: A the shared launcher maps every OSError of a direct launch to the shell's exit status; B every gate through the shell (recommended after the maintainer asked for B's advantages); C a named limit and a follow-up bead.
+
+In the context of two gate launch paths, direct and through the shell,
+facing a second finding where they disagree on a launch error, we decided
+that every gate launches through the one shared shell, to achieve a launch
+whose errors cannot differ between the entry points, accepting one extra
+`sh` process per gate (cost not measured) and a further phase-6 re-check —
+2026-11-19
