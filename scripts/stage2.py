@@ -7132,7 +7132,13 @@ def _targeted_commands(
     return run_gates(root, env, key, chosen.gates)
 
 
-def full_verify(root: Path, env: dict[str, str], key: str | None, change: str | None = None) -> list[str]:
+def full_verify(
+    root: Path,
+    env: dict[str, str],
+    key: str | None,
+    change: str | None = None,
+    prepare: Callable[[], list[str]] | None = None,
+) -> list[str]:
     """`make verify` under one machine admission: the problems, empty when it is green.
 
     The full check of a targeted route whose coverage was not safe, and of phase 6's boundary. New
@@ -7146,6 +7152,10 @@ def full_verify(root: Path, env: dict[str, str], key: str | None, change: str | 
     intended: list[bytes] = []
     try:
         with verify_lock.hold_admission(["make", "verify"]) as owned:
+            if prepare is not None:
+                preparation = prepare()
+                if preparation:
+                    return preparation
             try:
                 intended = intend_new_files(root, env)
             except (Refused, OSError) as error:
@@ -7365,75 +7375,40 @@ def verify_attempt(
         except Refused as error:
             targeted.append(str(error))
         return targeted
-    intended: list[bytes] = []
-    problems: list[str] = []
-    try:
-        # One machine-wide admission before the timed check: queue and memory waits consume no
-        # step limit; a refusal is a failed check, never a started one (bead coding-harness-p6mu).
-        # Preparation runs under the same admission, so ruff and the check inherit the one verify
-        # environment — the format step's ruff is a local child like the `make` below, and the
-        # ownership marker matches for both.
-        with verify_lock.hold_admission(["make", "verify"]) as owned:
-            try:
-                # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
-                # Clear against those final bytes, before stamping the plan and verifying (F-1).
-                line = format_step(root, env, key, tools)
-                if formatted is not None and line is not None:
-                    formatted.append(line)
-            except (OSError, RuntimeError, ValueError) as error:
-                return [
-                    f"the criterion ledger of {plan.name} could not be updated: "
-                    f"{getattr(error, 'strerror', None) or error}"
-                ]
-            # The attempt's own cheap checks, before anything derived: a planted fault stops here
-            # (bead coding-harness-5tyh). Cheap green continues into the clearing below. They run
-            # under the same admission and verify environment as the check (bead coding-harness-p6mu).
-            try:
-                cheap = cheap_checks(root, verify_lock.inherit_env(env), plan, key, accepted_plan, previous_failures)
-            except (OSError, RuntimeError, ValueError) as error:
-                # Named as the cheap checks' own failure, never as the ledger's (review row L7-2).
-                return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
-            if cheap:
-                return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
-            try:
-                capture_ledger_clearing(root, plan, clearing)
-            except (OSError, RuntimeError, ValueError) as error:
-                return [
-                    f"the criterion ledger of {plan.name} could not be updated: "
-                    f"{getattr(error, 'strerror', None) or error}"
-                ]
-            preparation = prepare_derived(root, env, key)
-            if preparation:
-                return preparation
-            try:
-                intended = intend_new_files(root, env)
-            except (Refused, OSError) as error:
-                return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
-            done = launch(
-                ["make", "verify"],
-                root,
-                verify_lock.inherit_env(env),
-                timeout=VERIFY_SECONDS,
-                limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-                pass_fds=_lock_fds(owned),
-            )
-    except verify_lock.VerifyLockError as error:
-        problems.append(scrub(f"`make verify` was not started: {error}", key))
-    except StepTimedOut as error:
-        # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
-        # could not be started (O188-4 of the #188 review).
-        problems.append(f"`make verify` did not finish: {error}")
-    else:
-        if done.returncode != 0:
-            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
-    finally:
-        # The entries were for the gates only: a failed run must not leave them in the operator's index,
-        # and a passing one is staged whole by the checkpoint (runner review R-5).
-        # Cleanup is a postcondition even when verification passed or timed out.
+
+    def prepare() -> list[str]:
         try:
-            drop_intended(root, intended, env)
-        except (Refused, OSError) as error:
-            problems.append(f"the attempt's intent-to-add entries could not be removed after `make verify`: {error}")
+            # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
+            # Clear against those final bytes, before stamping the plan and verifying (F-1).
+            line = format_step(root, env, key, tools)
+            if formatted is not None and line is not None:
+                formatted.append(line)
+        except (OSError, RuntimeError, ValueError) as error:
+            return [
+                f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+            ]
+        # The attempt's own cheap checks, before anything derived: a planted fault stops here
+        # (bead coding-harness-5tyh). Cheap green continues into the clearing below. They run
+        # under the same admission and verify environment as the check (bead coding-harness-p6mu).
+        try:
+            cheap = cheap_checks(root, verify_lock.inherit_env(env), plan, key, accepted_plan, previous_failures)
+        except (OSError, RuntimeError, ValueError) as error:
+            # Named as the cheap checks' own failure, never as the ledger's (review row L7-2).
+            return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
+        if cheap:
+            return [f"{CHEAP_LABEL}: {entry}" for entry in cheap]
+        try:
+            capture_ledger_clearing(root, plan, clearing)
+        except (OSError, RuntimeError, ValueError) as error:
+            return [
+                f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+            ]
+        preparation = prepare_derived(root, env, key)
+        if preparation:
+            return preparation
+        return []
+
+    problems = full_verify(root, env, key, plan.parent.name, prepare=prepare)
     try:
         time_log(plan)
     except Refused as error:

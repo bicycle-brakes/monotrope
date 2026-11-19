@@ -28790,3 +28790,18 @@ def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypat
     assert world.run("implement") == 0, world.text()
     assert commands.of("gate")
     assert slip_history(world) == []
+
+
+def test_default_full_attempt_uses_named_comparison_context(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default full attempt supplies the same comparison context as other full checks."""
+    world.script(make=[{"stdout": "green"}])
+    calls = []
+    original = stage2.verify_duration.full_run_context
+
+    def context(tree: str | None, change: str | None) -> dict[str, str]:
+        calls.append((tree, change))
+        return original(tree, change)
+
+    monkeypatch.setattr(stage2.verify_duration, "full_run_context", context)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert calls == [(stage2._checked_tree(world.root, "demo"), "demo")]
