@@ -247,6 +247,8 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
     kind = ""  # "", "released", "phase6", "other" (an eligible section ended by its kept-from line)
     last_release_heading = 0
     last_phase6_heading = 0
+    prose = False
+    release_table = False
 
     def outside(label: str, position: int) -> None:
         group = groups.get(label)
@@ -257,6 +259,8 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
 
     for position, line in enumerate(text.splitlines(), start=1):
         if line.startswith("## "):
+            prose = False
+            release_table = False
             heading = line
             if line.startswith(RELEASE_HEADING) or line.startswith(GLM_RELEASE_HEADING):
                 kind = "released"
@@ -273,15 +277,26 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
                 if kind == "phase6":
                     last_phase6_heading = position
             continue
+        if re.match(r"^#{3,6}[ \t]+", line):
+            heading = line
+            kind = "other"
+            prose = True
+            continue
+        if KEPT_FROM.match(line):
+            kind = "other"
+            prose = True
+            continue
         if line.startswith("Stage-2 call, "):
-            call = parse_call_line(line, position)
+            call = None if prose else parse_call_line(line, position)
             if call is not None:
                 calls.append(call)
             continue
-        if kind == "released" and KEPT_FROM.match(line):
-            kind = ""  # what follows is the reviewers' words, carried as they came, not rows
-            continue
         cells = split_row(line)
+        if kind == "released":
+            if cells is not None:
+                release_table = True
+            elif release_table:
+                kind = "other"
         if cells is None or furniture(cells):
             continue
         if not any(cell.strip() for cell in cells):

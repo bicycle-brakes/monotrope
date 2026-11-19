@@ -586,3 +586,27 @@ def test_explicit_head_uses_default_output(tmp_path, monkeypatch):
             commit(root, {"a": "later"})
     _, historical = run_report(root, main_sha, monkeypatch, state)
     assert historical[-1].strip().endswith(f"revisions/{main_sha}.jsonl")
+
+
+def test_subheading_restated_phase6_rows_are_outside():
+    result = read(doc(PHASE6, p6row("F-1", "open"), "### Restatement", p6row("F-1", "fixed")))
+    assert result.findings[0].status == "open"
+    assert [(table.label, table.rows) for table in result.outside] == [("### Restatement", 1)]
+
+
+def test_calls_in_reviewer_prose_do_not_change_attribution():
+    for prose in (
+        (RELEASE, lrow("L1-1", "hy3", "open"), "Kept from the loop record:"),
+        ("## Earlier review", "### Reviewer prose"),
+    ):
+        text = doc(
+            call("review", "original-model"), *prose, call("review", "stray-model"), PHASE6, p6row("F-1", "open")
+        )
+        result = read(text)
+        assert next(f.model for f in result.findings if f.id == "F-1") == "original-model"
+
+
+def test_released_section_ends_after_first_table():
+    result = read(doc(GLM_RELEASE, lrow("L1-1", "GLM", "open"), "", "Reviewer prose", lrow("L1-2", "GLM", "fixed")))
+    assert [finding.id for finding in result.findings] == ["L1-1"]
+    assert [(table.label, table.rows) for table in result.outside] == [(GLM_RELEASE, 1)]
