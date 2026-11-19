@@ -112,7 +112,7 @@ def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
         cells = reader.split_row(line)
         if cells is None or reader.furniture(cells) or not any(cell.strip() for cell in cells):
             continue
-        if reader.ROW_ID.fullmatch(cells[0]) is None or reader.status_cell(cells) is None:
+        if reader.ROW_ID.fullmatch(cells[0]) is None:
             continue
         rows.setdefault(cells[0], []).append(tuple(cells))
     return rows
@@ -135,7 +135,11 @@ def measure(root: Path, base: str, head: str) -> list[str]:
                 if remaining[cells]:
                     remaining[cells] -= 1
                     continue  # unchanged occurrence, including in a moved file
-                status = (reader.status_cell(list(cells)) or "").strip()
+                status_cell = reader.status_cell(list(cells))
+                if status_cell is None:
+                    findings.append(f"{new}:{row_id}: unknown finding row width {len(cells)}")
+                    continue
+                status = status_cell.strip()
                 if not marks_duplicate(status) or CANONICAL.fullmatch(status):
                     continue
                 findings.append(

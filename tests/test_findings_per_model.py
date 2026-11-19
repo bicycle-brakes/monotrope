@@ -358,7 +358,10 @@ def test_formats_agree_and_name_commit(tmp_path, monkeypatch):
     state = tmp_path / "state"
     base = state / "coding-harness" / "findings-per-model"
 
-    code, chunks = run_report(root, None, monkeypatch, state)
+    try:
+        code, chunks = run_report(root, None, monkeypatch, state)
+    except NotADirectoryError:
+        pytest.fail("an unwritable state path must produce an incomplete report")
     assert code == 0
     output = "".join(chunks)
     main_file = base / "main.jsonl"
@@ -595,15 +598,112 @@ def test_subheading_restated_phase6_rows_are_outside():
 
 
 def test_calls_in_reviewer_prose_do_not_change_attribution():
-    for prose in (
-        (RELEASE, lrow("L1-1", "hy3", "open"), "Kept from the loop record:"),
-        ("## Earlier review", "### Reviewer prose"),
-    ):
-        text = doc(
-            call("review", "original-model"), *prose, call("review", "stray-model"), PHASE6, p6row("F-1", "open")
-        )
-        result = read(text)
-        assert next(f.model for f in result.findings if f.id == "F-1") == "original-model"
+    text = doc(
+        call("review", "original-model"),
+        "### Reviewer prose",
+        "> " + call("review", "stray-model"),
+        PHASE6,
+        p6row("F-1", "open"),
+    )
+    result = read(text)
+    assert next(f.model for f in result.findings if f.id == "F-1") == "original-model"
+
+
+def test_calls_after_kept_block_and_subheadings_are_attributed():
+    text = doc(
+        RELEASE,
+        lrow("L1-1", "hy3", "open"),
+        "Kept from the loop record:",
+        "",
+        "> " + call("review", "stray-model"),
+        "",
+        call("review", "gpt-6.1-sol"),
+        PHASE6,
+        p6row("F-1", "open"),
+        "### Details",
+        "> quoted prose",
+        "",
+        call("review", "gpt-6.1-terra"),
+        PHASE6_2,
+        p6row("F-2", "open"),
+    )
+    models = {f.id: f.model for f in read(text).findings}
+    assert models["F-1"] == "gpt-6.1-sol"
+    assert models["F-2"] == "gpt-6.1-terra"
+
+
+def test_outside_tables_identify_their_source(tmp_path, monkeypatch):
+    root, _ = repo(
+        tmp_path,
+        {
+            findings_path("a"): doc("## Phase 2a", p6row("F-1", "open")),
+            findings_path("b"): doc("## Phase 2a", p6row("F-2", "open")),
+        },
+    )
+    code, chunks = run_report(root, None, monkeypatch, tmp_path / "state")
+    output = "".join(chunks)
+    assert code == 0
+    assert findings_path("a") in output and findings_path("b") in output
+
+
+def test_failed_git_show_is_an_incomplete_input(tmp_path, monkeypatch):
+    path = findings_path("a")
+    root, sha = repo(tmp_path, {path: doc(PHASE6, p6row("F-1", "open"))})
+    original = fpm.git
+
+    def failing(root, *args):
+        if args[0] == "show":
+            return SimpleNamespace(returncode=1, stdout=b"", stderr=b"failure")
+        return original(root, *args)
+
+    monkeypatch.setattr(fpm, "git", failing)
+    code, chunks = run_report(root, sha, monkeypatch, tmp_path / "state")
+    assert code == 1 and path in "".join(chunks) and "Incomplete" in "".join(chunks)
+    records = jsonl(Path(chunks[-1].strip()))
+    assert not records[0]["complete"] and any(r["type"] == "gap" and r["path"] == path for r in records)
+
+
+def test_unwritable_state_path_reports_gap(tmp_path, monkeypatch):
+    root, _ = repo(tmp_path, {findings_path("a"): doc(PHASE6, p6row("F-1", "open"))})
+    state = tmp_path / "file"
+    state.write_text("not a directory")
+    try:
+        code, chunks = run_report(root, None, monkeypatch, state)
+    except OSError as exc:
+        pytest.fail(f"an unwritable state path must end in the report's own gap wording, not raise {exc!r}")
+    assert code == 1 and "Incomplete" in "".join(chunks) and "cannot write report" in "".join(chunks)
+
+
+def test_later_phase6_blocks_after_kept_block_keep_their_own_calls():
+    """The shape of a released block with a kept-from record before several phase-6 blocks."""
+    text = doc(
+        "## Phase 4b — loop rows, released 2026-11-01",
+        lrow("L1-1", "hy3", "open"),
+        "",
+        "Kept from the loop record:",
+        "",
+        "### Reviewer prose",
+        "> quoted prose",
+        "",
+        call("review", "gpt-6.1-sol"),
+        PHASE6,
+        p6row("F-1", "open"),
+        "",
+        call("review", "gpt-6.1-terra"),
+        "## Phase 6 — Codex, 2026-11-03",
+        p6row("F-2", "open"),
+        "",
+        call("review", "gpt-6.1-luna"),
+        "## Phase 6 — Codex, 2026-11-04",
+        p6row("F-3", "open"),
+    )
+    models = {f.id: f.model for f in read(text).findings}
+    assert models == {
+        "L1-1": "hy3",
+        "F-1": "gpt-6.1-sol",
+        "F-2": "gpt-6.1-terra",
+        "F-3": "gpt-6.1-luna",
+    }
 
 
 def test_released_section_ends_after_first_table():

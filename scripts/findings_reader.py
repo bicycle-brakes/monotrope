@@ -206,6 +206,8 @@ class OutsideTable:
     label: str
     line: int
     rows: int
+    change: str
+    path: str
 
 
 @dataclass
@@ -237,71 +239,72 @@ def parse_call_line(line: str, position: int) -> CallLine | None:
     return CallLine(matched.group("date"), verb, model_match.group(1) if model_match else None, position)
 
 
+@dataclass
+class Section:
+    """The innermost heading and the row table it owns."""
+
+    heading: str | None = None
+    kind: str = "other"
+    table_started: bool = False
+
+
 def parse_findings(text: str, *, change: str, path: str) -> Parsed:
     """The eligible rows, the outside tables and the unreadable rows of one findings.md."""
     blocks: list[Block] = []
     gaps: list[Gap] = []
     calls: list[CallLine] = []
     groups: dict[str, OutsideTable] = {}
-    heading: str | None = None
-    kind = ""  # "", "released", "phase6", "other" (an eligible section ended by its kept-from line)
+    section = Section()
     last_release_heading = 0
     last_phase6_heading = 0
-    prose = False
-    release_table = False
 
     def outside(label: str, position: int) -> None:
         group = groups.get(label)
         if group is None:
-            groups[label] = OutsideTable(label, position, 1)
+            groups[label] = OutsideTable(label, position, 1, change, path)
         else:
             group.rows += 1
 
     for position, line in enumerate(text.splitlines(), start=1):
         if line.startswith("## "):
-            prose = False
-            release_table = False
-            heading = line
+            section = Section(heading=line)
             if line.startswith(RELEASE_HEADING) or line.startswith(GLM_RELEASE_HEADING):
-                kind = "released"
+                section.kind = "released"
             elif PHASE6_HEADING.match(line):
-                kind = "phase6"
+                section.kind = "phase6"
             else:
-                kind = "other"
-            if kind in ("released", "phase6"):
-                window = last_phase6_heading if kind == "phase6" else last_release_heading
+                section.kind = "other"
+            if section.kind in ("released", "phase6"):
+                window = last_phase6_heading if section.kind == "phase6" else last_release_heading
                 preceding = tuple(call for call in calls if call.line > window)
-                blocks.append(Block(BlockIdentity(change, path, heading, position, preceding), kind))
-                if kind == "released":
+                blocks.append(Block(BlockIdentity(change, path, section.heading, position, preceding), section.kind))
+                if section.kind == "released":
                     last_release_heading = position
-                if kind == "phase6":
+                if section.kind == "phase6":
                     last_phase6_heading = position
             continue
         if re.match(r"^#{3,6}[ \t]+", line):
-            heading = line
-            kind = "other"
-            prose = True
+            section = Section(heading=line)
             continue
         if KEPT_FROM.match(line):
-            kind = "other"
-            prose = True
+            section.kind = "other"
             continue
         if line.startswith("Stage-2 call, "):
-            call = None if prose else parse_call_line(line, position)
+            call = parse_call_line(line, position)
             if call is not None:
                 calls.append(call)
             continue
         cells = split_row(line)
-        if kind == "released":
+        if section.kind == "released":
             if cells is not None:
-                release_table = True
-            elif release_table:
-                kind = "other"
+                section.table_started = True
+            elif section.table_started:
+                section.kind = "other"
         if cells is None or furniture(cells):
             continue
         if not any(cell.strip() for cell in cells):
             continue  # a decorative line of empty cells is no row
-        if kind == "released":
+        if section.kind == "released":
             if len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
                 blocks[-1].rows.append(RowRecord(cells, position))
             else:
@@ -311,7 +314,7 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
                 )
                 gaps.append(Gap(path, cells[0], reason))
             continue
-        if kind == "phase6":
+        if section.kind == "phase6":
             if cells[0].startswith(PHASE2A_ID_PREFIX):
                 continue  # criterion 19: a phase-2a row never counts in a phase-6 block
             if len(cells) in (7, 9, 10):
@@ -321,18 +324,18 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
                 reason = f"line {position}: a phase-6 row needs 7, 9 or 10 cells, found {len(cells)}"
                 gaps.append(Gap(path, row_id, reason))
             continue
-        if kind in ("", "other") and ROW_ID.fullmatch(cells[0]):
+        if section.kind in ("", "other") and ROW_ID.fullmatch(cells[0]):
             # criterion 18: a table whose first cell holds a finding id, under a heading
             # that is not counted, stands outside the count with its heading; a table
             # before any heading is labelled headingless.
-            if heading is None:
+            if section.heading is None:
                 outside("headingless tables", position)
-            elif heading.startswith(PHASE2A_HEADING):
+            elif section.heading.startswith(PHASE2A_HEADING):
                 outside("phase-2a tables", position)
-            elif heading.startswith(REJECTED_ANSWER_HEADING):
+            elif section.heading.startswith(REJECTED_ANSWER_HEADING):
                 outside("rejected phase-6 answer tables", position)
             else:
-                outside(heading, position)
+                outside(section.heading, position)
     return Parsed(blocks, [groups[label] for label in sorted(groups)], gaps)
 
 

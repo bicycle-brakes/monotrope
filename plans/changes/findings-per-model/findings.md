@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -284,3 +284,45 @@ Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model kimi-k2.7
 Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4810 commits, 12 rules.
 
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1119 files, 4816 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4818 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/check_finding_duplicates.py` +6 -2
+> - `scripts/findings_per_model.py` +20 -9
+> - `scripts/findings_reader.py` +36 -33
+> - `tests/test_finding_duplicates.py` +8 -0
+> - `tests/test_findings_per_model.py` +71 -9
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_finding_duplicates.py`, `tests/test_findings_per_model.py`, `tests/test_kit.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `finding-duplicates` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L10-6: tests/test_findings_per_model.py::test_unwritable_state_path_reports_gap: the call of `tests/test_findings_per_model.py::test_unwritable_state_path_reports_gap` failed with NotADirectoryError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-1-20261119T215555501382Z-49a09000.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1119 files, 4833 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_findings_per_model.py` +4 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_finding_duplicates.py`, `tests/test_findings_per_model.py`, `tests/test_kit.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `finding-duplicates` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L10-6: tests/test_findings_per_model.py::test_unwritable_state_path_reports_gap: the call of `tests/test_findings_per_model.py::test_unwritable_state_path_reports_gap` failed with NotADirectoryError, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-2-20261119T215555501382Z-49a09000.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1119 files, 4833 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged

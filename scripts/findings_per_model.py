@@ -84,10 +84,8 @@ def output_relative(root: Path, rev_arg: str | None, sha: str) -> str:
     return f"branches/{branch.encode('utf-8').hex()}.jsonl"
 
 
-def state_root(override: str | None = None) -> Path:
+def state_root() -> Path:
     """``$XDG_STATE_HOME/coding-harness/findings-per-model``, or ``~/.local/state`` without the variable."""
-    if override:
-        return Path(override) / "coding-harness" / STATE_DIR
     env = os.environ.get("XDG_STATE_HOME")
     base = Path(env) if env else Path.home() / ".local" / "state"
     return base / "coding-harness" / STATE_DIR
@@ -105,9 +103,17 @@ def change_folders(root: Path, sha: str) -> list[str]:
 
 def read_findings(root: Path, sha: str, folder: str, gaps: list[reader.Gap]) -> str | None:
     """findings.md of one change at the commit; an unreadable input is a gap, never a silence."""
-    done = git(root, "show", f"{sha}:{folder}/findings.md")
+    path = f"{folder}/findings.md"
+    listing = git(root, "ls-tree", "-z", "--name-only", sha, "--", path)
+    if listing.returncode != 0:
+        gaps.append(reader.Gap(path, None, "cannot inspect input at commit"))
+        return None
+    if not listing.stdout:
+        return None
+    done = git(root, "show", f"{sha}:{path}")
     if done.returncode != 0:
-        return None  # a change without findings.md holds no rows
+        gaps.append(reader.Gap(path, None, "cannot read input at commit"))
+        return None
     try:
         return done.stdout.decode("utf-8")
     except UnicodeDecodeError:
@@ -140,7 +146,7 @@ def collect(
         outside += result.outside
     findings.sort(key=lambda finding: (finding.change, finding.id))
     gaps.sort(key=lambda gap: (gap.path, gap.id or "", gap.reason))
-    outside.sort(key=lambda table: (table.line, table.label))
+    outside.sort(key=lambda table: (table.path, table.line, table.label))
     return findings, gaps, outside
 
 
@@ -204,10 +210,15 @@ def run(root: Path, rev_arg: str | None, out: Callable[[str], object] | None = N
     models = totals_of(findings)
     complete = not gaps
     target = state_root() / output_relative(root, rev_arg, sha)
-    target.parent.mkdir(parents=True, exist_ok=True)
     records = jsonl_records(sha, complete, models, findings, gaps)
     body = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
-    target.write_text(body, encoding="utf-8")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+    except OSError as exc:
+        gaps.append(reader.Gap(str(target), None, f"cannot write report: {exc}"))
+        complete = False
+        records = jsonl_records(sha, complete, models, findings, gaps)
 
     out(f"Findings per model — cutoff commit {sha}\n\n")
     out(table(models, records) + "\n")
@@ -219,7 +230,7 @@ def run(root: Path, rev_arg: str | None, out: Callable[[str], object] | None = N
     if outside:
         out("\nOutside the count:\n")
         for entry in outside:
-            out(f"- {entry.label} (line {entry.line}): {entry.rows} row(s)\n")
+            out(f"- {entry.change}: {entry.path}: {entry.label} (line {entry.line}): {entry.rows} row(s)\n")
     out(f"{target}\n")
     return 0 if complete else 1
 

@@ -147,3 +147,11 @@ def test_only_added_occurrences_of_same_id_are_checked(tmp_path):
     assert gate.measure(root, base, head) == []
     bad = commit(root, {PATH: HEADER + history + table(("L1-3", "rejected — false: repeat of L1-1"))})
     assert any("L1-3" in item for item in gate.measure(root, base, bad))
+
+
+def test_unknown_width_finding_row_is_reported(tmp_path):
+    root, base = base_repo(tmp_path, {PATH: HEADER + table(("L1-1", "fixed"))})
+    malformed = "| L1-2 | MAJOR | CODE | x.py | finding | reviewer | same as L1-1 | extra |\n"
+    head = commit(root, {PATH: HEADER + table(("L1-1", "fixed")) + malformed})
+    found = gate.measure(root, base, head)
+    assert any("L1-2" in item and "width" in item for item in found)
