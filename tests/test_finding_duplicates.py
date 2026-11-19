@@ -110,6 +110,18 @@ def test_new_duplicate_form_gate_exit_codes(tmp_path, capsys):
     assert "L1-2" in capsys.readouterr().out
 
 
+def test_the_gate_goes_red_when_a_new_duplicate_row_uses_a_free_form(tmp_path, capsys):
+    """The mutation evidence of the gate finding-duplicates (tests/test_ci.py ratchet).
+
+    The fault seeded: one new row marks a duplicate in a free form instead of
+    `rejected — duplicate of <ID>`. The gate must exit 1 and name the row.
+    """
+    root, base = base_repo(tmp_path, {PATH: HEADER + table(("L1-1", "fixed"))})
+    bad = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", "rejected — same as L1-1"))})
+    assert gate.main(["--root", str(root), "--base", base, "--head", bad]) == 1, "a free-form duplicate passed"
+    assert "L1-2" in capsys.readouterr().out
+
+
 def test_cannot_measure_exits_three(tmp_path):
     root, base = base_repo(tmp_path, {PATH: HEADER})
     result = subprocess.run(
