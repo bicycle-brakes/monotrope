@@ -3,8 +3,8 @@ title: "Spec — mandatory-spec-review"
 status: draft
 implementation_status: none
 date: 2026-11-17
-last_reviewed: 2026-11-18
-updated: 2026-11-18
+last_reviewed: 2026-11-19
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -19,7 +19,7 @@ adr_files: []
 
 # Spec — mandatory-spec-review
 
-A current spec review precedes the plan card for bounded, feature and architectural changes, and implementation refuses an unreviewed spec (bead coding-harness-ttic). Research: `research.md`; decisions: `decisions.md`.
+A spec review precedes the plan card for bounded, feature and architectural changes, and implementation requires review evidence subject to the three-round limit (bead coding-harness-ttic). Research: `research.md`; decisions: `decisions.md`.
 
 ## Problem
 
@@ -35,23 +35,23 @@ A current spec review precedes the plan card for bounded, feature and architectu
 
 **Workflow texts:** `AGENTS.md` phase table, `docs/WORKFLOW.md`, `prompts/02-spec.md` and `prompts/02a-spec-review.md`, wherever they describe phase 2a or the draft chain.
 
-**Open ambiguity:** in the newest current qualifying block, a row whose Severity or Finding cell begins `[AMBIGUITY]` and whose Status begins `open`; an answer alone does not close the row.
+**Open ambiguity:** in the newest qualifying block, a row whose Severity or Finding cell begins `[AMBIGUITY]` and whose Status begins `open`; an answer alone does not close the row.
 
 ## Acceptance criteria
 
-1. The workflow requires a current spec review before the plan card for bounded, feature and architectural changes.
-   *Refuted by:* The workflow text permits a card before that review.
+1. The workflow requires a current spec review before the plan card for bounded, feature and architectural changes, except for a final draft after three review rounds.
+   *Refuted by:* The workflow permits a card without a current review before three rounds, or forbids the final draft after three rounds solely for lacking a new review.
 2. The workflow exempts spikes from this mandatory review.
    *Refuted by:* The workflow text requires the review for a spike.
 3. When a review produces rows requiring a spec edit, the workflow repeats draft and review until a current review has settled rows that require no further spec edit, or the third review round is reached; after round three a BLOCKER or an ambiguity whose answer changes the spec goes to the maintainer, who either authorizes a fourth round in `decisions.md` or re-slices the change.
-   *Refuted by:* The workflow permits the card after an edit without a current review, or runs a fourth round without the maintainer’s recorded authorization instead of re-slicing.
+   *Refuted by:* The workflow permits the card after an edit without a current review before three rounds, or runs a fourth round without the maintainer’s recorded authorization instead of re-slicing.
 4. When implement reads a missing, invalid or disagreeing class, it refuses before starting a model and tells the operator to add or repair class declarations.
    *Refuted by:* An unknown class reaches a model or the remedy is missing.
 5. When implement is called for a spike, the new review precondition permits it to reach the existing checks.
    *Refuted by:* The new precondition refuses an unreviewed spike.
-6. When implement is called for a bounded, feature or architectural change without a current readable qualifying review, it refuses before starting a model.
-   *Refuted by:* A missing, stale, unreadable, unaudited or Codex review admits a model.
-7. When implement is called with a current readable qualifying review whose newest current block has an open ambiguity, it refuses before starting a model and names the row.
+6. When implement is called for a bounded, feature or architectural change without a readable qualifying review, or with only stale qualifying review evidence before three spec-review rounds have run, it refuses before starting a model.
+   *Refuted by:* A missing, unreadable, unaudited or Codex review admits a model, or stale evidence admits a model before three rounds.
+7. When implement is called with review evidence whose newest qualifying block has an open ambiguity, it refuses before starting a model and names the row.
    *Refuted by:* The model starts or the refusal omits the row.
 8. When implement is called with a current readable qualifying review and no open ambiguity in its newest current block, the new precondition permits the existing checks.
    *Refuted by:* The new precondition refuses the call.
@@ -69,12 +69,14 @@ A current spec review precedes the plan card for bounded, feature and architectu
    *Refuted by:* A blocked leak check still permits the fallback call.
 15. When a fallback review succeeds, its runner-written block identifies it as fallback and records the model declared when it was written.
    *Refuted by:* A fallback block omits its model or is indistinguishable from an Opus block, or changing the declaration invalidates an existing block.
-16. When the morning inventory is generated, it considers only non-archived change folders containing `spec.md` and lists bounded, feature and architectural changes that fail the same review check as implement, including implemented changes, and separately lists changes with missing, invalid or disagreeing classes.
+16. When the morning inventory is generated, it considers only non-archived change folders containing `spec.md` and lists bounded, feature and architectural changes that fail the same review check as implement, including implemented changes, applies the three-round exception, and separately lists changes with missing, invalid or disagreeing classes.
    *Refuted by:* A review-refused change or class-refused change with a spec is missing from its group, a folder without a spec is listed, or an exempt spike is listed as review-refused.
 17. When the newest current qualifying review is a fallback, the morning inventory identifies the change for an Opus re-check in the next day session; that re-check replaces the fallback review in the same round, and its BLOCKER after round three follows criterion 3.
    *Refuted by:* A re-check consumes another round or its BLOCKER bypasses the maintainer; a current fallback is omitted, or a change whose newest current review is Opus remains listed.
 18. When a later implement call targets a previously implemented change, the same precondition applies.
    *Refuted by:* Earlier implementation exempts the later call.
+19. When three spec-review rounds have run and the spec body changes after the newest qualifying review, implement accepts that review evidence without a new review, subject to the remaining preconditions.
+   *Refuted by:* The changed body alone causes refusal after three rounds, or a changed body passes before three rounds.
 
 ## Non-goals
 
@@ -100,4 +102,5 @@ Existing ADRs and decision records remain unchanged because the maintainer settl
 - [DETAIL] The timeout is initially 30 minutes and the retry pause is 30 seconds; both are centrally configurable. The pause is a revisable operational delay and avoids an immediate duplicate call.
 - [DETAIL] The initial centrally configured fallback is `deepseek-v4.1-flash` on OpenCode Go, an already declared DeepSeek model; the configuration can be changed in one value.
 
+- [DETAIL] After three rounds the fingerprint still reports a changed body as stale; admission applies the separate exception, so currency is not misrepresented (Q-10).
 - [DETAIL] After each review, the orchestrator triages intent decisions with the maintainer and decides revisable details with reasons; after round three remaining non-BLOCKER rows become named plan limits. An open ambiguity still refuses implement under criterion 7 (S-15).

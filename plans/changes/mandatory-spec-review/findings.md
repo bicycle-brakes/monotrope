@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -297,3 +297,5 @@ Stage-2 call, 2026-11-18: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-11-19: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4762 commits, 12 rules.
