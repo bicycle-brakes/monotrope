@@ -3719,9 +3719,13 @@ def spec_review_call_config(root: Path) -> dict:
         "fallback_model": None,
     }
     try:
-        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8"))
+        if data is None:
+            data = {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         raise Refused(f"model-endpoints.yaml cannot be read ({error}).") from error
+    if not isinstance(data, dict):
+        raise Refused("model-endpoints.yaml is not a field mapping; repair it.")
     block = data.get("spec_review")
     if block is None:
         return settings
@@ -3903,13 +3907,20 @@ def review_rounds(blocks: list[SpecReviewBlock]) -> int:
 
 
 def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
-    """The UTC committer day of the last commit that touched the change's spec.md (spec criterion 12).
-
-    A spec never committed has no day: legacy currency cannot be measured and the legacy
-    block does not qualify.
-    """
-    line = _git_output(root, "log", "-1", "--format=%cI", "--", f"plans/changes/{change}/spec.md").strip()
-    return dt.date.fromisoformat(line[:10]) if line else None
+    """The UTC committer day of the latest committed spec body change."""
+    path = f"plans/changes/{change}/spec.md"
+    lines = _git_output(root, "log", "--format=%H %ct", "--", path).splitlines()
+    previous_body = None
+    previous_timestamp = None
+    for line in lines:
+        commit, timestamp = line.split()
+        body = spec_body_of(_git_output(root, "show", f"{commit}:{path}", preserve_newlines=True).encode("utf-8"))
+        if previous_body is not None and body != previous_body:
+            return dt.datetime.fromtimestamp(int(previous_timestamp), dt.UTC).date()
+        previous_body, previous_timestamp = body, timestamp
+    if previous_timestamp is not None:
+        return dt.datetime.fromtimestamp(int(previous_timestamp), dt.UTC).date()
+    return None
 
 
 def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None:

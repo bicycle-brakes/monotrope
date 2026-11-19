@@ -351,6 +351,7 @@ class World:
     root: Path
     bin: Path
     state: Path
+    seeded_review: str = ""
 
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
@@ -739,7 +740,8 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     # current review in findings.md, committed, so every implement call the suite makes is
     # admitted and the work verbs' clean-tree requirement holds. A test that needs another
     # history overwrites the file or unlinks it.
-    w.write_findings(opus_review_block(w))
+    w.seeded_review = opus_review_block(w)
+    w.write_findings(w.seeded_review)
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "seeded spec review")
     return w
@@ -7906,7 +7908,7 @@ def minus_seeded_review(world: World, text: str | None = None) -> str:
     Tests that count runner audit lines or look for table text measure the calls they made, not
     the review the `world` fixture seeds so that every implement call is admitted.
     """
-    return (world.text() if text is None else text).replace(opus_review_block(world), "")
+    return (world.text() if text is None else text).replace(world.seeded_review, "")
 
 
 def clean_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
@@ -7989,10 +7991,10 @@ def pin_spec_review(world: World, model: str = TEST_LADDER[0], minutes: int = 30
 def commit_at(
     world: World, monkeypatch: pytest.MonkeyPatch, day: dt.date, message: str = "a committed spec change"
 ) -> None:
-    """Commit a front-matter-only spec edit under the given UTC committer day (spec criterion 12)."""
+    """Commit a spec body edit under the given UTC committer day (spec criterion 12)."""
     spec = world.root / "plans" / "changes" / "demo" / "spec.md"
     text = spec.read_text(encoding="utf-8")
-    spec.write_text(text.replace("bead: demo-1\n", f"bead: demo-1\nnote: {day.isoformat()}\n"), encoding="utf-8")
+    spec.write_text(text + f"\nBody change {day.isoformat()}.\n", encoding="utf-8")
     stamp = f"{day.isoformat()}T12:00:00+00:00"
     monkeypatch.setenv("GIT_COMMITTER_DATE", stamp)
     monkeypatch.setenv("GIT_AUTHOR_DATE", stamp)
@@ -8251,6 +8253,39 @@ def test_legacy_review_currency_by_day(
     assert (admission.review_problem is None) is (expected is None)
     if expected is not None:
         assert expected in admission.review_problem
+
+
+def test_legacy_currency_ignores_committed_header_edit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = stage2.LEGACY_SPEC_REVIEW_DAY - dt.timedelta(days=5)
+    commit_at(world, monkeypatch, day)
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text().replace("title: Spec", "title: Changed"))
+    monkeypatch.setenv("GIT_COMMITTER_DATE", f"{day + dt.timedelta(days=1)}T12:00:00+00:00")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "header")
+    assert stage2.legacy_currency_problem(world.root, "demo", day) is None
+
+
+def test_spec_commit_day_uses_utc(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text() + "\nChanged body.\n")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2020-01-02T00:30:00+0200")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "body")
+    assert stage2.spec_last_commit_day(world.root, "demo") == dt.date(2020, 1, 1)
+
+
+@pytest.mark.parametrize("content", ["- item\n", "scalar\n", "false\n"])
+def test_spec_review_config_refuses_non_mapping(world: World, content: str) -> None:
+    (world.root / "model-endpoints.yaml").write_text(content)
+    try:
+        stage2.spec_review_call_config(world.root)
+    except stage2.Refused as error:
+        assert "field mapping" in str(error)
+    except AttributeError:
+        pytest.fail("non-mapping configuration must be refused")
+    else:
+        pytest.fail("non-mapping configuration must be refused")
 
 
 @pytest.mark.parametrize(
