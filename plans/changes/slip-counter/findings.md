@@ -986,7 +986,7 @@ Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:865 | Bei einem Bericht mit `--change X` wird ein gezielter Lauf mit unbekanntem Änderungsnamen nicht ausgewählt und nicht als nicht zuordenbare Evidenz gemeldet. Enthält die Historie zusätzlich einen vollständigen grünen Lauf für X, kann der Bericht mit Exit 0 vollständige Evidenz behaupten, obwohl der unbekannte Lauf zu X gehören könnte. Der Bericht muss diesen Lauf als nicht zuordenbar diagnostizieren und den Messwert als unvollständig kennzeichnen. [AC 8, 10; Boundary] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:865 | Bei einem Bericht mit `--change X` wird ein gezielter Lauf mit unbekanntem Änderungsnamen nicht ausgewählt und nicht als nicht zuordenbare Evidenz gemeldet. Enthält die Historie zusätzlich einen vollständigen grünen Lauf für X, kann der Bericht mit Exit 0 vollständige Evidenz behaupten, obwohl der unbekannte Lauf zu X gehören könnte. Der Bericht muss diesen Lauf als nicht zuordenbar diagnostizieren und den Messwert als unvollständig kennzeichnen. [AC 8, 10; Boundary] | Codex | taken — in-spec reproduced fault: under `--change X` a targeted run with an unknown change name is reported as unattributable evidence, so the report cannot claim complete evidence (provisional agent decision, autonomous run 2026-11-19) | — |
 
 Phase 6 verdict: codex 01a1f5d8-8c24-7092-9975-43fac6997bb0, 2026-11-19
 Reviewer session: codex 01a1f5d8-8c24-7092-9975-43fac6997bb0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
