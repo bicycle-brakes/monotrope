@@ -1175,6 +1175,24 @@ def test_slips_reject_unknown_comparison_identities(
     assert "slips: 0; incomplete/not countable runs: 2" in out, out
 
 
+def test_unknown_targeted_change_is_unassignable_in_change_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository, change="alpha", full_verdict="green")
+    events[0]["change"] = None
+    _write_history(tmp_path / "state", events)
+
+    code, out, _ = _slips(capsys, "--change", "alpha")
+    assert code == 1, out
+    assert "run t-1 cannot be assigned" in out and "change" in out, out
+    assert "evidence partial" in out, out
+
+    code, out, _ = _slips(capsys, "--change", "alpha", "--since", "2026-11-13T10:00:00+00:00")
+    assert code == 0, out
+    assert "run t-1 cannot be assigned" not in out, out
+
+
 def test_slips_select_interval_repository_and_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

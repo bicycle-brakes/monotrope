@@ -852,6 +852,9 @@ def _collect(
         kind = start.get("check_kind")
         outside = legacy or (kind == "full" and change is None)
         selected = in_bounds and named
+        if in_bounds and args.change is not None and change is None and not outside:
+            tally.partial = True
+            tally.findings.append(f"run {run_id} cannot be assigned: missing or invalid change")
         if outside:
             if in_bounds and run_id not in damaged:
                 if args.change is None:
