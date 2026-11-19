@@ -372,3 +372,145 @@ Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1117 files, 4698 commits, 12 rules.
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1117 files, 4698 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4699 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +4 -1
+> - `scripts/stage2.py` +39 -9
+> - `tests/test_stage2.py` +52 -6
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 80 lines of this gate left out …]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ................................                                         [100%]
+> =================================== FAILURES ===================================
+> ________ test_staging_precedes_old_archive_and_rejects_reactivated_key _________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/41603/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/41603/pytest-of-mikypiky/pytest-1/popen-gw5/test_staging_precedes_old_arch0/state'))
+>
+>     def test_staging_precedes_old_archive_and_rejects_reactivated_key(world: World) -> None:
+>         other = other_worktree(world)
+>         key = stage2.record_key("demo", other)
+>         own = stage2.record_key("demo", world.root)
+>         old = archive_base() / f"demo@{own.split('@')[1]}@2026-01-01T00-00-00Z"
+>         (old / key).mkdir(parents=True)
+>         stage2._write_supersession_manifest(old, "demo", own, [key])
+>         (old / key / "loop.md").write_text("old", encoding="utf-8")
+>         staging = archive_base() / f"{stage2.STAGING_PREFIX}demo@{own.split('@')[1]}@2026-01-02T00-00-00Z"
+>         (staging / key).mkdir(parents=True)
+>         stage2._write_supersession_manifest(staging, "demo", own, [key])
+>         record = write_foreign_record(other, [7])
+>         original = record.read_bytes()
+>         shutil.move(str(record), str(staging / key / "loop.md"))
+>         assert supersede(world, key) == 0
+> >       assert "rounds 7-7" in world.text()
+> E       AssertionError: assert 'rounds 7-7' in 'Loop restarted: 2026-11-19 after round 7 — superseded record demo@6699444a (rounds 7–7, archived at ${XDG_STATE_HOME:.../coding-harness/stage2-superseded/demo@836e0367@2026-01-02T00-00-00Z/demo@6699444a), audit calls 0 — continued there\n'
+> E        +  where 'Loop restarted: 2026-11-19 after round 7 — superseded record demo@6699444a (rounds 7–7, archived at ${XDG_STATE_HOME:.../coding-harness/stage2-superseded/demo@836e0367@2026-01-02T00-00-00Z/demo@6699444a), audit calls 0 — continued there\n' = text()
+> E        +    where text = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/41603/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/41603/pytest-of-mikypiky/pytest-1/popen-gw5/test_staging_precedes_old_arch0/state')).text
+>
+> tests/test_stage2.py:29102: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> release-loop: the loop of demo restarts after round 7; the next review-loop is a fresh run.
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=44460) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/tests/test_stage2.py:24360: DeprecationWarning: This process (pid=44456) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_staging_precedes_old_archive_and_rejects_reactivated_key
+> 1 failed, 6350 passed, 17 skipped, 5 warnings in 556.40s (0:09:16)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47001 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/loop-record-other-worktree/stage2/attempts/loop-record-other-worktree/attempt-1-20261118T234048138075Z-7a2c028a.md
+> ````
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4703 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - L3-5: tests/test_stage2.py::test_foreign_refusal_preserves_message_when_worktree_discovery_fails: the call of `tests/test_stage2.py::test_foreign_refusal_preserves_message_when_worktree_discovery_fails` failed with Refused, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/loop-record-other-worktree/stage2/attempts/loop-record-other-worktree/attempt-2-20261118T234048138075Z-7a2c028a.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1117 files, 4704 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged

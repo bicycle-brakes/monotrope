@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-18
+updated: 2026-11-19
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1251,7 +1251,10 @@ into a shell. Thirteen verbs exist:
   archive subdirectory and the audit calls pending since the last release or
   restart; zero calls are allowed and reported as zero. The keys are discovered
   from `git worktree list` of this repository only — a removed worktree's or
-  another repository's record is never adopted — and each selected record is
+  another repository's record is never adopted. If a removed worktree path is reused, its old
+  unarchived record has the same key and can continue; follow-up coding-harness-0aht addresses this
+  limit. Unreadable or symlinked records are named as unreadable and do not block a plain restart;
+  readable active records still require supersession. Each selected record is
   read only under its lock. The next `review-loop` here is a fresh run whose
   rounds continue after the highest superseded round, a later release needs a
   verdict written after the restart line, and releasing before any fresh round

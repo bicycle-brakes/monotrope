@@ -1436,10 +1436,10 @@ def test_supersede_accounts_for_old_rounds_and_calls(world: World) -> None:
     line = match.group(0)
     own_digest = stage2.record_key("demo", world.root).split("@")[1]
     assert "after round 2 — superseded record" in line, line
-    assert f"{key} (rounds 1-2, archived at " in line, line
+    assert f"{key} (rounds 1–2, archived at " in line, line
     assert f"{stage2.ARCHIVE_PATH_FORM}/demo@{own_digest}@" in line, line
     assert f"/{key})" in line, line
-    assert "; 2 pending audit calls accounted; why not" in line, line
+    assert ", audit calls 2 — why not" in line, line
     assert stage2.restart_floor(text) == 2
     assert stage2.rounds_run(None, text) == 2, "the superseded rounds are not counted"
     assert stage2.restarted_fresh(None, text)
@@ -1844,8 +1844,8 @@ def test_supersede_retry_matches_archive_directory(world: World, monkeypatch: py
     (older / key / "loop.md").write_text("# Loop record — demo\n", encoding="utf-8")
     stage2._write_supersession_manifest(older, "demo", superseder, [key])
     older_line = (
-        f"Loop restarted: 2026-01-01 after round 2 — superseded record {key} (rounds 1-2, archived at "
-        f"{stage2.ARCHIVE_PATH_FORM}/{older.name}/{key}); 0 pending audit calls accounted; older"
+        f"Loop restarted: 2026-01-01 after round 2 — superseded record {key} (rounds 1–2, archived at "
+        f"{stage2.ARCHIVE_PATH_FORM}/{older.name}/{key}), audit calls 0 — older"
     )
     world.write_findings(older_line)
     # The new attempt is interrupted between archive and accounting: its archive is its own.
@@ -1868,7 +1868,7 @@ def test_supersede_retry_matches_archive_directory(world: World, monkeypatch: py
     assert (archive_base() / name / key / "loop.md").read_bytes() == original, (
         "the line names an archive that does not hold the record"
     )
-    assert "rounds 5-6" in lines[1][2], lines[1]
+    assert "rounds 5–6" in lines[1][2], lines[1]
     assert supersede(world, key) == 0
     assert len(stage2.SUPERSEDED_RESTART_LINE.findall(world.text())) == 2
 
@@ -1908,7 +1908,7 @@ def test_supersede_without_pending_audit_calls(world: World) -> None:
     world.write_findings("## Phase 6 — earlier, 2026-11-17", VERDICT)
     assert stage2.pending_audit_calls(world.text()) == 0
     assert supersede(world, key) == 0
-    assert "; 0 pending audit calls accounted" in world.text()
+    assert ", audit calls 0" in world.text()
 
 
 def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
@@ -29099,7 +29099,7 @@ def test_staging_precedes_old_archive_and_rejects_reactivated_key(world: World) 
     original = record.read_bytes()
     shutil.move(str(record), str(staging / key / "loop.md"))
     assert supersede(world, key) == 0
-    assert "rounds 7-7" in world.text()
+    assert "rounds 7–7" in world.text()
     assert (
         archive_base() / staging.name.removeprefix(stage2.STAGING_PREFIX) / key / "loop.md"
     ).read_bytes() == original
@@ -29183,3 +29183,53 @@ def test_no_record_retire_and_triage_name_foreign_key(world: World, capsys) -> N
     assert key in capsys.readouterr().err
     assert world.run("triage", "demo", "L1-1=taken", "repair") == 2
     assert key in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("symlinked", [False, True])
+def test_restart_reports_unreadable_foreign_records_without_blocking(world: World, capsys, symlinked: bool) -> None:
+    other = other_worktree(world)
+    record = write_foreign_record(other, [1])
+    key = stage2.record_key("demo", other)
+    if symlinked:
+        target = world.state / "linked-record"
+        record.parent.rename(target)
+        record.parent.symlink_to(target, target_is_directory=True)
+    else:
+        record.write_bytes(b"\xff")
+    original = record.read_bytes()
+    world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
+    assert "unreadable" in stage2.foreign_record_refusal("demo", world.root).lower()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 0
+    assert key in capsys.readouterr().out
+    assert record.read_bytes() == original
+
+
+def test_worktree_digest_and_superseded_rounds_use_shared_definitions(world: World, monkeypatch) -> None:
+    other = other_worktree(world)
+    original = stage2.record_key
+    monkeypatch.setattr(stage2, "record_key", lambda change, _root: f"{change}@12345678")
+    assert stage2.worktree_digests(world.root) == ["12345678"]
+    monkeypatch.setattr(stage2, "record_key", original)
+    key = original("demo", other)
+    record = write_foreign_record(other, [1])
+    with record.open("a", encoding="utf-8") as handle:
+        handle.write("\n## Round 99 — malformed\n")
+    world.write_findings("## Phase 6 — earlier, 2026-11-17", VERDICT)
+    assert supersede(world, key) == 0
+    assert "after round 1 — superseded record" in world.text()
+
+
+def test_foreign_refusal_preserves_message_when_worktree_discovery_fails(world: World, monkeypatch) -> None:
+    def fail(*_args, **_kwargs):
+        raise stage2.Refused("git unavailable")
+
+    monkeypatch.setattr(stage2, "_git_output", fail)
+    text = "Stage-2 call, 2026-11-18: review-loop · example reviewer"
+    try:
+        refusal = stage2.lost_record_refusal("demo", world.root, text)
+    except stage2.Refused as error:
+        pytest.fail(f"the refusal was replaced by a discovery error instead of keeping its message: {error}")
+    assert refusal is not None and "no loop record at" in refusal
+    assert "worktree discovery failed: git unavailable" in refusal
+    with pytest.raises(stage2.Refused, match="worktree discovery failed"):
+        stage2.restart_loop(world.root, "demo", "continue")

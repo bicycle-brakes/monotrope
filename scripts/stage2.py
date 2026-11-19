@@ -3493,7 +3493,7 @@ def worktree_digests(root: Path) -> list[str]:
         path = Path(line[len("worktree ") :]).resolve()
         if not path.is_dir():
             continue
-        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:8]
+        digest = record_key("", path).rsplit("@", 1)[1]
         if digest not in digests:
             digests.append(digest)
     return digests
@@ -3520,20 +3520,46 @@ def other_record_keys(change: str, root: Path) -> list[str]:
     return keys
 
 
+def classified_foreign_records(change: str, root: Path) -> tuple[list[str], list[str]]:
+    """Separate readable records from records that cannot safely be superseded."""
+    readable, unreadable = [], []
+    for key in other_record_keys(change, root):
+        directory = record_base() / key
+        try:
+            if directory.is_symlink() or (directory / "loop.md").is_symlink():
+                raise OSError("symlinked record")
+            (directory / "loop.md").read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            unreadable.append(key)
+        else:
+            readable.append(key)
+    return readable, unreadable
+
+
+def unreadable_records_message(keys: list[str]) -> str:
+    if not keys:
+        return ""
+    return " Unreadable other-worktree loop records: " + ", ".join(f"`{key}`" for key in keys) + "."
+
+
 def foreign_record_refusal(change: str, root: Path) -> str:
     """The sentence a no-record refusal appends while another worktree holds this change's record.
 
     No other behavior changes: the record stays the other worktree's (criterion 9), and only the
     explicit supersession command adopts its history.
     """
-    keys = other_record_keys(change, root)
+    try:
+        keys, unreadable = classified_foreign_records(change, root)
+    except Refused as error:
+        return f" worktree discovery failed: {str(error).removeprefix('worktree discovery failed: ')}"
     if not keys:
-        return ""
+        return unreadable_records_message(unreadable)
     quoted = ", ".join(f"`{key}`" for key in keys)
     return (
         f" Active loop records for {change} also stand under other worktree keys {quoted}; "
         f"`release-loop {change} --restart --supersedes <key> --reason <text>` (repeat `--supersedes` "
         "for every active key) archives such a record and restarts the loop in this worktree."
+        + unreadable_records_message(unreadable)
     )
 
 
@@ -4849,14 +4875,17 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         raise Refused("a loop record exists; release the running loop first, after its phase-6 verdict.")
     # Another worktree's active record stays private (criterion 9); a plain restart here would number
     # the fresh run without accounting for the run that still stands there (criterion 13).
-    other = other_record_keys(change, root)
+    other, unreadable = classified_foreign_records(change, root)
     if other:
         raise Refused(
             f"another worktree holds the loop record of {change} under "
             + ", ".join(f"`{key}`" for key in other)
             + "; a plain restart would leave that run unaccounted. Supersede it first: "
             "`release-loop <change> --restart --supersedes <key> --reason <text>`, naming every active key."
+            + unreadable_records_message(unreadable)
         )
+    if unreadable:
+        print(unreadable_records_message(unreadable).strip())
     findings_path = folder_of(root, change) / "findings.md"
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
     last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
@@ -4961,13 +4990,12 @@ def _supersede_accounting_line(
     parts = []
     for key in keys:
         numbers = rounds.get(key) or []
-        span = f"{min(numbers)}-{max(numbers)}" if numbers else "0"
+        span = f"{min(numbers)}–{max(numbers)}" if numbers else "0"
         parts.append(f"{key} (rounds {span}, archived at {ARCHIVE_PATH_FORM}/{archive_name}/{key})")
     return (
         f"Loop restarted: {today()} after round {highest} — {SUPERSEDED_CLAUSE} "
         + ", ".join(parts)
-        + f"; {pending} pending audit calls accounted"
-        + f"; {reason}"
+        + f", audit calls {pending} — {reason}"
     )
 
 
@@ -5087,7 +5115,7 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
                     "would misstate its rounds, so nothing is written."
                 ) from error
         rounds = {
-            key: [int(number) for number in re.findall(r"^## Round (\d+) — ", record, re.M)]
+            key: [int(match.group().split()[2]) for match in ROUND_HEADING.finditer(record)]
             for key, record in records.items()
         }
         highest = max(
@@ -5119,8 +5147,10 @@ def _supersede_request_refusal(
 ) -> str | None:
     """Why the supersession request cannot run, or None. Read-only: it changes nothing, so the
     pre-lock call and the re-check under the locks share one body."""
-    active = other_record_keys(change, root)
+    active, unreadable = classified_foreign_records(change, root)
     for key in keys:
+        if key in unreadable:
+            return f"the loop record of `{key}` cannot be read; nothing is superseded or archived."
         if key not in active and resume is None:
             return (
                 f"`{key}` has no active loop record at `{record_base() / key / 'loop.md'}`; supersession takes "
