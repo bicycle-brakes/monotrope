@@ -2,7 +2,7 @@
 title: "A leak-check block stopped the research swarm"
 category: research
 created: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 last_reviewed: 2026-11-18
 status: draft
 implementation_status: none
@@ -87,3 +87,23 @@ raise of the same limit — bead `coding-harness-ht1b` raised it from 600
 seconds. Two raises for one repository size say the limit is not a constant: it
 should follow the measured size, or the finder should report progress instead
 of timing out silently. That is a question for its own change.
+
+## Addendum — 2026-11-19, the outcome
+
+- **Option 1 was taken.** On 2026-11-18 the maintainer had the place
+  checked: a false positive, JSON-LD text in the research artefact of
+  `ontology-relation-layer` (commit 6df696e5) whose shape resembles a
+  connection string with credentials. No credential was exposed, and no
+  branch was rewritten.
+- The rule `secret:connection-string-with-credentials` in the machine's
+  denylist was refined so that a "password" starting with `[`, `{` or a
+  backslash no longer matches; the previous rule is kept as a dated backup
+  beside it. The next leak check ran clean.
+- The finder limit raise left this pull request. It contradicted the
+  interview's decided value (20 minutes) without a decision; it now goes as
+  its own decision pull request (#414), which the maintainer chose on
+  2026-11-19.
+- Open beads for the mechanisms named above: one blocked commit stops every
+  lane (coding-harness-159n); the finder limit should follow the measured
+  repository size (coding-harness-n76m); a timed-out seat voids a whole run
+  (coding-harness-glqo).
