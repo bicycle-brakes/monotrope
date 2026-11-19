@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-18
 created: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -47,6 +47,26 @@ accounting line itself and archiving the old record, to achieve a restart
 that the runner records truthfully and that no other worktree can continue by
 mistake, accepting that exactly one command reads across worktree keys of the
 same change. — 2026-11-18
+
+## Q-2 · How the review loop ends after round 6
+
+asked: 2026-11-19
+answer: "A: Reparieren + ersetzt" — in English: case repair ends; the orchestrator takes L6-2, L6-3, L6-5 and L6-6 and aligns criterion 2's text with S-14 (L6-1); for L6-4 the superseded worktree's `release-loop` recognises the archive by the accounting line and writes "superseded by <key>" instead of a false line. Then one more round and phase 6.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: review-loop round 6 of this change opened the supersession mechanism a fourth time.
+  Intention: the night rule ends case repair at a further finding of one mechanism; the maintainer decides how the change finishes.
+  Today: six rounds ran; all taken rows of rounds 1-3 are repaired; round 6 raised L6-1 (criterion 2's wording disagrees with S-14), L6-2 (a partially moved record is finalised incomplete on retry), L6-3 (other worktrees' records read outside their lock), L6-4 (the superseded worktree has no honest release), L6-5 and L6-6 (refusal-text gaps).
+  Repository change: scripts/stage2.py (supersession, release-loop), docs/WORKFLOW.md, spec criterion 2, tests; one more round, then phase 6.
+  Architecture change: release-loop knows a superseded state.
+  Options shown: A repair and add the superseded release (recommended); B ship L6-3 and L6-4 as named limits with a follow-up bead; C re-slice supersession into its own change.
+
+In the context of a supersession mechanism that a fourth review round still
+found incomplete, facing a superseded worktree that can only write a false
+release line, we decided to repair the round-6 rows and give release-loop a
+"superseded by <key>" outcome, to achieve an honest record on both
+worktrees, accepting one or two more loop rounds — 2026-11-19
 
 ## Agent decisions on the phase-2a rows S-1..S-7 — 2026-11-18
 
