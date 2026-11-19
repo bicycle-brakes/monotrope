@@ -759,3 +759,16 @@ Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4745 commits, 12 rules.
 
 Runner restoration, 2026-11-19: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4746 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R7 | MAJOR | SPEC | base | scripts/venv_guard.py:120 | A script that needs only PyYAML is restarted when the caller already has PyYAML but lacks an unrelated dependency such as pydantic. If the checkout’s PyYAML has different behavior, the script gets a different result even though its required dependency was available to the caller. [Acceptance criterion 1] | Codex | rejected — decisions.md Q-3 (maintainer, 2026-11-18): the guard re-executes when any of the three required dependencies is missing, as one set; a per-script dependency list was not chosen | — |
+| R8 | MAJOR | SPEC | base | scripts/kit/probe.py:121 | A guarded script can print before calling a function that imports `venv_guard` and then `yaml`. The effect check returns an empty list when there is no top-level guard, so the check passes; if the function triggers a restart, the print occurs twice. [Boundary; acceptance criterion 1] | Codex | rejected — named Boundary in spec.md (AGENTS.md: a mechanism no choke point closes gets a Boundary): third further case of effects before the guard after Q-4; the static check covers top-level statements only, a lazy guard inside a function is outside it | — |
+| R9 | MAJOR | SPEC | base | scripts/kit/probe.py:133 | The effect check accepts `os.environ["COUNT"] = "1"` before a top-level guard because it treats assignments without calls as harmless. Assignments to a subscript or attribute can change state, which is then applied again after a restart. This is a further case beyond calls inside assignments. [Boundary; acceptance criterion 1] | Codex | rejected — named Boundary in spec.md, same mechanism as R8: an assignment to a subscript or attribute before the guard counts as no effect for the static check | — |
+
+Phase 6 verdict: codex 01a1f439-ef91-7532-aa81-cad36e366a3b, 2026-11-19
+Reviewer session: codex 01a1f439-ef91-7532-aa81-cad36e366a3b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
