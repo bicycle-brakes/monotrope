@@ -7255,7 +7255,11 @@ def _targeted_body(
             problems.append(f"the attempt's new files could not be added intent-to-add before the checks: {error}")
         else:
             try:
-                problems, notes = run_targeted(root, env, key, chosen, change)
+                problems, notes = (
+                    _targeted_commands(root, env, key, chosen)
+                    if new_file_guard
+                    else run_targeted(root, env, key, chosen, change)
+                )
             except StepTimedOut as error:
                 problems.append(
                     protect_diagnostics(f"{TARGETED_LABEL}: targeted check exceeded its time bound: {error}", key)

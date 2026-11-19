@@ -887,12 +887,12 @@ def test_slips_count_each_matching_red_full_run_once(
     _write_history(tmp_path / "state", events)
 
     code, out, _ = _slips(capsys)
-    assert code == 0, out
-    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    assert code == 1, out
+    assert "slips: 0; incomplete/not countable runs: 3" in out, out
     assert f"repository {repository}/.git" in out and "change all" in out, out
     # Reading twice reports the same count from the same bytes.
     code_again, out_again, _ = _slips(capsys)
-    assert code_again == 0 and out_again == out, out_again
+    assert code_again == 1 and out_again == out, out_again
 
 
 def test_slips_pair_overlapping_checks_by_completion(
@@ -1111,11 +1111,11 @@ def test_slips_show_incomplete_runs_beside_count(
     _write_history(tmp_path / "state", events)
 
     # A potentially matching pair with a gap on either side is incomplete on both sides, once each.
-    expected = 1 if case == "legacy-lost-end" else 2
+    expected = 0 if case == "legacy-lost-end" else 2
     code, out, _ = _slips(capsys)
-    assert code == 1, (case, out)
+    assert code == (0 if case == "legacy-lost-end" else 1), (case, out)
     assert f"slips: 0; incomplete/not countable runs: {expected}" in out, (case, out)
-    assert "evidence partial" in out, (case, out)
+    assert ("evidence partial" in out) == (case != "legacy-lost-end"), (case, out)
     # The damaged runs keep their diagnosis, named and visible.
     if case in ("conflicting-ends", "conflicting-starts"):
         assert "history note:" in out, (case, out)
@@ -1991,3 +1991,66 @@ def test_tied_full_checks_after_targeted_are_incomplete(
     code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
     assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
     assert "flaky-test signals" not in out, out
+
+
+@pytest.mark.parametrize("kind", ["unknown", "legacy", "changeless"])
+def test_intervening_unusable_run_blocks_pair(tmp_path, monkeypatch, capsys, kind):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    middle = _check("middle", "full", "2026-11-13T09:10:00+00:00", "2026-11-13T09:30:00+00:00", "green", repository)
+    if kind == "unknown":
+        middle[0]["check_kind"] = "unrecognised:damaged"
+    elif kind == "legacy":
+        for field in ("check_kind", "change", "tree_id", "comparison_version"):
+            middle[0].pop(field, None)
+    else:
+        middle[0]["change"] = None
+    _write_history(tmp_path / "state", events + middle)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0;" in out, out
+    assert f"incomplete/not countable runs: {3 if kind == 'unknown' else 2}" in out, out
+
+
+def test_tied_red_successors_do_not_double_count(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    events += _check("second", "full", "2026-11-13T11:05:00+00:00", "2026-11-13T11:30:00+00:00", "red", repository)
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+
+
+def test_incomplete_details_and_field_diagnosis(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    events.pop()
+    broken = _run_start(
+        "broken", utc="2026-11-13T12:00:00+00:00", repository=repository, kind="full", change="demo", tree=TREE
+    )
+    broken["placement"] = None
+    events.append(broken)
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "placement" in out, out
+    assert "f-1" in out and "demo" in out and "full" in out and "2026-11-13T11:00" in out, out
+
+
+def test_orphan_tie_and_full_green_predecessor_are_incomplete(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _check("green", "full", "2026-11-13T09:00:00+00:00", "2026-11-13T09:05:00+00:00", "green", repository)
+    events += _check("red", "full", "2026-11-13T10:00:00+00:00", "2026-11-13T10:30:00+00:00", "red", repository)
+    events += [_run_end("orphan", utc="2026-11-13T09:05:00+00:00") | {"_file": "targeted"}]
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "incomplete/not countable runs: 2" in out, out
+    assert "flaky-test signals: 1" not in out, out
+
+
+def test_uncertain_targeted_between_full_checks_marks_predecessor(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _check("green", "full", "2026-11-13T09:00:00+00:00", "2026-11-13T09:05:00+00:00", "green", repository)
+    events += _check("red", "full", "2026-11-13T10:00:00+00:00", "2026-11-13T10:30:00+00:00", "red", repository)
+    events += [_run_end("orphan", utc="2026-11-13T09:30:00+00:00") | {"_file": "targeted"}]
+    _write_history(tmp_path / "state", events)
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "incomplete/not countable runs: 2" in out, out

@@ -754,6 +754,7 @@ class _Check:
     config: str | None
     selected: bool
     certain: bool
+    outside: bool = False
 
 
 @dataclass
@@ -786,14 +787,14 @@ def _may_precede(other: _Check, full: _Check) -> bool:
     """Whether an uncertain check could have completed before the full run's completion."""
     assert full.completion is not None
     if other.completion is not None:
-        return other.completion < full.completion
+        return other.completion <= full.completion
     return other.start < full.completion
 
 
 def _may_follow(other: _Check, earlier: _Check) -> bool:
     """Whether an uncertain check could have completed after an earlier check's completion."""
     assert earlier.completion is not None
-    return other.completion is None or other.completion > earlier.completion
+    return other.completion is None or other.completion >= earlier.completion
 
 
 def _collect(
@@ -809,7 +810,12 @@ def _collect(
         job = start.get("job")
         placement = start.get("placement")
         legacy = "check_kind" not in start  # no comparison evidence: a recognizable legacy duration record
-        located = moment is not None and isinstance(job, str) and isinstance(repository, str) and bool(repository)
+        located = (
+            moment is not None
+            and _text(job) is not None
+            and _text(placement) is not None
+            and _text(repository) is not None
+        )
         if not located:
             if legacy and run_id not in damaged and moment is not None:
                 tally.unattributed += 1  # a legacy run that names no repository cannot be assigned to one
@@ -818,7 +824,17 @@ def _collect(
                 # partial and no run is invented for it.
                 tally.partial = True
                 if run_id not in damaged:
-                    tally.findings.append(f"run {run_id} cannot be assigned to a repository or start time")
+                    missing = [
+                        name
+                        for name, value in (
+                            ("start time", moment),
+                            ("repository", _text(repository)),
+                            ("job", _text(job)),
+                            ("placement", _text(placement)),
+                        )
+                        if value is None
+                    ]
+                    tally.findings.append(f"run {run_id} cannot be assigned: missing or invalid {', '.join(missing)}")
             continue
         if job != "verify" or placement != "local" or repository != current_repository:
             continue  # complete unrelated jobs, placements and repositories are ignored
@@ -829,45 +845,32 @@ def _collect(
         end = run["end"]
         completion = _instant(end.get("utc")) if end is not None and run_id not in damaged else None
         valid_end = completion is not None and completion >= moment
-        if legacy:
-            if not in_bounds:
-                continue
-            if args.change is not None:
-                tally.unattributed += 1  # a legacy run names no change, so it cannot answer a change scope
-                continue
-            tally.selected += 1
-            if valid_end:
-                tally.outside += 1
-            else:
-                tally.extra_incomplete += 1  # an interrupted or conflicting legacy run is a gap
-            continue
         kind = start.get("check_kind")
-        if kind not in CHECK_KINDS:
-            if in_bounds and named:
-                tally.selected += 1
-                tally.extra_incomplete += 1  # an unknown kind is unsupported evidence, never a clean run
-            continue
-        if kind == "full" and change is None:
-            if args.change is None and in_bounds:
-                tally.selected += 1
-                if valid_end:
-                    tally.outside += 1  # a change-less full run is outside the slip population
-                else:
-                    tally.extra_incomplete += 1
-            continue
+        outside = legacy or (kind == "full" and change is None)
+        selected = in_bounds and named
+        if outside:
+            if in_bounds:
+                if legacy and args.change is not None:
+                    tally.unattributed += 1
+                elif named:
+                    tally.selected += 1
+                    tally.outside += 1
+            # Outside runs still may interrupt a pair, but never count as incomplete.
+            selected = False
+        elif selected:
+            tally.selected += 1
         tree_start = _text(start.get("tree_id"))
         tree_end = _text(end.get("tree_id")) if end is not None and run_id not in damaged else None
         config = _text(start.get("config_sha256"))
         trees = {tree_start, tree_end} if kind == "targeted" else {tree_start}
-        certain = valid_end and bool(change and tree_start and config)
+        certain = not outside and kind in CHECK_KINDS and valid_end and bool(change and tree_start and config)
         if kind == "targeted":
             certain = certain and tree_end == tree_start  # both readings must exist and agree
         verdict = end.get("verdict") if valid_end and end is not None else None
-        selected = in_bounds and named
         tally.checks.append(
             _Check(
                 run_id=run_id,
-                kind=kind,
+                kind=kind if kind in CHECK_KINDS else "unknown",
                 start=moment,
                 completion=completion if valid_end else None,
                 verdict=verdict,
@@ -876,10 +879,9 @@ def _collect(
                 config=config,
                 selected=selected,
                 certain=certain,
+                outside=outside,
             )
         )
-        if selected:
-            tally.selected += 1
     return tally
 
 
@@ -910,8 +912,6 @@ def _tie_uncertain(checks: list[_Check]) -> None:
         for second in timed[index + 1 :]:
             if first.completion != second.completion:
                 continue
-            if (first.kind, first.verdict) == (second.kind, second.verdict):
-                continue  # interchangeable: either order leaves the same kind and verdict first
             if _compatible(first, second):
                 first.certain = False
                 second.certain = False
@@ -949,22 +949,37 @@ def _pair(checks: list[_Check], orphans: list[_Check]) -> tuple[int, int, int, s
             elif full.selected and predecessor is not None and _full_green(predecessor):
                 flaky += 1
             continue
-        if green or any(check.kind == "targeted" for check in between):
+        if (
+            green
+            or any(check.kind == "targeted" and not check.outside for check in between)
+            or (predecessor is not None and _full_green(predecessor))
+            or (predecessor is not None and any(check.kind == "unknown" for check in between))
+        ):
             promoted.add(full.run_id)
             promoted.update(check.run_id for check in between)
-            if green and predecessor is not None:
+            if predecessor is not None:
                 promoted.add(predecessor.run_id)
         elif full.selected:
             undecided += 1  # the intervening full run may have been green: the signal stays undecided
     for unsure in uncertain:
-        if unsure.kind != "full":
+        if unsure.kind != "full" or unsure.outside:
             continue
         # An uncertain full run could be the red successor of the latest certain check before it.
         before = [check for check in certain if _compatible(check, unsure)]
         if unsure.completion is not None:
             before = [check for check in before if _when(check) < unsure.completion]
         latest = max(before, key=_when, default=None)
-        if latest is not None and _targeted_green(latest):
+        if (
+            latest is not None
+            and (_targeted_green(latest) or _full_green(latest))
+            and any(
+                other is not unsure and _compatible(other, unsure) and _between(other, unsure, latest)
+                for other in pool
+                if unsure.completion is not None
+            )
+            or latest is not None
+            and _targeted_green(latest)
+        ):
             promoted.add(latest.run_id)
     return slips, flaky, undecided, promoted
 
@@ -1065,6 +1080,11 @@ def cmd_slips(args: argparse.Namespace) -> int:
             print(f"history note: {finding}")
         return 1
     print(f"slips: {slips}; incomplete/not countable runs: {uncountable}")
+    for check in pending:
+        if not check.certain or check.run_id in promoted:
+            print(
+                f"incomplete run: {check.run_id} · {check.start.isoformat()} · change {check.change or 'unknown'} · kind {check.kind}"
+            )
     if flaky or undecided:
         print(f"flaky-test signals: {flaky}; undecided flaky-test signals: {undecided}")
     if tally.outside or tally.unattributed:

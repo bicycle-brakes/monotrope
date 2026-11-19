@@ -28782,3 +28782,11 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    commands = targeted_mode(monkeypatch)
+    world.script(claude=[dict(COVERED_IMPLEMENT)])
+    assert world.run("implement") == 0, world.text()
+    assert commands.of("gate")
+    assert slip_history(world) == []
