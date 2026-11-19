@@ -79,7 +79,14 @@ def _tree_files(tree: Path) -> Path:
     """
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
-    for name in ("verify_all.sh", "ci_gates.py", "verify_run.py", "venv_guard.py", "verify_lock.py", "verify_duration.py"):
+    for name in (
+        "verify_all.sh",
+        "ci_gates.py",
+        "verify_run.py",
+        "venv_guard.py",
+        "verify_lock.py",
+        "verify_duration.py",
+    ):
         shutil.copy(REPO_ROOT / "scripts" / name, tree / "scripts" / name)
     _git_in(tree, "init")
     _git_in(tree, "add", ".")

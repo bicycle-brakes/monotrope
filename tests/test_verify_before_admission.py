@@ -40,6 +40,7 @@ import yaml  # noqa: E402
 # The mechanism files the kit transfers; the recipient proof copies exactly these.
 KIT_MECHANISM = (
     "scripts/ci_gates.py",
+    "scripts/venv_guard.py",
     "scripts/verify_run.py",
     "scripts/verify_lock.py",
     "scripts/verify_duration.py",
