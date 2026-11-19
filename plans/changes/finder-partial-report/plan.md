@@ -51,33 +51,37 @@ Do not touch model configuration, security checks, topic validation, other promp
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_swarm.py::test_finder_claude_enforces_shared_schema — Claude argv lacks or changes the schema.
-- 2: not yet written tests/test_stage2_swarm.py::test_finder_pi_prompt_contains_shared_schema — Pi receives a different schema.
-- 3: not yet written tests/test_stage2_research_map.py::test_finder_validation_uses_shared_schema — schema and validation diverge.
-- 4: not yet written tests/test_stage2_swarm.py::test_finder_first_answer_filters_without_retry — valid entries disappear, invalid entries reach merge or another call occurs.
-- 5: not yet written tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry — an entry fault survives or its error is absent.
-- 6: not yet written tests/test_stage2_research_map.py::test_finder_filter_marks_emptied_category — the fixed marker is missing or wrong.
-- 7: not yet written tests/test_stage2_swarm.py::test_finder_filtered_gaps_are_published — either publication omits a seat, category, entry or error.
-- 8: not yet written tests/test_stage2_swarm.py::test_finder_filtered_entries_stay_out_of_map_gaps — a rejected entry becomes map evidence.
-- 9: not yet written tests/test_stage2_swarm.py::test_finder_filtered_record_is_stored_ok — the outcome or filtered details are wrong.
-- 10: not yet written tests/test_stage2_swarm.py::test_finder_filtered_record_is_reused_on_resume — resume relaunches or changes the retained answer or gaps.
-- 11: not yet written tests/test_stage2_swarm.py::test_finder_filtered_merge_preserves_exact_union — an altered locator or origin passes.
-- 12: not yet written tests/test_stage2_swarm.py::test_finder_invalid_outer_shape_stops — invalid JSON or outer shape reaches merge.
-- 13: not yet written tests/test_stage2_swarm.py::test_finder_failure_and_refusal_still_stop — a failed or refused call reaches merge.
+- 1: tests/test_stage2_swarm.py::test_finder_claude_enforces_shared_schema — Claude argv lacks or changes the schema.
+- 2: tests/test_stage2_swarm.py::test_finder_pi_prompt_contains_shared_schema — Pi receives a different schema.
+- 3: tests/test_stage2_research_map.py::test_finder_validation_uses_shared_schema — schema and validation diverge.
+- 4: tests/test_stage2_swarm.py::test_finder_first_answer_filters_without_retry — valid entries disappear, invalid entries reach merge or another call occurs.
+- 5: tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry — an entry fault survives or its error is absent.
+- 6: tests/test_stage2_research_map.py::test_finder_filter_marks_emptied_category — the fixed marker is missing or wrong.
+- 7: tests/test_stage2_swarm.py::test_finder_filtered_gaps_are_published — either publication omits a seat, category, entry or error.
+- 8: tests/test_stage2_swarm.py::test_finder_filtered_entries_stay_out_of_map_gaps — a rejected entry becomes map evidence.
+- 9: tests/test_stage2_swarm.py::test_finder_filtered_record_is_stored_ok — the outcome or filtered details are wrong.
+- 10: tests/test_stage2_swarm.py::test_finder_filtered_record_is_reused_on_resume — resume relaunches or changes the retained answer or gaps.
+- 11: tests/test_stage2_swarm.py::test_finder_filtered_merge_preserves_exact_union — an altered locator or origin passes.
+- 12: tests/test_stage2_swarm.py::test_finder_invalid_outer_shape_stops — invalid JSON or outer shape reaches merge.
+- 13: tests/test_stage2_swarm.py::test_finder_failure_and_refusal_still_stop — a failed or refused call reaches merge.
 
-- 14: not yet written tests/test_stage2_swarm.py::test_claude_finder_stores_structured_output — the envelope or result text is stored instead.
-- 15: not yet written tests/test_stage2_swarm.py::test_claude_finder_missing_structured_output_is_invalid — missing output is accepted or marked failed.
-- 16: not yet written tests/test_stage2_swarm.py::test_claude_finder_error_result_is_failed — a nonzero exit or a turn, budget or API limit is accepted or marked invalid.
-- 17: not yet written tests/test_stage2_swarm.py::test_filtered_success_partial_fence_omits_raw_answer — required fields are missing or raw answer is published.
-- 18: not yet written tests/test_stage2_swarm.py::test_finder_shared_prompt_and_hash_include_schema — prompts or hashes differ or the schema is absent.
-- 19: not yet written tests/test_stage2_research_map.py::test_finder_schema_rejects_unknown_keyword — an unknown keyword is silently ignored.
-- 20: not yet written tests/test_stage2_swarm.py::test_non_finder_claude_keeps_text_output — another seat uses JSON output.
+- 14: tests/test_stage2_swarm.py::test_claude_finder_stores_structured_output — the envelope or result text is stored instead.
+- 15: tests/test_stage2_swarm.py::test_claude_finder_missing_structured_output_is_invalid — missing output is accepted or marked failed.
+- 16: tests/test_stage2_swarm.py::test_claude_finder_error_result_is_failed — a nonzero exit or a turn, budget or API limit is accepted or marked invalid.
+- 17: tests/test_stage2_swarm.py::test_filtered_success_partial_fence_omits_raw_answer — required fields are missing or raw answer is published.
+- 18: tests/test_stage2_swarm.py::test_finder_shared_prompt_and_hash_include_schema — prompts or hashes differ or the schema is absent.
+- 19: tests/test_stage2_research_map.py::test_finder_schema_rejects_unknown_keyword — an unknown keyword is silently ignored.
+- 20: tests/test_stage2_swarm.py::test_non_finder_claude_keeps_text_output — another seat uses JSON output.
 
-- 21: not yet written tests/test_stage2_swarm.py::test_claude_finder_stdout_excludes_envelope_on_all_paths — a stored or published stdout exposes session or cost.
-- 22: not yet written tests/test_stage2_research_map.py::test_finder_schema_outer_shape_and_entry_fault_boundary — outer rules are ignored, categories diverge or a fault is misclassified.
-- 23: not yet written tests/test_stage2_swarm.py::test_invalid_finder_schema_stops_before_calls — a finder runs or the failure omits the schema filename.
-- 24: not yet written tests/test_stage2_research_map.py::test_finder_schema_annotations_and_reference_guidance — annotations are rejected or enforced or reference guidance is absent.
-- 25: not yet written tests/test_stage2_research_map.py::test_finder_field_form_is_resolved_at_merge — a form-only issue is filtered or bypasses merge resolution.
+- 21: tests/test_stage2_swarm.py::test_claude_finder_stdout_excludes_envelope_on_all_paths — a stored or published stdout exposes session or cost.
+- 22: tests/test_stage2_research_map.py::test_finder_schema_outer_shape_and_entry_fault_boundary — outer rules are ignored, categories diverge or a fault is misclassified.
+- 23: tests/test_stage2_swarm.py::test_invalid_finder_schema_stops_before_calls — a finder runs or the failure omits the schema filename.
+- 24: tests/test_stage2_research_map.py::test_finder_schema_annotations_and_reference_guidance — annotations are rejected or enforced or reference guidance is absent.
+- 25: tests/test_stage2_research_map.py::test_finder_field_form_is_resolved_at_merge — a form-only issue is filtered or bypasses merge resolution.
+
+## Runner route — 2026-11-19
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
 
@@ -85,3 +89,6 @@ Do not touch model configuration, security checks, topic validation, other promp
 2026-11-19 14:55:55–14:57:56 UTC, 121 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-19 15:04:46–15:06:29 UTC, 103 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-19 15:21:12–15:22:37 UTC, 85 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-19 16:17:52–17:06:28 UTC, 2916 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 17:06:40–17:21:10 UTC, 871 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-19 17:21:19–17:25:50 UTC, 271 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

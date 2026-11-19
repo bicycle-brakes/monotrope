@@ -33,6 +33,7 @@ import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
 import stage2_availability  # noqa: E402
 import stage2_research_limits  # noqa: E402
+import stage2_research_map  # noqa: E402
 import stage2_research_run  # noqa: E402
 import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
@@ -138,6 +139,95 @@ def locator_report(reason: str = "holds the value") -> str:
             "neighbours": [{"not_read": "no neighbour was found"}],
         }
     )
+
+
+FINDER_MODELS = ("deepseek-v4.1-flash", "mimo-v2.6-pro", "claude-haiku-5-5")
+
+_DEFAULT_STRUCTURED = object()
+
+
+def schema_text() -> str:
+    return (REPO_ROOT / "prompts" / "research-swarm" / "finder-locator.schema.json").read_text(encoding="utf-8")
+
+
+RESULT_TEXT = "The finder located the value."
+
+
+def claude_finder_envelope(structured: object = _DEFAULT_STRUCTURED, **extra: object) -> str:
+    """A Claude Code result envelope: the answer rides structured_output, session and cost stay inside it."""
+    body = {
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "result": RESULT_TEXT,
+        "session_id": "sess-finder-1234",
+        "total_cost_usd": 0.25,
+        "structured_output": json.loads(locator_report()) if structured is _DEFAULT_STRUCTURED else structured,
+    }
+    body.update(extra)
+    return json.dumps(body)
+
+
+def claude_finder_envelope_without_structured() -> str:
+    body = json.loads(claude_finder_envelope())
+    del body["structured_output"]
+    return json.dumps(body)
+
+
+def limit_envelope(subtype: str) -> str:
+    """A Claude result that ended at a turn, budget or API limit before the model answered."""
+    body = json.loads(claude_finder_envelope_without_structured())
+    body["subtype"] = subtype
+    body["is_error"] = True
+    return json.dumps(body)
+
+
+def dropped_row() -> list[dict]:
+    """The one filtered gap of partial_finder_report: the second code entry with its exact error."""
+    return [
+        {
+            "category": "code",
+            "index": 1,
+            "entry": {"path": "src/gone.py", "reference": "value"},
+            "errors": ["the required field 'reason' is missing"],
+        },
+    ]
+
+
+def partial_finder_report() -> str:
+    """A finder answer whose second code entry fails locator validation (its reason is missing)."""
+    body = json.loads(locator_report())
+    body["code"].append({"path": "src/gone.py", "reference": "value"})
+    return json.dumps(body)
+
+
+def finder_steps(step: dict | list) -> dict:
+    """One scenario step (or a list of steps) for all three finder seats.
+
+    Pi seats read the answer as text; the Claude seat's answer rides the result
+    envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
+    that is no JSON object (a fault answer) passes through unchanged.
+    """
+    if isinstance(step, list):
+        per_step = [finder_steps(one) for one in step]
+        return {key: [item for part in per_step for item in part[key]] for key in per_step[0]}
+    try:
+        body = json.loads(step.get("stdout", ""))
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and "structured_output" not in body:
+        wrapped = {**step, "stdout": claude_finder_envelope(body)}
+    else:
+        wrapped = step
+    return {f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS}
+
+
+def partials_of(text: str) -> list[dict]:
+    return [json.loads(block) for block in re.findall(r"```research-swarm/v2 partial\n(.*?)\n```", text, re.S)]
+
+
+def map_of(text: str) -> dict:
+    return json.loads(re.findall(r"```research-swarm/v2 map\n(.*?)\n```", text, re.S)[-1])
 
 
 def repository_report(topic: int, neighbours: list[str] | None = None) -> str:
@@ -411,9 +501,13 @@ class SwarmWorld:
         )  # fmt: skip
 
     def complete(self, **overrides: object) -> None:
-        """The scenario of a run in which every scheduled role succeeds; overrides win."""
+        """The scenario of a run in which every scheduled role succeeds; overrides win.
+
+        A `finder` override applies to all three seats; the Claude seat's answer rides
+        the result envelope, so its stdout is wrapped (finder_steps).
+        """
         steps: dict[str, object] = {
-            "finder": [{"stdout": locator_report()}],
+            **finder_steps({"stdout": locator_report()}),
             "merge": [{"stdout": "AUTO"}],
             "sentence": [{"stdout": TOPIC_OK}],
             "online": [{"stdout": online_report(), "receipts": [RECEIPT]}],
@@ -422,6 +516,9 @@ class SwarmWorld:
         }
         for topic in range(1, 9):
             steps[f"repository:{topic}"] = [{"stdout": repository_report(topic)}]
+        overrides = dict(overrides)
+        if "finder" in overrides:
+            steps.update(finder_steps(overrides.pop("finder")))
         steps.update(overrides)
         steps = {key: [value] if isinstance(value, dict) else value for key, value in steps.items()}
         self.script(**steps)
@@ -2221,12 +2318,13 @@ def test_a_refused_run_is_printed_before_any_model_call(sworld: SwarmWorld, monk
 
 
 def test_finder_trio_locates_four_categories_without_judging(sworld: SwarmWorld) -> None:
-    # Criterion 24. Planted fault: a fifth locator field passes, or an empty category lacks its unread marker.
+    # Criterion 24. Planted fault: an empty category lacks its unread marker, or a fifth category is
+    # accepted. A fifth locator field is no longer a stop: it is a dropped entry (finder-partial-report,
+    # criteria 4-7), so only the outer shapes stop here.
     good = json.loads(locator_report())
-    bad_fifth = dict(good, code=[{**good["code"][0], "judgement": "this is the right design"}])
     bad_empty = dict(good, tests=[])
     bad_category = {**good, "design": [{"not_read": "x"}]}
-    for bad in (bad_fifth, bad_empty, bad_category):
+    for bad in (bad_empty, bad_category):
         sworld.rewind()
         sworld.complete(finder=[{"stdout": json.dumps(bad)}])
         assert sworld.run() == 1
@@ -4019,8 +4117,9 @@ def test_launch_record_keeps_individual_leak_check_before_launch(sworld: SwarmWo
 
 
 @pytest.mark.parametrize("stored", [False, True])
-def test_malformed_finder_reasons_block_progress_and_reuse(sworld: SwarmWorld, stored: bool) -> None:
-    # Criteria 18, 53: malformed unread reasons fail before merge, including legacy stored successes.
+def test_malformed_finder_shape_blocks_progress_and_reuse(sworld: SwarmWorld, stored: bool) -> None:
+    # Criteria 18, 53: an invalid outer shape fails before merge, including legacy stored successes; a
+    # malformed entry no longer stops a live answer - it is filtered and published (finder-partial-report).
     malformed = json.dumps({category: [{"not_read": 42}] for category in ("code", "rules", "tests", "neighbours")})
     if stored:
         sworld.complete(judge=[{"exit": 1}])
@@ -4038,7 +4137,7 @@ def test_malformed_finder_reasons_block_progress_and_reuse(sworld: SwarmWorld, s
         assert len(sworld.calls("finder")) == 1
         assert ["finders-0-1", "validation"] in manifest_of(sworld)["resume"]["not_reused"]
     else:
-        sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": malformed}]})
+        sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": json.dumps({"code": []})}]})
         assert sworld.run() == 1
         assert kinds(sworld) == ["finder"] * 3
         slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")
@@ -4277,3 +4376,329 @@ def test_correction_slot_at_store_limit_is_bounded_and_distinct(sworld: SwarmWor
     run.entries["short-correction"] = {"slot_id": "short-correction"}
     correction = run.correction_entry(other, {**first, "slot_id": "short"})
     assert correction["slot_id"] != "short-correction", "a correction must not overwrite an existing seat"
+
+
+# ---------------------------------------------------------------------------
+# Finder partial report (finder-partial-report; the plan's criterion ledger)
+# ---------------------------------------------------------------------------
+
+
+def test_finder_claude_enforces_shared_schema(sworld: SwarmWorld) -> None:
+    # Criterion 1. Planted fault: the Claude finder call omits the schema or sends a different one.
+    sworld.complete()
+    assert sworld.run() == 0
+    (call,) = [c for c in sworld.calls("finder") if c["model"] == "claude-haiku-5-5"]
+    argv = call["argv"]
+    assert argv[argv.index("--output-format") + 1] == "json", "the finder answer arrives as JSON"
+    assert "--json-schema" in argv, "the shared locator schema is enforced at the call"
+    assert argv[argv.index("--json-schema") + 1] == schema_text()
+
+
+def test_finder_pi_prompt_contains_shared_schema(sworld: SwarmWorld) -> None:
+    # Criterion 2. Planted fault: a Pi finder prompt omits the schema or carries a different one.
+    sworld.complete()
+    assert sworld.run() == 0
+    pi_finders = [c for c in sworld.calls("finder") if c["name"] == "pi"]
+    assert len(pi_finders) == 2
+    fence = f"```{stage2_research_run.LOCATOR_SCHEMA}\n{schema_text()}\n```"
+    for call in pi_finders:
+        assert fence in call["prompt"]
+
+
+def test_finder_first_answer_filters_without_retry(sworld: SwarmWorld) -> None:
+    # Criterion 4. Planted fault: a valid entry is lost, an invalid entry reaches the merge, or a
+    # correction asks the finder again.
+    sworld.complete(finder=[{"stdout": partial_finder_report()}])
+    assert sworld.run() == 0
+    assert len(sworld.calls("finder")) == 3, "the first answer is filtered, never asked again"
+    assert manifest_of(sworld)["correction_calls"] == 0
+    merge = sworld.calls("merge")[0]["prompt"]
+    assert "src/gone.py" not in merge, "the dropped entry never reaches the merge"
+    assert '"reference": "value"' in merge, "the retained entry reaches the merge"
+    text = sworld.research.read_text(encoding="utf-8")
+    merged = map_of(text)
+    assert [e["path"] for e in merged["entries"] if e["category"] == "code"] == ["src/app.py"], "no valid entry is lost"
+
+
+def test_finder_filtered_gaps_are_published(sworld: SwarmWorld) -> None:
+    # Criterion 7. Planted fault: a publication omits or misidentifies a seat, category, entry or
+    # error, or shows a dropped entry as retained evidence.
+    sworld.complete(finder=[{"stdout": partial_finder_report()}])
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    fence = next(p for p in partials_of(text) if p.get("slot_id") == "finders-0-1")
+    assert set(fence) == {"slot_id", "outcome", "filtered"}, "the fence names the seat and the gaps only"
+    assert fence["outcome"] == "ok"
+    assert fence["filtered"] == dropped_row()
+    assert "holds the value" not in json.dumps(fence), "the raw answer stays out of the fence"
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")
+    assert slot["filtered"] == dropped_row(), "the manifest identifies the same gaps"
+
+
+def test_finder_filtered_entries_stay_out_of_map_gaps(sworld: SwarmWorld) -> None:
+    # Criterion 8. Planted fault: a dropped entry or its validation error becomes map evidence.
+    sworld.complete(finder=[{"stdout": partial_finder_report()}])
+    assert sworld.run() == 0
+    merged = map_of(sworld.research.read_text(encoding="utf-8"))
+    assert merged["gaps"] == []
+    unread = json.dumps(merged["not_read"])
+    assert "src/gone.py" not in unread and "missing" not in unread
+    sworld.rewind()
+    emptied = json.loads(locator_report())
+    emptied["code"] = [{"path": "src/gone.py", "reference": "value"}]  # the only entry fails validation
+    sworld.complete(finder=[{"stdout": json.dumps(emptied)}])
+    assert sworld.run() == 0, "an emptied category keeps the fixed marker; the union stays exact"
+    merged = map_of(sworld.research.read_text(encoding="utf-8"))
+    row = next(r for r in merged["not_read"] if r["category"] == "code")
+    assert {o["finder"] for o in row["origins"]} == {seat_id(s) for s in REPOSITORY_SEATS}
+    assert all(o["reason"] == stage2_research_map.FILTERED_MARKER for o in row["origins"])
+
+
+def test_finder_filtered_record_is_stored_ok(sworld: SwarmWorld) -> None:
+    # Criterion 9. Planted fault: the stored outcome is not ok or the filtered details are wrong.
+    sworld.complete(finder=[{"stdout": partial_finder_report()}], judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-1.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "ok"
+    retained = json.loads(record["stdout"])
+    assert [e["path"] for e in retained["code"]] == ["src/app.py"], "only the retained answer is stored"
+    assert record["filtered"] == dropped_row()
+
+
+def test_finder_filtered_record_is_reused_on_resume(sworld: SwarmWorld) -> None:
+    # Criterion 10. Planted fault: resume relaunches the finder, changes the retained answer or
+    # loses the gaps.
+    sworld.complete(finder=[{"stdout": partial_finder_report()}], judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-1.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "ok" and record["filtered"] == dropped_row()
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0
+    assert sworld.calls("finder") == [], "the reusable filtered answer is not launched again"
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")
+    assert slot["reused_from"] == first["run_id"]
+    assert slot["filtered"] == record["filtered"], "the same gaps are republished"
+    text = sworld.research.read_text(encoding="utf-8")
+    merged = map_of(text)
+    assert [e["path"] for e in merged["entries"] if e["category"] == "code"] == ["src/app.py"]
+    fence = next(p for p in partials_of(text) if p.get("slot_id") == "finders-0-1")
+    assert fence["outcome"] == "ok" and fence["filtered"] == record["filtered"]
+
+
+def test_finder_filtered_merge_preserves_exact_union(sworld: SwarmWorld) -> None:
+    # Criterion 11. Planted fault: the exact union accepts an added or missing retained locator or
+    # an altered finder origin once a seat's answer was filtered.
+    finders = [seat_id(s) for s in REPOSITORY_SEATS]
+    origins = [{"finder": f, "reason": "holds the value"} for f in finders]
+    rule_origins = [dict(o, reason="the rules") for o in origins]
+    good = {
+        "code": [{"path": "src/app.py", "reference": "value", "origins": origins}],
+        "rules": [{"path": "AGENTS.md", "reference": "Agent rules", "origins": rule_origins}],
+        "tests": [{"not_read": [dict(o, reason="the fixture has no tests") for o in origins]}],
+        "neighbours": [{"not_read": [dict(o, reason="no neighbour was found") for o in origins]}],
+    }
+    sworld.complete(finder=[{"stdout": partial_finder_report()}])
+    assert sworld.run() == 0, "the retained reports satisfy the exact union"
+    altered = [dict(o, reason="invented") if o["finder"] == finders[0] else o for o in origins]
+    for name, code in {
+        "added": [*good["code"], dict(good["code"][0], path="src/gone.py")],
+        "missing": [dict(good["code"][0], origins=origins[1:])],
+        "altered-origin": [dict(good["code"][0], origins=altered)],
+    }.items():
+        sworld.rewind()
+        merge = [{"stdout": json.dumps(dict(good, code=code))}]
+        sworld.complete(finder=[{"stdout": partial_finder_report()}], merge=merge)
+        assert sworld.run() == 1, f"a merge that {name} retained evidence must fail the exact union"
+        assert kinds(sworld) == ["finder"] * 3 + ["merge"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["not-json", "missing-category", "extra-category", "not-a-list", "empty-list", "duplicate-key"],
+)
+def test_finder_invalid_outer_shape_stops(sworld: SwarmWorld, case: str) -> None:
+    # Criterion 12. Planted fault: an outer-invalid answer is accepted or reaches the merge.
+    body = json.loads(locator_report())
+    answers = {
+        "not-json": "not a locator list",
+        "missing-category": json.dumps({k: v for k, v in body.items() if k != "neighbours"}),
+        "extra-category": json.dumps({**body, "design": [{"not_read": "x"}]}),
+        "not-a-list": json.dumps(dict(body, code="x")),
+        "empty-list": json.dumps(dict(body, tests=[])),
+        "duplicate-key": json.dumps(body)[:-1] + ',"code":' + json.dumps(body["code"]) + "}",
+    }
+    sworld.complete(**{f"finder:None:{FINDER_MODELS[0]}": [{"stdout": answers[case]}]})
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3, "an outer-shape fault stops before the merge"
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")
+    assert slot["outcome"] == "invalid-report"
+    assert "incomplete" in status_line(sworld.research.read_text(encoding="utf-8"))
+
+
+def test_finder_failure_and_refusal_still_stop(sworld: SwarmWorld) -> None:
+    # Criterion 13. Planted fault: a failed or refused finder reaches the merge or counts as invalid.
+    sworld.complete(**{"finder:None:mimo-v2.6-pro": [{"exit": 3, "stderr": "boom"}]})
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-2")
+    assert slot["outcome"] == "failed"
+    sworld.rewind()
+    sworld.research.write_text(SEED + f"\nAn accident: {LEAK}.\n", encoding="utf-8")
+    sworld.complete()
+    assert sworld.run() == 2
+    assert sworld.calls() == [], "a refused prompt starts no finder"
+
+
+def test_claude_finder_stores_structured_output(sworld: SwarmWorld) -> None:
+    # Criterion 14. Planted fault: the envelope or the result text is stored instead of the object.
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-3.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "ok"
+    assert json.loads(record["stdout"]) == json.loads(locator_report()), "the structured object is the answer"
+    assert "sess-finder-1234" not in record["stdout"] and "total_cost_usd" not in record["stdout"]
+    merge = sworld.calls("merge")[0]["prompt"]
+    assert "holds the value" in merge, "the merge reads the structured answer"
+    assert "sess-finder-1234" not in merge and "total_cost_usd" not in merge
+
+
+@pytest.mark.parametrize("case", ["no-field", "null-field", "not-json"])
+def test_claude_finder_missing_structured_output_is_invalid(sworld: SwarmWorld, case: str) -> None:
+    # Criterion 15. Planted fault: a Claude success without a structured answer is accepted or
+    # classified as a failed call.
+    stdout = {
+        "no-field": claude_finder_envelope_without_structured(),
+        "null-field": claude_finder_envelope(structured=None),
+        "not-json": "not a locator list",
+    }[case]
+    sworld.complete(**{"finder:None:claude-haiku-5-5": [{"stdout": stdout}]})
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-3")
+    assert slot["outcome"] == "invalid-report", "a missing answer is not accepted and not a failed call"
+
+
+@pytest.mark.parametrize(
+    "exit_code,stdout",
+    [
+        pytest.param(1, claude_finder_envelope(), id="exit"),
+        pytest.param(0, limit_envelope("error_max_turns"), id="turns"),
+        pytest.param(0, limit_envelope("error_budget_exhausted"), id="budget"),
+        pytest.param(0, limit_envelope("error_api_overloaded"), id="api"),
+        pytest.param(1, '{"type": "result", "sub', id="half-envelope"),
+    ],
+)
+def test_claude_finder_error_result_is_failed(sworld: SwarmWorld, exit_code: int, stdout: str) -> None:
+    # Criterion 16. Planted fault: a nonzero exit or a turn, budget or API limit before the model
+    # answered is accepted or classified as an invalid report.
+    sworld.complete(**{"finder:None:claude-haiku-5-5": [{"exit": exit_code, "stdout": stdout}]})
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-3")
+    assert slot["outcome"] == "failed"
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-3.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "failed"
+    assert "sess-finder-1234" not in record["stdout"] and "total_cost_usd" not in record["stdout"]
+
+
+@pytest.mark.parametrize("launcher,seat", [("pi", "finders-0-1"), ("claude", "finders-0-3")])
+def test_filtered_success_partial_fence_omits_raw_answer(sworld: SwarmWorld, launcher: str, seat: str) -> None:
+    # Criterion 17. Planted fault: the filtered fence omits a field or publishes the raw answer.
+    if launcher == "pi":
+        answer = partial_finder_report()
+    else:
+        answer = claude_finder_envelope(json.loads(partial_finder_report()))
+    model = FINDER_MODELS[0] if launcher == "pi" else FINDER_MODELS[2]
+    sworld.complete(**{f"finder:None:{model}": [{"stdout": answer}]})
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    fence = next(p for p in partials_of(text) if p.get("slot_id") == seat)
+    assert set(fence) == {"slot_id", "outcome", "filtered"}
+    assert fence["outcome"] == "ok" and fence["filtered"] == dropped_row()
+    published = json.dumps(fence)
+    assert "holds the value" not in published and "sess-finder-1234" not in published
+    assert "stdout" not in fence
+
+
+def test_finder_shared_prompt_and_hash_include_schema(sworld: SwarmWorld) -> None:
+    # Criterion 18. Planted fault: finder prompts or hashes differ, or the schema is not appended.
+    sworld.complete()
+    assert sworld.run() == 0
+    prompts = {c["prompt"] for c in sworld.calls("finder")}
+    assert len(prompts) == 1, "all finder seats receive one shared prompt"
+    (prompt,) = prompts
+    assert f"```{stage2_research_run.LOCATOR_SCHEMA}\n{schema_text()}\n```" in prompt
+    hashes = {s["slot_id"]: s["prompt_sha256"] for s in manifest_of(sworld)["slots"] if s["stage"] == "finders"}
+    assert len(hashes) == 3 and len(set(hashes.values())) == 1, "one prompt hash for all finder seats"
+    assert hashes["finders-0-1"] == stage2_research_run.digest(prompt)
+
+
+def test_non_finder_claude_keeps_text_output(sworld: SwarmWorld) -> None:
+    # Criterion 20. Planted fault: a non-finder Claude seat is launched with JSON output or the schema.
+    sworld.complete()
+    assert sworld.run() == 0
+    claude_calls = [c for c in sworld.calls() if c["name"] == "claude"]
+    assert {"finder", "merge", "judge"} <= {c["kind"] for c in claude_calls}
+    for call in claude_calls:
+        argv = call["argv"]
+        expected = "json" if call["kind"] == "finder" else "text"
+        assert argv[argv.index("--output-format") + 1] == expected
+        assert ("--json-schema" in argv) == (call["kind"] == "finder")
+
+
+@pytest.mark.parametrize(
+    "exit_code,stdout,stored",
+    [
+        pytest.param(0, claude_finder_envelope(), "structured", id="success"),
+        pytest.param(0, claude_finder_envelope_without_structured(), RESULT_TEXT, id="no-structured"),
+        pytest.param(1, claude_finder_envelope(), RESULT_TEXT, id="failed"),
+        pytest.param(1, '{"type": "result", "sub', "", id="half-envelope"),
+    ],
+)
+def test_claude_finder_stdout_excludes_envelope_on_all_paths(
+    sworld: SwarmWorld, exit_code: int, stdout: str, stored: str
+) -> None:
+    # Criterion 21. Planted fault: stored or published stdout exposes the envelope's session or cost.
+    sworld.complete(judge=[{"exit": 1}], **{"finder:None:claude-haiku-5-5": [{"exit": exit_code, "stdout": stdout}]})
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-3.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    for secret in ("sess-finder-1234", "total_cost_usd", "structured_output", "is_error"):
+        assert secret not in record["stdout"]
+    if stored == "structured":
+        assert json.loads(record["stdout"]) == json.loads(locator_report())
+    else:
+        assert record["stdout"] == stored
+    published = sworld.research.read_text(encoding="utf-8")
+    for secret in ("sess-finder-1234", "total_cost_usd", "structured_output", "is_error"):
+        assert secret not in published
+
+
+@pytest.mark.parametrize("case", ["missing", "invalid-json", "unknown-keyword"])
+def test_invalid_finder_schema_stops_before_calls(sworld: SwarmWorld, case: str) -> None:
+    # Criterion 23. Planted fault: a finder call starts anyway, or the reason omits the schema file.
+    path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
+    if case == "missing":
+        path.unlink()
+        sworld.commit()  # the freeze must not trip over the deleted file; the schema check is the stop
+    elif case == "invalid-json":
+        path.write_text("{ not json", encoding="utf-8")
+    else:
+        value = json.loads(schema_text())
+        value["properties"]["code"]["maxItems"] = 5  # an unsupported keyword the interpreter must refuse
+        path.write_text(json.dumps(value, indent=2), encoding="utf-8")
+    assert sworld.run() == 1
+    assert sworld.calls() == [], "no finder call starts on an unusable schema"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    assert stage2_research_run.LOCATOR_SCHEMA in text, "the reason names the schema file"

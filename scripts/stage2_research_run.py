@@ -81,6 +81,10 @@ def free_slot_id(stage: str, topic: int, model: str) -> str:
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
 SWARM_PUBLISHER = "stage2-research-swarm"  # produced_by.name of a publication the whole swarm wrote
 BRIEF_DAY = "0000-00-00"  # the fixed day the private brief's corrected header carries, so it never varies by run
+LOCATOR_SCHEMA = "finder-locator.schema.json"  # the one locator format, beside the finder prompt (Q-3, S-13)
+# A result subtype naming a turn, budget or API limit means the call ended before the
+# model answered: a failed call, never an invalid report (criterion 16, decisions S-15).
+LIMITED_FINDER_SUBTYPE = re.compile(r"turn|budget|api", re.IGNORECASE)
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -166,6 +170,28 @@ def payload_text(stdout: str) -> str:
     text = (stdout or "").strip()
     found = re.fullmatch(r"```(?:json)?[ \t]*\n(.*)\n```", text, re.S)
     return found.group(1).strip() if found else text
+
+
+def claude_finder_output(stdout: str) -> tuple[str, dict | None, dict | None]:
+    """What a Claude finder record stores, its structured answer, and the result envelope (S-9, S-14).
+
+    The envelope's session id and cost never reach the record: the stored text is the
+    envelope's ``result``, or nothing when the output is no JSON envelope. The answer
+    is the ``structured_output`` object, or None when the call produced none.
+    """
+    try:
+        envelope = json.loads((stdout or "").strip())
+    except ValueError:
+        envelope = None
+    if not isinstance(envelope, dict):
+        return "", None, None
+    result = envelope.get("result")
+    structured = envelope.get("structured_output")
+    return (
+        result if isinstance(result, str) else "",
+        structured if isinstance(structured, dict) else None,
+        envelope,
+    )
 
 
 CORRECTION_SUFFIX = "-correction"
@@ -402,6 +428,8 @@ class Run:
         self.stop = threading.Event()
         self.began = CLOCK()
         self.limits: stage2_research_limits.Limits | None = None
+        self.locator_schema: dict | None = None
+        self.locator_schema_text: str | None = None
         self.lock = threading.Lock()
 
     # -- small helpers ---------------------------------------------------------------------------
@@ -557,8 +585,35 @@ class Run:
     def private_brief(self) -> str:
         return "\n\n".join([self.brief, "# Repository rules (AGENTS.md)", self.agents.rstrip()])
 
+    def load_locator_schema(self) -> None:
+        """Load and interpret the one locator schema before any finder call starts (Q-3, S-17).
+
+        A missing, malformed or unsupported schema ends the run incomplete with a reason
+        naming the schema file; a harness fault is never blamed on the finder seats.
+        """
+        name = f"prompts/research-swarm/{LOCATOR_SCHEMA}"
+        try:
+            text = prompt_text(self.root, LOCATOR_SCHEMA)
+        except OSError as error:
+            raise Stop(f"the locator schema {name} is unreadable: {error}; no finder call starts.", 1) from error
+        try:
+            self.locator_schema = stage2_research_map.interpret_locator_schema(text)
+        except stage2_research_map.ResearchMapError as error:
+            raise Stop(f"the locator schema {name} is unusable: {error}; no finder call starts.", 1) from error
+        self.locator_schema_text = text
+
     def finder_prompt(self) -> str:
-        return "\n\n".join([self.prompt_file("finder.md"), "---", self.private_brief(), self.runner.READ_REQUEST])
+        """The one shared finder prompt with the schema appended, so all seats keep one prompt and hash (S-12)."""
+        assert self.locator_schema_text is not None, "load the locator schema before the finder prompt"
+        return "\n\n".join(
+            [
+                self.prompt_file("finder.md"),
+                fence(LOCATOR_SCHEMA, self.locator_schema_text),
+                "---",
+                self.private_brief(),
+                self.runner.READ_REQUEST,
+            ]
+        )
 
     def merge_prompt(self, reports: dict[str, str]) -> str:
         parts = [self.prompt_file("finder-merge.md"), "---"]
@@ -701,6 +756,8 @@ class Run:
             # Pi ran without the measured definition (deep review RS-3-1): fail closed, never keep the answer.
             record["outcome"] = "failed"
             record["error"] = f"Pi did not use the measured model: {self.scrub(refused)}"
+        if entry["stage"] == "finders" and entry["program"] == "claude-code":
+            self.record_claude_finder(record, result)
         if result.outcome == "refused":
             record["refused"] = gate.get("refused") or gate.get("audit_error") or gate.get("error") or "refused"
             self.line(
@@ -719,6 +776,28 @@ class Run:
         assert self.store is not None and self.run_id is not None
         self.store.write_result(self.run_id, slot.slot_id, record)
         self.unstored.discard(slot.slot_id)
+
+    def record_claude_finder(self, record: dict, result) -> None:
+        """Store a Claude finder answer from the envelope's structured output (S-9, S-14, S-15).
+
+        The record's stdout keeps only the envelope's ``result`` text, never the session
+        or cost fields, on every path. A process success without a structured answer is
+        an invalid report (S-15); a result that ends at a turn, budget or API limit
+        before the model answered stays a failed call (S-16).
+        """
+        stored, structured, envelope = claude_finder_output(result.stdout)
+        record["stdout"] = self.scrub(stored)
+        if result.outcome != "ok":
+            return
+        subtype = envelope.get("subtype") if isinstance(envelope, dict) else None
+        if isinstance(subtype, str) and LIMITED_FINDER_SUBTYPE.search(subtype):
+            record["outcome"] = "failed"
+            record["error"] = f"the Claude finder call ended before an answer: {subtype}"
+        elif structured is None:
+            record["outcome"] = "invalid-report"
+            record["error"] = "the Claude finder call produced no structured answer for the locator schema"
+        else:
+            record["stdout"] = self.scrub(json.dumps(structured, ensure_ascii=False, sort_keys=True))
 
     # -- launching -------------------------------------------------------------------------------
 
@@ -838,9 +917,14 @@ class Run:
             "--permission-prompts",
             "none",
             "--no-session-persistence",
-            "--output-format",
-            "text",
         ]
+        if entry["stage"] == "finders":
+            # Q-3: the shared schema is enforced where the harness allows it, and the
+            # answer arrives as JSON with the structured object (S-9). Every other
+            # seat keeps text output.
+            command += ["--output-format", "json", "--json-schema", self.locator_schema_text]
+        else:
+            command += ["--output-format", "text"]
         cwd = self.root if entry["tools"] == "repository" else scratch
         return command, cwd, self.runner.foreign_env({}), data
 
@@ -1264,6 +1348,7 @@ class Run:
             raise Stop(f"{what} failed: {names}; no later stage starts.", 1)
 
     def stage_finders(self) -> None:
+        self.load_locator_schema()
         prompt = self.finder_prompt()
         entries = []
         for number, seat in enumerate(self.roles["finder_agents"], 1):
@@ -1271,17 +1356,39 @@ class Run:
 
         def valid(_entry, record) -> bool:
             try:
-                stage2_research_map.validate_locator_report(payload_text(record["stdout"]))
+                stage2_research_map.validate_locator_report(payload_text(record["stdout"]), self.locator_schema)
             except stage2_research_map.ResearchMapError:
                 return False
             return True
 
         records = self.run_stage("finders", entries, valid, reserve=self.limits.role_seconds("judge"))
         for record in records:
-            if record["outcome"] == "ok" and not valid(None, record):
-                self.invalidate(record, "the finder answer is not the four-list locator object")
+            if record["outcome"] == "ok":
+                self.filter_finder_record(record)
         self.require_ok(records, "a finder")
         self.finder_reports = {self.seat_id(self.entries[r["slot_id"]]): payload_text(r["stdout"]) for r in records}
+
+    def filter_finder_record(self, record: dict) -> None:
+        """Filter the first process-successful finder answer without any correction call (Q-2, criterion 4).
+
+        Valid locator entries survive; each dropped entry is recorded with its exact
+        errors on the ``ok`` record and republished on resume (S-8). An outer-shape
+        fault invalidates the whole answer as today. Path and reference form stay with
+        the merge (S-19).
+        """
+        try:
+            retained, rows = stage2_research_map.filter_locator_report(
+                payload_text(record["stdout"]), self.locator_schema
+            )
+        except stage2_research_map.ResearchMapError as error:
+            self.invalidate(record, str(error))
+            return
+        if not rows:
+            return
+        record["stdout"] = json.dumps(retained, ensure_ascii=False, sort_keys=True)
+        record["filtered"] = rows
+        assert self.store is not None and self.run_id is not None
+        self.store.write_result(self.run_id, record["slot_id"], record)
 
     def map_merge(self, record: dict) -> dict:
         try:
@@ -1646,7 +1753,8 @@ class Run:
             slots.append(
                 {
                     **{
-                        k: record.get(k) for k in ("slot_id", "stage", "topic", "seat", "endpoint", "model", "required")
+                        k: record.get(k)
+                        for k in ("slot_id", "stage", "topic", "seat", "endpoint", "model", "required", "filtered")
                     },
                     "prompt_sha256": record.get("prompt_sha256"),
                     "outcome": record["outcome"],
@@ -1830,6 +1938,14 @@ class Run:
             )
         for slot_id in sorted(self.records):
             record = self.records[slot_id]
+            if record.get("filtered"):
+                # A filtered success publishes its dropped entries only (S-11): the retained
+                # answer already appears in the map, so the raw answer stays out of the fence.
+                partial = {k: record.get(k) for k in ("slot_id", "outcome", "filtered")}
+                parts.append(
+                    fence("research-swarm/v2 partial", json.dumps(partial, ensure_ascii=False, sort_keys=True))
+                )
+                continue
             kept = record["outcome"] != "ok" or slot_id in self.unstored  # an ok output with no stored record too
             if kept and (record.get("stdout") or record.get("stderr") or record.get("receipts")):
                 partial = {k: record.get(k) for k in ("slot_id", "outcome", "error", "stdout", "stderr", "receipts")}

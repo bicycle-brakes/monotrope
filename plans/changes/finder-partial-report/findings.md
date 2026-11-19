@@ -66,3 +66,190 @@ Stage-2 call, 2026-11-19: spec-review · endpoint claude-code-plan · model clau
 | S-19 | MINOR | SPEC | base | criterion 5 ("invalid fields"); decisions.md S-2/S-6, S-10 | [AMBIGUITY] *What makes a field "invalid" besides its type and blankness.* Reading A: invalid means a non-string value, and the schema states only types, closed fields and non-whitespace strings. Then `{"path": "../x.py", "reference": "line 12", "reason": "y"}` is kept, reaches merge, and appears in the map as `unresolved`, where topic seats see it. Reading B: the schema also gives `path` and `reference` a form, such as the repository-relative POSIX rule of `_parts` or finder.md's "line numbers and bare paths are not references". Then the same entry is dropped into the filtered gaps and is missing from the map. The decisions list missing, empty and extra fields and non-objects, but not this. The same answer gives different retained reports and maps. | Opus | in spec | — |
 
 Stage-2 call, 2026-11-19: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1118 files, 4758 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1119 files, 4771 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/finder-partial-report/plan.md` +25 -25
+> - `scripts/stage2_research_map.py` +173 -3
+> - `scripts/stage2_research_run.py` +123 -7
+> - `tests/test_stage2_research_map.py` +156 -5
+> - `tests/test_stage2_swarm.py` +429 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2_swarm.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/stage2_research_map.py:162:8: UP038 Use `X | Y` in `isinstance` call instead of `(X, Y)`
+>     |
+> 160 |     or unsupported schema raises ``ResearchMapError`` (S-17), never a silent default.
+> 161 |     """
+> 162 |     if isinstance(value, (str, bytes)):
+>     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP038
+> 163 |         try:
+> 164 |             value = json.loads(value)
+>     |
+>     = help: Convert to `X | Y`
+>
+> Found 1 error.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-11-19: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1119 files, 4782 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_map.py` +1 -1
+> - `tests/test_stage2_research_map.py` +1 -0
+> - `tests/test_stage2_swarm.py` +6 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>     
+>         Pi seats read the answer as text; the Claude seat's answer rides the result
+>         envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
+>         that is no JSON object (a fault answer) passes through unchanged.
+>         """
+>         try:
+> >           body = json.loads(step.get("stdout", ""))
+> E           AttributeError: 'list' object has no attribute 'get'
+>
+> tests/test_stage2_swarm.py:212: AttributeError
+> ___________________ test_finder_filtered_record_is_stored_ok ___________________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2157/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2157/popen-gw2/test_finder_filtered_record_is0/home'))
+>
+>     def test_finder_filtered_record_is_stored_ok(sworld: SwarmWorld) -> None:
+>         # Criterion 9. Planted fault: the stored outcome is not ok or the filtered details are wrong.
+> >       sworld.complete(finder=[{"stdout": partial_finder_report()}], judge=[{"exit": 1}])
+>
+> tests/test_stage2_swarm.py:4456: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_swarm.py:518: in complete
+>     steps.update(finder_steps(overrides.pop("finder")))
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> step = [{'stdout': '{"code": [{"path": "src/app.py", "reference": "value", "reason": "holds the value"}, {"path": "src/gone.p...les"}], "tests": [{"not_read": "the fixture has no tests"}], "neighbours": [{"not_read": "no neighbour was found"}]}'}]
+>
+>     def finder_steps(step: dict) -> dict:
+>         """One scenario step for all three finder seats.
+>     
+>         Pi seats read the answer as text; the Claude seat's answer rides the result
+>         envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
+>         that is no JSON object (a fault answer) passes through unchanged.
+>         """
+>         try:
+> >           body = json.loads(step.get("stdout", ""))
+> E           AttributeError: 'list' object has no attribute 'get'
+>
+> tests/test_stage2_swarm.py:212: AttributeError
+> _______________ test_finder_filtered_record_is_reused_on_resume ________________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2157/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2157/popen-gw7/test_finder_filtered_record_is0/home'))
+>
+>     def test_finder_filtered_record_is_reused_on_resume(sworld: SwarmWorld) -> None:
+>         # Criterion 10. Planted fault: resume relaunches the finder, changes the retained answer or
+>         # loses the gaps.
+> >       sworld.complete(finder=[{"stdout": partial_finder_report()}], judge=[{"exit": 1}])
+>
+> tests/test_stage2_swarm.py:4470: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_swarm.py:518: in complete
+>     steps.update(finder_steps(overrides.pop("finder")))
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> step = [{'stdout': '{"code": [{"path": "src/app.py", "reference": "value", "reason": "holds the value"}, {"path": "src/gone.p...les"}], "tests": [{"not_read": "the fixture has no tests"}], "neighbours": [{"not_read": "no neighbour was found"}]}'}]
+>
+>     def finder_steps(step: dict) -> dict:
+>         """One scenario step for all three finder seats.
+>     
+>         Pi seats read the answer as text; the Claude seat's answer rides the result
+>         envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
+>         that is no JSON object (a fault answer) passes through unchanged.
+>         """
+>         try:
+> >           body = json.loads(step.get("stdout", ""))
+> E           AttributeError: 'list' object has no attribute 'get'
+>
+> tests/test_stage2_swarm.py:212: AttributeError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_map.py::test_finder_field_form_is_resolved_at_merge
+> FAILED tests/test_stage2_research_map.py::test_finder_filter_marks_emptied_category
+> FAILED tests/test_stage2_swarm.py::test_finder_first_answer_filters_without_retry
+> FAILED tests/test_stage2_swarm.py::test_finder_filtered_merge_preserves_exact_union
+> FAILED tests/test_stage2_swarm.py::test_finder_filtered_entries_stay_out_of_map_gaps
+> FAILED tests/test_stage2_swarm.py::test_finder_trio_locates_four_categories_without_judging
+> FAILED tests/test_stage2_swarm.py::test_finder_filtered_gaps_are_published - ...
+> FAILED tests/test_stage2_swarm.py::test_finder_filtered_record_is_stored_ok
+> FAILED tests/test_stage2_swarm.py::test_finder_filtered_record_is_reused_on_resume
+> 9 failed, 45 passed in 15.56s
+> ```
+
+Stage-2 call, 2026-11-19: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1119 files, 4786 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_research_map.py` +2 -2
+> - `tests/test_stage2_swarm.py` +5 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_atomic_test_log.py`, `tests/test_pi_contract.py`, `tests/test_research_capture.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_research_map.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [  6%]
+> ........................................................................ [ 13%]
+> ........................................................................ [ 20%]
+> ........................................................................ [ 27%]
+> ........................................................................ [ 33%]
+> ........................................................................ [ 40%]
+> ........................................................................ [ 47%]
+> ........................................................................ [ 54%]
+> ........................................................................ [ 61%]
+> ..................F..................................................... [ 67%]
+> ........................................................................ [ 74%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 95%]
+> ...................................................                      [100%]
+> =================================== FAILURES ===================================
+> ________________ test_finders_use_the_repository_seat_selection ________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2159/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2159/popen-gw0/test_finders_use_the_repositor0/home'))
+>
+>     def test_finders_use_the_repository_seat_selection(sworld: SwarmWorld) -> None:
+>         # Criteria 6 and 43. Planted fault: a finder runs a model other than its repository seat's selection.
+>         sworld.selection = selection_for()
+>         sworld.selection["seats"]["repository"][1] = {"endpoint": "opencode-go", "model": "longcat-2.0"}
+>         sworld.complete()
+> >       assert sworld.run() == 0
+> E       AssertionError: assert 1 == 0
+> E        +  where 1 = run()
+> E        +    where run = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2159/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2159/popen-gw0/test_finders_use_the_repositor0/home')).run
+>
+> tests/test_stage2_swarm.py:796: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research run 46b497c0c20190cce3c0b731245fc42d is incomplete: incomplete - a finder failed: finders-0-2 (invalid-report); no later stage starts.
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_finders_use_the_repository_seat_selection
+> 1 failed, 1058 passed in 206.40s (0:03:26)
+> ```
