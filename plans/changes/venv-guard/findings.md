@@ -589,3 +589,74 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-19: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4736 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1116 files, 4739 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_venv_guard.py` +8 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_venv_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - R2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-1-20261119T080207420916Z-112dc25a.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1116 files, 4739 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_venv_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-2-20261119T080207420916Z-112dc25a.md
+> ```
+
+Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1116 files, 4739 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/venv_guard.py` +36 -2
+> - `tests/test_venv_guard.py` +10 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/venv-guard/plan.md, plans/changes/venv-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `scripts/venv_guard.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/venv_guard.py:81:16: UP038 Use `X | Y` in `isinstance` call instead of `(X, Y)`
+>    |
+> 79 |             isinstance(statement, ast.Expr)
+> 80 |             and isinstance(statement.value, ast.Constant)
+> 81 |             or isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+>    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP038
+> 82 |             or isinstance(statement, (ast.Assign, ast.AnnAssign))
+> 83 |             and not any(isinstance(node, ast.Call) for node in ast.walk(statement))
+>    |
+>    = help: Convert to `X | Y`
+>
+> scripts/venv_guard.py:82:16: UP038 Use `X | Y` in `isinstance` call instead of `(X, Y)`
+>    |
+> 80 |             and isinstance(statement.value, ast.Constant)
+> 81 |             or isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+> 82 |             or isinstance(statement, (ast.Assign, ast.AnnAssign))
+>    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP038
+> 83 |             and not any(isinstance(node, ast.Call) for node in ast.walk(statement))
+> 84 |         ):
+>    |
+>    = help: Convert to `X | Y`
+>
+> Found 2 errors.
+> No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/venv-guard/stage2/attempts/venv-guard/attempt-3-20261119T080207420916Z-112dc25a.md
+> ```
