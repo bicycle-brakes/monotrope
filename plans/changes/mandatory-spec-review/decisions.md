@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -269,3 +269,24 @@ fourth review runs; the final draft works these in.
   writes between implementation and merge need a new review.
 - **S-27, which folders the morning list reads.** Only change folders that
   hold a `spec.md`. Reason: a review is not due before there is a spec.
+
+## Q-10 · A final draft after the third review round (the change's own gate refused its implement)
+
+asked: 2026-11-19
+answer: "C: Nach Runde 3 frei" — in English: a spec changed by a draft after the third spec-review round needs no new review; the implement gate accepts a spec changed after its newest qualifying review when three spec-review rounds have run for the change.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: on 2026-11-18 this change's own new implement gate refused its implement: "the spec of mandatory-spec-review changed after its newest qualifying spec review"; the final draft after round 3 changed the spec, as the three-round rule intends.
+  Intention: the lane was parked for the morning; on 2026-11-19 the maintainer also decided for finder-partial-report (its Q-4) that no fourth round follows round 3, which this gate would block for every later change.
+  Today: the gate demands a qualifying review newer than the last spec change; the first Sonnet implement pass left 2 of 6358 tests red (wip 7e445cfe).
+  Repository change: this change's spec, plan and gate (scripts/stage2.py implement precondition) and their tests.
+  Architecture change: the gate accepts a spec change after the third review round.
+  Options shown: C a draft after round 3 needs no new review (recommended); A one fourth round as this change's bootstrap; B hand-finish the 2 red tests and let the gate apply from the next change.
+
+In the context of an implement gate that demands a review newer than the
+last spec change, facing the three-round rule whose final draft always
+changes the spec, we decided that after three review rounds the final draft
+passes without a new review, to achieve a gate that agrees with the
+three-round rule, accepting that the last spec edit is first checked by the
+review loop and phase 6 — 2026-11-19
