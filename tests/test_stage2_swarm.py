@@ -206,7 +206,9 @@ def finder_steps(step: dict | list) -> dict:
 
     Pi seats read the answer as text; the Claude seat's answer rides the result
     envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
-    that is no JSON object (a fault answer) passes through unchanged.
+    that is no JSON object (a fault answer) passes through unchanged. The generic
+    `finder` key carries the Pi step for a seat a test substitutes into the selection
+    (the stand-in falls back to it when no per-model key names the seat's model).
     """
     if isinstance(step, list):
         per_step = [finder_steps(one) for one in step]
@@ -219,7 +221,8 @@ def finder_steps(step: dict | list) -> dict:
         wrapped = {**step, "stdout": claude_finder_envelope(body)}
     else:
         wrapped = step
-    return {f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS}
+    steps = {f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS}
+    return {**steps, "finder": [dict(step)]}
 
 
 def partials_of(text: str) -> list[dict]:
