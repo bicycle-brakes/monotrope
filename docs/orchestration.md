@@ -130,8 +130,8 @@ recorded before the counter existed carry no comparison identity: the reader
 reports them on a separate line outside the count, and they do not make the
 read partial. A lane reads its change with `--change <name>` and `--since` set
 to the lane's start in UTC. This includes other lanes working on the same change;
-the outside and unattributed lines can also include other repositories on the
-machine. The reader also reports flaky-test signals (a full green then a
+the outside line holds runs of this repository; the unattributed line can also
+include runs of other repositories on the machine. The reader also reports flaky-test signals (a full green then a
 full red of one identity) and, when evidence is incomplete, names the
 incomplete runs on both sides of a possible pair.
 

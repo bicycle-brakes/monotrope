@@ -950,7 +950,20 @@ def _pair(checks: list[_Check], orphans: list[_Check]) -> tuple[int, int, int, s
         if (
             green
             or any(check.kind == "targeted" and not check.outside for check in between)
-            or (predecessor is not None and _full_green(predecessor))
+            or (
+                predecessor is not None
+                and _full_green(predecessor)
+                and any(
+                    _targeted_green(candidate)
+                    and _compatible(candidate, uncertain_full)
+                    and _compatible(candidate, full)
+                    and _may_precede(candidate, full)
+                    and (uncertain_full.completion is None or _may_precede(candidate, uncertain_full))
+                    for candidate in checks
+                    for uncertain_full in between
+                    if uncertain_full.kind == "full"
+                )
+            )
             or (predecessor is not None and any(check.kind == "unknown" for check in between))
         ):
             promoted.add(full.run_id)
@@ -1078,8 +1091,11 @@ def cmd_slips(args: argparse.Namespace) -> int:
     if not tally.selected:
         # Nothing of this scope was measured: an observed absence needs runs.
         print("0 runs selected, no statement possible")
-        if tally.unattributed:
-            print(f"unattributed outside runs: {tally.unattributed}")
+        if tally.outside or tally.unattributed:
+            print(
+                f"outside the count: {tally.outside} legacy or change-less full runs; "
+                f"unattributed outside runs: {tally.unattributed}"
+            )
         for finding in tally.findings:
             print(f"history note: {finding}")
         return 1

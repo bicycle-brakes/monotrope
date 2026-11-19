@@ -1719,6 +1719,42 @@ def test_change_scope_with_only_outside_runs_has_no_measurement(
     assert "slips: 0" not in out, out
 
 
+def test_empty_selection_reports_attributable_outside_runs(tmp_path, monkeypatch, capsys):
+    repository = _measured_repo(tmp_path, monkeypatch)
+    _write_history(
+        tmp_path / "state",
+        _check("cl", "full", _at("07:00"), _at("07:10"), "red", repository, change=None),
+    )
+    code, out, _ = _slips(capsys, "--change", "missing")
+    assert code == 1 and "0 runs selected, no statement possible" in out, out
+    assert "outside the count: 1 legacy or change-less full runs" in out, out
+
+
+@pytest.mark.parametrize("cause", ["conflicting-ends", "unknown-tree"])
+def test_uncertain_full_after_green_without_targeted_is_undecided(tmp_path, monkeypatch, capsys, cause):
+    def build(repository):
+        middle = _check(
+            "uncertain",
+            "full",
+            _at("10:00"),
+            _at("10:30"),
+            "green",
+            repository,
+            tree=None if cause == "unknown-tree" else TREE,
+        )
+        if cause == "conflicting-ends":
+            middle.append(_run_end("uncertain", utc=_at("10:31"), verdict="red"))
+        return [
+            *_check("green", "full", _at("09:00"), _at("09:30"), "green", repository),
+            *middle,
+            *_check("red", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 1" in out, out
+    assert "flaky-test signals: 0; undecided flaky-test signals: 1" in out, out
+
+
 def test_old_duration_reader_accepts_additive_version_one_fields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
