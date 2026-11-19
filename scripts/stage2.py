@@ -5204,34 +5204,41 @@ def _mask_stamp(text: str, *, dated: bool) -> str | None:
 
 
 def _mask_owned_fields(text: str) -> str | None:
-    """`text` with its header's `produced_by` and `review` spans replaced by one mask each.
+    """`text` without its header's `produced_by`, `review` and `updated` fields, each with its line ending.
 
-    The runner stamps those fields after the model call (runner-stamps-provenance), so a
-    difference only there cannot qualify an attempt: a stamp-only edit, and a review the
-    stamp reset, read as no work. None when the fields cannot be masked safely, which keeps
-    the comparison strict - work, never silence.
+    The runner stamps those fields after the model call (runner-stamps-provenance), all three in
+    one write and inserting a field the header lacked, so a difference only there cannot qualify
+    an attempt: a stamp-only edit, an inserted record and a review the stamp reset read as no
+    work. A field is cut out whole, so an inserted field and an edited one compare alike. None
+    when the fields cannot be cut out safely, which keeps the comparison strict - work, never
+    silence.
     """
     block = check_frontmatter_current._BLOCK.match(text)
     if block is None:
         return None
+    header = block.group(1)
     try:
-        spans: list[tuple[int, int, str]] = []
-        for key in ("produced_by", "review"):
-            found = _header_field_spans(block.group(1), key)
+        spans: list[tuple[int, int]] = []
+        for key in ("produced_by", "review", "updated"):
+            found = _header_field_spans(header, key)
             if len(found) > 1:
                 return None
-            if found:
-                spans.append((block.start(1) + found[0][0], block.start(1) + found[0][1], key))
+            spans.extend(found)
     except yaml.YAMLError:
         return None
-    pieces: list[str] = []
-    position = block.start(1)
-    for start, end, key in sorted(spans):
-        pieces.append(text[position:start])
-        pieces.append(f"{key}: <runner stamp>")
-        position = end
-    pieces.append(text[position:])
-    return "".join(pieces)
+    # Cut from the last field backwards, so each cut reads the header the later cuts left. A field
+    # leaves with its own line ending; the header's last field, which has none inside the block,
+    # takes the line ending before it instead.
+    for start, end in sorted(spans, reverse=True):
+        ending = re.match(r"\r?\n", header[end:])
+        if ending is not None:
+            end += ending.end()
+        else:
+            leading = re.search(r"\r?\n\Z", header[:start])
+            if leading is not None:
+                start -= len(leading.group(0))
+        header = header[:start] + header[end:]
+    return text[: block.start(1)] + header + text[block.end(1) :]
 
 
 def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
@@ -9318,12 +9325,18 @@ class CommittedRecordFault(Refused):
 def committed_bytes(root: Path, relative: str) -> bytes | None:
     """The file's bytes as HEAD commits them, or None when HEAD holds no such file.
 
-    Only the exact missing-path diagnostic establishes absence; added warnings or fatal
-    lines refuse, like every git read.
+    Absence is measured, never inferred from a failing `git show` (review row L6-1): git's
+    diagnostic renders a path with a line break differently from the path itself. The literal
+    tree lookup names the exact path; every git failure refuses, like every git read.
     """
-    missing = rf"fatal: path '{re.escape(relative)}' (?:does not exist in|exists on disk, but not in) 'HEAD'"
-    held = run_git(root, "show", f"HEAD:{relative}", allow={128: missing})
-    return held.stdout if held.returncode == 0 else None
+    env = {**os.environ, "GIT_LITERAL_PATHSPECS": "1"}
+    wanted = os.fsencode(relative)
+    for entry in _git_bytes(root, "ls-tree", "-z", "HEAD", "--", relative, env=env).split(b"\0"):
+        meta, _, name = entry.partition(b"\t")
+        fields = meta.split()
+        if name == wanted and len(fields) == 3 and fields[1] == b"blob":
+            return _git_bytes(root, "cat-file", "blob", fields[2].decode("ascii"))
+    return None
 
 
 def _committed_fault(relative: str, reason: str) -> CommittedRecordFault:
@@ -9644,15 +9657,18 @@ def stamp_retained_artifacts(
     model: str | None,
     day: str,
     ledger: dict[str, list[dict]] | None = None,
+    before_write: Callable[[list[Path]], None] | None = None,
 ) -> list[str]:
     """Stamp every retained artifact this attempt changed, before its post-run checks.
 
     Candidates are the paths the attempt's model changed, as the caller measured them. A file
     whose bytes equal HEAD's is not retained model work and is left alone; a file without
-    frontmatter carries no producer record. The returned lines are the approval resets for
-    the attempt's findings (criterion 8).
+    frontmatter carries no producer record. `before_write` receives exactly the files the
+    stamp will write, before its first write, so a caller's safety check covers that batch and
+    nothing else. The returned lines are the approval resets for the attempt's findings
+    (criterion 8).
     """
-    notices: list[str] = []
+    targets: list[str] = []
     for relative in sorted(candidates):
         try:
             current = (root / relative).read_bytes()
@@ -9663,6 +9679,11 @@ def stamp_retained_artifacts(
             continue
         if re.match(rb"\A(?:\xef\xbb\xbf)?---\r?\n", current) is None:
             continue
+        targets.append(relative)
+    if before_write is not None:
+        before_write([root / relative for relative in targets])
+    notices: list[str] = []
+    for relative in targets:
         notice = stamp_artifact(root, relative, producer=producer, model=model, day=day, ledger=ledger)
         if notice:
             notices.append(notice)
@@ -9708,6 +9729,18 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes) -> li
         keys = [key.value for key, _ in node.value]
         if keys.count("produced_by") > 1:
             problems.append(f"{relative}: produced_by is held more than once")
+        for key, value in node.value:
+            if key.value != "produced_by":
+                continue
+            # A duplicate key inside any record is a fault, never a silent last-wins (loop row L1-2):
+            # the loaded value below would keep only the last one.
+            records = value.value if isinstance(value, yaml.SequenceNode) else [value]
+            for record in records:
+                if isinstance(record, yaml.MappingNode):
+                    record_keys = [child.value for child, _ in record.value]
+                    if len(record_keys) != len(set(record_keys)):
+                        problems.append(f"{relative}: produced_by: duplicate keys in a record")
+                        break
     if "produced_by" in header:
         problems.extend(
             f"{relative}: {problem}" for problem in research_census.producer_records_problems(header["produced_by"])
@@ -10199,20 +10232,31 @@ def run_attempts(
             stamp_problems: list[str] = []
             findings_rel = ctx.findings.relative_to(root).as_posix()
             if unmeasured is None and work_unmeasured is None:
-                candidates = [
-                    path
-                    for path in changed_relative_paths(root, before, after)
-                    if path not in (findings_rel, "plans/INDEX.md")
-                ]
                 try:
+                    # The measurement itself stands inside the guard: a failed comparison fails this
+                    # attempt like any unmeasured one and never ends the verb (criterion 10).
+                    candidates = [
+                        path
+                        for path in changed_relative_paths(root, before, after)
+                        if path not in (findings_rel, "plans/INDEX.md")
+                    ]
                     if verb == "repair":
+                        # The stamp writes into the change folder, so its whole batch stands checked
+                        # before its first write, as every recovery write does: a parent replaced by a
+                        # link since the call refuses unwritten.
                         stamp_notices = stamp_retained_artifacts(
-                            root, candidates, producer=producer_for(endpoint), model=endpoint[1], day=today()
+                            root,
+                            candidates,
+                            producer=producer_for(endpoint),
+                            model=endpoint[1],
+                            day=today(),
+                            before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
                         )
                     stamp_problems = touched_header_problems(root, candidates)
-                except CommittedRecordFault:
+                except (CommittedRecordFault, RestorationRefused):
                     # A committed header no route can stamp stops the verb; the migration owns it
-                    # (spec, criterion 15). The attempt's own entry still stands, rejected.
+                    # (spec, criterion 15). A safety refusal propagates unwritten. The attempt's own
+                    # entry still stands, rejected.
                     raise
                 except (Refused, OSError) as error:
                     # The stamp or the check refused an artifact: the attempt fails before any

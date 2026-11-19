@@ -74,8 +74,11 @@ def test_a_unicode_line_separator_inside_a_receipt_keeps_the_receipt(separator: 
     assert stage2_swarm.parse_receipts(text) == events
 
 
+# The dates the publication contract reads stand as in the `scripts/new_change.py` skeleton: a single
+# explorer's publication is judged by that contract before it lands (runner-stamps-provenance, criterion 15).
 SEED = (
-    "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\nneighbours: []\n---\n\n"
+    "---\ntitle: Research\ndate: 2026-10-15\nlast_reviewed: 2026-10-15\nupdated: 2026-10-15\nbead: demo-1\n"
+    "class: feature\nneighbours: []\n---\n\n"
     "# Research\n\nseed fact\n"
 )
 

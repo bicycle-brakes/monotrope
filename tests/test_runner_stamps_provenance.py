@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import date
@@ -325,6 +326,57 @@ def test_repair_stamps_retained_artifacts_before_checks(repo, monkeypatch):
     assert "Approval reset — plans/changes/demo/spec.md: the committed approval by Michael Peichl" in findings, (
         "the accepted attempt records whose approval its stamp reset"
     )
+
+
+def test_repair_stamp_refuses_a_replaced_parent_unwritten(repo, monkeypatch, tmp_path):
+    # Hand-finish of 2026-11-19: the stamp writes into the change folder, so its batch is checked
+    # before its first write. Planted fault: the folder is swapped for a link outside the worktree
+    # after the lifecycle restore, and the stamp writes the producer record through it.
+    outside = tmp_path / "outside-change"
+
+    def fake_run_codex(*_a, **_k):
+        _write(repo, "plans/changes/demo/spec.md", SPEC_SEED.replace("stand here.", "stand here, repaired."))
+        return "repaired", "thread"
+
+    real_restore = stage2.restore_lifecycle_fields
+
+    def swap_after_restore(*args, **kwargs):
+        result = real_restore(*args, **kwargs)
+        folder = repo / "plans/changes/demo"
+        if not folder.is_symlink():
+            shutil.copytree(folder, outside)
+            shutil.rmtree(folder)
+            folder.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(stage2, "run_codex", fake_run_codex)
+    monkeypatch.setattr(stage2, "restore_lifecycle_fields", swap_after_restore)
+    monkeypatch.setattr(stage2, "verify_attempt", lambda *_a, **_k: pytest.fail("verification ran after the swap"))
+    ctx = _ctx(repo)
+    baseline = _git(repo, "rev-parse", "HEAD")
+    with pytest.raises(stage2.RestorationRefused, match="plans/changes/demo"):
+        stage2.run_attempts(
+            ctx,
+            "repair",
+            [(stage2.CODEX, None, "codex", None)],
+            _build_prompt(ctx),
+            baseline,
+            None,
+            None,
+            commit_message="test repair",
+            closing="stopped",
+            tools={},
+            verify_mode="targeted",
+            protect_lifecycle=True,
+        )
+    spec = (outside / "spec.md").read_text(encoding="utf-8")
+    assert "stand here, repaired." in spec, "the swap carried the attempt's edit outside"
+    assert _header_of(spec)["produced_by"] == {
+        "kind": "llm-session",
+        "name": "codex",
+        "version": "2026-11-10",
+        "model": "gpt-6.1-terra",
+    }, "the stamp wrote through a parent that escapes the worktree"
 
 
 def test_each_verb_rejects_invalid_touched_header(repo, monkeypatch):
@@ -953,6 +1005,24 @@ def test_duplicate_key_in_producer_list_is_committed_fault(position):
     records[position] = duplicate
     with pytest.raises(stage2.CommittedRecordFault, match="duplicate keys"):
         stage2.parse_producer_records(f"[{', '.join(records)}]", "docs/example.md")
+
+
+@pytest.mark.parametrize("position", [0, 1])
+@pytest.mark.parametrize("relative", ["docs/example.md", "plans/changes/demo/research.md"])
+def test_duplicate_key_in_producer_list_is_output_fault(position, relative):
+    # Loop row L1-2, output side: the shared post-run check refuses a duplicate key inside any record
+    # of a list-shaped produced_by a run wrote, outside active research as inside it.
+    valid = '{kind: llm-session, name: codex, version: "2026-11-04"}'
+    duplicate = '{kind: llm-session, name: pi, name: codex, version: "2026-11-04"}'
+    records = [valid, valid]
+    records[position] = duplicate
+    text = (
+        "---\ntitle: New\ndate: 2026-11-04\nlast_reviewed: 2026-11-04\nupdated: 2026-11-04\n"
+        f"provenance: ai-drafted-reviewed\nproduced_by: [{', '.join(records)}]\nreview: {PENDING_REVIEW}\n"
+        "---\n# New\n\nText.\n"
+    )
+    problems = stage2.header_problems(relative, None, text.encode("utf-8"))
+    assert any("produced_by" in problem and "duplicate" in problem for problem in problems), problems
 
 
 def test_prepublication_failure_routing(repo, monkeypatch):

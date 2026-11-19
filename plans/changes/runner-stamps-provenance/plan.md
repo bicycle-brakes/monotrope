@@ -92,6 +92,37 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: one targeted test
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Hand finish — 2026-11-19
+
+The maintainer chose an orchestrator hand finish by an Opus subagent (bead notes, answer A of
+2026-11-19) after the full `make verify` of 2026-11-19 stood at 334 failed. What the hand finish
+found and changed:
+
+- The diagnosis "the implement commit made `run_codex` require a `thread.started` event" did not
+  hold: `run_codex` is byte-identical to the merge base, and a missing thread event is a specified
+  transport failure there (`test_codex_repair_transport_failures_stop_the_chain[no-thread]`). The
+  message came from the fake Codex running out of scripted steps once the new header check had
+  refused an earlier attempt. `run_codex` therefore stays unchanged; no thread id is recorded as
+  "unknown".
+- Test fixtures, not the contract, were out of date: the shared test worlds planted new `spec.md`
+  and `plan.md` files without `provenance` and `review`, and committed `research.md` files without
+  the dates the census contract reads. They now carry what criteria 11, 14 and 15 require
+  (`DRAFTED_HEADER`, `DRAFTED_SPEC` in `tests/test_stage2.py`; `SEED` in
+  `tests/test_stage2_swarm.py`).
+- Four code faults in this change, each reproduced by an existing test, were repaired in
+  `scripts/stage2.py`: the no-work measurement counted the runner's own stamp as model work (the
+  `produced_by`, `review` and `updated` fields are now cut out together, an inserted field
+  included); `committed_bytes` inferred absence from git's error text, which renders a path with a
+  line break differently (now a literal `ls-tree` lookup, as review row L6-1 asks); a failed
+  changed-file measurement in implement and repair ended the verb instead of failing the attempt
+  (criterion 10); and the repair stamp wrote into the change folder without the recovery preflight,
+  so a parent swapped for an outside link was written through (new test
+  `test_repair_stamp_refuses_a_replaced_parent_unwritten`).
+- Loop row L1-2 (duplicate key inside a record of a list-shaped `produced_by`): the committed side
+  was repaired in the saved repair tree (8b49b3d3); the output side, the shared post-run check for
+  files outside active research, still let it pass and now refuses it
+  (`test_duplicate_key_in_producer_list_is_output_fault`).
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

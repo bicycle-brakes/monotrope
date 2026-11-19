@@ -312,6 +312,13 @@ raise SystemExit(step.get("exit", 0))
 """
 
 
+# The class and review a new model-written file must carry, and that a stamped file keeps from its
+# committed header (runner-stamps-provenance, criteria 11, 12 and 14; decisions Q-14, Q-18). The
+# stand-in models plant headers with these lines, as a real draft from the templates does.
+DRAFTED_HEADER = "provenance: ai-drafted-reviewed\nreview: {status: pending, approved_by: null, approved_at: null}\n"
+DRAFTED_SPEC = f"---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n{DRAFTED_HEADER}---\n\n# Spec\n"
+
+
 def codex_ok(thread: str, answer: str, **more: object) -> dict:
     """A Codex step that succeeds: a `thread.started` event and the answer file."""
     started = json.dumps({"type": "thread.started", "thread_id": thread})
@@ -477,7 +484,7 @@ def old_header(updated: str = "2026-09-29") -> str:
     return (
         "---\ntitle: Findings\ncategory: findings\nstatus: draft\nimplementation_status: none\n"
         f"date: {updated}\ncreated: {updated}\nlast_reviewed: {updated}\nupdated: {updated}\n"
-        "bead: demo-1\n---\n\n# Findings — demo\n"
+        f"bead: demo-1\n{DRAFTED_HEADER}---\n\n# Findings — demo\n"
     )
 
 
@@ -641,14 +648,17 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     root = tmp_path / "repo"
     (root / "plans" / "changes" / "demo").mkdir(parents=True)
     (root / "plans" / "changes" / "demo" / "spec.md").write_text(
-        "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
+        f"---\ntitle: Spec\nbead: demo-1\n{DRAFTED_HEADER}---\n\n# Spec\n", encoding="utf-8"
     )
     (root / "plans" / "changes" / "demo" / "research.md").write_text(
-        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: bounded\n---\n\n# Research\n\nseed fact\n",
+        # The publication contract every touched active research file meets (runner-stamps-provenance,
+        # criterion 14): a run that stamps a model producer into it keeps the class and review it finds.
+        "---\ntitle: Research\ndate: 2026-09-30\nlast_reviewed: 2026-09-30\nupdated: 2026-09-30\nbead: demo-1\n"
+        f"class: bounded\n{DRAFTED_HEADER}---\n\n# Research\n\nseed fact\n",
         encoding="utf-8",
     )
     (root / "plans" / "changes" / "demo" / "plan.md").write_text(
-        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n",
+        f"---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n{DRAFTED_HEADER}---\n\n# Plan\n\n## Time used\n",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text("# Agent rules\n\nStay inside the repository.\n", encoding="utf-8")
@@ -1002,7 +1012,7 @@ def test_every_git_call_names_the_resolved_path(world: World, monkeypatch: pytes
     draft_world(world)
     assert stage2._merge_base(world.root)
     plants = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
@@ -2985,7 +2995,7 @@ def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
 
 
 def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World) -> None:
-    valid = "---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n"
+    valid = f"---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n{DRAFTED_HEADER}---\n\n# Plan\n\n## Time used\n"
     world.script(
         claude=[
             {
@@ -3280,7 +3290,7 @@ def failing_run(world: World, verb: str, monkeypatch: pytest.MonkeyPatch) -> tup
     if verb == "draft":
         draft_world(world)
         plant = {
-            "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+            "plans/changes/demo/spec.md": DRAFTED_SPEC,
             "plans/changes/demo/plan.md": PLAN_CARD,
         }
         world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")])
@@ -3763,7 +3773,7 @@ def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World
 
 
 PLAN_CARD = (
-    "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n"
+    f"---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n{DRAFTED_HEADER}---\n\n# Plan\n\n"
     "```text\n"
     "For you:     one command drafts the change\n"
     "Done when:   the criteria hold\n"
@@ -3874,7 +3884,7 @@ def passing_draft(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                 },
             )
@@ -4088,7 +4098,7 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                     "src/new.py": "new = 1\n",
                     "src/app.py": "value = 2\n",
@@ -4129,7 +4139,7 @@ def test_a_draft_does_not_blame_the_model_for_a_derived_leftover(world: World) -
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                     "src/app.py": "value = 2\n",
                 },
@@ -4149,7 +4159,7 @@ def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
     # path behind a remainder line, so the audit cannot name every restored path.
     draft_world(world)
     plant = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
     }
     for n in range(stage2.ATTEMPT_FILES + 1):
@@ -4172,7 +4182,7 @@ def test_an_edited_decisions_file_is_put_back(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                     "plans/changes/demo/decisions.md": "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n"
                     "---\n\n# Decisions\n\nQ-1 answered.\nQ-2 answered by the model.\n",
@@ -4194,7 +4204,7 @@ def test_two_new_adr_files_fail_the_attempt(world: World) -> None:
     # Criterion 10. Planted fault: no count of new ADR files.
     draft_world(world)
     plants = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
         "docs/adr/0017-second-record.md": "# Second\n",
@@ -4218,7 +4228,7 @@ def test_a_second_draft_that_adds_another_adr_fails_the_attempt(world: World) ->
     # draft's committed ADR no longer counts and a second one reaches the commit.
     draft_world(world)
     first = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
@@ -4347,7 +4357,7 @@ def test_failed_docs_checks_fail_the_draft_attempt(world: World, monkeypatch: py
     # unreadable-gate-list document check is accepted, committed as a passing draft, reported as a
     # failed `make verify` run, or slips the retry chain.
     draft_world(world)
-    spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+    spec = DRAFTED_SPEC
     plant = {"plans/changes/demo/spec.md": spec, "plans/changes/demo/plan.md": PLAN_CARD}
     before = git(world.root, "rev-parse", "HEAD")
 
@@ -4429,7 +4439,7 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
     assert problems == [], problems
     assert order == ["renderer", *["docs"] * len(stage2.document_gates())], order
     # and the artefact guards still reject what they rejected
-    spec = "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+    spec = DRAFTED_SPEC
     (world.root / "plans/changes/demo/spec.md").unlink()
     problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
     assert "plans/changes/demo/spec.md is missing after the draft." in problems, problems
@@ -4517,7 +4527,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
 
 FEATURE_SPEC = (
     "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\nchange: demo\nclass: feature\n"
-    'adr_question: {proposed: "no", answered_by: null, reason: "A reason."}\n---\n\n# Spec\n'
+    'adr_question: {proposed: "no", answered_by: null, reason: "A reason."}\n' + DRAFTED_HEADER + "---\n\n# Spec\n"
 )
 
 
@@ -4850,7 +4860,7 @@ def refused_verification(world: World, monkeypatch: pytest.MonkeyPatch, verifica
     """Run a draft whose every document check prints `verification` and exits 1; nothing may be committed."""
     draft_world(world)
     planted = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
     }
     world.script(
@@ -4913,7 +4923,7 @@ def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) ->
     # Phase-6 F-11. Planted fault: the count includes the deleted old path, so a rename reads as two new ADRs.
     draft_world(world)
     first = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
@@ -4951,7 +4961,7 @@ def test_put_back_paths_are_named_in_full_however_long(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                     one: "x\n",
                     two: "y\n",
@@ -4988,7 +4998,7 @@ def test_a_docs_check_that_cannot_start_fails_the_attempt_and_moves_the_chain(
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                 },
             ),
@@ -5028,7 +5038,7 @@ def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                 },
             ),
             codex_ok("T2", "again"),
@@ -5049,7 +5059,7 @@ def test_a_missing_plan_md_is_reported_once(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                 },
             ),
             codex_ok("T2", "again"),
@@ -5131,7 +5141,7 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(
                 "T2",
                 "repaired",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                 },
             ),
         ],
@@ -5158,7 +5168,7 @@ def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World, monkeypatc
             {
                 "stdout": "glm drafted",
                 "plant": {
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                 },
             }
         ],
@@ -5188,7 +5198,7 @@ def test_a_failed_draft_call_is_put_back_and_recorded(world: World) -> None:
                 "T2",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                 },
             ),
@@ -5227,7 +5237,7 @@ def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World, monkey
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                 },
             ),
@@ -6813,7 +6823,7 @@ def test_a_draft_may_commit_its_own_new_adr(world: World) -> None:
     (world.root / "provenance.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     git(world.root, "commit", "--quiet", "-am", "the real class of docs/adr/")
     plants = {
-        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/spec.md": DRAFTED_SPEC,
         "plans/changes/demo/plan.md": PLAN_CARD,
         "docs/adr/0016-first-record.md": "# First\n",
     }
@@ -19696,9 +19706,7 @@ def test_sol_effort_changes_propagate_without_other_edits(
                 codex_ok(
                     "T2",
                     "repaired",
-                    plant={
-                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
-                    },
+                    plant={"plans/changes/demo/spec.md": DRAFTED_SPEC},
                 ),
             ],
         )
@@ -21847,7 +21855,7 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
                 "T1",
                 "drafted",
                 plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/spec.md": DRAFTED_SPEC,
                     "plans/changes/demo/plan.md": PLAN_CARD,
                     f"tests/test_{FIXTURE_SECRET}.py": "value = 1\n",
                 },
@@ -22341,7 +22349,7 @@ def test_work_verbs_skip_escaped_scan_parent(
                 {
                     "stdout": "done",
                     "plant": {
-                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                        "plans/changes/demo/spec.md": DRAFTED_SPEC,
                         "plans/changes/demo/plan.md": PLAN_CARD,
                     },
                 }
@@ -22586,7 +22594,11 @@ def test_failed_verify_recovery_refusal_preserves_diagnostics(
         for name in ("append", "restore_work_input", "persist_time_entry", "stamp_updated", "save_attempt"):
             monkeypatch.setattr(stage2, name, unexpected_write)
 
+    verified = False
+
     def verify(*_args, **_kwargs):
+        nonlocal verified
+        verified = True
         if boundary == "batch":
             escape()
         return ["`make verify` failed: planted verifier evidence"]
@@ -22597,8 +22609,10 @@ def test_failed_verify_recovery_refusal_preserves_diagnostics(
 
         def preflight(root, destinations, **kwargs):
             nonlocal checked
-            # The first post-verification batch is safe; the findings restore must recheck.
-            if not checked:
+            # The first post-verification batch is safe; the findings restore must recheck. A repair
+            # checks batches before verification too (its lifecycle restore and its producer stamp),
+            # and those run on the safe tree.
+            if verified and not checked:
                 real_preflight(root, destinations, **kwargs)
                 checked = True
                 escape()
@@ -26637,7 +26651,7 @@ def test_research_publication_preserves_all_producers(shape):
         stage2.research_publication(corrected, producer="pi", day="2026-11-05", baseline_field=baseline_field)
         == corrected
     )
-    assert corrected.split(b"---", 2)[2] == source.split(b"---", 2)[2]
+    assert corrected.split(b"---", 2)[2] == source.encode().split(b"---", 2)[2]
 
 
 # ---------------------------------------------------------------------------
