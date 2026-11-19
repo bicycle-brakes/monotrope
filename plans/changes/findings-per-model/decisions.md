@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-18
+updated: 2026-11-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -22,6 +22,8 @@ tags: [decisions, stage-2, review-loop, measurement]
 Class: bounded (bead coding-harness-qut1).
 
 ## Q-1 · What counts as accepted, per model
+
+The column choice in this answer was superseded by Q-5 (provisional agent detail, autonomous run 2026-11-19).
 
 asked: 2026-11-17
 answer: "C" — report taken and fixed as two separate columns per model id. Taken = taken, 'taken — not a test', fixed; fixed = actually repaired. A duplicate ('same as ...') counts for the model that raised it first. Also raised and rejected counts. Output JSONL plus a plain table with the cut-off commit, runnable through make; the morning handover shows the table.

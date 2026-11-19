@@ -274,3 +274,7 @@ Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1119 files, 4772 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4779 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
