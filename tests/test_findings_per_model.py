@@ -191,6 +191,16 @@ def test_unattributed_rows_are_visible():
     assert {"type": "finding", "change": "c1", "id": "F-1"} in records
 
 
+def test_unattributed_table_lists_change_and_id(tmp_path, monkeypatch):
+    root, _ = repo(tmp_path, {findings_path("c1"): doc(PHASE6, p6row("F-1", "fixed"))})
+    code, chunks = run_report(root, None, monkeypatch, tmp_path / "state")
+    output = "".join(chunks)
+    records = jsonl(Path(chunks[-1].strip()))
+    assert code == 0
+    assert {"type": "finding", "change": "plans/changes/c1", "id": "F-1"} in records
+    assert "- plans/changes/c1: F-1" in output.split("| unattributed |", 1)[1]
+
+
 # --- criterion 6 ---------------------------------------------------------------------
 
 

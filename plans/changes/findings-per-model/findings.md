@@ -262,3 +262,7 @@ Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1119 files, 4709 commits, 12 rules.
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1119 files, 4714 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4718 commits, 12 rules.
+
+Runner restoration, 2026-11-19: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged

@@ -179,7 +179,7 @@ def jsonl_records(
     return records
 
 
-def table(models: list[dict[str, object]]) -> str:
+def table(models: list[dict[str, object]], records: list[dict[str, object]]) -> str:
     """The plain per-model table, the same counts as the JSON Lines (criterion 14)."""
     lines = ["| Model | Raised | Defects accepted | Questions settled | Rejected |", "|---|---:|---:|---:|---:|"]
     for record in models:
@@ -188,6 +188,10 @@ def table(models: list[dict[str, object]]) -> str:
             f"| {label} | {record['raised']} | {record['defects_accepted']} | "
             f"{record['questions_settled']} | {record['rejected']} |"
         )
+    unattributed = [record for record in records if record["type"] == "finding"]
+    if unattributed:
+        lines.append("\nUnattributed findings:")
+        lines.extend(f"- {record['change']}: {record['id']}" for record in unattributed)
     return "\n".join(lines)
 
 
@@ -206,7 +210,7 @@ def run(root: Path, rev_arg: str | None, out: Callable[[str], object] | None = N
     target.write_text(body, encoding="utf-8")
 
     out(f"Findings per model — cutoff commit {sha}\n\n")
-    out(table(models) + "\n")
+    out(table(models, records) + "\n")
     if gaps:
         out(f"\nIncomplete — {len(gaps)} gap(s), the counts above are not complete:\n")
         for gap in gaps:
