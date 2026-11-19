@@ -29155,6 +29155,7 @@ def test_staging_manifest_failure_is_reported(world: World, monkeypatch: pytest.
     def fail_manifest(*_args):
         raise OSError("injected manifest failure")
 
+    original_manifest = stage2._write_supersession_manifest
     monkeypatch.setattr(stage2, "_write_supersession_manifest", fail_manifest)
     try:
         result = supersede(world, key)
@@ -29162,8 +29163,10 @@ def test_staging_manifest_failure_is_reported(world: World, monkeypatch: pytest.
         pytest.fail(f"manifest failure escaped instead of being reported: {error}")
     assert result == 1
     assert "archive could not be completed" in capsys.readouterr().err
-    assert supersede(world, key) == 2
-    assert "manifest cannot be read" in capsys.readouterr().err
+    monkeypatch.setattr(stage2, "_write_supersession_manifest", original_manifest)
+    assert supersede(world, key) == 0
+    assert "removed empty interrupted staging directory" in capsys.readouterr().out
+    assert not (stage2.record_base() / key / "loop.md").exists()
 
 
 def test_supersession_floor_includes_own_history(world: World) -> None:
@@ -29302,3 +29305,25 @@ def test_superseded_worktree_release_records_superseder(world: World) -> None:
     assert f"Loop rows: superseded by {own}" in text
     stage2.release(other, "demo")
     assert old_findings.read_text(encoding="utf-8").count("Loop rows: superseded by") == 1
+
+
+def test_restart_in_superseded_worktree_counts_archived_rounds(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1, 7])
+    assert supersede(world, key) == 0
+    findings = other / "plans/changes/demo/findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text(stage2.RELEASE_HEADING + " 2026-11-17\nRounds run: 1\n", encoding="utf-8")
+    stage2.restart_loop(other, "demo", "continue")
+    assert stage2.restart_floor(findings.read_text(encoding="utf-8")) == 7
+
+
+def test_missing_listed_worktree_record_remains_discoverable(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    shutil.rmtree(other)
+    assert key in stage2.other_record_keys("demo", world.root)
+    assert supersede(world, key) == 0
+    assert not (stage2.record_base() / key / "loop.md").exists()

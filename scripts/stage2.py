@@ -3479,8 +3479,7 @@ def matches_released_identity(record: str, text: str) -> bool:
 def worktree_digests(root: Path) -> list[str]:
     """The 8-character record digests of every worktree `git worktree list` names for this root.
 
-    The listing is this repository's, so a record of another repository is never derived; a worktree
-    whose directory is gone is no place a record can stand in, and its digest stays out too.
+    The listing is this repository's, including worktrees whose directories are missing.
     """
     try:
         listing = _git_output(root, "worktree", "list", "--porcelain")
@@ -3491,8 +3490,6 @@ def worktree_digests(root: Path) -> list[str]:
         if not line.startswith("worktree "):
             continue
         path = Path(line[len("worktree ") :]).resolve()
-        if not path.is_dir():
-            continue
         digest = record_key("", path).rsplit("@", 1)[1]
         if digest not in digests:
             digests.append(digest)
@@ -4919,7 +4916,12 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         print("Unreadable other-worktree loop records: " + ", ".join(unreadable))
     findings_path = folder_of(root, change) / "findings.md"
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
-    last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
+    last = max(
+        max(history_rounds(None, text), default=0),
+        rounds_run(None, text),
+        restart_floor(text),
+        archived_round_floor(change),
+    )
     if not last:
         if lost_record_refusal(change, root, text):
             raise Refused(
@@ -4934,6 +4936,31 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         reason = "reason: " + reason
     append(findings_path, f"Loop restarted: {today()} after round {last} — {reason}")
     print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
+
+
+def archived_round_floor(change: str) -> int:
+    """Highest round assigned in finalized archives for this change."""
+    base = record_base().parent / ARCHIVE_DIR_NAME
+    highest = 0
+    if not base.is_dir():
+        return highest
+    for archive in base.iterdir():
+        if not archive.name.startswith(f"{change}@") or not archive.is_dir():
+            continue
+        try:
+            manifest = json.loads((archive / MANIFEST_NAME).read_text(encoding="utf-8"))
+            if manifest["change"] != change:
+                continue
+            for key in manifest["keys"]:
+                if re.fullmatch(rf"{re.escape(change)}@[0-9a-f]{{8}}", key) is None:
+                    raise ValueError("invalid archive key")
+                record = (archive / key / "loop.md").read_text(encoding="utf-8")
+                highest = max(highest, *(int(m.group().split()[2]) for m in ROUND_HEADING.finditer(record)), 0)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise Refused(
+                f"cannot read supersession archive `{archive}` to establish the restart floor: {error}"
+            ) from error
+    return highest
 
 
 def _supersession_archive_name(archive_base: Path, change: str, digest: str) -> str:
@@ -4975,6 +5002,9 @@ def _supersession_resumes(change: str, superseder: str, keys: list[str], archive
             manifest = json.loads((entry / MANIFEST_NAME).read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             if staging and name.startswith(f"{change}@{superseder.split(chr(64))[-1]}@"):
+                if entry.is_dir() and not any(entry.iterdir()):
+                    found.append({"path": entry, "staging": True, "empty": True})
+                    continue
                 raise Refused(f"staged supersession manifest cannot be read at `{entry}`: {error}") from error
             continue
         if (
@@ -5063,6 +5093,11 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
         if (base / key).is_symlink():
             raise Refused(f"the record directory of `{key}` is a symlink; supersession takes a real record directory.")
     resume = _supersession_resumes(change, current, keys, archive_base)
+    if resume is not None and resume.get("empty"):
+        # Before the manifest exists no records have moved; validate the complete active set.
+        refusal = _supersede_request_refusal(change, root, keys, None)
+        if refusal:
+            raise Refused(refusal)
     refusal = _supersede_request_refusal(change, root, keys, resume)
     if refusal:
         raise Refused(refusal)
@@ -5089,6 +5124,13 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
                 raise Refused(
                     f"the loop record of `{key}` cannot be read; nothing is superseded or archived."
                 ) from error
+        if resume is not None and resume.get("empty"):
+            refusal = _supersede_request_refusal(change, root, keys, None, require_current_free=True)
+            if refusal:
+                raise Refused(refusal)
+            resume["path"].rmdir()
+            print("release-loop: removed empty interrupted staging directory; restarting supersession.")
+            resume = None
         findings_path = folder_of(root, change) / "findings.md"
         text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
         pending = pending_audit_calls(text)
