@@ -418,7 +418,7 @@ def test_make_index_uses_existing_generator(tmp_path: Path, monkeypatch: pytest.
     (fixture / "scripts").mkdir()
     (fixture / "plans" / "one" / "spec.md").write_text(_artefact("One", "bead-1"), encoding="utf-8")
     (fixture / "plans" / "two.md").write_text(_artefact("Two", "bead-2"), encoding="utf-8")
-    for name in ("plans_registry.py", "_verdict.py"):
+    for name in ("plans_registry.py", "_verdict.py", "venv_guard.py"):
         shutil.copy(REPO_ROOT / "scripts" / name, fixture / "scripts" / name)
 
     env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}"}

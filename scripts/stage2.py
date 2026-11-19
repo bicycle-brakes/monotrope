@@ -186,6 +186,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import venv_guard  # noqa: F401
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -6106,8 +6107,9 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
     """A scratch mirror of the worktree whose `scripts/` is the committed one (R-19).
 
     `plans_registry.py` reads its repository root from its own path, so the committed code cannot
-    simply run somewhere else. Every other entry of the worktree is linked into the mirror and its
-    `scripts/` comes from `HEAD`, so the renderer's code is the committed one while the data it
+    simply run somewhere else. Worktree entries except `scripts/` and `.venv` are linked into the mirror;
+    `.venv` is excluded so the guard cannot re-execute committed code under the attempt-controlled interpreter.
+    The mirror’s `scripts/` comes from `HEAD`, so the renderer's code is the committed one while the data it
     renders stays the attempt's. The caller removes the mirror.
 
     This removes one execution path, not all of them (R-19). `make verify` still runs next, from the
@@ -6120,7 +6122,8 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
     mirror = Path(tempfile.mkdtemp(prefix="harness-registry-"))
     try:
         for entry in root.iterdir():
-            if entry.name != "scripts":
+            # No `.venv`: the mirror's venv guard would re-exec into it (bead coding-harness-s55e).
+            if entry.name not in ("scripts", ".venv"):
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
             archive = run_git(root, "archive", "--format=tar", "HEAD", "scripts/", env=env)
