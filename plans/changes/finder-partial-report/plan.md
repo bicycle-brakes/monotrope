@@ -28,10 +28,11 @@ Starts unless you say stop.
 
 ## Files and steps
 
-1. Change `scripts/stage2_research_map.py`: define one JSON Schema for the existing four nonempty lists and entry rules; use it for strict validation and entry-level filtering, preserving duplicate-key and outer-shape failures, per-entry errors and the fixed empty-after-filter marker in the spec. Keep exact-union validation unchanged.
-2. Change `scripts/stage2_research_run.py`: pass that schema to Claude finder calls and embed it in Pi finder prompts; correctly extract Claude's schema-enforced response through the existing payload path. Filter the first successful answer before merge without a retry, persist `ok` plus `filtered` details, publish them in the manifest and a partial fence, and reuse them on resume. Preserve failure and refusal handling and ensure filtered entries do not enter map gaps.
-3. Change `tests/test_stage2_research_map.py` and `tests/test_stage2_swarm.py`: test the schema, boundaries, merge, publication and resume with deterministic stand-ins, including mixed faults and all-invalid categories. Change `tests/test_stage2_research_deep_review.py` if needed to hold finder prompt separation when the schema is included.
-4. Update this change's `spec.md`, `plan.md` and `findings.md` as work advances. No held path is assigned to the implementation attempt; the orchestrator handles any derived index, commit and pull request.
+1. Orchestrator bootstrap after the accepted implementation attempt: create `prompts/research-swarm/finder-locator.schema.json` as the single schema for the four nonempty lists and required nonblank strings; change `prompts/research-swarm/finder.md` to replace its entry-format prose with a reference to the appended schema. Both paths are held and must not be edited by the implementation attempt; its tests use temporary fixtures until the orchestrator installs the canonical files.
+2. Change `scripts/stage2_research_map.py`: read that schema and interpret its supported keywords, refusing unknown keywords; provide strict validation and entry-level filtering, per-entry errors and the fixed empty-after-filter marker. Preserve duplicate-key, outer-shape and exact-union failures.
+3. Change `scripts/stage2_research_run.py`: append the schema to the shared finder prompt; use `--output-format json --json-schema` for Claude finders only, extract and serialize `structured_output`, classify missing output as invalid and nonzero or error results as failed. Filter the first successful answer without retry, persist `ok` plus `filtered`, publish those details without the raw answer in a filtered-success partial fence and in the manifest, and reuse them on resume. Preserve other failure boundaries and exclude rejected entries from map gaps.
+4. Change `tests/test_stage2_research_map.py` and `tests/test_stage2_swarm.py`: cover the schema, boundaries, merge, publication and resume with deterministic stand-ins. Change `tests/test_stage2_research_deep_review.py` if needed for the shared prompt.
+5. Update this change's `spec.md`, `plan.md` and `findings.md` as work advances. The orchestrator handles held paths, any derived index, commit and pull request.
 
 Explore fallback, 2026-11-19: Stage 1 via `claude-code-plan`, model `claude-haiku-5-5`, because GLM via Z.ai returned `claude-code:unrecognized_model` (research.md).
 
@@ -40,11 +41,13 @@ Explore fallback, 2026-11-19: Stage 1 via `claude-code-plan`, model `claude-haik
 ```sh
 .venv/bin/python -m pytest tests/test_stage2_research_map.py tests/test_stage2_swarm.py tests/test_stage2_research_deep_review.py -q
 python3 scripts/check_interview_minimums.py --change finder-partial-report
-python3 scripts/validate_change_artefacts.py --check
+python3 scripts/check_criterion_ledger.py
+python3 scripts/check_research_handoff.py
+python3 scripts/plans_registry.py --check
 make verify
 ```
 
-Do not touch model configuration, security checks, topic validation, prompts, templates or other change folders. The runner owns full verification and the final commit.
+Do not touch model configuration, security checks, topic validation, other prompts, templates or other change folders. The runner owns full verification and the final commit.
 
 ## Criterion ledger
 
@@ -62,7 +65,16 @@ Do not touch model configuration, security checks, topic validation, prompts, te
 - 12: not yet written tests/test_stage2_swarm.py::test_finder_invalid_outer_shape_stops — invalid JSON or outer shape reaches merge.
 - 13: not yet written tests/test_stage2_swarm.py::test_finder_failure_and_refusal_still_stop — a failed or refused call reaches merge.
 
+- 14: not yet written tests/test_stage2_swarm.py::test_claude_finder_stores_structured_output — the envelope or result text is stored instead.
+- 15: not yet written tests/test_stage2_swarm.py::test_claude_finder_missing_structured_output_is_invalid — missing output is accepted or marked failed.
+- 16: not yet written tests/test_stage2_swarm.py::test_claude_finder_error_result_is_failed — an error result is accepted or marked invalid.
+- 17: not yet written tests/test_stage2_swarm.py::test_filtered_success_partial_fence_omits_raw_answer — required fields are missing or raw answer is published.
+- 18: not yet written tests/test_stage2_swarm.py::test_finder_shared_prompt_and_hash_include_schema — prompts or hashes differ or the schema is absent.
+- 19: not yet written tests/test_stage2_research_map.py::test_finder_schema_rejects_unknown_keyword — an unknown keyword is silently ignored.
+- 20: not yet written tests/test_stage2_swarm.py::test_non_finder_claude_keeps_text_output — another seat uses JSON output.
+
 ## Time used
 
 2026-11-19 14:42:57–14:44:52 UTC, 114 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-19 14:55:55–14:57:56 UTC, 121 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-19 15:04:46–15:06:29 UTC, 103 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
