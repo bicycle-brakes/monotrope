@@ -516,3 +516,5 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-19: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
 
 Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1117 files, 4707 commits, 12 rules.
+
+Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1117 files, 4710 commits, 12 rules.
