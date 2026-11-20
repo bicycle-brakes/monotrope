@@ -5,7 +5,7 @@ status: draft
 implementation_status: none
 date: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-kpo7
@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 neighbours:
   - plans/changes/archive/2026-09-29-frontmatter-current/spec.md
   - plans/changes/archive/2026-11-06-provenance-location/spec.md
-produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-19"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-19", model: "Opus 5.5"}
 tags: [interview]
 ---
 

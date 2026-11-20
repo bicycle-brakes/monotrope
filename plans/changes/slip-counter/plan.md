@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-bxxt.7
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-13"}
+produced_by: {kind: llm-session, name: codex, version: "2026-11-13", model: "gpt-6.1-sol"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, verification, run-log]
 ---
