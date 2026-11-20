@@ -337,7 +337,7 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MINOR | SPEC | current diff | tests/test_provenance.py:255 | The test intended to check citations before and after a trusted envelope uses an absolute temporary path outside `REPO_ROOT`. The path therefore is not recognised as a change’s `research.md`, and the whole text is scanned without parsing the envelope. No test checks that a citation after a trusted envelope is reported while the envelope remains exempt. [Acceptance criteria 2 and 3] | Codex | open | — |
+| R-1 | MINOR | SPEC | current diff | tests/test_provenance.py:255 | The test intended to check citations before and after a trusted envelope uses an absolute temporary path outside `REPO_ROOT`. The path therefore is not recognised as a change’s `research.md`, and the whole text is scanned without parsing the envelope. No test checks that a citation after a trusted envelope is reported while the envelope remains exempt. [Acceptance criteria 2 and 3] | Codex | fixed — tests/test_provenance.py::test_undated_citations_outside_runner_envelopes_are_reported (orchestrator hand repair 1bffcd2c, MINOR on tests) | no |
 
 Phase 6 verdict: codex 01a1f7ad-2d5a-7142-ab90-0758c1ac1157, 2026-11-20
 Reviewer session: codex 01a1f7ad-2d5a-7142-ab90-0758c1ac1157 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
