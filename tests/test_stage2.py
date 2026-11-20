@@ -8314,6 +8314,7 @@ def test_spec_review_retries_then_falls_back(
 
 
 def test_fallback_review_has_worktree_read_access(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L2-10: the fallback reviewer gets the read tools and the worktree, not the tool-less free mode."""
     pin_spec_review(world)
     monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
     calls = []
@@ -8328,22 +8329,28 @@ def test_fallback_review_has_worktree_read_access(world: World, monkeypatch: pyt
     assert calls and not calls[0].get("free", False)
 
 
-def test_legacy_review_accepts_blank_before_heading(world: World) -> None:
-    text = opus_review_block(world, day="2026-11-17", fingerprint=None)
-    text = text.replace("\n## Phase 2a", "\n\n## Phase 2a")
+@pytest.mark.parametrize("fingerprint", [None, "current"], ids=["legacy", "fingerprinted"])
+def test_a_blank_line_between_call_line_and_heading_still_qualifies(world: World, fingerprint: str | None) -> None:
+    """L2-5: the call line qualifies a block when it is the nearest non-blank line above the heading."""
+    text = opus_review_block(world, day="2026-11-17", fingerprint=fingerprint)
+    assert "\n## Phase 2a" in text
+    text = text.replace("\n## Phase 2a", "\n\n\n## Phase 2a")
     blocks = stage2.spec_review_blocks(text)
     assert len(blocks) == 1 and blocks[0].audit_matches
+    prose = text.replace("\n\n\n## Phase 2a", "\n\nA note between.\n\n## Phase 2a")
+    assert not stage2.spec_review_blocks(prose)[0].audit_matches
 
 
-def test_spec_review_refuses_invalid_utf8(world: World) -> None:
-    try:
+def test_spec_review_refuses_a_spec_body_that_is_not_utf8(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L2-15: a spec body that is not UTF-8 ends spec-review with the runner's refusal, never a traceback."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_bytes(spec.read_bytes() + b"\ninvalid \xff byte\n")
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert capsys.readouterr().err.startswith("refused: ")
+    assert world.calls() == []
+    with pytest.raises(stage2.Refused, match="UTF-8"):
         stage2.spec_review_prompt(world.root, "demo", b"invalid \xff")
-    except stage2.Refused as error:
-        assert "UTF-8" in str(error)
-    except UnicodeDecodeError:
-        pytest.fail("invalid UTF-8 must be refused without a traceback")
-    else:
-        pytest.fail("invalid UTF-8 must be refused")
 
 
 BAD_SEVERITY_ANSWERS = [
@@ -8363,6 +8370,13 @@ def test_spec_review_answer_the_stored_reader_rejects_fails_the_call(answer: str
     """L2-1, L2-3, L2-6, L2-7: an answer whose rows the stored reader could not read is no readable review."""
     with pytest.raises(stage2.CallFailed):
         stage2.readable_review(answer)
+
+
+def test_the_spec_review_prompt_states_the_severity_its_reader_takes(world: World) -> None:
+    """L2-1, L2-6: the 2a prompt names the strict severity set, not the free-text convention."""
+    prompt = stage2.spec_review_prompt(world.root, "demo", b"# Spec\n")
+    assert "exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`" in prompt
+    assert "free text" not in prompt
 
 
 def test_an_overwide_ambiguity_row_reads_and_reads_back_open() -> None:
@@ -8607,7 +8621,7 @@ def fourth_round_record(
 def test_fourth_round_is_not_released_by_wording(world: World, text: str) -> None:
     """L2-4, L2-9, L2-13: only a maintainer-answered fourth-round question that authorizes releases a round."""
     (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(text, encoding="utf-8")
-    assert stage2.authorized_extra_rounds(world.root, "demo") == 0
+    assert not stage2.fourth_round_authorized(world.root, "demo")
     seed_review_rounds(world, 3)
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 2
@@ -8615,11 +8629,13 @@ def test_fourth_round_is_not_released_by_wording(world: World, text: str) -> Non
 
 
 def test_one_authorization_releases_exactly_one_extra_round(world: World) -> None:
-    """L2-4: a single recorded authorization admits round four and not round five."""
+    """L2-4: recorded authorizations admit round four and never round five."""
     (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
-        fourth_round_record("Q-20", "Authorised — one fourth round"), encoding="utf-8"
+        fourth_round_record("Q-20", "Authorised — one fourth round")
+        + fourth_round_record("Q-21", "authorized — another round"),
+        encoding="utf-8",
     )
-    assert stage2.authorized_extra_rounds(world.root, "demo") == 1
+    assert stage2.fourth_round_authorized(world.root, "demo")
     seed_review_rounds(world, 3)
     world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("spec-review") == 0

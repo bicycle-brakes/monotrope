@@ -332,6 +332,14 @@ PHASE6_ANSWER_FORMAT = (
     )
     + f"\n{PHASE6_GUARD_EVIDENCE}"
 )
+# The spec review's answer instruction states the one severity set its reader takes (loop rows
+# L2-1 and L2-6 of mandatory-spec-review): a word of the reviewer's own would fail the call.
+SPEC_REVIEW_ANSWER_FORMAT = ANSWER_FORMAT.replace(
+    "The severity cell is free text (BLOCKER, MAJOR or MINOR is the convention); the orchestrator\n"
+    "decides what is taken, so a word of your own is not a fault.\n",
+    "The severity cell is exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`;\n"
+    "any other severity makes the whole answer unreadable.\n",
+)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
 # evidence; phase 6 explicitly refuses malformed evidence even beside findings.
 GUARD_EVIDENCE_LINE = re.compile(
@@ -3714,7 +3722,7 @@ def spec_review_prompt(root: Path, change: str, body: bytes) -> str:
     except UnicodeDecodeError as error:
         raise Refused(f"plans/changes/{change}/spec.md cannot be read as UTF-8 ({error}).") from error
     extra = "## The spec body under review\n\n" + decoded
-    return phase_prompt(root, "02a-spec-review.md", change, extra)
+    return phase_prompt(root, "02a-spec-review.md", change, extra, answer_format=SPEC_REVIEW_ANSWER_FORMAT)
 
 
 def spec_review_call_config(root: Path) -> dict:
@@ -3961,7 +3969,7 @@ def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None
     return None
 
 
-def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecReviewBlock], str]:
+def qualifying_reviews(text: str) -> tuple[list[SpecReviewBlock], str]:
     """The change's qualifying spec-review blocks, in findings order, and the blocks left out.
 
     Qualifying (spec terms): an Opus 5.5 or declared-fallback block with readable rows or the
@@ -4070,7 +4078,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
         current = spec_body_fingerprint(folder / "spec.md")
     except (OSError, UnicodeDecodeError) as error:
         return ReviewAdmission(klass=klass, review_problem=f"plans/changes/{change}/spec.md cannot be read ({error}).")
-    kept, left_out = qualifying_reviews(root, change, text)
+    kept, left_out = qualifying_reviews(text)
     if not kept:
         detail = f" The blocks read were left out: {left_out}." if left_out else ""
         return ReviewAdmission(
@@ -4149,22 +4157,22 @@ FOURTH_ROUND_TITLE = re.compile(r"fourth spec-review round\b", re.I)
 FOURTH_ROUND_GRANT = re.compile(r"[\"'`\s]*authori[sz]ed\b", re.I)
 
 
-def authorized_extra_rounds(root: Path, change: str) -> int:
-    """How many rounds beyond the third decisions.md lets the maintainer's answers release (spec criterion 3).
+def fourth_round_authorized(root: Path, change: str) -> bool:
+    """Whether the maintainer's answer in decisions.md releases this change's one fourth review round (spec criterion 3).
 
-    Each counts only as a question of this change, headed `Q-<n> · Fourth spec-review round`,
-    answered by the maintainer (the interview reader's own selection) with an answer that begins
-    `authorized` - one such record releases exactly one round. A note that merely quotes the rule,
-    or an answer that declines, releases none; no wording elsewhere in the file counts.
+    Only a question of this change counts, headed `Q-<n> · Fourth spec-review round` and answered
+    by the maintainer (the interview reader's own selection, `maintainer_answers`) with an answer
+    that begins `authorized`. It releases round four and nothing beyond it: after four rounds the
+    change is re-sliced. A note that merely quotes the rule, or an answer that declines, releases
+    nothing; no wording elsewhere in the file counts.
     """
     try:
         text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return 0
-    return sum(
-        1
+        return False
+    return any(
+        FOURTH_ROUND_TITLE.match(record["title"]) and FOURTH_ROUND_GRANT.match(record["answer"])
         for record in check_interview_minimums.maintainer_answers(text)
-        if FOURTH_ROUND_TITLE.match(record["title"]) and FOURTH_ROUND_GRANT.match(record["answer"])
     )
 
 
@@ -4256,7 +4264,7 @@ def spec_review(root: Path, change: str) -> None:
     ctx = preflight(root, change, OPUS)
     config = spec_review_call_config(root)
     findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    kept, _left_out = qualifying_reviews(root, change, findings_text)
+    kept, _left_out = qualifying_reviews(findings_text)
     rounds = review_rounds(kept)
     recheck = False
     if kept:
@@ -4266,12 +4274,12 @@ def spec_review(root: Path, change: str) -> None:
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
         recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
-    if not recheck and rounds >= 3 and rounds - 2 > authorized_extra_rounds(root, change):
+    if not recheck and rounds >= 3 and not (rounds == 3 and fourth_round_authorized(root, change)):
         raise Refused(
-            f"{rounds} spec-review rounds have run for {change}; round {rounds + 1} runs only when "
+            f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
             f"plans/changes/{change}/decisions.md holds a question headed `Q-<n> · Fourth spec-review round`, "
-            "answered by the maintainer with an answer that begins `authorized` (one such record releases "
-            "one round), or the change is re-sliced."
+            "answered by the maintainer with an answer that begins `authorized`, and no round runs after "
+            "the fourth; otherwise the change is re-sliced."
         )
     spec = ctx.folder / "spec.md"
     body = spec_body_bytes(spec)
