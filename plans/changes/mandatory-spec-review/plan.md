@@ -92,3 +92,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 06:21:00–06:22:06 UTC, 66 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-20 06:22:15–07:04:47 UTC, 2552 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-20 07:04:55–07:08:18 UTC, 203 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-20 07:09–07:20 UTC — repair · round 2 · orchestrator hand finishing (Opus subagent) on runner attempt 3 (Sonnet): ruff ARG001 fixed, one interview-record reader for the fourth round (round four only), strict severity in the 2a answer format, row-named tests; targeted tests green (106), full `tests/test_stage2.py` green (2165 passed, 1 skipped); full `make verify` green (6384 passed, 17 skipped; 778 s execution) · measured with `date -u`
