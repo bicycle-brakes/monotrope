@@ -29,6 +29,7 @@ asked: 2026-11-19
 answer: "A: Retry + Rest behalten (Empf.)" — in English: the finder seat is asked once more with the exact validation error; if its second answer still fails, the runner keeps the valid locator entries, records the dropped ones as a gap in the run record, and the run continues; the requirement that every locator names a path and an exact symbol or section stays.
 answered_by: maintainer
 status: answered
+superseded_by: Q-2 (the retry in this answer is withdrawn; do not build it, ADR 0020 point 9 forbids it)
 context: |
   Topic: bead coding-harness-yd8w, the finder step of the research swarm.
   Intention: the trust-pyramid-swarm run could not run; finder seat 3 failed twice in two changes.

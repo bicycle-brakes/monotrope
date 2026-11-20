@@ -470,3 +470,14 @@ def test_unpatterned_string_field_still_checks_type():
     retained, faults = module().filter_locator_report(sample(code=[finder(42)]), compiled)
     assert faults and "must be a string" in str(faults)
     assert retained["code"][0].get("not_read")
+
+
+def test_finder_faults_follow_entry_form() -> None:
+    # L3-4: a dropped entry's errors come from the form its keys aim at, not the closest other form.
+    report = {key: [{"not_read": "not available"}] for key in ("code", "rules", "tests", "neighbours")}
+    report["code"].extend([{"path": 42}, {}])
+    _, rows = module().filter_locator_report(report, schema())
+    assert "the field 'path' must be a string" in rows[0]["errors"]
+    assert "the required field 'reference' is missing" in rows[0]["errors"]
+    assert all("not_read" not in error for error in rows[0]["errors"])
+    assert "the required field 'path' is missing" in rows[1]["errors"]

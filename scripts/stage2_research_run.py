@@ -81,10 +81,27 @@ def free_slot_id(stage: str, topic: int, model: str) -> str:
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
 SWARM_PUBLISHER = "stage2-research-swarm"  # produced_by.name of a publication the whole swarm wrote
 BRIEF_DAY = "0000-00-00"  # the fixed day the private brief's corrected header carries, so it never varies by run
+# The Claude finder call depends on the CLI's `--json-schema` option and its JSON result envelope
+# (`structured_output`, `is_error`, `subtype`). Declared like the judge's minimum_claude_code_version:
+# the minimum is the version on which the option was read (decisions.md S-9), not the version that
+# introduced it, which no source read here names. A CLI below it stops the finder stage before any call.
+CLAUDE_FINDER_STRUCTURED_OUTPUT = {
+    "minimum_claude_code_version": "2.1.328",
+    "read_on": "2026-11-19",
+    "basis": "installed version on which --json-schema and --output-format json were read; not the first version",
+    "sources": [
+        "https://code.claude.com/docs/en/cli-reference",
+        "https://code.claude.com/docs/en/agent-sdk/typescript",
+    ],
+}
 LOCATOR_SCHEMA = "finder-locator.schema.json"  # the one locator format, beside the finder prompt (Q-3, S-13)
-# A result subtype naming a turn, budget or API limit means the call ended before the
-# model answered: a failed call, never an invalid report (criterion 16, decisions S-15).
-LIMITED_FINDER_SUBTYPE = re.compile(r"turn|budget|api", re.IGNORECASE)
+# The error subtypes of a result that ended before the model answered: the turn limit, the budget
+# limit, and an execution error (API errors and startup failures) - a failed call, never an invalid
+# report (criterion 16, decisions S-15). Read on 2026-11-20 from the SDKResultMessage type in
+# https://code.claude.com/docs/en/agent-sdk/typescript, whose error arm declares exactly these plus
+# `error_max_structured_output_retries`; that one means the model answered without a schema-conforming
+# answer, so it stays an invalid report (S-15). The set is read only together with `is_error: true`.
+LIMITED_FINDER_SUBTYPES = frozenset({"error_max_turns", "error_max_budget_usd", "error_during_execution"})
 EMPTY_PACKET_GAP = "no neighbour given or found"  # criterion 7, decisions.md S-45
 # The runner's own rule for the judge, below the checked-in instructions (deep review RS-1-5): an unresolved claim
 # outside every disagreement would leave no handoff item, so validate_judge refuses such an answer.
@@ -185,7 +202,7 @@ def claude_finder_output(stdout: str) -> tuple[str, dict | None, dict | None]:
             object_pairs_hook=stage2_research_map._json_object,
             parse_constant=stage2_research_map._bad_json_constant,
         )
-    except ValueError:
+    except (ValueError, RecursionError):
         envelope = None
     if not isinstance(envelope, dict):
         return "", None, None
@@ -792,7 +809,13 @@ class Run:
         if result.outcome != "ok":
             return
         subtype = envelope.get("subtype") if isinstance(envelope, dict) else None
-        if structured is None and isinstance(subtype, str) and LIMITED_FINDER_SUBTYPE.search(subtype):
+        if (
+            structured is None
+            and envelope
+            and envelope.get("is_error") is True
+            and isinstance(subtype, str)
+            and subtype in LIMITED_FINDER_SUBTYPES
+        ):
             record["outcome"] = "failed"
             record["error"] = f"the Claude finder call ended before an answer: {subtype}"
         elif structured is None:
@@ -1349,8 +1372,26 @@ class Run:
             names = ", ".join(f"{r['slot_id']} ({r['outcome']})" for r in bad)
             raise Stop(f"{what} failed: {names}; no later stage starts.", 1)
 
+    def check_claude_finder_version(self) -> None:
+        """Stop before any finder call when the installed Claude Code is below the declared minimum (L3-3)."""
+        minimum = CLAUDE_FINDER_STRUCTURED_OUTPUT["minimum_claude_code_version"]
+        try:
+            result = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=10, check=False)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise Stop(f"Claude Code version check failed before the finder calls: {error}", 1) from error
+        match = re.match(r"^(\d+)\.(\d+)\.(\d+)", result.stdout.strip())
+        found = ".".join(match.groups()) if match else "unreadable"
+        if result.returncode or not match or tuple(map(int, match.groups())) < tuple(map(int, minimum.split("."))):
+            raise Stop(
+                f"Claude Code {minimum} or newer is required for the finder's --json-schema "
+                f"(read on {CLAUDE_FINDER_STRUCTURED_OUTPUT['read_on']}); installed: {found}.",
+                1,
+            )
+
     def stage_finders(self) -> None:
         self.load_locator_schema()
+        if any(stage2_swarm.LAUNCHERS[seat["endpoint"]] == "claude-code" for seat in self.roles["finder_agents"]):
+            self.check_claude_finder_version()
         prompt = self.finder_prompt()
         entries = []
         for number, seat in enumerate(self.roles["finder_agents"], 1):
@@ -1358,7 +1399,7 @@ class Run:
 
         def valid(_entry, record) -> bool:
             try:
-                stage2_research_map.validate_locator_report(payload_text(record["stdout"]), self.locator_schema)
+                stage2_research_map.filter_locator_report(payload_text(record["stdout"]), self.locator_schema)
             except stage2_research_map.ResearchMapError:
                 return False
             return True
@@ -1757,9 +1798,9 @@ class Run:
             slots.append(
                 {
                     **{
-                        k: record.get(k)
-                        for k in ("slot_id", "stage", "topic", "seat", "endpoint", "model", "required", "filtered")
+                        k: record.get(k) for k in ("slot_id", "stage", "topic", "seat", "endpoint", "model", "required")
                     },
+                    **({"filtered": record["filtered"]} if record.get("filtered") else {}),
                     "prompt_sha256": record.get("prompt_sha256"),
                     "outcome": record["outcome"],
                     "attempt": record.get("attempt"),

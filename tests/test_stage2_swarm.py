@@ -207,24 +207,13 @@ def finder_steps(step: dict | list) -> dict:
     Pi seats read the answer as text; the Claude seat's answer rides the result
     envelope's structured_output, so a JSON-object stdout is wrapped for it. A stdout
     that is no JSON object (a fault answer) passes through unchanged. The generic
-    `finder` key carries the Pi step for a seat a test substitutes into the selection
-    (the stand-in falls back to it when no per-model key names the seat's model).
+    `finder` key carries the step for any substituted seat; the stand-in wraps it
+    only when the selected launcher is Claude Code.
     """
     if isinstance(step, list):
         per_step = [finder_steps(one) for one in step]
         return {key: [item for part in per_step for item in part[key]] for key in per_step[0]}
-    try:
-        body = json.loads(step.get("stdout", ""))
-    except ValueError:
-        body = None
-    if isinstance(body, dict) and "structured_output" not in body:
-        wrapped = {**step, "stdout": claude_finder_envelope(body)}
-    else:
-        wrapped = step
-    steps = {
-        f"finder:None:{model}": [dict(wrapped if model == "claude-haiku-5-5" else step)] for model in FINDER_MODELS
-    }
-    return {**steps, "finder": [dict(step)]}
+    return {"finder": [{**step, "wrap_claude_finder": True}]}
 
 
 def partials_of(text: str) -> list[dict]:
@@ -307,6 +296,9 @@ scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = read_records(log)
 argv = sys.argv[1:]
+if name == "claude" and argv == ["--version"]:
+    sys.stdout.write(scenario.get("claude_version", "2.1.328 (Claude Code)") + "\\n")
+    raise SystemExit(0)
 if name == "pi" and argv == ["--version"]:
     append_record(here / "infrastructure.jsonl", {"path": program_path, "argv": argv})
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
@@ -388,6 +380,14 @@ for relative, text in step.get("plant", {}).items():
 for relative, text in step.get("append", {}).items():
     text_append(Path(relative), text.replace("@KEY@", key))
 stdout = step.get("stdout", "")
+if kind == "finder" and name == "claude" and step.get("wrap_claude_finder"):
+    try:
+        body = json.loads(stdout)
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and "structured_output" not in body and body.get("type") != "result":
+        stdout = json.dumps({"type": "result", "subtype": "success", "is_error": False,
+                             "result": "The finder located the value.", "structured_output": body})
 if stdout == "AUTO" and kind == "merge":
     merged = {category: {} for category in ("code", "rules", "tests", "neighbours")}
     for finder, body in re.findall(r"## Finder (\\S+)\\n\\n(.*?)(?=\\n\\n## Finder |\\Z)", prompt, re.S):
@@ -4595,8 +4595,8 @@ def test_claude_finder_missing_structured_output_is_invalid(sworld: SwarmWorld, 
     [
         pytest.param(1, claude_finder_envelope(), id="exit"),
         pytest.param(0, limit_envelope("error_max_turns"), id="turns"),
-        pytest.param(0, limit_envelope("error_budget_exhausted"), id="budget"),
-        pytest.param(0, limit_envelope("error_api_overloaded"), id="api"),
+        pytest.param(0, limit_envelope("error_max_budget_usd"), id="budget"),
+        pytest.param(0, limit_envelope("error_during_execution"), id="api"),
         pytest.param(1, '{"type": "result", "sub', id="half-envelope"),
     ],
 )
@@ -4781,3 +4781,80 @@ def test_undecodable_finder_schema_stops_cleanly(sworld: SwarmWorld) -> None:
     text = sworld.research.read_text(encoding="utf-8")
     assert "incomplete" in status_line(text)
     assert stage2_research_run.LOCATOR_SCHEMA in text
+
+
+def test_finder_deep_envelope_is_invalid_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # L3-1: a RecursionError from the envelope reader must not escape the terminal callback.
+    # The decoder's recursion limit depends on the Python build, so plant its
+    # failure directly: the envelope reader must treat it as an invalid envelope.
+    def too_deep(*_args, **_kwargs):
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON array")
+
+    monkeypatch.setattr(stage2_research_run.json, "loads", too_deep)
+    try:
+        stored, structured, envelope = stage2_research_run.claude_finder_output("[" * 2000 + "]" * 2000)
+    except RecursionError:
+        pytest.fail("a deeply nested envelope must be invalid, not crash the terminal callback")
+    assert (stored, structured, envelope) == ("", None, None)
+
+
+@pytest.mark.parametrize(
+    "subtype,is_error,expected",
+    [
+        ("error_during_execution", True, "failed"),
+        ("apiary", True, "invalid-report"),
+        ("error_max_turns", False, "invalid-report"),
+    ],
+)
+def test_finder_limit_requires_declared_error_subtype(sworld: SwarmWorld, subtype, is_error, expected) -> None:
+    # L3-2: the failed-call outcome reads is_error and the documented limit subtypes, not a substring.
+    envelope = json.loads(claude_finder_envelope_without_structured())
+    envelope.update(subtype=subtype, is_error=is_error)
+    sworld.complete(**{"finder:None:claude-haiku-5-5": [{"stdout": json.dumps(envelope)}]})
+    assert sworld.run() == 1
+    assert next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-3")["outcome"] == expected
+
+
+def test_finder_old_claude_stops_before_calls(sworld: SwarmWorld) -> None:
+    # L3-3: a Claude Code below the declared --json-schema minimum stops before any finder call.
+    sworld.complete(claude_version="2.1.327")
+    assert sworld.run() == 1
+    assert not sworld.calls("finder")
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    minimum = stage2_research_run.CLAUDE_FINDER_STRUCTURED_OUTPUT["minimum_claude_code_version"]
+    assert minimum == "2.1.328" and f"Claude Code {minimum} or newer" in text and "installed: 2.1.327" in text
+
+
+def test_manifest_filtered_field_only_on_filtered_seat(sworld: SwarmWorld) -> None:
+    # L3-5: only a seat whose answer was filtered carries `filtered` in the manifest.
+    sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": partial_finder_report()}]})
+    assert sworld.run() == 0
+    slots = manifest_of(sworld)["slots"]
+    assert [s["slot_id"] for s in slots if "filtered" in s] == ["finders-0-1"]
+
+
+def test_resume_filters_legacy_success_without_relaunch(sworld: SwarmWorld) -> None:
+    # L3-7: a stored ok finder record with entry faults is filtered and reused on resume, not relaunched.
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-1.result.json"
+    record = json.loads(path.read_text())
+    record["stdout"] = partial_finder_report()
+    record.pop("sha256")
+    path.write_text(json.dumps(stage2_research_store._seal(record)))
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete()
+    assert sworld.run() == 0
+    assert not sworld.calls("finder")
+    assert next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")["filtered"] == dropped_row()
+
+
+def test_finder_all_entries_dropped_stops(sworld: SwarmWorld) -> None:
+    # L3-8: a seat whose filtering empties every category stops as invalid-report.
+    bad = json.dumps({key: [{"path": 42}] for key in ("code", "rules", "tests", "neighbours")})
+    sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": bad}]})
+    assert sworld.run() == 1
+    assert not sworld.calls("merge")
+    assert next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")["outcome"] == "invalid-report"

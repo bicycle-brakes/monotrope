@@ -244,13 +244,15 @@ def _field_schema(where, schema):
 def _entry_faults(entry, branches):
     """The faults of one entry against the schema's entry forms; empty when one form matches.
 
-    The faults come from the closest form (fewest faults, schema order on a tie), so a
-    dropped entry records the errors that apply to it and nothing else (S-1, S-4).
+    Keys that identify one form select that form. Otherwise use the closest form
+    (fewest faults, schema order on a tie).
     """
     if not isinstance(entry, dict):
         return ["the entry must be a JSON object"]
     closest = None
-    for branch in branches:
+    aimed = [branch for branch in branches if set(entry) & set(branch["fields"])]
+    candidates = aimed if len(aimed) == 1 else (branches[:1] if not entry else branches)
+    for branch in candidates:
         foreign = sorted(set(entry) - set(branch["fields"]))
         faults = [f"the field '{name}' is not part of the entry form" for name in foreign]
         faults += [f"the required field '{name}' is missing" for name in sorted(branch["required"] - set(entry))]
@@ -289,6 +291,7 @@ def filter_locator_report(report, schema):
     if not isinstance(report, dict) or set(report) != set(shape):
         raise ResearchMapError("the finder answer must hold exactly the schema's locator categories")
     retained, rows = {}, []
+    kept_count = 0
     for category, compiled in shape.items():
         values = report[category]
         if not isinstance(values, list) or len(values) < compiled["min_items"]:
@@ -300,7 +303,10 @@ def filter_locator_report(report, schema):
                 rows.append({"category": category, "index": index, "entry": entry, "errors": faults})
             else:
                 kept.append(entry)
+        kept_count += len(kept)
         retained[category] = kept or [{"not_read": FILTERED_MARKER}]
+    if not kept_count:
+        raise ResearchMapError("finder report has no valid entries after locator validation")
     return retained, rows
 
 
