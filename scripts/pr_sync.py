@@ -61,6 +61,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
+import venv_guard  # noqa: F401
 import yaml
 from plans_registry import REQUIRED
 

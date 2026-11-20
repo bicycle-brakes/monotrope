@@ -49,6 +49,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import venv_guard  # noqa: F401
 import yaml
 
 SCRIPT_DIR = Path(__file__).resolve().parent
