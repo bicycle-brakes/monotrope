@@ -463,6 +463,12 @@ def cmd_end(args: argparse.Namespace) -> int:
     return 0
 
 
+class _Event(dict):
+    """A parsed record retaining its original bytes for duplicate detection."""
+
+    raw: bytes
+
+
 def _read_events(source: Path | None = None) -> tuple[list[dict], list[str]]:
     """The valid version-1 events in file order, plus one diagnostic per unreadable line.
 
@@ -509,7 +515,9 @@ def _read_events(source: Path | None = None) -> tuple[list[dict], list[str]]:
         if type(event.get("v")) is not int or event["v"] != EVENT_VERSION:
             findings.append(f"line {number}: unsupported event version {event.get('v')!r}; expected {EVENT_VERSION}")
             continue
-        events.append(event)
+        record = _Event(event)
+        record.raw = raw_line
+        events.append(record)
     return events, findings
 
 
@@ -593,12 +601,16 @@ def _runs(
             damaged.add(run_id)
         if kind == RUN_START:
             if run_id in runs:
-                if runs[run_id]["start"] == event:
+                if (
+                    getattr(runs[run_id]["start"], "raw", None) == getattr(event, "raw", None)
+                    and runs[run_id]["start"] == event
+                ):
                     continue  # an identical duplicate is a retried append, not a conflict
+                runs[run_id]["starts"].append(event)
                 findings.append(f"a second start for run {run_id}")
                 damaged.add(run_id)
                 continue
-            runs[run_id] = {"start": event, "gates": [], "end": None}
+            runs[run_id] = {"start": event, "starts": [event], "gates": [], "end": None, "ends": []}
             order.append(run_id)
         elif run_id not in runs:
             unassigned += 1
@@ -613,9 +625,11 @@ def _runs(
             runs[run_id]["gates"].append(event)
         elif runs[run_id]["end"] is None:
             runs[run_id]["end"] = event
-        elif runs[run_id]["end"] == event:
+            runs[run_id]["ends"].append(event)
+        elif getattr(runs[run_id]["end"], "raw", None) == getattr(event, "raw", None) and runs[run_id]["end"] == event:
             continue  # an identical duplicate is a retried append, not a conflict
         else:
+            runs[run_id]["ends"].append(event)
             findings.append(f"a second end for run {run_id}")
             damaged.add(run_id)
     for run_id in damaged:
@@ -867,7 +881,15 @@ def _collect(
         tree_start = _text(start.get("tree_id"))
         tree_end = _text(end.get("tree_id")) if end is not None and run_id not in damaged else None
         config = _text(start.get("config_sha256"))
-        trees = {tree_start, tree_end}
+        trees = {tree_start, tree_end, *(_text(row.get("tree_id")) for row in [*run["starts"], *run["ends"]])}
+        if any(row.get("check_kind") != kind for row in run["starts"]):
+            kind = None
+        if any(row.get("change") != start.get("change") for row in run["starts"]):
+            change = None
+        if any(row.get("config_sha256") != start.get("config_sha256") for row in run["starts"]):
+            config = None
+        moments = [_instant(row.get("utc")) for row in run["starts"]]
+        moment = min((value for value in moments if value is not None), default=moment)
         certain = not outside and kind in CHECK_KINDS and valid_end and bool(change and tree_start and config)
         if kind == "targeted":
             certain = certain and tree_end == tree_start  # both readings must exist and agree

@@ -2235,3 +2235,37 @@ def test_unavailable_repository_scope_is_named(tmp_path, monkeypatch, capsys):
     _write_history(tmp_path / "state", [])
     code, out, _ = _slips(capsys)
     assert code == 1 and "repository unavailable" in out, out
+
+
+def test_conflicting_starts_preserve_possible_intervening_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def build(repository: str) -> list[dict]:
+        first = _check("t-2", "targeted", _at("09:10"), _at("09:20"), "red", repository, tree="other")
+        alternate = {**first[0], "tree_id": TREE}
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository),
+            first[0],
+            alternate,
+            first[1],
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 3" in out, out
+
+
+@pytest.mark.parametrize("index", [0, 1, 2, 3])
+def test_byte_distinct_duplicate_records_are_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], index: int
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    repository = _measured_repo(tmp_path, monkeypatch)
+    events = _slip_events(repository)
+    path = _write_history(tmp_path / "state", events)
+    if index < 2:
+        path = path.parent / verify_duration.TARGETED_HISTORY_NAME
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps(events[index], separators=(",", ":")) + "\n")
+    code, out, _ = _slips(capsys)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
