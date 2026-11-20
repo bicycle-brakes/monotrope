@@ -1987,8 +1987,6 @@ class Run:
                 # A filtered success publishes its dropped entries only (S-11): the retained
                 # answer already appears in the map, so the raw answer stays out of the fence.
                 partial = {k: record.get(k) for k in ("slot_id", "outcome", "filtered")}
-                if slot_id in self.unstored:
-                    partial["stdout"] = record.get("stdout")
                 parts.append(
                     fence("research-swarm/v2 partial", json.dumps(partial, ensure_ascii=False, sort_keys=True))
                 )

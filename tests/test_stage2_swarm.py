@@ -4765,7 +4765,9 @@ def test_filtered_finder_output_survives_failed_terminal_write(
     sworld.complete(finder=[{"stdout": partial_finder_report()}])
     assert sworld.run() == 1
     partial = next(p for p in partials_of(sworld.research.read_text(encoding="utf-8")) if p.get("filtered"))
-    assert "holds the value" in partial.get("stdout", "")
+    # Criterion 17: the filtered fence never carries the raw answer, even when the write failed.
+    assert "stdout" not in partial
+    assert "holds the value" not in json.dumps(partial)
     assert partial["filtered"] == dropped_row()
 
 

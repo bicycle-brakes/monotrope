@@ -372,3 +372,137 @@ Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1145 files, 4899 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1145 files, 4900 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_run.py` +0 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_pi_contract.py`, `tests/test_research_capture.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [  7%]
+> ........................................................................ [ 14%]
+> ........................................................................ [ 22%]
+> ........................................................................ [ 29%]
+> ........................................................................ [ 37%]
+> ........................................................................ [ 44%]
+> ........................................................................ [ 51%]
+> ........................................................................ [ 59%]
+> ........................................................................ [ 66%]
+> ........................................................................ [ 74%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 89%]
+> .......................................................F................ [ 96%]
+> ..................................                                       [100%]
+> =================================== FAILURES ===================================
+> __________ test_filtered_finder_output_survives_failed_terminal_write __________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2602/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2602/popen-gw2/test_filtered_finder_output_su0/home'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a1c6a50>
+>
+>     def test_filtered_finder_output_survives_failed_terminal_write(
+>         sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         original = stage2_research_store.Store.write_result
+>     
+>         def broken(self, run_id, slot_id, record):
+>             if record.get("filtered"):
+>                 raise stage2_research_store.StoreWriteError("disk full")
+>             return original(self, run_id, slot_id, record)
+>     
+>         monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+>         sworld.complete(finder=[{"stdout": partial_finder_report()}])
+>         assert sworld.run() == 1
+>         partial = next(p for p in partials_of(sworld.research.read_text(encoding="utf-8")) if p.get("filtered"))
+> >       assert "holds the value" in partial.get("stdout", "")
+> E       assert 'holds the value' in ''
+> E        +  where '' = <built-in method get of dict object at 0x10a23dac0>('stdout', '')
+> E        +    where <built-in method get of dict object at 0x10a23dac0> = {'filtered': [{'category': 'code', 'entry': {'path': 'src/gone.py', 'reference': 'value'}, 'errors': ["the required field 'reason' is missing"], 'index': 1}], 'outcome': 'ok', 'slot_id': 'finders-0-1'}.get
+>
+> tests/test_stage2_swarm.py:4768: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research run 489dac22ea29e819f1f527b6acca17f6 is incomplete: incomplete - the research state store failed (disk full).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_filtered_finder_output_survives_failed_terminal_write
+> 1 failed, 969 passed in 377.22s (0:06:17)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/finder-partial-report/stage2/attempts/finder-partial-report/attempt-1-20261120T133824591381Z-9246c005.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1145 files, 4900 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....................................F........                           [100%]
+> =================================== FAILURES ===================================
+> __________ test_filtered_finder_output_survives_failed_terminal_write __________
+> [gw11] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2605/pop...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2605/popen-gw11/test_filtered_finder_output_su0/home'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10775ecc0>
+>
+>     def test_filtered_finder_output_survives_failed_terminal_write(
+>         sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         original = stage2_research_store.Store.write_result
+>     
+>         def broken(self, run_id, slot_id, record):
+>             if record.get("filtered"):
+>                 raise stage2_research_store.StoreWriteError("disk full")
+>             return original(self, run_id, slot_id, record)
+>     
+>         monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+>         sworld.complete(finder=[{"stdout": partial_finder_report()}])
+>         assert sworld.run() == 1
+>         partial = next(p for p in partials_of(sworld.research.read_text(encoding="utf-8")) if p.get("filtered"))
+> >       assert "holds the value" in partial.get("stdout", "")
+> E       assert 'holds the value' in ''
+> E        +  where '' = <built-in method get of dict object at 0x10778ad00>('stdout', '')
+> E        +    where <built-in method get of dict object at 0x10778ad00> = {'filtered': [{'category': 'code', 'entry': {'path': 'src/gone.py', 'reference': 'value'}, 'errors': ["the required field 'reason' is missing"], 'index': 1}], 'outcome': 'ok', 'slot_id': 'finders-0-1'}.get
+>
+> tests/test_stage2_swarm.py:4768: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> INFO  (1):
+>   - leak check clean: 27 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research run 755a3b5640bf39ab3de4a82c795c5e3f is incomplete: incomplete - the research state store failed (disk full).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_filtered_finder_output_survives_failed_terminal_write
+> 1 failed, 45 passed in 20.90s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/finder-partial-report/stage2/attempts/finder-partial-report/attempt-2-20261120T133824591381Z-9246c005.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1145 files, 4900 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
