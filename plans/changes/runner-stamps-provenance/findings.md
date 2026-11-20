@@ -1463,3 +1463,5 @@ Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claud
 > 1 failed, 23 passed in 3.44s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261120T063731768911Z-5b04f1b1.md
 > ```
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1141 files, 4888 commits, 12 rules.
