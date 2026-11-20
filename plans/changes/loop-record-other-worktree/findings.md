@@ -953,7 +953,9 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | scripts/stage2.py `release` | If worktree A was superseded by B, then later supersedes a record from C, A’s release before its first new round can find B’s older archive first. It returns success and may append `Loop rows: superseded by …` instead of refusing without changing findings. [Criterion 10] | Codex | taken — in-spec reproduced fault (criterion 10): release finds the archive of the supersession it belongs to, never an older one of the same worktree, and refuses without changing findings otherwise (provisional agent decision, autonomous run 2026-11-19) | — |
+| F6-1 | MAJOR | SPEC | base | scripts/stage2.py `release` | If worktree A was superseded by B, then later supersedes a record from C, A’s release before its first new round can find B’s older archive first. It returns success and may append `Loop rows: superseded by …` instead of refusing without changing findings. [Criterion 10] | Codex | fixed — tests/test_stage2.py::test_release_refuses_after_new_supersession_despite_old_archive | — |
 
 Phase 6 verdict: codex 01a1f981-3cc7-75d1-9d23-e669f22227c2, 2026-11-20
 Reviewer session: codex 01a1f981-3cc7-75d1-9d23-e669f22227c2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4924 commits, 12 rules.

@@ -1705,6 +1705,23 @@ def test_supersede_release_requires_a_new_round(world: World, capsys) -> None:
     assert stage2.RELEASE_HEADING in world.text() and "L3-1" in world.text()
 
 
+def test_release_refuses_after_new_supersession_despite_old_archive(world: World, capsys) -> None:
+    """An earlier archive of this worktree cannot release its later supersession restart."""
+    other = other_worktree(world)
+    third = other_worktree(world, "repo-c")
+    other_world = World(other, world.bin, world.state)
+    write_foreign_record(world.root, [1])
+    assert supersede(other_world, stage2.record_key("demo", world.root)) == 0
+    git(other, "add", "plans/changes/demo/findings.md")
+    git(other, "commit", "-m", "Record earlier supersession")
+    write_foreign_record(third, [2])
+    assert supersede(world, stage2.record_key("demo", third)) == 0
+    before = world.findings.read_bytes()
+    assert world.run("release-loop") == 2, "an older archive released the new restart"
+    assert "nothing to release" in capsys.readouterr().err
+    assert world.findings.read_bytes() == before, "the refusal changed findings"
+
+
 def test_plain_restart_after_supersession_allows_release(world: World) -> None:
     """A later plain restart restores ordinary release behavior without a fresh round."""
     world.write_findings(

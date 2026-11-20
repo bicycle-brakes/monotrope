@@ -4700,7 +4700,7 @@ def released_overlap_refusal(record: str, text: str) -> str | None:
     )
 
 
-def superseded_by(root: Path, change: str) -> str | None:
+def superseded_by(root: Path, change: str, after_round: int | None = None) -> str | None:
     """Recognize an archive confirmed by the superseder's accounting line."""
     own = record_key(change, root)
     base = record_base().parent / ARCHIVE_DIR_NAME
@@ -4715,6 +4715,11 @@ def superseded_by(root: Path, change: str) -> str | None:
         if archive.name.startswith(STAGING_PREFIX) or not (archive / own / "loop.md").is_file():
             continue
         try:
+            if after_round is not None:
+                archived_record = (archive / own / "loop.md").read_text(encoding="utf-8")
+                rounds = [int(m.group(1)) for m in re.finditer(r"^## Round (\d+) —", archived_record, re.M)]
+                if not rounds or max(rounds) <= after_round:
+                    continue
             manifest = json.loads((archive / MANIFEST_NAME).read_text(encoding="utf-8"))
             superseder = manifest["superseder"]
             if manifest["change"] != change or own not in manifest["keys"]:
@@ -4769,18 +4774,17 @@ def release(root: Path, change: str) -> list[list[str]]:
         )
         return rows
     if record is None:
-        superseder = superseded_by(root, change)
+        refusal = superseded_release_refusal(change, text)
+        # Only an archive with a round after this restart can supersede the new run.
+        superseder = superseded_by(root, change, restart_floor(text) if refusal else None)
         if superseder:
             line = f"Loop rows: superseded by {superseder}"
             if line not in text:
                 append(findings, line)
             return []
-        refusal = lost_record_refusal(change, root, text)
         if refusal:
             raise Refused(refusal)
-        # A supersession restart stands: the archived run is never released, and this worktree has no
-        # rows of its own until a fresh round ran (bead coding-harness-e82i, criteria 10 and 11).
-        refusal = superseded_release_refusal(change, text)
+        refusal = lost_record_refusal(change, root, text)
         if refusal:
             raise Refused(refusal)
     # A record's rows need a verdict of their own: one after the last release and the last restart
