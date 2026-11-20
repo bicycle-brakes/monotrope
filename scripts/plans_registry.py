@@ -24,6 +24,7 @@ import json
 import sys
 from pathlib import Path
 
+import venv_guard  # noqa: F401
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

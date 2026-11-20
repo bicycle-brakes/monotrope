@@ -37,6 +37,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
