@@ -4,13 +4,13 @@ status: draft
 implementation_status: partial
 date: 2026-10-25
 last_reviewed: 2026-10-25
-updated: 2026-10-26
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: to be filed
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-10-25"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-25", model: "Opus 5.5"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions]
 ---

@@ -67,7 +67,7 @@ def _artefact(
     header += [
         "supersedes: null",
         "superseded_by: null",
-        'produced_by: {kind: llm-session, name: fixture, version: "test"}',
+        f'produced_by: {{kind: llm-session, name: codex, version: "{date}"}}',
         "tags: [fixture]",
     ]
     return "\n".join([*header, "---", "", body])

@@ -19,10 +19,14 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import adoption  # noqa: E402
+import plans_registry  # noqa: E402
 import stage2  # noqa: E402
 
-FRONTMATTER = re.compile(r"\A\ufeff?---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.S)
-PROGRAMS = {"claude-code", "codex", "pi", "stage2-research-swarm"}
+FRONTMATTER = plans_registry.FRONTMATTER
+PROGRAMS = plans_registry.PROGRAMS
+is_day = plans_registry.is_day
+producer_record_problems = plans_registry.producer_record_problems
+producer_records_problems = plans_registry.producer_records_problems
 # Q-5 and option C (maintainer, 2026-11-12): the adoption day is read from decisions/adoption.yaml;
 # a file's last change is read from git, never from a date written in the file.
 GATE = "research-census"
@@ -51,46 +55,6 @@ def publication_evidence(body: str) -> tuple[str | None, str | None]:
         raise ValueError("runner publication has no producing endpoint evidence")
     endpoint = calls[-1].group(1)
     return stage2.producer_for((endpoint, "", None)), answer.group(1)
-
-
-def is_day(value: object) -> bool:
-    if isinstance(value, date):
-        return type(value) is date
-    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-        return False
-    try:
-        date.fromisoformat(value)
-    except ValueError:
-        return False
-    return True
-
-
-def producer_record_problems(record: object) -> list[str]:
-    """The contract one producer record must satisfy, as the census and the runner's shared
-    post-run check both hold it: a known program, one publication date, an optional model."""
-    if not isinstance(record, Mapping):
-        return ["produced_by: expected program and publication date"]
-    problems = []
-    if record.get("kind") != "llm-session":
-        problems.append("produced_by.kind: expected llm-session")
-    if not isinstance(record.get("name"), str) or record.get("name") not in PROGRAMS:
-        problems.append("produced_by.name: expected producing program")
-    if not isinstance(record.get("version"), str) or not is_day(record.get("version")):
-        problems.append("produced_by.version: expected one publication date")
-    if "model" in record and (not isinstance(record["model"], str) or not record["model"].strip()):
-        problems.append("produced_by.model: expected known model identity")
-    return problems
-
-
-def producer_records_problems(producer: object) -> list[str]:
-    """Every producer record in one `produced_by` value, judged by the record contract."""
-    records = producer if isinstance(producer, list) else [producer]
-    if not records:
-        return ["produced_by: expected nonempty producer list"]
-    problems: list[str] = []
-    for record in records:
-        problems.extend(producer_record_problems(record))
-    return problems
 
 
 def metadata_problems(

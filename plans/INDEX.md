@@ -632,7 +632,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/runner-stamps-provenance/findings.md`](changes/runner-stamps-provenance/findings.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/plan.md`](changes/runner-stamps-provenance/plan.md) | draft | none | 2026-11-18 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/research.md`](changes/runner-stamps-provenance/research.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
-| [`changes/runner-stamps-provenance/spec.md`](changes/runner-stamps-provenance/spec.md) | draft | none | 2026-11-18 | coding-harness-f9sv |
+| [`changes/runner-stamps-provenance/spec.md`](changes/runner-stamps-provenance/spec.md) | draft | none | 2026-11-20 | coding-harness-f9sv |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |

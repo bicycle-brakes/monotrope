@@ -5,13 +5,13 @@ implementation_status: none
 date: 2026-11-14
 created: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "claude-opus-5-5, 2026-11-14"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-14", model: "claude-opus-5-5"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [audit, verification, admission]
 ---

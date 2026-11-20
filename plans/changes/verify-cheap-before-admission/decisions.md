@@ -6,13 +6,13 @@ implementation_status: none
 date: 2026-11-13
 created: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.6
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Fable 5.2, 2026-11-13"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-13", model: "Fable 5.2"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions, verify, admission, gates, kit]
 ---

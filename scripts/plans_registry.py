@@ -21,7 +21,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import venv_guard  # noqa: F401
@@ -33,6 +35,88 @@ from _verdict import Level, Ramp, Verdict  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 PLANS = REPO / "plans"
 INDEX = PLANS / "INDEX.md"
+
+# The one shared producer-record contract for active changes, the research census and the
+# Stage-2 runner's post-run header check (runner-stamps-provenance, Q-19, 2026-11-20).
+FRONTMATTER = re.compile(r"\A\ufeff?---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.S)
+PROGRAMS = frozenset({"claude-code", "codex", "pi", "stage2", "stage2-research-swarm"})
+
+
+def is_day(value: object) -> bool:
+    if isinstance(value, dt.date):
+        return type(value) is dt.date
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        dt.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def producer_record_problems(record: object) -> list[str]:
+    """The contract one producer record must satisfy, as the plans gate, the census and
+    the runner's shared post-run check all hold it: a known program, one publication date,
+    an optional non-empty model."""
+    if not isinstance(record, Mapping):
+        return ["produced_by: expected program and publication date"]
+    problems = []
+    if record.get("kind") != "llm-session":
+        problems.append("produced_by.kind: expected llm-session")
+    if not isinstance(record.get("name"), str) or record.get("name") not in PROGRAMS:
+        problems.append("produced_by.name: expected producing program")
+    if not isinstance(record.get("version"), str) or not is_day(record.get("version")):
+        problems.append("produced_by.version: expected one publication date")
+    if "model" in record and (not isinstance(record["model"], str) or not record["model"].strip()):
+        problems.append("produced_by.model: expected known model identity")
+    return problems
+
+
+def producer_records_problems(producer: object) -> list[str]:
+    """Every producer record in one `produced_by` value, judged by the record contract."""
+    records = producer if isinstance(producer, list) else [producer]
+    if not records:
+        return ["produced_by: expected nonempty producer list"]
+    problems: list[str] = []
+    for record in records:
+        problems.extend(producer_record_problems(record))
+    return problems
+
+
+def producer_header_problems(text: str) -> list[str]:
+    """Check `produced_by` in one document's frontmatter, including duplicate keys.
+
+    A document without `produced_by` (for example a human-written skeleton) has no finding here.
+    """
+    match = FRONTMATTER.match(text)
+    if match is None:
+        return []
+    block = match.group(1)
+    try:
+        node = yaml.compose(block)
+        loaded = yaml.safe_load(block)
+    except (yaml.YAMLError, ValueError):
+        return []  # malformed frontmatter is already reported by `_frontmatter`
+    if not isinstance(node, yaml.MappingNode) or not isinstance(loaded, Mapping):
+        return []
+    problems: list[str] = []
+    keys = [key.value for key, _ in node.value]
+    if keys.count("produced_by") > 1:
+        problems.append("produced_by is held more than once")
+    for key, value in node.value:
+        if key.value != "produced_by":
+            continue
+        records = value.value if isinstance(value, yaml.SequenceNode) else [value]
+        for record in records:
+            if isinstance(record, yaml.MappingNode):
+                record_keys = [child.value for child, _ in record.value]
+                if len(record_keys) != len(set(record_keys)):
+                    problems.append("produced_by: duplicate keys in a record")
+                    break
+    if "produced_by" in loaded:
+        problems.extend(producer_records_problems(loaded["produced_by"]))
+    return problems
+
 
 # `bead` is required because the index renders a bead column: without the field
 # there is a gap, and an artefact without a bead is work that shows up in no
@@ -274,6 +358,14 @@ def check() -> Verdict:
         plans_parts = path.relative_to(PLANS).parts
         in_changes = bool(plans_parts) and plans_parts[0] == "changes"
         archived = in_changes and len(plans_parts) > 1 and plans_parts[1] == "archive"
+
+        if in_changes and not archived:
+            for problem in producer_header_problems(path.read_text(encoding="utf-8")):
+                verdict.block(
+                    f"{rel}: {problem}",
+                    "Active changes hold producer records in the shared form "
+                    "(kind: llm-session, known program name, quoted ISO date version, optional model).",
+                )
 
         if in_changes and not archived and meta.get("implementation_status") == "done":
             verdict.drift(

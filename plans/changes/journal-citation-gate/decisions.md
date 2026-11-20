@@ -12,7 +12,7 @@ superseded_by: null
 bead: coding-harness-x9ed
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-19"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-19", model: "Opus 5.5"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions, provenance]
 ---

@@ -213,6 +213,9 @@ def repo(tmp_path, monkeypatch):
     _git(root, "init", "-q", "-b", "main")
     _commit_file(root, "plans/changes/demo/research.md", RESEARCH_SEED, "seed the change")
     _git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    denylist = tmp_path / "denylist.txt"
+    denylist.write_text("secret:test = NEVER_MATCHES_RUNNER_TEST_SENTINEL\n", encoding="utf-8")
+    monkeypatch.setenv("LEAKCHECK_DENYLIST", str(denylist))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.setattr(stage2, "declaration_problem", lambda *_a, **_k: None)
@@ -1562,3 +1565,199 @@ def test_session_judges_new_findings_before_writing(repo, monkeypatch):
     with pytest.raises(stage2.Refused, match="findings.md"):
         stage2_session.write_pending(SimpleNamespace(findings=path), stage2, "pending", "codex")
     assert not path.exists()
+
+
+def test_findings_append_preserves_legacy_fault_and_rejects_new_fault(repo):
+    relative = "plans/changes/demo/findings.md"
+    legacy = (
+        "---\ntitle: Findings\nproduced_by: {kind: llm-session, name: Legacy, version: old}\n"
+        f"provenance: ai-drafted-reviewed\nreview: {PENDING_REVIEW}\nupdated: 2026-11-10\n---\nBody\n"
+    )
+    _commit_file(repo, relative, legacy, "seed legacy audit")
+    path = repo / relative
+    try:
+        stage2.append(path, "Audit entry")
+        stage2.classify_publication(repo, relative, stage2.appended_bytes(path.read_bytes(), "Review"))
+    except stage2.Refused as error:
+        pytest.fail(f"unchanged legacy producer must not stop an audit append: {error}")
+    bad = path.read_bytes().replace(b"provenance: ai-drafted-reviewed", b"provenance: human-written")
+    with pytest.raises(stage2.Refused):
+        stage2.judge_findings_write(path, bad)
+    rewritten = path.read_bytes().replace(b"name: Legacy", b"name: OtherLegacy")
+    with pytest.raises(stage2.Refused) as caught:
+        stage2.judge_findings_write(path, rewritten)
+    assert not isinstance(caught.value, stage2.CommittedRecordFault)
+
+
+def test_findings_header_names_runner_as_producer():
+    from types import SimpleNamespace
+
+    import plans_registry
+    import research_census
+
+    header = yaml.safe_load(
+        stage2.findings_header(SimpleNamespace(change="demo", bead="demo-1"), "codex").split("---")[1]
+    )
+    assert header["produced_by"]["name"] == "stage2"
+    assert not research_census.producer_record_problems(header["produced_by"])
+    assert not plans_registry.producer_record_problems(header["produced_by"])
+
+
+def test_field_level_header_check_ignores_untouched_legacy_and_rejects_new_faults(repo):
+    # Criterion 16 (Q-19, loop rows L9-1, L9-2, L9-4): field-level judgement applies to any
+    # non-active-research file, not only findings.md, and a rewritten faulty field is always an
+    # attempt/output fault (`Refused`), never misclassified as `CommittedRecordFault`.
+    relative = "plans/changes/demo/notes.md"
+    legacy = (
+        "---\n"
+        'title: "Notes — demo"\n'
+        "status: draft\n"
+        "date: 2026-11-10\n"
+        "last_reviewed: 2026-11-10\n"
+        "updated: 2026-11-10\n"
+        "bead: demo-1\n"
+        "provenance: ai-drafted-reviewed\n"
+        'produced_by: {kind: llm-session, name: Legacy, version: "Opus 5.5, 2026-11-10"}\n'
+        f"review: {PENDING_REVIEW}\n"
+        "tags: [notes]\n"
+        "---\n\n# Notes\n\nBody.\n"
+    )
+    _commit_file(repo, relative, legacy, "seed legacy note")
+
+    # (a) Updating only `updated:` and prose leaves `produced_by`, `provenance` and `review`
+    # untouched: neither classify_publication nor touched_header_problems raises or flags it.
+    body_only = legacy.replace("updated: 2026-11-10", "updated: 2026-11-20").replace("Body.", "Body, updated.")
+    stage2.classify_publication(repo, relative, body_only.encode("utf-8"))
+    _write(repo, relative, body_only)
+    assert stage2.touched_header_problems(repo, [relative], reject_added=True) == []
+
+    # (b) Changing `provenance` beside an untouched legacy `produced_by` is refused as Refused.
+    bad_class = body_only.replace("provenance: ai-drafted-reviewed", "provenance: human-written")
+    with pytest.raises(stage2.Refused) as caught_class:
+        stage2.classify_publication(repo, relative, bad_class.encode("utf-8"))
+    assert not isinstance(caught_class.value, stage2.CommittedRecordFault)
+    assert "provenance: changed from the committed class" in str(caught_class.value)
+    assert "produced_by" not in str(caught_class.value)
+
+    # (c) Rewriting the faulty `produced_by` to another invalid value (even with identical
+    # diagnostic wording, L9-4) is refused as Refused, never misclassified as CommittedRecordFault.
+    rewritten = body_only.replace("name: Legacy", "name: AnotherLegacy")
+    with pytest.raises(stage2.Refused) as caught_rewritten:
+        stage2.classify_publication(repo, relative, rewritten.encode("utf-8"))
+    assert not isinstance(caught_rewritten.value, stage2.CommittedRecordFault)
+    assert "produced_by.name: expected producing program" in str(caught_rewritten.value)
+    _write(repo, relative, rewritten)
+    problems = stage2.touched_header_problems(repo, [relative], reject_added=True)
+    assert any("produced_by.name: expected producing program" in p for p in problems), problems
+
+    # (d) Active research with a rewritten invalid producer also refuses as Refused, not CommittedRecordFault.
+    research_rel = "plans/changes/demo/research.md"
+    legacy_research = (
+        "---\n"
+        'title: "Research — demo"\n'
+        "status: draft\n"
+        "date: 2026-11-10\n"
+        "last_reviewed: 2026-11-10\n"
+        "updated: 2026-11-10\n"
+        "bead: demo-1\n"
+        "provenance: ai-drafted-reviewed\n"
+        'produced_by: {kind: llm-session, name: Legacy, version: "2026-11-10"}\n'
+        f"review: {PENDING_REVIEW}\n"
+        "tags: [research]\n"
+        "---\n\n# Research\n"
+    )
+    _commit_file(repo, research_rel, legacy_research, "seed legacy research")
+    rewritten_research = legacy_research.replace("name: Legacy", "name: OtherBad")
+    with pytest.raises(stage2.Refused) as caught_research:
+        stage2.classify_publication(repo, research_rel, rewritten_research.encode("utf-8"))
+    assert not isinstance(caught_research.value, stage2.CommittedRecordFault)
+
+
+def test_plans_registry_blocks_legacy_active_producers_only(tmp_path, monkeypatch):
+    # Criterion 17 (Q-19): plans-registry blocks non-conforming producer records in active changes
+    # while allowing files without `produced_by`, valid `stage2` producers, and archived legacy files.
+    import json
+
+    import plans_registry
+    from _verdict import Level
+
+    plans = tmp_path / "plans"
+    active = plans / "changes" / "demo"
+    archived = plans / "changes" / "archive" / "2026-10-01-old"
+    active.mkdir(parents=True)
+    archived.mkdir(parents=True)
+    beads = tmp_path / ".beads"
+    beads.mkdir()
+    (beads / "issues.jsonl").write_text(
+        json.dumps({"id": "demo-1", "status": "open"}) + "\n" + json.dumps({"id": "old-1", "status": "closed"}) + "\n",
+        encoding="utf-8",
+    )
+
+    def doc(bead: str, produced: str | None, *, status: str = "draft", impl: str = "none") -> str:
+        lines = [
+            "---",
+            'title: "Doc"',
+            f"status: {status}",
+            f"implementation_status: {impl}",
+            "date: 2026-11-20",
+            "last_reviewed: 2026-11-20",
+            "updated: 2026-11-20",
+            "supersedes: null",
+            "superseded_by: null",
+            f"bead: {bead}",
+            "provenance: ai-drafted-reviewed",
+        ]
+        if produced is not None:
+            lines.append(produced)
+        lines += [f"review: {PENDING_REVIEW}", "tags: [spec]", "---", "", "# Doc", ""]
+        return "\n".join(lines)
+
+    (active / "research.md").write_text(doc("demo-1", None), encoding="utf-8")
+    (active / "findings.md").write_text(
+        doc("demo-1", 'produced_by: {kind: llm-session, name: stage2, version: "2026-11-20"}'),
+        encoding="utf-8",
+    )
+    (active / "spec.md").write_text(
+        doc("demo-1", 'produced_by: {kind: llm-session, name: codex, version: "2026-11-20", model: "gpt-6.1-terra"}'),
+        encoding="utf-8",
+    )
+    (archived / "spec.md").write_text(
+        doc(
+            "old-1",
+            'produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-10-01"}',
+            status="accepted",
+            impl="done",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(plans_registry, "REPO", tmp_path)
+    monkeypatch.setattr(plans_registry, "PLANS", plans)
+    monkeypatch.setattr(plans_registry, "INDEX", plans / "INDEX.md")
+    (plans / "INDEX.md").write_text(plans_registry.render_index(), encoding="utf-8")
+
+    # Clean active changes + legacy archived change -> zero BLOCK findings.
+    assert plans_registry.check().at(Level.BLOCK) == []
+
+    # Plant a legacy active producer record -> BLOCK naming the file.
+    (active / "spec.md").write_text(
+        doc("demo-1", 'produced_by: {kind: llm-session, name: Claude Code, version: "Opus 5.5, 2026-11-20"}'),
+        encoding="utf-8",
+    )
+    blocks = [finding.message for finding in plans_registry.check().at(Level.BLOCK)]
+    assert any("plans/changes/demo/spec.md: produced_by.name:" in msg for msg in blocks), blocks
+    assert any("plans/changes/demo/spec.md: produced_by.version:" in msg for msg in blocks), blocks
+    assert not any("archive/2026-10-01-old" in msg for msg in blocks), blocks
+
+    # Plant duplicate `produced_by` keys in an active file -> BLOCK naming the file.
+    (active / "spec.md").write_text(
+        doc(
+            "demo-1",
+            'produced_by: {kind: llm-session, name: codex, version: "2026-11-20"}\n'
+            'produced_by: {kind: llm-session, name: pi, version: "2026-11-20"}',
+        ),
+        encoding="utf-8",
+    )
+    dup_blocks = [finding.message for finding in plans_registry.check().at(Level.BLOCK)]
+    assert any("plans/changes/demo/spec.md: produced_by is held more than once" in msg for msg in dup_blocks), (
+        dup_blocks
+    )

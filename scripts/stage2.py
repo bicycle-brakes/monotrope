@@ -1836,7 +1836,7 @@ def preflight(
     return Context(root, change, folder, bead, go_admission=admission_problem)
 
 
-def findings_header(ctx: Context, producer: str) -> str:
+def findings_header(ctx: Context, _producer: str) -> str:
     day = today()
     return (
         "---\n"
@@ -1853,7 +1853,7 @@ def findings_header(ctx: Context, producer: str) -> str:
         f"bead: {ctx.bead}\n"
         "owner: Data Architect\n"
         "provenance: ai-drafted-reviewed\n"
-        f'produced_by: {{kind: llm-session, name: {producer}, version: "{day}"}}\n'
+        f'produced_by: {{kind: llm-session, name: stage2, version: "{day}"}}\n'
         "review: {status: pending, approved_by: null, approved_at: null}\n"
         "tags: [findings, stage-2]\n"
         "---\n\n"
@@ -3661,7 +3661,6 @@ def spec_review(root: Path, change: str) -> None:
     findings_rel = ctx.findings.relative_to(root).as_posix()
     # A committed header no publication can be judged against stops the verb before a route is
     # spent: the header migration (bead coding-harness-2i7x) owns existing headers (criterion 15).
-    refuse_committed_header_fault(root, findings_rel)
     prompt = phase_prompt(root, "02a-spec-review.md", change)
     begin_call(ctx, "spec-review", OPUS, prompt)
     answer = run_work_model(ctx, prompt, OPUS, writable=False)
@@ -9604,6 +9603,35 @@ def committed_producer_field(root: Path, relative: str) -> str | None:
     return field
 
 
+def refuse_committed_structural_header_fault(root: Path, relative: str) -> None:
+    """Stop the verb when the committed header itself cannot be read as a YAML mapping.
+
+    A structurally unreadable committed header (invalid YAML, YAML anchor/alias, non-mapping
+    header) prevents field-level comparison on any verb and belongs to the stock migration
+    (bead coding-harness-2i7x, L2-12). Untouched legacy field values (such as a legacy
+    `produced_by` on a file edited only in `updated:` or body) are judged field-by-field
+    instead of stopping here (Q-19, L9-1).
+    """
+    head = committed_bytes(root, relative)
+    if head is None:
+        return
+    match = frontmatter_pattern().match(head.decode("utf-8", "surrogateescape"))
+    if match is None:
+        return
+    block = match.group(1)
+    try:
+        for token in yaml.scan(block):
+            if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
+                raise _committed_fault(relative, f"YAML anchor or alias {token.value!r} in the header")
+        loaded = yaml.safe_load(block)
+        if loaded is None or isinstance(loaded, str):
+            return  # a document opening with a rule, not a committed header (L2-6)
+        if not isinstance(loaded, dict):
+            raise _committed_fault(relative, "the header is not a mapping")
+    except (ValueError, yaml.YAMLError) as error:
+        raise _committed_fault(relative, f"invalid YAML ({error})") from None
+
+
 def refuse_committed_header_fault(root: Path, relative: str) -> None:
     """Stop the verb before a route is spent when the committed header cannot be stamped.
 
@@ -9613,6 +9641,7 @@ def refuse_committed_header_fault(root: Path, relative: str) -> None:
     meets (L2-12): an unreadable or non-mapping header, a YAML anchor or alias, a `produced_by`
     held more than once, and an unreadable producer field.
     """
+    refuse_committed_structural_header_fault(root, relative)
     head = committed_bytes(root, relative)
     if head is None:
         return
@@ -9620,14 +9649,9 @@ def refuse_committed_header_fault(root: Path, relative: str) -> None:
     if match is not None:
         block = match.group(1)
         try:
-            for token in yaml.scan(block):
-                if isinstance(token, yaml.tokens.AnchorToken | yaml.tokens.AliasToken):
-                    raise _committed_fault(relative, f"YAML anchor or alias {token.value!r} in the header")
             loaded = yaml.safe_load(block)
             if loaded is None or isinstance(loaded, str):
                 return  # a document opening with a rule, not a committed header (L2-6)
-            if not isinstance(loaded, dict):
-                raise _committed_fault(relative, "the header is not a mapping")
             if len(_header_field_spans(block, "produced_by")) > 1:
                 raise _committed_fault(relative, "produced_by is held more than once")
         except (ValueError, yaml.YAMLError) as error:
@@ -10075,6 +10099,69 @@ def header_problems(
     return problems
 
 
+def _header_field_slices(data: bytes | None, key: str) -> list[str] | None:
+    """Exact raw source slices of `key` in `data`'s frontmatter, or None when unreadable."""
+    if data is None:
+        return None
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    match = frontmatter_pattern().match(text)
+    if match is None:
+        return None
+    block = match.group(1)
+    try:
+        spans = _header_field_spans(block, key)
+    except (yaml.YAMLError, ValueError):
+        return None
+    return [block[start:end] for start, end in spans]
+
+
+def _field_unchanged(before: bytes | None, after: bytes, field: str) -> bool:
+    """Whether `field` keeps identical raw frontmatter bytes between `before` and `after`."""
+    before_slices = _header_field_slices(before, field)
+    after_slices = _header_field_slices(after, field)
+    return before_slices is not None and after_slices is not None and before_slices == after_slices
+
+
+def _problem_field(relative: str, problem: str) -> str | None:
+    """The header field a `header_problems` diagnostic belongs to, or None when header/body-wide."""
+    prefix = f"{relative}: "
+    detail = problem[len(prefix) :] if problem.startswith(prefix) else problem
+    if detail.startswith("produced_by"):
+        return "produced_by"
+    for key in ("provenance", "review", "date", "last_reviewed", "updated"):
+        if detail.startswith(f"{key}:"):
+            return key
+    return None
+
+
+def _partition_header_problems(
+    relative: str, head: bytes | None, current: bytes, problems: list[str]
+) -> tuple[list[str], list[str]]:
+    """Split `problems` at field level into (changed_or_new, untouched_committed) (Q-19, L9-1, L9-4).
+
+    A diagnostic belongs to `untouched_committed` only when it already existed in the committed
+    baseline AND the raw bytes of its owning header field stayed byte-for-byte identical. Any
+    fault in a field the run changed - even if its diagnostic string happens to match the
+    committed fault - lands in `changed_or_new` so it is refused as an output fault rather than
+    misclassified as a committed fault.
+    """
+    if head is None:
+        return list(problems), []
+    committed = set(header_problems(relative, head, head))
+    changed_or_new: list[str] = []
+    untouched_committed: list[str] = []
+    for problem in problems:
+        field = _problem_field(relative, problem)
+        if problem in committed and field is not None and _field_unchanged(head, current, field):
+            untouched_committed.append(problem)
+        else:
+            changed_or_new.append(problem)
+    return changed_or_new, untouched_committed
+
+
 def touched_header_problems(
     root: Path, candidates: list[str], *, runner_reset: bool = False, reject_added: bool = False
 ) -> list[str]:
@@ -10082,7 +10169,9 @@ def touched_header_problems(
 
     One judgement for every file-writing verb, implement included and the writing verbs to
     come (criterion 4). A file whose bytes equal HEAD's was not changed in effect and is not
-    judged; a file without frontmatter carries no producer record.
+    judged; a file without frontmatter carries no producer record. Outside active research,
+    untouched committed header fields are not blamed on an edit that only changed unrelated
+    fields or prose (Q-19, L9-1).
     """
     problems: list[str] = []
     for relative in sorted(candidates):
@@ -10096,15 +10185,16 @@ def touched_header_problems(
         if not has_frontmatter(current):
             continue
         if head is not None:
-            # A committed header no attempt can repair stops the verb naming the migration before
-            # the working-tree judgement, on every verb and fault kind (L2-12).
-            refuse_committed_header_fault(root, relative)
+            # A structurally unreadable committed header stops the verb naming the migration before
+            # the working-tree judgement, on every verb (L2-12).
+            refuse_committed_structural_header_fault(root, relative)
         try:
             # A readable baseline the census contract rejects is no committed fault: an attempt
             # that preserves it fails here and spends its route (criterion 14).
-            problems.extend(
-                header_problems(relative, head, current, runner_reset=runner_reset, reject_added=reject_added)
-            )
+            found = header_problems(relative, head, current, runner_reset=runner_reset, reject_added=reject_added)
+            if head is not None and not ACTIVE_RESEARCH.fullmatch(relative):
+                found, _ = _partition_header_problems(relative, head, current, found)
+            problems.extend(found)
         except CommittedRecordFault:
             raise
         except Exception as error:  # any read or YAML failure is this file's finding (EP6-14)
@@ -10133,8 +10223,8 @@ def check_written_findings(root: Path, snapshot: tuple[Path, bytes | None] | Non
     change's audit file is judged, new verbs included, and no verb carries a call of its own. A
     file whose header the verb left as it found it is not judged here: audit lines below a header
     are not the header's producer, provenance or review. A header fault the verb wrote refuses the
-    verb naming the file, and a fault the committed header already carries stops it naming the
-    migration. A file without frontmatter carries nothing to judge.
+    verb naming the file; untouched committed fields are skipped at field level (Q-19, L9-1). A
+    file without frontmatter carries nothing to judge.
     """
     if snapshot is None:
         return
@@ -10145,29 +10235,32 @@ def check_written_findings(root: Path, snapshot: tuple[Path, bytes | None] | Non
         return  # nothing retained to judge
     if before is not None and header_of(after) == header_of(before):
         return
-    problems = touched_header_problems(root, [findings.relative_to(root).as_posix()])
-    if problems:
-        raise Refused("; ".join(problems))
+    classify_publication(root, findings.relative_to(root).as_posix(), after)
 
 
 def classify_publication(root: Path, relative: str, prepared: bytes) -> None:
-    """Judge a prepared publication before it lands, and say who owns a fault (criterion 15).
+    """Judge a prepared publication before it lands, and say who owns a fault (criterion 15, Q-19).
 
-    A fault the prepared output itself carries refuses the attempt: the next available route
-    may do better. The same fault standing in the committed header is a committed fault - the
-    verb stops and names the migration, spending no route on it.
+    Field-level classification (L9-1, L9-2, L9-4):
+    - Any fault in a new or changed header field refuses the attempt (`Refused`), even if the
+      committed header carried a similar diagnostic text, so the next available route may fix it.
+    - When only untouched committed fields carry faults: active research still requires the full
+      census contract and stops with `CommittedRecordFault` naming the migration
+      (bead coding-harness-2i7x); every other file lets untouched committed fields pass so a
+      runner `updated:` stamp or body append never triggers a false stop.
     """
     head = committed_bytes(root, relative)
     problems = header_problems(relative, head, prepared)
     if not problems:
         return
-    committed = header_problems(relative, head, head) if head is not None else []
-    if problems and set(problems) <= set(committed):
+    changed_or_new, untouched_committed = _partition_header_problems(relative, head, prepared, problems)
+    if changed_or_new:
+        raise Refused("; ".join(sorted(set(changed_or_new))))
+    if ACTIVE_RESEARCH.fullmatch(relative) and untouched_committed:
         raise CommittedRecordFault(
-            "; ".join(sorted(set(problems)))
+            "; ".join(sorted(set(untouched_committed)))
             + "; the committed header is faulty, the migration owns it (bead coding-harness-2i7x)"
         )
-    raise Refused("; ".join(sorted(set(problems))))
 
 
 def run_attempts(

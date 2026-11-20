@@ -633,3 +633,19 @@ the final draft works these in.
   Whether a model may edit a `human-decided` file at all is governed by
   `decisions/provenance.yaml`, not by this change. Reason: an honest trace of
   who touched a file.
+
+## Q-19 · Raise appetite, field-level header check, and active-change migration with gate
+
+asked: 2026-11-20, conversation (review-loop round 9, finding L9-1)
+answer: "Option 2 — extend appetite beyond 12 h as needed, make the runner's header check field-level, migrate legacy producer records of active changes once, and add a gate keeping active changes in the new form"
+answered_by: maintainer
+status: answered
+context: |
+  Topic: review-loop round 9 finding L9-1 (runner `updated:` stamps and untouched legacy headers triggering false committed-record faults on active changes) and the change's appetite budget.
+  Intention: round 9 showed that whole-header judgement blocks runner appends (`spec-review`, `review-loop`, `release-loop`) on active changes still carrying legacy `produced_by` headers until the separate migration lands; the change had already reached its prior 10 h / 12 h appetite.
+  Today: the post-run and pre-publication checks judge whole headers via set inclusion against committed faults, 21 active change artifacts in this checkout still carry legacy `produced_by` headers, and no blocking gate prevents new legacy producer records in active changes.
+  Repository change: extend appetite to 16 h (as needed to finish cleanly); make the runner's header check field-level so untouched committed legacy fields never trigger false stops while changed/introduced faults are always refused as output faults; migrate the 21 legacy producer records of active changes under `plans/changes/` (outside `archive/`) once; wire the shared producer-record check into the `plans-registry` blocking gate for active changes (keeping `decisions/gates.yaml` untouched and archived headers under `coding-harness-2i7x`).
+  Architecture change: the producer-record contract lives once in `scripts/plans_registry.py` (re-exported by `scripts/research_census.py` and consumed by `scripts/stage2.py`), and `scripts/stage2.py` classifies header problems field-by-field.
+
+In the context of round-9 finding L9-1 where untouched legacy producer headers blocked runner housekeeping writes and the change approached its appetite limit, facing the choice between deferring the fix or finishing the root mechanism here, we decided to raise the appetite (beyond 12 h as needed, set to 16 h), make the runner's header check field-level, migrate the legacy producer records of active changes under `plans/changes/` once, and enforce the shared producer-record contract on active changes through the `plans-registry` gate, to achieve that untouched legacy headers never cause false stops and active changes stay cleanly in the new producer form without touching `decisions/gates.yaml`, accepting a larger one-time diff over active change headers while archived headers remain under `coding-harness-2i7x`.
+— 2026-11-20

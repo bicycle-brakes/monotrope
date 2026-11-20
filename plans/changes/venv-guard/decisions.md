@@ -6,13 +6,13 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-s55e
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, version: "Opus 5.5, 2026-11-17"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-17", model: "Opus 5.5"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions, venv]
 ---

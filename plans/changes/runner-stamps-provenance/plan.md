@@ -18,22 +18,23 @@ tags: [plan, provenance]
 # Plan — runner-stamps-provenance
 
 ```text
-For you:     The runner records the actual producer and checks producer headers in files a run touched.
-Done when:   Route and failure tests pass and make verify is green.
-Appetite:    3 hours of phase 4, repair rounds included; stop at the limit.
-Not now:     Existing-header migration and a tree-wide check.
+For you:     The runner records the actual producer, checks headers field-by-field, migrates active changes' legacy producer records once, and keeps them valid via plans-registry.
+Done when:   Route, field-level, gate and failure tests pass and make verify is green.
+Appetite:    16 hours of phase 4, repair rounds and active-change migration included; raised from 3 h per maintainer decision (2026-11-20, Q-19).
+Not now:     Archived-header migration and tree-wide check (coding-harness-2i7x).
 Pre-mortem:  suppose it failed: most likely because a route checks different files from those it publishes.
 Starts unless you say stop.
 ```
 
 ## Files and steps
 
-1. `scripts/stage2.py`: stamp the actual producer of each measured model-call contribution retained by explore, draft or repair before its checks; preserve pre-run committed producer records, allowing the compact block-mapping conversion specified in criterion 7, discard attempt-written self-descriptions, record approval resets in the attempt findings, fail unmeasured drafts and continue to the next available route, and route every file-writing verb, including future verbs, through one shared post-run check; compare provenance and approval with the committed baseline and reject invented approvals, including on implement; preflight explore and spec-review output and stop on committed-record faults without another route. Include new ADRs without changing their provenance class and exclude restored files.
+1. `scripts/stage2.py`: stamp the actual producer of each measured model-call contribution retained by explore, draft or repair before its checks; preserve pre-run committed producer records, allowing the compact block-mapping conversion specified in criterion 7, discard attempt-written self-descriptions, record approval resets in the attempt findings, fail unmeasured drafts and continue to the next available route, and route every file-writing verb, including future verbs, through one shared post-run check; compare provenance and approval with the committed baseline and reject invented approvals, including on implement; preflight explore and spec-review output and stop on committed-record faults without another route; judge committed headers field-by-field outside active research so untouched legacy fields never block unrelated writes while changed or new faults are always refused (criterion 16); name `stage2` as producer in `findings_header` (L9-3). Include new ADRs without changing their provenance class and exclude restored files.
 2. `scripts/stage2_research_run.py` and `scripts/stage2_research_snapshot.py`: retain swarm attribution and its frozen publication binding across resume; preserve earlier record bytes on explore apart from the specified compact conversion, and reset explore publication class and review as specified.
-3. `scripts/research_census.py`: share producer-record validation for non-research files and share the unchanged active-research publication contract with the census, so incompatible preserved draft or repair baselines fail; check all records only in touched files carrying `produced_by`.
-4. `tests/test_runner_stamps_provenance.py` (new): cover route identity, attempt attribution and failures, the full decided contract, approval resets, byte preservation and unsafe headers.
-5. `tests/test_explore_provenance.py`: replace normalization expectations with preservation and refusal cases for earlier records.
-6. `plans/changes/runner-stamps-provenance/spec.md`, `findings.md`, and `plan.md`: record phase-4 time and any implementation findings below. The runner regenerates `plans/INDEX.md` if required.
+3. `scripts/plans_registry.py` and `scripts/research_census.py`: hold the one shared producer-record contract in `scripts/plans_registry.py` (re-exported by `scripts/research_census.py` and consumed by `scripts/stage2.py`), enforce it in `plans-registry` as a blocking check over active changes under `plans/changes/<name>/` outside `archive/` (criterion 17), and keep the unchanged active-research publication contract in the census.
+4. Active change artifacts under `plans/changes/<name>/` (outside `archive/`): migrate the 21 legacy `produced_by` headers once into the shared producer-record form, preserving program, model and ISO publication date and stamping `updated: 2026-11-20`.
+5. `tests/test_runner_stamps_provenance.py` (new): cover route identity, attempt attribution and failures, the full decided contract, approval resets, byte preservation, unsafe headers, field-level classification (L9-1, L9-2, L9-4), `findings_header` producer (L9-3), and the active-change `plans-registry` producer gate.
+6. `tests/test_explore_provenance.py` and `tests/test_stage2.py`: replace normalization expectations with preservation and refusal cases for earlier records, and update `findings_header` producer assertions to `stage2`.
+7. `plans/changes/runner-stamps-provenance/decisions.md`, `spec.md`, `findings.md`, and `plan.md`: record Q-19, phase-4 time and implementation findings below. The runner regenerates `plans/INDEX.md` if required.
 
 ## Verification
 
@@ -59,10 +60,12 @@ PYTHON=.venv/bin/python3 make verify
 - 13: tests/test_runner_stamps_provenance.py::test_explore_resets_class_and_approval — a skeleton stays human-written or an approval survives publication.
 - 14: tests/test_runner_stamps_provenance.py::test_active_research_contract_matches_census — a post-run check accepts research that the census rejects for class or review.
 - 15: tests/test_runner_stamps_provenance.py::test_prepublication_failure_routing — invalid output is published or a committed-record fault spends another route.
+- 16: tests/test_runner_stamps_provenance.py::test_field_level_header_check_ignores_untouched_legacy_and_rejects_new_faults — an untouched legacy field blocks an unrelated update, hides a new fault, or a rewritten faulty field is misclassified as a committed fault.
+- 17: tests/test_runner_stamps_provenance.py::test_plans_registry_blocks_legacy_active_producers_only — an active change with a legacy or duplicate producer record passes `plans_registry.check()`, or an archived change is blocked.
 
 ## What is not touched
 
-No migration, tree-wide producer gate, skeleton writer, approval automation or held path is part of this implementation. A bounded change has no design phase or ADR.
+No archived-header migration, tree-wide producer gate outside active changes, skeleton writer, approval automation or held path (`decisions/gates.yaml`, `provenance.yaml`, `prompts/`, `templates/`, `AGENTS.md`) is part of this implementation. A bounded change has no design phase or ADR.
 
 ## Route
 
@@ -176,3 +179,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 07:33:26–07:34:22 UTC, 56 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-20 about 10:38–11:46 UTC, about 68 min including a budget pause of unmeasured length — repair · orchestrator hand finishing of round 6 (Opus subagent): origin/main merged (journal-date gate repaired there by journal-citation-gate), loop row L6-1's test extended to drive the implement route (red without the route's wiring), L6-3's test named, L6-4's spec [DETAIL] text corrected, rows L6-1, L6-3, L6-4 marked fixed, one full `make verify` green at a72a3928 (6499 passed, 17 skipped) · measured by hand from command and commit times; the start is approximate
 2026-11-20 12:55:18–14:39:51 UTC, 6273 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-20 16:51:19–17:19:17 UTC, 1678 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-20 19:22–19:48 UTC, 26 min — repair · orchestrator hand finishing of round 9 (maintainer Option 2, Q-19): appetite raised to 16 h in decisions/spec/plan, L9-3 kept (`findings_header` names `stage2`), L9-1/L9-2/L9-4 repaired with field-level header classification in `scripts/stage2.py`, shared producer-record contract hoisted to `scripts/plans_registry.py` with blocking active-change gate, 21 legacy active-change headers migrated once, rows L9-1 and L9-3 marked fixed; targeted ruff, pytest (265 + 8 passed) and fast document/schema gates green (full `make verify` deferred until verify slot clears) · measured by hand from task timestamps

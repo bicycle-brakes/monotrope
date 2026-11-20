@@ -4,13 +4,13 @@ status: draft
 implementation_status: partial
 date: 2026-11-13
 last_reviewed: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-yb1l
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-13"}
+produced_by: {kind: llm-session, name: codex, version: "2026-11-13", model: "gpt-6.1-sol"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, tests, swarm, concurrency]
 ---

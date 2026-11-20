@@ -1473,3 +1473,127 @@ Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
 
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1141 files, 4908 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1141 files, 4924 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/research_census.py` +1 -1
+> - `scripts/stage2.py` +18 -6
+> - `tests/test_runner_stamps_provenance.py` +28 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 123 lines of this gate left out …]
+>         # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
+>         draft_world(world)
+>         assert not world.findings.exists()
+>         passing_draft(world)
+>         assert world.run("draft") == 0
+>         header = plans_registry._frontmatter(world.findings)
+> >       assert header is not None and header["produced_by"]["name"] == "codex"
+> E       AssertionError: assert ({'bead': 'demo-1', 'category': 'findings', 'created': datetime.date(2026, 11, 20), 'date': datetime.date(2026, 11, 20), ...} is not None and 'stage2' == 'codex'
+> E         
+> E         - codex
+> E         + stage2)
+>
+> tests/test_stage2.py:4332: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 31 files, 3 commits, 1 rules, 1 prompt texts
+> draft: verified and committed · route codex · attempt 1
+> ________ test_a_findings_file_the_spec_review_creates_names_claude_code ________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-uka6kkqr/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-uka6kkqr/pytest-of-mikypiky/pytest-1/popen-gw5/test_a_findings_file_the_spec_0/state'))
+>
+>     def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World) -> None:
+>         # Criterion 29. Planted fault: the producer map stays at `codex` or `pi`.
+>         assert not world.findings.exists()
+>         world.script(claude=[{"stdout": rows(1)}])
+>         assert world.run("spec-review") == 0
+>         header = plans_registry._frontmatter(world.findings)
+> >       assert header is not None and header["produced_by"]["name"] == "claude-code"
+> E       AssertionError: assert ({'bead': 'demo-1', 'category': 'findings', 'created': datetime.date(2026, 11, 20), 'date': datetime.date(2026, 11, 20), ...} is not None and 'stage2' == 'claude-code'
+> E         
+> E         - claude-code
+> E         + stage2)
+>
+> tests/test_stage2.py:8217: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 31 files, 2 commits, 1 rules, 1 prompt texts
+> spec-review: 1 rows appended to plans/changes/demo/findings.md
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/tests/test_stage2.py:24207: DeprecationWarning: This process (pid=6854) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=6863) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_findings_file_an_implement_run_creates_names_claude_code
+> FAILED tests/test_stage2.py::test_a_findings_file_the_draft_creates_names_codex
+> FAILED tests/test_stage2.py::test_a_findings_file_the_spec_review_creates_names_claude_code
+> 3 failed, 6501 passed, 17 skipped, 5 warnings in 648.63s (0:10:48)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 49458 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-1-20261120T165108681333Z-3dcc7db2.md
+> ````
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1141 files, 4931 commits, 12 rules.

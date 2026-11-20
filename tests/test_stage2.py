@@ -4152,12 +4152,12 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
 
 
 def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World) -> None:
-    # Repair L2-1. Planted fault: `producer_for` falls through to `pi` for the GLM endpoints.
+    # The runner creates this file; its own name identifies the producer.
     assert not world.findings.exists()
     successful_implementation(world)
     assert world.run("implement") == 0
     header = plans_registry._frontmatter(world.findings)
-    assert header is not None and header["produced_by"]["name"] == "claude-code"
+    assert header is not None and header["produced_by"]["name"] == "stage2"
 
 
 # ---------------------------------------------------------------------------
@@ -4323,13 +4323,13 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
 
 
 def test_a_findings_file_the_draft_creates_names_codex(world: World) -> None:
-    # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
+    # The runner creates this file, even when Codex performs the draft.
     draft_world(world)
     assert not world.findings.exists()
     passing_draft(world)
     assert world.run("draft") == 0
     header = plans_registry._frontmatter(world.findings)
-    assert header is not None and header["produced_by"]["name"] == "codex"
+    assert header is not None and header["produced_by"]["name"] == "stage2"
 
 
 def test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules(world: World) -> None:
@@ -8209,12 +8209,12 @@ def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
 
 
 def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World) -> None:
-    # Criterion 29. Planted fault: the producer map stays at `codex` or `pi`.
+    # The runner creates this file, even when Claude Code performs the review.
     assert not world.findings.exists()
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
-    assert header is not None and header["produced_by"]["name"] == "claude-code"
+    assert header is not None and header["produced_by"]["name"] == "stage2"
 
 
 def commit_review_findings(world: World) -> None:

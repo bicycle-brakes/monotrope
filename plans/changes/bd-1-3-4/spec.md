@@ -4,13 +4,13 @@ status: draft
 implementation_status: none
 date: 2026-11-14
 last_reviewed: 2026-11-14
-updated: 2026-11-15
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-tr84
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-14"}
+produced_by: {kind: llm-session, name: codex, version: "2026-11-14", model: "gpt-6.1-sol"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, beads, supply-chain]
 class: bounded

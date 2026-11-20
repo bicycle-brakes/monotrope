@@ -3,7 +3,7 @@ title: "Spec — runner-stamps-provenance"
 status: draft
 implementation_status: none
 date: 2026-11-16
-last_reviewed: 2026-11-18
+last_reviewed: 2026-11-20
 updated: 2026-11-20
 supersedes: null
 superseded_by: null
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: claude-code, model: glm-5.3, version: "20
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, provenance]
 class: bounded
-appetite: 3
+appetite: 16
 adr_files: []
 neighbours: [plans/changes/archive/2026-11-16-explore-provenance/spec.md, plans/specs/implementation-verification/spec.md]
 ---
@@ -82,23 +82,29 @@ An **artifact changed by an attempt** is any retained file with frontmatter that
 15. When explore or spec-review prepares output, the shared check judges it before publication; a model-output fault fails the attempt and uses the next available route, while a faulty committed earlier producer stops the verb with a diagnostic naming the separate migration (bead `coding-harness-2i7x`) and spends no further route.
     *Refuted by:* publishing rejected output, retrying a committed-record fault, omitting the migration diagnostic, or failing to try an available route after a model-output fault.
     *Basis:* `decisions.md#Q-17`, agent decision F-36 in `decisions.md`.
+16. When the shared post-run or pre-publication check judges a previously committed non-active-research file, it operates at field level: untouched committed legacy fields do not block a runner `updated:` stamp or an unrelated body edit, while any fault in a new or changed header field — including rewriting a faulty field to another faulty value — is refused as an attempt or output fault rather than misclassified as a committed-record fault.
+    *Refuted by:* an untouched legacy `produced_by` blocking a runner `updated:` append on `findings.md` or a body edit on `implement`, an unchanged legacy field hiding a new `provenance` or `review` fault, or a rewritten invalid `produced_by` being misclassified as `CommittedRecordFault`.
+    *Basis:* `decisions.md#Q-19`.
+17. Active changes under `plans/changes/<name>/` (outside `archive/`) hold producer records conforming to the shared producer-record contract (`kind: llm-session`, known program in `PROGRAMS`, quoted ISO date `version`, optional non-empty `model`, no duplicate `produced_by` keys); existing active-change legacy records are migrated once and the `plans-registry` gate blocks any non-conforming active-change producer record while leaving archived changes to `coding-harness-2i7x`.
+    *Refuted by:* `plans_registry.py --check` passing over an active change with a legacy or duplicate `produced_by`, or rejecting an archived change for a legacy `produced_by`.
+    *Basis:* `decisions.md#Q-19`.
 
 Explore continues to remove generated skeleton notices; criterion 5 applies to draft and repair, not that removal. For non-active research and other files, the shared check applies producer-record rules plus the baseline class and review rules, leaving other fields to their own gates.
 
 ## Non-goals
 
-- Migration of existing headers and a tree-wide check belong to the separate migration work (bead `coding-harness-2i7x`), per Q-4; that migration is the next change after this one, per Q-15.
+- Migration of archived headers, files outside active `plans/changes/`, and a tree-wide check belong to the separate migration work (bead `coding-harness-2i7x`), per Q-4 and Q-19; active changes under `plans/changes/<name>/` (outside `archive/`) are migrated once here and kept clean by `plans-registry`.
 - No general side-route detector, enforcement of allowed provenance classes, change to the untouched new-change skeleton, or automated human approval.
 - No change to the maintainer's answers in `decisions.md`, nor to the headerless loop record.
 
 ## Protected areas
 
-Runner-held paths remain outside model attempts, including `provenance.yaml`, `decisions/gates.yaml`, `prompts/`, `templates/`, and `AGENTS.md`; no edit to them is planned. Existing unrelated artifacts and archived headers are not migrated.
+Runner-held paths remain outside model attempts, including `provenance.yaml`, `decisions/gates.yaml`, `prompts/`, `templates/`, and `AGENTS.md`; no edit to them is planned. Archived headers and unrelated documents outside active `plans/changes/` are not migrated.
 
 ## Definition of Done
 
-- `make verify` green; the tests in the criterion ledger exercise the runner routes and their failure cases.
-- The runner, its shared producer validation and their tests move in the same pull request; no special migration run is required.
+- `make verify` green; the tests in the criterion ledger exercise the runner routes, field-level classification, active-change producer gate and their failure cases.
+- The runner, its shared producer validation in `scripts/plans_registry.py` / `scripts/research_census.py`, the one-time active-change migration and their tests move in the same pull request.
 - The protected areas and non-goals are checked against the pull request's file list.
 - The pull request closes `coding-harness-f9sv` and its final commit carries `Closes-Bead: coding-harness-f9sv`.
 
