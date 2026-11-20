@@ -30,6 +30,10 @@ from test_stage2 import (  # noqa: E402
     git,  # noqa: E402
     prompt_entry,  # noqa: E402
     red_verify,  # noqa: E402
+    repair_step,  # noqa: E402
+    runner_entries,  # noqa: E402
+    script_repair,  # noqa: E402
+    seed_tests,  # noqa: E402
     successful_implementation,  # noqa: E402
     venv_pytest,  # noqa: E402
     venv_ruff,  # noqa: E402
@@ -123,7 +127,8 @@ def test_cheap_test_selection_matches_changed_functions_and_ledger(world: World)
     Importers are not selected (`decisions.md#Q-3`). The changed set spans every source at once — in a modified tracked test file only the new and the
     edited function, a new test file whole, the plan's ledger ids in both forms (one inside the new
     file, so it must not run twice; one in an untouched file; one still unwritten and absent, which
-    keeps the attempt red), and on a retry exactly the ids the attempt before reported as failed
+    the runner names as missing and never passes to pytest - the attempt stays red because implement
+    owes it), and on a retry exactly the ids the attempt before reported as failed
     whose file still stands. A modified script, a deleted script's committed importer and a deleted
     test file are not selected. The explicit argv of each attempt's pytest run is the assertion.
     """
@@ -181,7 +186,6 @@ def test_cheap_test_selection_matches_changed_functions_and_ledger(world: World)
         "tests/test_existing.py::test_added",
         "tests/test_existing.py::test_edit",
         "tests/test_ledger_old.py::test_old",
-        "tests/test_missing.py::test_later",
         "tests/test_new.py",
     ]
     assert calls[0]["argv"] == first
@@ -189,8 +193,9 @@ def test_cheap_test_selection_matches_changed_functions_and_ledger(world: World)
     expected = sorted([*first[len(head) :], "tests/test_existing.py::test_keep"])
     assert calls[1]["argv"] == [*head, *expected]
     # The attempt before reported no id, so the third run holds the changed and ledger sources only.
-    # The unwritten ledger test stays a target (`first` holds it): the real pytest then fails the
-    # attempt naming the missing id; the stand-in's own output is not the runner's to rewrite.
+    # The unwritten ledger id is named by the runner itself, never passed to pytest (bead
+    # coding-harness-bxxt.9); the attempt stays red because implement owes it, not because pytest
+    # saw the id.
     assert calls[2]["argv"] == first
 
 
@@ -496,8 +501,9 @@ def test_a_retry_drops_a_failed_test_the_attempt_removed(world: World) -> None:
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     plan = b"---\ntitle: Plan\n---\n\n# Plan\n"
     previous = ["tests/test_r.py::test_old", "tests/test_r.py::test_keep", "tests/test_r.py::test_keep[1]"]
-    targets, fault = stage2.selected_tests(world.root, env, plan, previous)
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan, previous)
     assert fault is None
+    assert not missing and not faults, "a ledger-less plan names no missing test"
     # A failed parameter id is selected by its function (review row F6-2).
     assert targets == ["tests/test_r.py::test_keep", "tests/test_r.py::test_new"]
 
@@ -536,7 +542,13 @@ def test_the_runners_scan_record_is_not_an_attempt_edit(world: World, monkeypatc
 
 
 def test_a_ledger_test_missing_from_a_new_file_is_still_selected(world: World) -> None:
-    """Row L3-1. Planted fault: a new test file selected whole hid the ledger test it lacks."""
+    """Row L3-1. Planted fault: a new test file selected whole hid the ledger test it lacks.
+
+    Since bead coding-harness-bxxt.9 the whole file is still covered, but the ledger entry the
+    attempt left unwritten is no longer a pytest target - the runner names it as missing instead
+    (spec, criterion 3 and 5): the file id covers the standing tests, the missing id never reaches
+    pytest.
+    """
     tests = world.root / "tests"
     tests.mkdir()
     (tests / "test_fresh.py").write_text("def test_other():\n    assert 1\n\n\ndef test_named():\n    assert 1\n")
@@ -546,9 +558,11 @@ def test_a_ledger_test_missing_from_a_new_file_is_still_selected(world: World) -
         "- 1: tests/test_fresh.py::test_named — written in the new file\n"
         "- 2: not yet written tests/test_fresh.py::test_required — the attempt left it out\n"
     ).encode()
-    targets, fault = stage2.selected_tests(world.root, env, plan)
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan)
     assert fault is None
-    assert targets == ["tests/test_fresh.py", "tests/test_fresh.py::test_required"]
+    assert targets == ["tests/test_fresh.py"], "the whole new file is still covered, without the missing id"
+    assert missing == {"tests/test_fresh.py::test_required": "not yet written"}
+    assert faults == []
 
 
 def test_a_retry_drops_a_removed_method_of_a_standing_class(world: World) -> None:
@@ -563,8 +577,11 @@ def test_a_retry_drops_a_removed_method_of_a_standing_class(world: World) -> Non
     (tests / "test_c.py").write_text("class TestC:\n    def test_m(self):\n        assert 1\n")
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     previous = ["tests/test_c.py::TestC::test_gone", "tests/test_c.py::TestC::test_m"]
-    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous)
+    targets, fault, missing, faults = stage2.selected_tests(
+        world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous
+    )
     assert fault is None
+    assert not missing and not faults, "a ledger-less plan names no missing test"
     assert targets == ["tests/test_c.py::TestC::test_m"]
 
 
@@ -632,8 +649,9 @@ def test_a_git_failure_is_a_selection_fault_not_a_new_file(world: World, monkeyp
 
     monkeypatch.setattr(stage2, "_git_bytes", failing_show)
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
-    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n")
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n")
     assert targets is None
+    assert not missing and not faults, "a selection fault preempts the ledger classification"
     assert fault is not None and "git show" in fault
 
 
@@ -686,8 +704,11 @@ def test_a_retry_selects_a_failed_parametrized_test_by_its_function(world: World
     )
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     previous = ["tests/test_p.py::test_case[old]"]
-    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous)
+    targets, fault, missing, faults = stage2.selected_tests(
+        world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous
+    )
     assert fault is None
+    assert not missing and not faults, "a ledger-less plan names no missing test"
     assert targets == ["tests/test_p.py::test_case"]
 
 
@@ -702,6 +723,465 @@ def test_a_retry_keeps_a_failed_inherited_test_of_a_derived_class(world: World) 
     git(world.root, "commit", "--quiet", "-m", "an inherited test")
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     previous = ["tests/test_i.py::TestDerived::test_case"]
-    targets, fault = stage2.selected_tests(world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous)
+    targets, fault, missing, faults = stage2.selected_tests(
+        world.root, env, b"---\ntitle: Plan\n---\n\n# Plan\n", previous
+    )
     assert fault is None
+    assert not missing and not faults, "a ledger-less plan names no missing test"
     assert targets == ["tests/test_i.py::TestDerived::test_case"]
+
+
+# ---------------------------------------------------------------------------
+# The ledger classification before pytest (bead coding-harness-bxxt.9): the runner names every
+# missing ledger test itself, before pytest starts, and a missing id is never one of pytest's
+# arguments. Ledger rows 1-9 and 12-17 stand here; rows 10 and 11 stand in test_stage2.py beside
+# the answer check they pin.
+# ---------------------------------------------------------------------------
+
+PYTEST_HEAD = ["-m", "pytest", "-q", "-n", "auto"]
+
+
+def plan_with_ledger(entries: list[str]) -> str:
+    """The accepted plan's text with the given criterion-ledger lines and a time section."""
+    body = "".join(f"{entry}\n" for entry in entries)
+    return (
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n"
+        f"## Criterion ledger\n\n{body}\n## Time used\n"
+    )
+
+
+def commit_tree(world: World, message: str) -> None:
+    """Commit the tree as it stands, so the attempt's snapshot holds the plan's ledger."""
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", message)
+
+
+def test_ledger_ids_are_checked_before_pytest(world: World) -> None:
+    """Ledger 1. Planted fault: a missing ledger id reached pytest as a target id.
+
+    The plan names four ledger tests: one standing, one defined only inside a string, one whose
+    file is gone, one still unwritten. pytest runs the standing targets only - none of the three
+    missing ids appears in its arguments - and the implement attempt fails naming all three.
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text(
+        "def test_standing():\n    assert 1\n\n\n_DECOY = '''\ndef test_in_string():\n    pass\n'''\n",
+        encoding="utf-8",
+    )
+    venv_ruff(world)
+    venv_pytest(world)
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — written on an earlier change",
+                "- 2: tests/test_standing.py::test_in_string — defined only inside a string",
+                "- 3: tests/test_gone.py::test_gone — written once, its file is gone",
+                "- 4: not yet written tests/test_later.py::test_later — nobody writes it",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a standing test and a plan with three missing ledger tests")
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[{}, {}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    calls = world.calls("python3")
+    assert calls[0]["argv"] == [*PYTEST_HEAD, "tests/test_new.py", "tests/test_standing.py::test_standing"]
+    assert world.calls("make") == [], "a red cheap check still started `make verify`"
+    assert (
+        "the criterion ledger names tests that do not stand, and this attempt owes them: "
+        "`tests/test_gone.py::test_gone` (written), `tests/test_later.py::test_later` (not yet written), "
+        "`tests/test_standing.py::test_in_string` (written)"
+    ) in world.text()
+
+
+def test_missing_ledger_ids_persist_in_attempt_record(world: World) -> None:
+    """Ledger 2. Planted fault: a missing ledger id vanished from the attempt's own record.
+
+    The repair is otherwise green - the unwritten-only missing test does not fail it - and its
+    accepted attempt's measured time line still names the id (spec, criterion 2).
+    """
+    seed_tests(world)
+    world.plan.write_text(
+        plan_with_ledger(["- 1: not yet written tests/test_later.py::test_later — parked for a later change"]),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan whose ledger names an unwritten test")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    entry = runner_entries(world.plan)[-1]
+    assert "tests/test_later.py::test_later" in entry, entry
+    assert "named but not owed" in entry, entry
+
+
+def test_standing_targets_run_when_ledger_ids_are_missing(world: World) -> None:
+    """Ledger 3. Planted fault: a missing id replaced or blocked the standing targets."""
+    venv_ruff(world)
+    venv_pytest(world)
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_new.py::test_new — written by this attempt",
+                "- 2: not yet written tests/test_new.py::test_required — the attempt left it out",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan with a standing and an unwritten ledger test")
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[{}, {}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    calls = world.calls("python3")
+    assert calls[0]["argv"] == [*PYTEST_HEAD, "tests/test_new.py"], "the standing target did not run"
+    assert "tests/test_new.py::test_required" not in calls[0]["argv"], "the missing id reached pytest"
+    assert "tests/test_new.py::test_required" in world.text()
+
+
+def test_only_missing_ledger_ids_skip_pytest(world: World) -> None:
+    """Ledger 4. Planted fault: pytest started although no selected target stands."""
+    world.plan.write_text(
+        plan_with_ledger(["- 1: not yet written tests/test_later.py::test_later — parked for a later change"]),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan whose only ledger test is unwritten and missing")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("implement") == 1
+    assert world.calls("python3") == [], "pytest started without a standing target"
+    assert world.calls("make") == []
+    text = world.text()
+    assert "tests/test_later.py::test_later" in text
+    assert "owes them" in text
+
+
+def test_implement_fails_after_running_standing_tests_with_missing_ledger_ids(world: World) -> None:
+    """Ledger 5. Planted fault: an implement attempt with a missing ledger test was accepted.
+
+    The standing ledger test runs green; the attempt still fails, because implement owes the
+    unwritten one too.
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    assert 1\n", encoding="utf-8")
+    venv_ruff(world)
+    venv_pytest(world)
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — written on an earlier change",
+                "- 2: not yet written tests/test_later.py::test_later — parked for a later change",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a standing ledger test and an unwritten one")
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[{}, {}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    calls = world.calls("python3")
+    assert calls, "the standing ledger test never ran"
+    assert calls[0]["argv"] == [*PYTEST_HEAD, "tests/test_new.py", "tests/test_standing.py::test_standing"]
+    assert world.calls("make") == []
+    assert "tests/test_later.py::test_later" in world.text()
+
+
+def test_repair_accepts_unclaimed_unwritten_ledger_ids(world: World) -> None:
+    """Ledger 6. Planted fault: a repair was rejected solely for an unwritten missing ledger test.
+
+    The repair is green - its cheap pytest runs the standing targets without the missing id - and
+    the run ends accepted with the row marked fixed (spec, criterion 6).
+    """
+    seed_tests(world)
+    world.plan.write_text(
+        plan_with_ledger(["- 1: not yet written tests/test_later.py::test_later — parked for a later change"]),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan whose ledger names an unwritten test")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    cheap = world.calls("python3")[0]["argv"]
+    assert cheap == [*PYTEST_HEAD, "tests/test_fix.py"], "the unwritten missing id reached pytest"
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        ["- 1: tests/test_gone.py::test_gone — written once, its file is gone"],
+        [
+            "- 1: tests/test_gone.py::test_gone — written once, its file is gone",
+            "- 2: not yet written tests/test_gone.py::test_gone — parked beside it",
+        ],
+    ],
+    ids=["written-only", "written-and-unwritten"],
+)
+def test_repair_fails_for_missing_written_ledger_test(world: World, entries: list[str]) -> None:
+    """Ledger 7. Planted fault: a missing written ledger test was excused by an unwritten duplicate.
+
+    Written takes precedence: both parametrize cases owe the same missing written test, and every
+    repair attempt fails at the cheap check before anything derived runs (spec, criterion 7).
+    """
+    seed_tests(world)
+    world.plan.write_text(plan_with_ledger(entries), encoding="utf-8")
+    commit_tree(world, "a plan whose ledger names a missing written test")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step()] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    assert world.calls("make") == []
+    assert (
+        "the criterion ledger names tests that do not stand, and this attempt owes them: "
+        "`tests/test_gone.py::test_gone` (written)"
+    ) in world.text()
+
+
+def test_standing_test_failure_is_not_hidden_by_missing_ledger_ids(world: World) -> None:
+    """Ledger 8. Planted fault: a red standing test was excused, or hid the missing ids.
+
+    The findings hold the pytest failure and every missing ledger id beside it, and the attempt
+    fails (spec, criterion 8).
+    """
+    venv_ruff(world)
+    venv_pytest(world)
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_new.py::test_new — written by this attempt",
+                "- 2: not yet written tests/test_later.py::test_later — parked for a later change",
+                "- 3: tests/test_gone.py::test_gone — written once, its file is gone",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan with a standing test and two missing ones")
+    red = {"stdout": "FAILED tests/test_new.py::test_new - assert 1 == 2\n", "exit": 1}
+    world.script(
+        claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
+        python3=[red] * 3,
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    text = world.text()
+    assert "FAILED tests/test_new.py::test_new" in text, "the red standing test was hidden"
+    assert "`tests/test_later.py::test_later` (not yet written)" in text
+    assert "`tests/test_gone.py::test_gone` (written)" in text
+    assert world.calls("make") == []
+
+
+@pytest.mark.parametrize("case", ["unparseable", "invalid-bytes"])
+def test_unreadable_or_invalid_ledger_test_is_not_missing(world: World, case: str) -> None:
+    """Ledger 9. Planted fault: a read or parse error became a missing id, or the check stayed green.
+
+    The fault names the input that cannot be read or parsed; the classification reports no missing
+    id for it, and the cheap check fails on the fault (spec, criterion 9).
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    target = tests / "test_broken.py"
+    if case == "unparseable":
+        target.write_text("def test_broken(:\n    pass\n", encoding="utf-8")
+    else:
+        target.write_bytes(b"\xff\xfe this file is not utf-8\n")
+    commit_tree(world, "a ledger test file that cannot be read or parsed")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    plan = (
+        "---\ntitle: Plan\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: tests/test_broken.py::test_broken — written on an earlier change\n"
+    ).encode()
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan)
+    assert fault is None
+    assert missing == {}, "a read or parse error was diagnosed as a missing id"
+    assert targets == [], "the check stayed green on an uninspectable ledger test"
+    assert len(faults) == 1
+    assert "tests/test_broken.py" in faults[0] and "cannot be read or parsed" in faults[0]
+    problem = stage2.cheap_checks(world.root, env, world.plan, None, plan)
+    assert problem, "the cheap check stayed green on an uninspectable ledger test"
+    assert "cannot be read or parsed" in problem[0] and "tests/test_broken.py" in problem[0]
+
+
+def test_implement_prompt_requires_all_ledger_tests(world: World) -> None:
+    """Ledger 12. Planted fault: the implement prompt let an unwritten ledger test stay unwritten."""
+    snapshot = plan_with_ledger(
+        [
+            "- 1: tests/test_fix.py::test_fix — written on an earlier change",
+            "- 2: not yet written tests/test_new.py::test_new — the attempt writes it",
+        ]
+    )
+    world.plan.write_text(snapshot, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.implementation_prompt(ctx, "baseline-sha", [])
+    assert ("Write every test the ledger names, including the rows still marked `not yet written`") in prompt, (
+        "the implement prompt permitted a missing unwritten ledger test"
+    )
+    for ref in ("tests/test_fix.py::test_fix", "tests/test_new.py::test_new"):
+        assert ref in prompt, ref
+
+
+def test_repair_prompt_distinguishes_finding_proof_from_unwritten_tests(world: World) -> None:
+    """Ledger 13. Planted fault: the repair prompt owed every unwritten test, or omitted an obligation.
+
+    Both prompt variants owe the findings' proofs and the written entries, name the missing
+    unwritten tests without owing them, and never carry the implement prompt's all-tests sentence.
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    assert 1\n", encoding="utf-8")
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — written and standing",
+                "- 2: tests/test_owed.py::test_owed — written once, its file is gone",
+                "- 3: not yet written tests/test_later.py::test_later — parked for a later change",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan with a standing, a missing written and an unwritten ledger test")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    for endpoint in (stage2.CODEX, stage2.GLM_FLASH):
+        prompt = stage2.repair_prompt(ctx, "baseline-sha", [], [], endpoint=endpoint)
+        assert "the proof of every finding it addresses" in prompt, endpoint
+        assert "every written entry of the plan's criterion ledger, standing or missing" in prompt, endpoint
+        assert "named but not owed" in prompt, endpoint
+        assert "Write every test the ledger names" not in prompt, f"{endpoint} owes unwritten tests"
+        refs = (
+            "tests/test_standing.py::test_standing",
+            "tests/test_owed.py::test_owed",
+            "tests/test_later.py::test_later",
+        )
+        for ref in refs:
+            assert f"- {ref}" in prompt, (endpoint, ref)
+
+
+def test_repair_prompt_pytest_list_excludes_missing_ledger_ids(world: World) -> None:
+    """Ledger 14. Planted fault: a missing id stood in the repair's pytest command list.
+
+    The pytest line names the standing ledger tests as its targets; the sections after it hold the
+    missing written and unwritten ids, and none of them stands in the pytest list (spec, criterion 14).
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    assert 1\n", encoding="utf-8")
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — written and standing",
+                "- 2: tests/test_owed.py::test_owed — written once, its file is gone",
+                "- 3: not yet written tests/test_later.py::test_later — parked for a later change",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a plan with a standing, a missing written and an unwritten ledger test")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.repair_prompt(ctx, "baseline-sha", [], [], endpoint=stage2.CODEX)
+    assert "`.venv/bin/python3 -m pytest -q -n auto` over the standing ledger tests below" in prompt
+    assert (
+        "Standing ledger tests, the pytest targets - run them and leave them green:\n"
+        "- tests/test_standing.py::test_standing"
+    ) in prompt
+    assert (
+        "Written ledger entries whose test is missing - owed: write them:\n- tests/test_owed.py::test_owed"
+    ) in prompt
+    assert (
+        "Missing unwritten ledger tests - named but not owed, never passed to pytest:\n"
+        "- tests/test_later.py::test_later"
+    ) in prompt
+
+
+def test_missing_ledger_file_is_reported_as_missing(world: World) -> None:
+    """Ledger 15. Planted fault: an absent file was diagnosed as an unreadable existing file.
+
+    Both ids of files that do not exist are missing, each with its entry's state; no fault is named
+    (spec, criterion 15).
+    """
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    plan = plan_with_ledger(
+        [
+            "- 1: tests/test_gone.py::test_gone — written once, its file is gone",
+            "- 2: not yet written tests/test_absent.py::test_absent — parked for a later change",
+        ]
+    ).encode()
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan)
+    assert fault is None and faults == []
+    assert missing == {
+        "tests/test_gone.py::test_gone": "written",
+        "tests/test_absent.py::test_absent": "not yet written",
+    }
+    assert targets == []
+
+
+def test_repair_prompt_reports_uninspectable_ledger_test(world: World) -> None:
+    """Ledger 16. Planted fault: prompt construction refused, or named the uninspectable test standing.
+
+    The prompt still builds: the standing section holds the standing ref alone, the uninspectable
+    file is named as unreadable in its own section, and no ledger ref of it is listed (spec, criterion 16).
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    assert 1\n", encoding="utf-8")
+    (tests / "test_broken.py").write_text("def test_broken(:\n    pass\n", encoding="utf-8")
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — written and standing",
+                "- 2: tests/test_broken.py::test_broken — written on an earlier change",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "a standing and an unparseable ledger test file")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.repair_prompt(ctx, "baseline-sha", [], [], endpoint=stage2.CODEX)
+    assert (
+        "Standing ledger tests, the pytest targets - run them and leave them green:\n"
+        "- tests/test_standing.py::test_standing"
+    ) in prompt
+    assert "Ledger tests the runner cannot inspect" in prompt
+    listed = [line for line in prompt.splitlines() if line.startswith("- ")]
+    assert any("test_broken.py" in line and "cannot be read or parsed" in line for line in listed)
+    assert not any(line.startswith("- tests/test_broken.py") for line in listed), "named as standing"
+
+
+def test_malformed_ledger_entry_is_not_selected(world: World) -> None:
+    """Ledger 17. Planted fault: a malformed entry was selected or named as a missing ledger test.
+
+    The line in no recognized entry form is left to the criterion-ledger gate: the cheap selection
+    neither sends it to pytest nor reports it as missing (spec, criterion 17).
+    """
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_real.py").write_text("def test_real():\n    assert 1\n", encoding="utf-8")
+    commit_tree(world, "a standing test file")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    plan = plan_with_ledger(
+        [
+            "- 1: tests/test_real.py::test_real — written and standing",
+            "- 2: someday tests/test_malformed.py::test_someday — no recognized entry form",
+        ]
+    ).encode()
+    targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan)
+    assert fault is None and missing == {} and faults == []
+    assert targets == ["tests/test_real.py::test_real"]

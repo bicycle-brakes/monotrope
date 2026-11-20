@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-19
+updated: 2026-11-20
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1151,13 +1151,35 @@ implement or repair attempt's cheap checks and stops at the first red one
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
 over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
 file the top-level test functions that are new or differ from HEAD (a new file
-whole), the accepted plan's criterion-ledger test references in both forms as
+whole), the accepted plan's standing criterion-ledger test references as
 function ids, and, on a retry, the test ids pytest reported as failed in the
 previous attempt of the same run whose file and test still stand, each by its function without a
 parameter part (a test inherited by a class with a base counts as standing); deduplicated and
 sorted (a file selected whole covers its own ids, which are then not repeated as
 explicit targets), and no importer of a changed `scripts/` module is selected
-(`decisions.md` Q-3 of the change). The cheap checks run on the attempt's own
+(`decisions.md` Q-3 of the change). Before pytest is ever started, the ledger
+references are classified against the tree (bead coding-harness-bxxt.9): each
+reference in either entry form is judged by the same parsed-name check the
+selection uses — a top-level `async def` stands, a name defined only inside a
+string does not — and a reference whose file or name does not stand is
+classified missing and never becomes one of pytest's arguments. The runner
+names it in the attempt's own record instead, a standing test runs beside it,
+and pytest is skipped altogether when no selected target stands. A missing
+test keeps its entry's state — written, or still marked `not yet written`,
+written taking precedence when duplicate entries name one id — and the state
+decides what the attempt owes: an implement attempt owes every ledger test and
+fails when any of them is missing, even when all standing selected tests pass; a
+repair owes the written entries and the proof of each finding it addresses, so
+a missing written entry fails it too, while a missing unwritten-only entry
+alone fails no repair and stands in its record as named but not owed. A failing
+selected test fails the attempt whatever the classification found. A ledger
+file that does not exist makes its references missing; an existing file that
+cannot be read or parsed is a fault that names that input, and the cheap check
+fails on it instead of diagnosing a missing test. A ledger line in none of the
+recognized entry forms is neither selected nor named — the criterion-ledger
+gate reports it. The classification lands in the attempt's record wherever the
+verdict puts it: in the measured time line of an accepted attempt, beside the
+failure reasons in the diagnostics block of a failed one. The cheap checks run on the attempt's own
 bytes, before the runner stamps documents and renders derived files: a selected
 test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
 line) sees it unprepared, and such a test belongs to `make verify`, not to the
@@ -1172,10 +1194,15 @@ check reads model-written state — through the recovery preflight, never
 through a linked parent — and records the restoration in the attempt's
 bookkeeping with its real verdict: a note beside the failure for a rejected
 attempt, a quoted notice under the audit line of one that passes. The
-implement and repair prompts carry the accepted plan's ledger test references
-as must-runs before handback, taken from the plan's snapshot so a retry
-rereads nothing its predecessor may have edited: a command-capable Codex runs
-ruff and the named tests itself before handing back, while the file-only Flash
+implement and repair prompts carry the accepted plan's ledger tests as
+must-runs before handback, taken from the plan's snapshot so a retry
+rereads nothing its predecessor may have edited, and each variant states what
+its attempt owes: the implement prompt owes every ledger test, including the
+entries still marked `not yet written`; a repair prompt owes the proof of every
+finding it addresses and every written ledger entry, standing or missing, while
+missing unwritten entries are named but not owed and never stand in the
+repair's pytest list — a command-capable Codex runs ruff and the standing
+ledger tests itself before handing back, while the file-only Flash
 and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 

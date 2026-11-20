@@ -48,23 +48,23 @@ The runner performs the final full check and commit. Explore used Stage 2, route
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_fail_fast.py::test_ledger_ids_are_checked_before_pytest — a missing written or unwritten ID reaches pytest
-- 2: not yet written tests/test_stage2_fail_fast.py::test_missing_ledger_ids_persist_in_attempt_record — a successful repair or failed attempt loses a missing ID
-- 3: not yet written tests/test_stage2_fail_fast.py::test_standing_targets_run_when_ledger_ids_are_missing — a missing ID blocks a standing target, including in a new file
-- 4: not yet written tests/test_stage2_fail_fast.py::test_only_missing_ledger_ids_skip_pytest — pytest starts without a standing target
-- 5: not yet written tests/test_stage2_fail_fast.py::test_implement_fails_after_running_standing_tests_with_missing_ledger_ids — implement accepts missing ledger tests
-- 6: not yet written tests/test_stage2_fail_fast.py::test_repair_accepts_unclaimed_unwritten_ledger_ids — an unwritten-only test alone rejects repair even if later claimed
-- 7: not yet written tests/test_stage2_fail_fast.py::test_repair_fails_for_missing_written_ledger_test — a missing written proof is accepted, including when also marked unwritten
-- 8: not yet written tests/test_stage2_fail_fast.py::test_standing_test_failure_is_not_hidden_by_missing_ledger_ids — a red selected test is accepted
-- 9: not yet written tests/test_stage2_fail_fast.py::test_unreadable_or_invalid_ledger_test_is_not_missing — a read or parse error becomes a missing ID or green
-- 10: not yet written tests/test_stage2.py::test_repair_rejects_missing_claimed_proof — the existing answer check accepts an undefined ordinary or guard-test claim
-- 11: not yet written tests/test_stage2.py::test_repair_still_requires_finding_proof_with_missing_ledger_ids — missing finding proof is accepted
-- 12: not yet written tests/test_stage2_fail_fast.py::test_implement_prompt_requires_all_ledger_tests — an unwritten test is optional in the implement prompt
-- 13: not yet written tests/test_stage2_fail_fast.py::test_repair_prompt_distinguishes_finding_proof_from_unwritten_tests — repair omits an obligation or the named-but-not-owed statement
-- 14: not yet written tests/test_stage2_fail_fast.py::test_repair_prompt_pytest_list_excludes_missing_ledger_ids — a missing ID is supplied to model-run pytest
-- 15: not yet written tests/test_stage2_fail_fast.py::test_missing_ledger_file_is_reported_as_missing — an absent file becomes a read fault
-- 16: not yet written tests/test_stage2_fail_fast.py::test_repair_prompt_reports_uninspectable_ledger_test — an unreadable or invalid file prevents the prompt or is silently listed as standing
-- 17: not yet written tests/test_stage2_fail_fast.py::test_malformed_ledger_entry_is_not_selected — a malformed entry is selected or named as missing
+- 1: tests/test_stage2_fail_fast.py::test_ledger_ids_are_checked_before_pytest — a missing written or unwritten ID reaches pytest
+- 2: tests/test_stage2_fail_fast.py::test_missing_ledger_ids_persist_in_attempt_record — a successful repair or failed attempt loses a missing ID
+- 3: tests/test_stage2_fail_fast.py::test_standing_targets_run_when_ledger_ids_are_missing — a missing ID blocks a standing target, including in a new file
+- 4: tests/test_stage2_fail_fast.py::test_only_missing_ledger_ids_skip_pytest — pytest starts without a standing target
+- 5: tests/test_stage2_fail_fast.py::test_implement_fails_after_running_standing_tests_with_missing_ledger_ids — implement accepts missing ledger tests
+- 6: tests/test_stage2_fail_fast.py::test_repair_accepts_unclaimed_unwritten_ledger_ids — an unwritten-only test alone rejects repair even if later claimed
+- 7: tests/test_stage2_fail_fast.py::test_repair_fails_for_missing_written_ledger_test — a missing written proof is accepted, including when also marked unwritten
+- 8: tests/test_stage2_fail_fast.py::test_standing_test_failure_is_not_hidden_by_missing_ledger_ids — a red selected test is accepted
+- 9: tests/test_stage2_fail_fast.py::test_unreadable_or_invalid_ledger_test_is_not_missing — a read or parse error becomes a missing ID or green
+- 10: tests/test_stage2.py::test_repair_rejects_missing_claimed_proof — the existing answer check accepts an undefined ordinary or guard-test claim
+- 11: tests/test_stage2.py::test_repair_still_requires_finding_proof_with_missing_ledger_ids — missing finding proof is accepted
+- 12: tests/test_stage2_fail_fast.py::test_implement_prompt_requires_all_ledger_tests — an unwritten test is optional in the implement prompt
+- 13: tests/test_stage2_fail_fast.py::test_repair_prompt_distinguishes_finding_proof_from_unwritten_tests — repair omits an obligation or the named-but-not-owed statement
+- 14: tests/test_stage2_fail_fast.py::test_repair_prompt_pytest_list_excludes_missing_ledger_ids — a missing ID is supplied to model-run pytest
+- 15: tests/test_stage2_fail_fast.py::test_missing_ledger_file_is_reported_as_missing — an absent file becomes a read fault
+- 16: tests/test_stage2_fail_fast.py::test_repair_prompt_reports_uninspectable_ledger_test — an unreadable or invalid file prevents the prompt or is silently listed as standing
+- 17: tests/test_stage2_fail_fast.py::test_malformed_ledger_entry_is_not_selected — a malformed entry is selected or named as missing
 
 ## Time used
 
@@ -72,3 +72,4 @@ The runner performs the final full check and commit. Explore used Stage 2, route
 2026-11-20 17:28:09–17:31:32 UTC, 203 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-20 17:39:25–17:42:29 UTC, 185 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-20 17:57:44–18:00:50 UTC, 186 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-20 19:50:24–22:17:52 UTC, 8848 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

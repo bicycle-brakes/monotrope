@@ -10851,9 +10851,13 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
     assert record["L1-4"] == "fixed — tests/test_fix.py::test_fix"
 
 
-@pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS"])
+@pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS", "MUST_RUN_DELEGATED_REPAIR"])
 def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
-    """No tool route may promise unconditional full verification after a work verb (repair-targeted-check L5-2)."""
+    """No tool route may promise unconditional full verification after a work verb (repair-targeted-check L5-2).
+
+    The file-only repair route has its own instruction block since bead coding-harness-bxxt.9: it
+    names the standing ledger tests as pytest's targets, owes the findings' proofs and the written
+    entries, and says missing unwritten tests are named but not owed."""
     text = getattr(stage2, block)
     assert "before full verification" not in text
     assert "checks and full `make verify` after the call" not in text
@@ -16686,6 +16690,76 @@ def test_a_fixed_line_whose_test_path_climbs_out_of_tests_fails_the_attempt(worl
 def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> None:
     """Criterion 18. Planted fault: exit 0 on the baseline accepted as red first."""
     seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    green_on_baseline = (
+        "from pathlib import Path\n\n\ndef test_not_red():\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 1" in value\n'
+    )
+    script_repair(
+        world,
+        [
+            repair_step(
+                stdout="L1-1: fixed — tests/test_notred.py::test_not_red",
+                plant={"src/app.py": "value = 2\n", "tests/test_notred.py": green_on_baseline},
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[1])
+    assert (
+        "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; "
+        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
+    ) in prompt
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "fixed — tests/test_absent.py::test_absent",
+        "fixed — guard test — tests/test_absent.py::test_absent",
+    ],
+    ids=["ordinary-claim", "guard-test-claim"],
+)
+def test_repair_rejects_missing_claimed_proof(world: World, claim: str) -> None:
+    """Ledger 10. Planted fault: the answer check accepted an undefined ordinary or guard-test claim.
+
+    The claimed file does not exist, so the check finds no `def test_absent(`: the attempt fails,
+    the diagnostic stands in the retry's prompt, and the second attempt repairs properly (spec,
+    criterion 10). The guard claim is answered only because the row's own Status authorises it.
+    """
+    seed_tests(world)
+    if claim.startswith("fixed — guard"):
+        world.write_record([("L1-1", "taken — guard test — no standing test can show the fault", "no")])
+    else:
+        world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [repair_step(stdout=f"L1-1: {claim}"), repair_step(), repair_step()],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[1])
+    assert "L1-1: tests/test_absent.py::test_absent defines no function `def test_absent(`" in prompt, prompt
+
+
+def test_repair_still_requires_finding_proof_with_missing_ledger_ids(world: World) -> None:
+    """Ledger 11. Planted fault: missing unwritten ledger tests excused the finding's own proof.
+
+    The plan's ledger names only an unwritten missing test, so the cheap check is green - and the
+    red-first obligation still refuses the attempt whose named test is green on the baseline
+    (spec, criterion 11).
+    """
+    seed_tests(world)
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_later.py::test_later — parked for a later change\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a plan whose ledger names an unwritten test")
     world.write_record([("L1-1", "taken — test_a", "no")])
     green_on_baseline = (
         "from pathlib import Path\n\n\ndef test_not_red():\n"
@@ -26257,8 +26331,8 @@ def test_findings_stay_when_the_checkpoint_fails_without_a_rollback(
 
 def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
     # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that
-    # exists. Row 2 is a `not a test` row: a row still naming an unwritten test would be one of
-    # the cheap pytest run's targets (spec, criterion 3), and the attempt would end before the
+    # exists. Row 2 is a `not a test` row: a row naming a test that never stands would fail the
+    # cheap classification (bead coding-harness-bxxt.9), and the attempt would end before the
     # clearing this regression proves.
     world.plan.write_text(
         "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
@@ -26491,11 +26565,16 @@ def test_ledger_discount_keeps_clearing_in_both_verify_modes(
     git(world.root, "commit", "--quiet", "-m", "pending entries in both kinds")
     commands = targeted_mode(monkeypatch)
     evidence = stage2.ClearingEvidence()
+    # A repair owes only the written entries (bead coding-harness-bxxt.9): the missing unwritten
+    # entry is named but not owed, so verification runs and the proof below holds - an implement
+    # verb would fail the cheap check on that entry before any clearing happened.
     if mode == "full":
-        problems = stage2.verify_attempt(world.root, world.plan, clearing=evidence)
+        problems = stage2.verify_attempt(world.root, world.plan, clearing=evidence, verb="repair")
     else:
         baseline = git(world.root, "rev-parse", "HEAD")
-        problems = stage2.verify_attempt(world.root, world.plan, mode="targeted", against=baseline, clearing=evidence)
+        problems = stage2.verify_attempt(
+            world.root, world.plan, mode="targeted", against=baseline, clearing=evidence, verb="repair"
+        )
     assert problems == [], problems
     if mode == "targeted":
         assert commands.of("make") == [], "the targeted check fell back to full verification"
