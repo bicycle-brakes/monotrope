@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -125,6 +125,23 @@ context: |
   (Recorded by the lane session from the bead's notes, which hold the answer; the full wording shown with the question was not read.)
 
 In the context of a per-model report over historical findings that cannot be edited, facing rows that cannot be read or resolved, we decided to always print the table and the JSON, flag gaps as 'incomplete' with the affected rows and exit non-zero, every unreadable row (cell count, unknown status, encoding) being a gap and never silently 'unattributed', to achieve a report that is always visible yet never passes an incomplete count as complete, accepting a non-zero exit as long as any historical gap remains. — 2026-11-18
+
+## Q-7 · Who enforces the cell vocabulary: the reader or a gate (phase-6 grammar review)
+
+asked: 2026-11-20
+answer: "Leser misst, Gate setzt durch" — the reader measures: severity, dimension and origin need only a non-blank cell, while ID, reviewer and Status stay strict because the count depends on them; historical rows with a free vocabulary are counted again. The gate enforces: the fixed vocabulary (origin `base`, `loop` or `fix-r<N>`, the severity set, the dimension set) applies only to new or changed rows, through the existing new-row gate `scripts/check_finding_duplicates.py`, without a new entry in `decisions/gates.yaml`.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the hand repair of phase-6 rows F6-1 and F6-2, a review of the reader's whole input grammar, found that its cell check rejects real history.
+  Intention: the per-model report must be usable on main; history is protected and cannot be rewritten.
+  Today: at commit faa75a3d the main report had 1555 gaps; 1414 were historical rows whose origin is free text (`impl`, `Phase 6`, a model name), 47 a free dimension, 9 a free severity. Those rows were left out of every model's count.
+  Options as offered: the recommendation was to require only non-blank severity, dimension and origin in the reader and to enforce the vocabulary for new rows; the wording of the options shown on 2026-11-20 was not read.
+  Repository change: the reader counts rows with a free vocabulary; a later step makes the new-row gate check the vocabulary of new or changed rows.
+  Architecture change: none; the one reader and the one new-row gate stay the only paths.
+  (Recorded by the lane session from the orchestrator's relay of the maintainer's answer. The reader half is built; the gate half waits on a follow-up question, because three released loop rows the runner wrote on this branch carry the dimension `Correctness`, and the gate would block runner output that may not be edited by hand.)
+
+In the context of a per-model report over protected historical findings, facing rows whose severity, dimension or origin is free text although those cells decide no count, we decided that the reader asks only that they are not blank while ID, reviewer and Status stay strict, and that the fixed vocabulary is enforced on new or changed rows by the existing new-row gate, to achieve a report that counts the real history and a vocabulary that holds from now on, accepting that historical rows keep their free vocabulary for good. — 2026-11-20
 
 ## Agent decisions on the second phase-2a rows F-12..F-19 — 2026-11-18
 

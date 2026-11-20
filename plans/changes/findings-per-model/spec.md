@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -78,6 +78,13 @@ Changing review execution, release format, model selection, the ladder, the stag
 ## Protected areas
 
 Historical findings and decisions remain evidence; model declarations and review execution are unchanged.
+
+## Boundary
+
+Limits this change accepts; phase 6 judges a row that describes only one of them as that limit (decisions Q-7, phase-6 grammar review of 2026-11-20).
+
+- **The reader reads the grammar in `scripts/findings_reader.py`, not all of Markdown.** Three cases are deliberately not read as a Markdown renderer would: a setext heading whose text spans several lines is labelled by its last line only; rows without a header row above them are read as rows, although a renderer shows them as a paragraph; and HTML blocks other than comments (`<details>`, `<table>`) are not opaque, so a table line inside one is read as a row.
+- **Severity, dimension and origin are measured, not enforced, by the reader.** A non-blank free value (`impl`, `Correctness`) is no gap under criterion 16; the fixed vocabulary is a matter for the new-row gate (decisions Q-7).
 
 ## Definition of Done
 
