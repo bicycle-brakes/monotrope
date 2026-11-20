@@ -1483,18 +1483,37 @@ def test_selection_and_census_read_one_frontmatter_pattern(text):
     assert stage2.frontmatter_pattern() is research_census.FRONTMATTER
 
 
-def test_implement_refuses_an_added_producer(repo):
+def test_implement_refuses_an_added_producer(repo, monkeypatch):
+    # Loop row L6-1: on implement, a producer record the session added is refused like a rewritten
+    # or dropped one - only the runner's stamp adds records (Q-10); the implement route passes it on.
     extra = '{kind: llm-session, name: codex, version: "2026-11-20"}'
     original = 'produced_by: {kind: llm-session, name: codex, version: "2026-11-10", model: "gpt-6.1-terra"}'
-    _write(repo, SPEC_PATH, SPEC_SEED.replace(original, f"produced_by: [{original[len('produced_by: ') :]}, {extra}]"))
+    added = SPEC_SEED.replace(original, f"produced_by: [{original[len('produced_by: ') :]}, {extra}]")
+    _write(repo, SPEC_PATH, added)
     try:
         problems = stage2.touched_header_problems(repo, [SPEC_PATH], reject_added=True)
     except TypeError as error:
         pytest.fail(f"the shared check cannot reject added producer records: {error}")
     assert any("session added a producer record" in problem for problem in problems), problems
+    _write(repo, SPEC_PATH, SPEC_SEED)
+
+    def adds_a_record(root):
+        # Real work beside the header edit, so only the added record can fail the attempt.
+        _write(root, "plans/changes/demo/other.txt", "plain text, no header\n")
+        _write(root, SPEC_PATH, added)
+
+    with pytest.raises(stage2.CallFailed):
+        _run_two_attempts(repo, monkeypatch, "implement", adds_a_record, adds_a_record, [[], []])
+    assert not _git(repo, "log", "--format=%s", "-1").startswith("test run"), (
+        "a session-written producer record was committed on implement"
+    )
+    findings = (repo / "plans/changes/demo/findings.md").read_text(encoding="utf-8")
+    assert "session added a producer record" in findings, findings
 
 
 def test_runner_findings_stamp_does_not_judge_legacy_header(repo, monkeypatch):
+    # Loop row L6-3: the dispatch-level check compares against the header the runner itself last
+    # wrote, so its own `updated:` stamp on a legacy findings.md never refuses the verb.
     relative = "plans/changes/demo/findings.md"
     legacy = (
         "---\ntitle: Findings\nproduced_by: {kind: llm-session, name: Claude Code, version: '2026-11-10'}\n"

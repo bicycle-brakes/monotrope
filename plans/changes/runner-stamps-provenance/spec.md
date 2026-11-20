@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -106,4 +106,4 @@ Runner-held paths remain outside model attempts, including `provenance.yaml`, `d
 
 [DETAIL] Insert a missing field at the end of frontmatter when `tags` is absent; this preserves unrelated bytes. Refuse all YAML anchors and aliases because safe source-span edits cannot be guaranteed. A resumed swarm retains its frozen preparation day so its publication binding remains stable.
 
-[DETAIL] A retained approval needs a nonempty approver and ISO approval date, without introducing role membership or date-range rules; this makes the committed approval checkable without inventing an authorization policy. Do not append an identical measured producer record twice; the existing record already represents that producer and day. Convert a block mapping to a compact sequence by replacing its first record line’s indentation with `- ` and leaving later record lines unchanged; this structural conversion is the accepted exception to byte preservation (agent decision F-35). Fail an unmeasured repair attempt and continue to the next available route, as for draft, because its contributions cannot be attributed reliably.
+[DETAIL] A retained approval needs a nonempty approver and ISO approval date, without introducing role membership or date-range rules; this makes the committed approval checkable without inventing an authorization policy. Do not append an identical measured producer record twice; the existing record already represents that producer and day. Convert a block mapping to a compact sequence by replacing its first record line’s indentation with `- ` and moving every later record line with it to the item’s content column: at the usual two-space indentation the later lines keep their bytes, and a mapping indented deeper is re-indented so it stays valid YAML (loop rows L3-7 and L6-4); this structural conversion is the accepted exception to byte preservation (agent decision F-35). Fail an unmeasured repair attempt and continue to the next available route, as for draft, because its contributions cannot be attributed reliably.

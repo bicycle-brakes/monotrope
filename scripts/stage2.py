@@ -1604,8 +1604,11 @@ def stamp_updated(path: Path) -> None:
 
     The stamp edits that one line. A file without a header, like the loop record, is left as it is.
     """
+    # The runner's own stamp on the change's findings.md moves the post-run check's baseline with it
+    # when the verb had not changed that header itself, so the stamp alone never trips the check (L6-3).
     snapshot = _findings_written_header.get()
-    before = path.read_bytes() if snapshot is not None and path == snapshot[0] and path.exists() else None
+    same = snapshot is not None and path.exists() and snapshot[0].exists() and path.samefile(snapshot[0])
+    before = path.read_bytes() if same else None
     check_frontmatter_current.stamp(path, clock_now().local_date)
     if before is not None and snapshot[1] is not None and header_of(before) == header_of(snapshot[1]):
         snapshot[1] = path.read_bytes()
@@ -9661,7 +9664,8 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
     list grow a flow list in place, a block sequence and a block mapping grow compact sequence
     items - the mapping's first record line's indentation becomes `- ` and every later line moves
     with it to the item's content column (unchanged bytes at the usual two spaces; a deeper
-    mapping is re-indented so it stays valid YAML, loop row L3-7; agent decision F-35). A file with no committed field gets the canonical rendering.
+    mapping is re-indented so it stays valid YAML, loop rows L3-7 and L6-4; agent decision F-35).
+    A file with no committed field gets the canonical rendering.
     """
     if baseline_field is None:
         # The rendering already leads with the one space after the key's colon.
@@ -9683,7 +9687,7 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
         rest = ", ".join(inline_producer_record(record) for record in added)
         return f" [{inner}, {rest}]" if inner else f" [{rest}]"
     # A block value begins with the line ending that followed `produced_by:`; the record
-    # lines follow. The first record line's indentation becomes `- `, the rest unchanged.
+    # lines follow. The first record line's indentation becomes `- `; a mapping's later lines follow it.
     body = baseline_field[1:] if baseline_field[0] in "\r\n" else baseline_field
     lines = body.replace("\r\n", "\n").split("\n")
     first = lines[0]
@@ -9950,7 +9954,9 @@ def header_problems(
 
     `runner_reset` says the verb stamps, so the runner itself may have reset a committed
     approval beside a document change (criterion 8); on a verb that does not stamp, such a
-    reset is a fault (L2-9).
+    reset is a fault (L2-9). `reject_added` says the verb never stamps (implement), so any
+    producer record the commit does not hold was written by the session and is refused, on
+    active research as on every other file (L6-1).
     """
     import research_census  # the census reads this module back, so the import stands at call time
 
@@ -10011,24 +10017,20 @@ def header_problems(
                 baseline_header = None
     provenance = header.get("provenance")
     review = header.get("review")
-    if isinstance(baseline_header, dict) and baseline_header.get("produced_by") is not None:
-        # A producer record a session wrote is never trusted (Q-10, Q-17): every record the commit
-        # holds must stand unchanged, on implement as on every verb. A dropped or rewritten one is a fault.
-        def as_records(value: object) -> list:
-            return value if isinstance(value, list) else [value]
 
-        kept = as_records(header.get("produced_by"))
-        if any(record not in kept for record in as_records(baseline_header["produced_by"])):
-            problems.append(f"{relative}: produced_by: a committed producer record was rewritten or dropped")
-    if reject_added:
-        prior = baseline_header.get("produced_by") if isinstance(baseline_header, dict) else None
-        prior_records = prior if isinstance(prior, list) else ([] if prior is None else [prior])
-        current_value = header.get("produced_by")
-        current_records = (
-            current_value if isinstance(current_value, list) else ([] if current_value is None else [current_value])
-        )
-        if any(record not in prior_records for record in current_records):
-            problems.append(f"{relative}: produced_by: a session added a producer record")
+    def as_records(value: object) -> list:
+        return [] if value is None else value if isinstance(value, list) else [value]
+
+    committed_records = as_records(baseline_header.get("produced_by") if isinstance(baseline_header, dict) else None)
+    current_records = as_records(header.get("produced_by"))
+    # A producer record a session wrote is never trusted (Q-10, Q-17): every record the commit
+    # holds must stand unchanged, on implement as on every verb. A dropped or rewritten one is a fault.
+    if any(record not in current_records for record in committed_records):
+        problems.append(f"{relative}: produced_by: a committed producer record was rewritten or dropped")
+    if reject_added and any(record not in committed_records for record in current_records):
+        # On a verb that never stamps, no record may appear that the commit does not hold: only the
+        # runner's stamp adds producer records (Q-10, loop row L6-1).
+        problems.append(f"{relative}: produced_by: a session added a producer record")
     if ACTIVE_RESEARCH.fullmatch(relative):
         return research_census.text_findings(relative, text) + problems
     if baseline_header is None or not isinstance(baseline_header, dict):
