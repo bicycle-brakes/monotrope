@@ -74,10 +74,11 @@ its first table, a kept line or the next heading) or a phase-6 section (it
 ends at the next heading or kept line). In a counted section every row must
 pass ``row_error`` — width 10 released, 7, 9 or 10 phase-6, matching its
 header when one stands above; an id of ``ROW_ID`` form (``LOOP_ID`` when
-released); severity ``BLOCKER``/``MAJOR``/``MINOR``; dimension ``SPEC``/
-``MAINT``/``CODE``; origin ``base``/``loop``/``fix-r<N>`` (historical
-seven-cell ``CODE`` rows have none); no blank location, finding, reviewer,
-test or Phase 6 cell; a status of the closed set. A row whose id begins
+released); no blank severity, dimension, origin (historical seven-cell
+``CODE`` rows have none), location, finding, reviewer, test or Phase 6
+cell; a status of the closed set. Severity, dimension and origin decide no
+count, so their vocabulary is not the reader's to enforce (maintainer,
+2026-11-20: the reader measures, a gate enforces). A row whose id begins
 ``2a-`` in a phase-6 section is never counted (criterion 19) and is listed
 with the phase-2a tables. Outside a counted section, a table whose first
 cell is a finding id stands outside the count (criterion 18) and is listed
@@ -529,18 +530,17 @@ def row_error(cells: list[str], kind: str, header: tuple[str, ...] | None = None
     id_pattern = LOOP_ID if kind == "released" else ROW_ID
     if not id_pattern.fullmatch(cells[0]):
         return f"unreadable {kind} finding id"
-    if cells[1] not in {"BLOCKER", "MAJOR", "MINOR"}:
-        return f"invalid severity {cells[1]!r}"
-    if cells[2] not in {"SPEC", "MAINT", "CODE"}:
-        return f"invalid dimension {cells[2]!r}"
+    # The reader measures, a gate enforces (maintainer, 2026-11-20): severity,
+    # dimension and origin decide no count, so the reader asks only that they
+    # are not blank — historical rows with a free vocabulary are counted.
     # Historical seven-cell CODE rows predate the Origin column: their final
     # three fields before Status are Where, Finding and Reviewer. A header
     # above the row names its columns, so only a row without one is read so.
     legacy = len(cells) == 7 and cells[2] == "CODE" and header is None
-    if not legacy and not re.fullmatch(r"(?:base|loop|fix-r[0-9]+)", cells[3]):
-        return f"invalid origin {cells[3]!r}"
     for index, name in (
-        ((3, "location"), (4, "finding"), (5, "reviewer")) if legacy else ((4, "location"), (5, "finding"))
+        ((1, "severity"), (2, "dimension"), (3, "location"), (4, "finding"), (5, "reviewer"))
+        if legacy
+        else ((1, "severity"), (2, "dimension"), (3, "origin"), (4, "location"), (5, "finding"))
     ):
         if not cells[index].strip():
             return f"blank {name}"

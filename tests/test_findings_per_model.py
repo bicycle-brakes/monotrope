@@ -455,9 +455,10 @@ def test_gaps_produce_both_incomplete_outputs_and_nonzero(tmp_path, monkeypatch)
 
 
 def test_malformed_finding_cells_are_gaps_in_both_outputs(tmp_path, monkeypatch):
+    # Maintainer decision 2026-11-20 ("the reader measures, the gate enforces"): blank cells are gaps, free vocabulary is not.
     valid = ["F-1", "MAJOR", "SPEC", "base", "spec.md", "a finding", "open"]
     rows = []
-    for index, value in enumerate(("bad id", "BAD", "BAD", "bad", "", "", "unknown")):
+    for index, value in enumerate(("bad id", "", "", "", "", "", "unknown")):
         cells = valid.copy()
         cells[index] = value
         if index != 0:
@@ -472,6 +473,23 @@ def test_malformed_finding_cells_are_gaps_in_both_outputs(tmp_path, monkeypatch)
     assert records[0]["complete"] is False
     assert len([record for record in records if record["type"] == "gap"]) == len(rows)
     assert not [record for record in records if record["type"] == "model"]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| L2-1 | MINOR | MAINT | impl | x.py | a finding | hy3 | fixed — tests/x.py::t | no | – |",
+        "| L1-1 | MAJOR | Correctness | base | x.py | a finding | hy3 | open | no | – |",
+        "| L1-11 | MAINT | MAINT | change | x.py | a finding | hy3 | rejected — style | no | – |",
+    ],
+    ids=["origin-impl", "free-dimension", "free-severity"],
+)
+def test_historic_free_vocabulary_rows_are_counted(row):
+    # Maintainer decision 2026-11-20 ("the reader measures, the gate enforces"): a historic row with `impl` counts.
+    result = read(doc(RELEASE, row))
+    assert result.gaps == [], "a free origin, severity or dimension made the report incomplete"
+    assert [(finding.model, finding.id) for finding in result.findings] == [("hy3", row.split(" | ")[0][2:])]
+    assert totals(result.findings)["hy3"]["raised"] == 1
 
 
 # --- criterion 18 --------------------------------------------------------------------
