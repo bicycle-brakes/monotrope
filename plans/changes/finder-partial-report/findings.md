@@ -657,3 +657,16 @@ Stage-2 call, 2026-11-20: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4978 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4984 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-2 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1158 | When a Claude finder result is reused but a Pi finder must run, an installed Claude Code below the declared minimum does not stop the Pi call: the version check runs only if a Claude finder is being launched. The criterion requires the check before any finder call. [Criterion 26] | Codex | open | — |
+| R6-3 | MAJOR | SPEC | base | scripts/stage2_research_map.py:155 | If the schema’s `code` category is renamed to `design` in both `properties` and `required`, schema loading and finder validation accept it. Finder calls can then run, but the merge still requires `code` and rejects their reports. The declared category compatibility check is absent from the runtime path. [Criteria 12 and 22; Open decisions] | Codex | open | — |
+| R6-4 | MAJOR | SPEC | base | scripts/stage2_research_map.py:257 | If the schema changes the `not_read` form’s `required` list to empty, an empty object matches that form. The validator checks only the first form for an empty object, drops the valid entry, and publishes missing-field errors instead. [Criteria 3 and 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fb5f-cd31-7532-9e33-4cb2c3ac8898, 2026-11-21
+Reviewer session: codex 01a1fb5f-cd31-7532-9e33-4cb2c3ac8898 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
