@@ -522,3 +522,5 @@ Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1145 files, 4946 commits, 12 rules.
 
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1150 files, 4954 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1150 files, 4957 commits, 12 rules.
