@@ -506,3 +506,9 @@ Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint 
 Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1145 files, 4900 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1145 files, 4901 commits, 12 rules.
+
+Loop attempt: 2026-11-20 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
