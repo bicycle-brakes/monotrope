@@ -470,3 +470,15 @@ Reviewer session: codex 01a1f8a1-afab-7333-b3af-a41e91aafa65 — a fresh session
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4878 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4894 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | implementation | `scripts/findings_reader.py`, `duplicate_targets`; `scripts/check_finding_duplicates.py`, `marks_duplicate` | For rows `R1` and `R2`, a status `rejected — same as R1` is treated as an independent rejected finding because duplicate references require a hyphen, although `R1` is a readable finding ID. The report credits the duplicate, and the gate also accepts that noncanonical form on a new row. [Acceptance criteria 7–9] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | implementation | `scripts/findings_reader.py`, `split_row` and `parse_findings` | A phase-6 row missing its final pipe, such as `\| F-3 \| MAJOR \| SPEC \| base \| file \| broken \| open`, is silently discarded: `split_row` returns no row, and the report records no gap. The report can therefore claim completeness and exit zero while omitting an unreadable finding. [Acceptance criterion 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f906-b20b-7601-ae7f-f7a326efe4fc, 2026-11-20
+Reviewer session: codex 01a1f906-b20b-7601-ae7f-f7a326efe4fc — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
