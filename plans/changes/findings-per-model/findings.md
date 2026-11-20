@@ -493,7 +493,7 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | scripts/findings_reader.py:315 | A phase-6 row such as `\| F-1 \| \| \| \| \| \| open \|` has the expected number of cells but leaves severity, dimension, origin, location and finding empty. The reader counts it and reports no gap, so both outputs can claim completeness for a malformed finding. The report must identify the row as incomplete and exit non-zero. [Criterion 16] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | scripts/findings_reader.py:315 | A phase-6 row such as `\| F-1 \| \| \| \| \| \| open \|` has the expected number of cells but leaves severity, dimension, origin, location and finding empty. The reader counts it and reports no gap, so both outputs can claim completeness for a malformed finding. The report must identify the row as incomplete and exit non-zero. [Criterion 16] | Codex | taken — in-spec reproduced fault, third of the unreadable-row mechanism: one row validator decides what a finding row is — every cell is checked against its declared form (ID grammar, severity set, dimension set, origin form, nonblank location and finding, status form) and any row that fails one is a gap that marks the report incomplete and exits non-zero; no other code path counts a row (provisional agent decision, autonomous run 2026-11-19) | — |
 
 Phase 6 verdict: codex 01a1f966-3933-7df0-bca5-d042e91cbacf, 2026-11-20
 Reviewer session: codex 01a1f966-3933-7df0-bca5-d042e91cbacf — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
