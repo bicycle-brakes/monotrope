@@ -276,12 +276,17 @@ orchestrator applied the maintainer's answer by hand; a run's history cannot
 be reset, so a new loop run was never an option.
 
 Decision 7 now reads, for this case: when every eligible stage of a run is
-consumed and the last round was not clean, the loop ends without a further
-round and names the next step. While a taken row of that round is open, the
-next step is the repair of those rows; once every taken row is fixed, the
-next step is the phase-6 review, which checks that last repair through its
-full `make verify` and the reviewer's read of the whole diff. No
-final-model repeat follows, as before.
+consumed, at least one review round completed in that run, and the last
+round was not clean, the loop ends without a further round and names the
+next step. While a taken row of that round is open, the next step is the
+repair of those rows; once every taken row is fixed, the next step is the
+phase-6 review, which checks that last repair through its full `make verify`
+and the reviewer's read of the whole diff. This holds also when the loop's
+diff was cut at the line bound, because phase 6 reads the complete diff in
+the worktree (`decisions.md` Q-5). When zero review rounds completed in the
+run (total stage outage), the loop still stops and reports to the maintainer
+instead of skipping phase 4b (`decisions.md` Q-4). No final-model repeat
+follows, as before.
 
 Unchanged: the repair brake of decision 7 (two consecutive rounds each with
 accepted findings all caused by repairs, Origin `fix-r`, stop and go to the
