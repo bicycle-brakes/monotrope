@@ -222,12 +222,12 @@ SUBSCRIPTION_TERMS_ENDPOINTS = {"glm-coding-plan": "Z.ai"}
 HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 # Codex's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
-# review start at `high`, the repair at `medium`. This mapping is the one place a later adjustment
+# review run at `xhigh`, the repair at `high` (each raised one step by the maintainer, 2026-11-20). This mapping is the one place a later adjustment
 # edits - the instructions link its entries and the tests read them. A call's verb selects the
 # entry, retries included: the `codex-repair` route label names a retry of draft and repair and
 # picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
 # `run_codex` takes the effort from the caller's verb instead.
-CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
+CODEX_EFFORTS = {"draft": "xhigh", "repair": "high", "review": "xhigh"}
 CODEX = ("openai-codex", "gpt-6.1-terra", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
