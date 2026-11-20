@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-15
+updated: 2026-11-20
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -82,7 +82,7 @@ handover to the next phase — not the chat history.**
 | 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — eleven topics from a finder map for a `feature` or `architectural` change, one report otherwise | the `research-handoff` check for a complete swarm run, otherwise — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
 | 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason; after a research swarm every obligation item answered and linked (`research_items`, `research_neighbours`; minimums are no ceiling) | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]`; after a research swarm `neighbours:` and every criterion's `*Basis:*` match the research (`research-handoff`) | [`02-spec.md`](../prompts/02-spec.md) |
-| 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 2a | Spec review *(not for a spike)* | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | a current review of the spec before the plan card, the final draft after round three excepted; every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]`; at most three rounds, a fourth only by the maintainer's recorded answer (§4, "The spec review before the plan card") | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
@@ -695,7 +695,9 @@ medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
 --effort medium`.
 
 **The spec review improves the spec first.** The spec's author works each 2a
-row into `spec.md` (or rejects it with a reason) before phase 3; the revised
+row into `spec.md` (or rejects it with a reason) before phase 3, and a spec
+changed that way is reviewed again until a current review settles the rows or
+three rounds have run (§4, "The spec review before the plan card"); the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
 "After the spec review"). **One reviewer for both:** since ADR 0016 this holds
 for a `spike` only — a routed change's phase 6 is a fresh Codex session that
@@ -975,8 +977,8 @@ models on the declared endpoints run is the declaration's job, in
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Opus 5.5, where one is held | the ladder | Codex, a fresh session |
-| `feature`, `architectural` | Opus 5.5 | the ladder | Codex, a fresh session |
+| `bounded` | Opus 5.5, required before the plan card | the ladder | Codex, a fresh session |
+| `feature`, `architectural` | Opus 5.5, required before the plan card | the ladder | Codex, a fresh session |
 
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
 review and is reviewed by Opus 5.5 where §3 asks for a review. The draft and
@@ -987,15 +989,20 @@ routing table. The class is therefore needed before the spec exists: explore
 takes the class from the explicit `--class` argument and the headers of
 `research.md` and `spec.md`, wherever stated. All available declarations must
 agree; missing, invalid or disagreeing declarations refuse before any model
-call. `--stage2-off [REASON]` keeps the Stage-1 route and
+call. For explore, `--stage2-off [REASON]` keeps the Stage-1 route and
 skips class derivation and class/neighbour header checks. Passing `--class`
 beside `--stage2-off` is refused with exit 2 before any call; the class has
 no effect on that route.
 
-**Nothing checks a change's class beyond explore.** A `feature` stated as a
-`spike` skips every stage-2 review, and one stated as `bounded` may skip the
-spec review, which is optional there; only the review before the merge catches
-either. Whoever runs the change runs the verbs its row allows.
+**Explore and implement check the class.** `implement` reads the class through
+the same reader as explore, from `research.md` and `spec.md`, on every route,
+`--stage2-off` included, and refuses a missing, invalid or disagreeing class
+before any model starts, telling the operator to add or repair the `class:`
+declarations. A `bounded`, `feature` or `architectural` change then needs a
+current spec review ("The spec review before the plan card" below); a `spike`
+stands outside it. A `feature` stated as a `spike` still skips every stage-2
+review; only the review before the merge catches that. Whoever runs the change
+runs the verbs its row allows.
 
 ### The routing
 
@@ -1209,9 +1216,13 @@ into a shell. Thirteen verbs exist:
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
-  no session kept.
+  no session kept; one retry after the configured pause, then the declared
+  fallback through Pi; at most three rounds ("The spec review before the plan
+  card").
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
-  5.5 at effort `medium`.
+  5.5 at effort `medium`. On every route it first refuses, before any model
+  starts, a refused class or a `bounded`, `feature` or `architectural` change
+  without a current spec review free of open `[AMBIGUITY]` rows.
 - `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
@@ -1464,10 +1475,20 @@ A drafted change runs in this order:
 2. The orchestrating session reads the whole draft against the change's
    problem.
 3. `python3 scripts/stage2.py spec-review <change>` — Opus 5.5 reviews the
-   spec (phase 2a), its rows into `findings.md`.
-4. A second `draft <change>` works the review's open rows in, once the
-   maintainer has answered every `[AMBIGUITY]` a row raised.
-5. The plan card reaches the maintainer unchanged — the veto stays theirs.
+   spec (phase 2a), its rows into `findings.md`; not for a `spike`.
+4. The orchestrator triages the rows: decisions go to the maintainer one at a
+   time, details it decides with reasons; the maintainer answers every
+   `[AMBIGUITY]` a row raised.
+5. When a row needs a spec edit, a second `draft <change>` works the rows in,
+   and step 3 runs again on the changed spec: draft and review repeat until a
+   current review leaves only settled rows that need no further spec edit, or
+   until the third review round has run.
+6. After the third round one final draft may work the last rows in without a
+   new review; rows still open that are no BLOCKER become named limits in
+   `plan.md`. A BLOCKER, or an `[AMBIGUITY]` whose answer changes the spec,
+   goes to the maintainer, who authorizes a fourth round or has the change
+   re-sliced.
+7. The plan card reaches the maintainer unchanged — the veto stays theirs.
 
 What the runner cannot see: which paths a draft's Codex call reads, and
 whether its sandbox in fact confines its writes. The put-back bounds what git
@@ -1476,6 +1497,64 @@ path outside the worktree, and not the repository's git directory (`.git`:
 hooks, config), which `git restore` and `git clean` never touch although the
 runner commits right after the draft; that residual risk is ADR 0016's to
 state, and the first real draft is a later change's.
+
+### The spec review before the plan card
+
+A `bounded`, `feature` or `architectural` change reaches its plan card, and
+`implement`, only with a current spec review; a `spike` stands outside this
+rule (bead coding-harness-ttic). The rule is enforced where it costs: the
+`implement` verb refuses before any model starts, on every route,
+`--stage2-off` included, and a change implemented earlier faces it again on
+its next `implement`.
+
+- **What counts.** Only a block the runner wrote: an Opus 5.5 block, or a
+  block of the declared fallback reviewer, with readable rows or the exact
+  answer `No finding.`, and the runner's matching `Stage-2 call … ·
+  spec-review` line directly above it. Prose, a refusal, a failed call, a
+  Codex block or a hand-held review counts as no review; one table line that
+  does not parse makes the whole block unreadable.
+- **What makes it current.** The block records the SHA-256 fingerprint of the
+  spec body, everything after the front matter, as the review prompt carried
+  it; a body that differs, an uncommitted edit included, makes the review
+  stale, and a front-matter edit does not. A block without a fingerprint
+  counts only when its day lies before the fixed implementation day written
+  in the runner; it is compared by day with the committer day, in UTC, of the
+  last commit that changed the spec body, and an uncommitted body edit makes
+  it stale.
+- **Open ambiguity.** In the newest qualifying block, a row whose Severity or
+  Finding begins `[AMBIGUITY]` and whose Status begins `open` refuses
+  `implement`, and the refusal names the row. Once no further round can run,
+  the maintainer settles such a row in `decisions.md`, with a question of the
+  change headed `Q-<n> · Ambiguity <row id>` and an answer.
+- **Three rounds.** After the third round one final draft passes without a new
+  review: one changed spec body after the newest qualifying review; a later
+  body change needs a current review again. A fourth round runs only when the
+  change's `decisions.md` holds a question headed `Q-<n> · Fourth spec-review
+  round` that the maintainer answered with an answer beginning `authorized`;
+  no round runs after the fourth, and otherwise the change is re-sliced.
+- **When Opus fails.** A call that exits nonzero, runs over the call limit, or
+  answers empty or unreadably is retried once after the configured pause;
+  then the declared fallback reviews through the runner's Pi on OpenCode Go,
+  the leak check first, and a leak-check BLOCK starts no fallback call. The
+  call limit, the pause and the fallback model, a DeepSeek model admitted on
+  OpenCode Go, stand in one place, the `spec_review` block of
+  `model-endpoints.yaml`. A fallback block is headed
+  `## Phase 2a — fallback <model>, <date>` and keeps the model it records, so
+  switching the declaration never voids it.
+- **The Opus re-check.** A current fallback review is re-checked by Opus in
+  the next day session: the next `spec-review` call on the unchanged spec.
+  The re-check replaces the fallback review in the same round and counts as
+  no new round; a BLOCKER from it after round three goes to the maintainer as
+  above.
+- **The morning inventory.** `python3 scripts/stage2.py
+  --spec-review-inventory` measures every non-archived change folder that
+  holds a `spec.md`, implemented changes included, with the same admission
+  `implement` faces. It lists, each in a group of its own, the changes whose
+  class is missing, invalid or disagreeing; the changes whose spec review is
+  missing, unreadable, stale or ambiguous; and the changes whose newest
+  current review is a fallback, for the Opus re-check. The morning handover
+  includes its output; whether a missing review is caught up is the
+  maintainer's decision, per change.
 
 ### The interactive session (`session`)
 

@@ -40,6 +40,14 @@ Jede Aussage trägt ihren Stichtag (Datum, Commit).
 - parallele Sessions: `~/.claude/hooks/session-scan.sh "${CLAUDE_SESSION_ID}" "$PWD"`
   (Spalte 1 `clash` = selber Checkout)
 - was diese Session geprüft hat (Tests, verify), und was nicht
+- nur in coding-harness, bei der Morgenübergabe (dem Bericht eines
+  Nachtlaufs): die Spec-Review-Inventur mit
+  `python3 scripts/stage2.py --spec-review-inventory` messen und ihre Ausgabe
+  unverändert, mit Datum und Commit, als Absatz „Spec-review inventory“ unter
+  `## Open work and blockers` aufnehmen. Sie nennt die Changes ohne gültige
+  Klasse, die ohne aktuelles Spec-Review und die, deren Fallback-Review Opus
+  am Tag nachprüft. Ob ein fehlendes Review nachgeholt wird, entscheidet die
+  Person je Change; die Übergabe holt nichts nach.
 
 Was nicht gelesen werden konnte, steht als „nicht gelesen“ drin, nie als „keine“.
 

@@ -567,6 +567,8 @@ def pin_the_ladder(target: Path) -> None:
     # This fixture exercises legacy declarations and frozen run histories.
     # Availability-enabled fresh runs have their own integration suite.
     entry.pop("availability_preflight", None)
+    # The spec review's fallback is the maintainer's to switch; a test declares its own (`pin_spec_review`).
+    data.pop("spec_review", None)
     entry["modelle"] = list(TEST_LADDER)
     entry["modelle_terms"] = {
         model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(TEST_LADDER)
@@ -8004,13 +8006,37 @@ def commit_at(
     monkeypatch.delenv("GIT_AUTHOR_DATE", raising=False)
 
 
-def spec_review_doctrine_problems(workflow: str, agents: str) -> list[str]:
-    """Criterion 1: the chain names the spec-review step before the plan card; the final draft stays unfenced."""
-    problems: list[str] = []
+def spec_review_texts() -> tuple[str, str, str, str]:
+    """The live workflow texts the spec names (spec terms): WORKFLOW, AGENTS.md and the two 2a prompts."""
+    return (
+        WORKFLOW.read_text(encoding="utf-8"),
+        (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+        (PROMPTS / "02-spec.md").read_text(encoding="utf-8"),
+        (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8"),
+    )
+
+
+def draft_chain(workflow: str) -> str | None:
+    """The ordered steps of the draft chain in docs/WORKFLOW.md §4, or None when the list is gone."""
     chain = re.search(r"A drafted change runs in this order:\n\n(.*?)\n\n", workflow, re.S)
-    if chain is None:
+    return chain.group(1) if chain else None
+
+
+def table_row(text: str, start: str) -> str | None:
+    """The first table line that begins with `start`, or None."""
+    return next((line for line in text.splitlines() if line.startswith(start)), None)
+
+
+def spec_review_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    """Criterion 1: every workflow text requires a current review before the card, the final draft excepted.
+
+    Loop rows L2-8, L2-12, L3-3 and L3-5: the phase rows, the class table and the class paragraph
+    are read for the words that let a card pass without a current review, so the old texts go red.
+    """
+    problems: list[str] = []
+    steps = draft_chain(workflow)
+    if steps is None:
         return ["docs/WORKFLOW.md no longer states the draft chain in one ordered list."]
-    steps = chain.group(1)
     review = re.search(r"\d+\. `python3 scripts/stage2\.py spec-review <change>`", steps)
     card = re.search(r"\d+\. The plan card reaches the maintainer", steps)
     if review is None:
@@ -8024,29 +8050,65 @@ def spec_review_doctrine_problems(workflow: str, agents: str) -> list[str]:
     card_row = next((index for index, line in enumerate(lines) if line.startswith("| 3 | Plan")), None)
     if review_row is None or card_row is None or review_row > card_row:
         problems.append("AGENTS.md's phase table no longer puts Spec-Review before Plan.")
+    for name, row in (
+        ("AGENTS.md's phase table", table_row(agents, "| 2a |")),
+        ("docs/WORKFLOW.md's phase table", table_row(workflow, "| 2a | Spec review")),
+    ):
+        if row is None:
+            problems.append(f"{name} has no 2a row.")
+            continue
+        if "optional" in row.lower():
+            problems.append(f"{name} still calls the spec review optional.")
+        if "a current review" not in row:
+            problems.append(f"{name}'s 2a gate does not require a current review of the spec.")
+        if not re.search(r"final draft after round three", row):
+            problems.append(f"{name}'s 2a gate does not except the final draft after round three.")
+    for klass in ("`bounded`", "`feature`, `architectural`"):
+        row = table_row(section(workflow, "### Which change gets what"), f"| {klass} |")
+        cell = row.split("|")[2].strip() if row else ""
+        if not cell.startswith("Opus 5.5") or "required" not in cell or "where one is held" in cell:
+            problems.append(f"the class table does not require the spec review for {klass}.")
+    for stale in (
+        r"may skip the\s+spec review",
+        r"spec review,\s+which is optional",
+        r"Nothing checks a change's class beyond explore",
+    ):
+        if re.search(stale, workflow):
+            problems.append(f"docs/WORKFLOW.md still says `{stale}`.")
+    if not re.search(r"final draft[^.]*without a\s+new review", workflow):
+        problems.append("docs/WORKFLOW.md no longer lets the final draft after three rounds pass without a review.")
     if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
         problems.append("the final draft after three rounds is fenced behind another review.")
     return problems
 
 
 def test_doctrine_requires_review_before_card() -> None:
-    """Criterion 1: the live chain keeps the spec-review step before the card, and no text fences the final draft."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    """Criterion 1: the live texts require a current review before the card and leave the final draft unfenced."""
+    workflow, agents, _spec_prompt, _review_prompt = spec_review_texts()
     assert spec_review_doctrine_problems(workflow, agents) == []
     wounded = re.sub(r"\n\d+\. `python3 scripts/stage2\.py spec-review <change>`[^\n]*\n[^\n]*", "\n", workflow)
     assert spec_review_doctrine_problems(wounded, agents), "a chain without the spec-review step must go red"
+    optional = re.sub(r"^\| 2a \| Spec-Review [^|]*\|", "| 2a | Spec-Review *(optional)* |", agents, flags=re.M)
+    assert optional != agents and spec_review_doctrine_problems(workflow, optional), "an optional 2a row must go red"
+    held = re.sub(r"^(\| `bounded` \| )[^|]*\|", r"\1Opus 5.5, where one is held |", workflow, flags=re.M)
+    assert held != workflow and spec_review_doctrine_problems(held, agents), "a bounded row that may skip must go red"
+    skip = workflow + "\nOne stated as `bounded` may skip the spec review, which is optional there.\n"
+    assert spec_review_doctrine_problems(skip, agents), "a sentence that lets bounded skip the review must go red"
 
 
 def spec_review_spike_problems(workflow: str) -> list[str]:
-    """Criterion 2: the class table keeps the spike outside the spec review."""
+    """Criterion 2: the class table and the phase row keep the spike outside the spec review."""
     found = re.search(r"^\| a one-sentence change, a `spike` \| ([^|]+) \|", workflow, re.M)
     if found is None:
         return ["the class table no longer carries the spike row."]
+    problems: list[str] = []
     cell = found.group(1)
-    if "no stage 2" in cell or "no spec review" in cell:
-        return []
-    return ["the spike row's spec-review cell no longer keeps the spike outside the review."]
+    if "no stage 2" not in cell and "no spec review" not in cell:
+        problems.append("the spike row's spec-review cell no longer keeps the spike outside the review.")
+    row = table_row(workflow, "| 2a | Spec review")
+    if row is None or "not for a spike" not in row:
+        problems.append("the 2a phase row no longer exempts the spike.")
+    return problems
 
 
 def test_doctrine_exempts_spike() -> None:
@@ -8057,11 +8119,40 @@ def test_doctrine_exempts_spike() -> None:
         "| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | Opus 5.5, required |"
     )
     assert spec_review_spike_problems(planted), "a spike row that requires the review must go red"
+    unexempt = workflow.replace("| 2a | Spec review *(not for a spike)* |", "| 2a | Spec review |")
+    assert unexempt != workflow and spec_review_spike_problems(unexempt), "a 2a row for every class must go red"
 
 
-def spec_review_repeat_problems(workflow: str) -> list[str]:
-    """Criterion 3: no text lets a fourth round run without the maintainer or fences the final draft."""
+def spec_review_repeat_problems(workflow: str, spec_prompt: str = "") -> list[str]:
+    """Criterion 3: draft and review repeat until a current review settles the rows or round three.
+
+    Loop rows L2-11, L2-12, L3-4 and L3-5: the chain and the spec prompt must name the re-review,
+    the three-round limit and the fourth round's recorded form, and that form must be the one
+    `stage2.fourth_round_authorized` reads; no text lets a fourth round run without it.
+    """
     problems: list[str] = []
+    steps = draft_chain(workflow) or ""
+    second = re.search(r"\d+\. [^\n]*second `draft <change>`", steps)
+    card = re.search(r"\d+\. The plan card reaches the maintainer", steps)
+    if second is None or card is None:
+        problems.append("the draft chain no longer names the second draft before the plan card.")
+    else:
+        between = steps[second.start() : card.start()]
+        if not re.search(r"draft and review\s+repeat", between):
+            problems.append("the draft chain shows the card after the second draft without a re-review.")
+        if not re.search(r"third\s+review\s+round", between):
+            problems.append("the draft chain names no three-round limit.")
+        if not re.search(r"authorizes a\s+fourth\s+round", between) or "re-sliced" not in between:
+            problems.append("the draft chain does not leave round four to the maintainer or a re-slice.")
+    after = section(spec_prompt, "## After the spec review")
+    if not re.search(r"draft and review\s+repeat", after) or not re.search(r"third\s+review\s+round", after):
+        problems.append("prompts/02-spec.md does not repeat draft and review up to the third round.")
+    for name, text in (("docs/WORKFLOW.md", workflow), ("prompts/02-spec.md", after)):
+        form = re.search(r"`Q-<n> · (Fourth spec-review\s+round)`", text)
+        if form is None:
+            problems.append(f"{name} does not name the recorded form that authorizes a fourth round.")
+        elif not stage2.FOURTH_ROUND_TITLE.match(re.sub(r"\s+", " ", form.group(1))):
+            problems.append(f"{name} names a fourth-round form the runner does not read.")
     if re.search(r"a fourth (?:spec-)?review round[^.]*runs without[^.]*authoriz", workflow, re.I):
         problems.append("the text admits a fourth review round without the maintainer's authorization.")
     if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
@@ -8070,14 +8161,70 @@ def spec_review_repeat_problems(workflow: str) -> list[str]:
 
 
 def test_doctrine_repeats_review_after_edit() -> None:
-    """Criterion 3: the live text leaves the fourth round to the maintainer and the final draft unfenced."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert spec_review_repeat_problems(workflow) == []
+    """Criterion 3: the live chain repeats review after an edit and leaves the fourth round to the maintainer."""
+    workflow, _agents, spec_prompt, _review_prompt = spec_review_texts()
+    assert spec_review_repeat_problems(workflow, spec_prompt) == []
     planted = (
         workflow
         + "\nA fourth spec-review round runs without the maintainer's authorization when the loop demands it.\n"
     )
-    assert spec_review_repeat_problems(planted), "an unauthorized fourth round must go red"
+    assert spec_review_repeat_problems(planted, spec_prompt), "an unauthorized fourth round must go red"
+    no_repeat = re.sub(r"draft and review\s+repeat", "the card follows", workflow)
+    assert spec_review_repeat_problems(no_repeat, spec_prompt), "a chain without the re-review must go red"
+    other_form = workflow.replace("Fourth spec-review\n  round", "Extra round").replace(
+        "Fourth spec-review round", "Extra round"
+    )
+    assert spec_review_repeat_problems(other_form, spec_prompt), "a form the runner does not read must go red"
+
+
+def test_spec_review_prompt_states_the_strict_answer_format() -> None:
+    """Loop row L3-6: the 2a prompt asks for the strict severities and the exact clean answer its reader takes."""
+    prompt = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
+    assert spec_review_prompt_problems(prompt) == []
+    old = prompt.replace(
+        section(prompt, "## If you find nothing"),
+        "## If you find nothing\n\nSay so, in one sentence, and name what you checked.",
+    )
+    assert spec_review_prompt_problems(old), "a one-sentence clean result must go red"
+
+
+def spec_review_prompt_problems(prompt: str) -> list[str]:
+    """Where the 2a prompt disagrees with `SPEC_REVIEW_ANSWER_FORMAT` and the reader behind it."""
+    problems: list[str] = []
+    assert "exactly BLOCKER, MAJOR or MINOR" in stage2.SPEC_REVIEW_ANSWER_FORMAT
+    assert "No finding." in stage2.SPEC_REVIEW_ANSWER_FORMAT
+    clean = section(prompt, "## If you find nothing")
+    if f"`{stage2.NO_FINDING_ANSWER}`" not in clean or "in one sentence" in clean:
+        problems.append("the clean result is not the exact `No finding.` answer.")
+    if not re.search(r"exactly `BLOCKER`, `MAJOR` or `MINOR`,? or begins with\s+the\s+mark `\[AMBIGUITY\]`", prompt):
+        problems.append("the prompt does not state the severities the reader takes.")
+    if stage2.readable_review(stage2.NO_FINDING_ANSWER) != []:
+        problems.append("the reader no longer takes the exact clean answer.")
+    return problems
+
+
+def test_repository_declares_the_spec_review_fallback() -> None:
+    """Loop row L3-2: the repository's own declaration names the fallback, the call limit and the pause."""
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    block = data.get("spec_review")
+    assert isinstance(block, dict), "model-endpoints.yaml declares no `spec_review` block"
+    assert {"call_limit_minutes", "pause_seconds", "fallback_endpoint", "fallback_model"} <= set(block)
+    config = stage2.spec_review_call_config(REPO_ROOT)
+    assert config["fallback_model"] is not None and config["fallback_endpoint"] == stage2.OPENCODE
+    assert config["timeout_seconds"] == block["call_limit_minutes"] * 60
+    assert config["pause_seconds"] == block["pause_seconds"]
+    entry = next(e for e in data["endpunkte"] if e["name"] == stage2.OPENCODE)
+    assert config["fallback_model"] in entry["modelle"], "the fallback is no admitted model of its endpoint"
+    assert config["fallback_model"] in entry.get("modelle_terms", {}), "the fallback has no terms reading"
+
+
+def test_morning_handover_runs_the_spec_review_inventory(tmp_path: Path) -> None:
+    """Loop row L3-10: the handover skill runs the inventory option the runner offers."""
+    skill = (REPO_ROOT / "tools" / "claude-code" / "skills" / "handover" / "SKILL.md").read_text(encoding="utf-8")
+    command = "python3 scripts/stage2.py --spec-review-inventory"
+    assert command in skill, "the morning handover does not run the spec-review inventory"
+    assert "Spec-review inventory" in skill
+    assert stage2.main(["--spec-review-inventory", "--root", str(tmp_path)]) == 0
 
 
 @pytest.mark.parametrize(
@@ -20506,7 +20653,10 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         ),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
         ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
-        ("| `bounded` | Opus 5.5, where one is held | the ladder |", "| `bounded` | the ladder | the ladder |"),
+        (
+            "| `bounded` | Opus 5.5, required before the plan card | the ladder |",
+            "| `bounded` | the ladder | the ladder |",
+        ),
         ("| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | the ladder |"),
     ):
         assert old in text, old
