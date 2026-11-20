@@ -1109,3 +1109,15 @@ Reviewer session: codex 01a1f7a0-b5bf-7ee0-afa3-07ea691b5495 — a fresh session
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4841 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4855 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/verify_duration.py:592 | A targeted run with two conflicting starts, one naming tree X and the other tree Y, is reduced to its first start. If a green targeted check on Y precedes that run and a red full run on Y follows it, the conflicting run is treated as incompatible and the report still counts a slip. Its second start could instead identify an intervening check on Y, so the affected runs must be incomplete and the slip undecided. [AC 7] | Codex | open | — |
+| P6-2 | MAJOR | SPEC | base | scripts/verify_duration.py:596 | Two start or completion records with the same JSON fields but different bytes, such as different whitespace, are collapsed as duplicates because parsed dictionaries are compared. A run with those distinct records can therefore count as valid and contribute a slip, although the validity rule permits collapsing only byte-identical records. [AC 1, 6] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f803-bcfc-71f1-9272-484b8d0919b9, 2026-11-20
+Reviewer session: codex 01a1f803-bcfc-71f1-9272-484b8d0919b9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
