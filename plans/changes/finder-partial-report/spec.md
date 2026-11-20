@@ -43,7 +43,7 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
 5. When an entry is not an object, has missing, extra or invalid fields, or has a required string consisting only of whitespace or empty, that entry is dropped and its own validation errors are recorded.
    *Refuted by:* an invalid entry is retained or a dropped entry has no applicable error.
    *Basis:* decisions.md#Q-2; decisions.md, agent details S-1, S-2, S-4 and S-6.
-6. When filtering removes every entry of a category, the retained report contains exactly `{"not_read": "every entry of this category was dropped by locator validation (finder-partial-report)"}` in that category.
+6. When filtering removes every entry of a category, the retained report contains exactly `{"not_read": "every entry of this category was dropped by locator validation (finder-partial-report)"}` in that category, provided at least one entry of the answer survives (otherwise criterion 12 applies).
    *Refuted by:* an empty category, another marker, or a marker alongside a retained entry.
    *Basis:* decisions.md, agent detail S-7.
 7. When entries are dropped, the published partial fence and manifest identify their finder seat, category, original entries and exact per-entry validation errors as filtered gaps.
@@ -61,9 +61,9 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
 11. When a map is merged, the existing exact-union check uses the retained reports of all three finder seats.
     *Refuted by:* an added or missing retained locator or altered finder origin passes the check.
     *Basis:* research.md, Map merge; decisions.md#Q-2.
-12. If the outer answer is invalid JSON, has duplicate keys or non-finite values, lacks exactly the four categories, or has a non-list or originally empty category, the existing invalid-report outcome stops the run before map merge.
+12. If the outer answer is invalid JSON, has duplicate keys or non-finite values, lacks exactly the four categories, or has a non-list or originally empty category, the existing invalid-report outcome stops the run before map merge. The same outcome stops the run when locator validation drops every entry of all four categories: criterion 6's marker applies only while at least one entry of the answer survives, so a seat never yields a map built from no located place.
     *Refuted by:* such an answer being accepted or reaching merge.
-    *Basis:* decisions.md, agent detail S-2 and S-6; research.md, Finder stage.
+    *Basis:* decisions.md, agent detail S-2 and S-6; research.md, Finder stage; loop row L3-8 (fixed, `tests/test_stage2_swarm.py::test_finder_all_entries_dropped_stops`).
 13. If a finder call fails or is refused, its existing failure or refusal outcome remains in force before map merge.
     *Refuted by:* a failed or refused finder being treated as successful or reaching merge.
     *Basis:* research.md, Run outcome; decisions.md#Q-2.

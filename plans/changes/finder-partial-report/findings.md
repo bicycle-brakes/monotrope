@@ -526,3 +526,5 @@ Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1150 files, 4957 commits, 12 rules.
 
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1150 files, 4961 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1150 files, 4965 commits, 12 rules.
