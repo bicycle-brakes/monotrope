@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""findings_reader.py — the one reader of findings rows, statuses and attribution.
+r"""findings_reader.py — the one reader of findings rows, statuses and attribution.
 
 Every consumer of the findings records — the per-model report
 (``scripts/findings_per_model.py``), the later metrics consumer (bead
@@ -10,56 +10,141 @@ The row and line shapes are the runner's own (``scripts/stage2.py`` writes
 them); the constants below mirror the writer so a consumer can read without
 importing the runner. A test pins the mirror against the writer.
 
-Eligible rows (spec, criterion 1): released loop rows under
-``## Phase 4b — loop rows, released <date>`` or the legacy GLM form
-``## Phase 4b — GLM loop rows, released <date>`` (ten cells, loop id), and
-phase-6 rows under the runner form ``## Phase 6 — <who>, <date>`` (seven,
-nine or ten cells; pre-stage-2 files hold seven). Rejected phase-6 answers
-and phase-2a blocks are excluded; a row whose id begins ``2a-`` never counts
-in a phase-6 block (criterion 19). Tables under any other heading —
-restatements included — stand outside the count (criterion 18) and never
-supply a row's current state (decisions F-20).
+The input grammar
+-----------------
 
-Statuses are read from the leading word. The known set is closed (decisions
-F-27): ``open``, ``taken``, ``fixed``, the historical ``closed —``,
-``resolved``, ``answered``, ``in spec``, ``rejected`` and ``accepted limit
-—``. ``open`` and ``accepted limit`` contribute only to raised (criteria 10,
-16); ``taken``/``fixed``/``closed —`` are defects accepted, ``resolved``/
-``answered``/``in spec`` are questions settled, ``rejected`` is rejected. A
-status outside the set is a gap, never a guess (decisions Q-6).
+One grammar, written down once (phase-6 grammar review, maintainer
+2026-11-20), and every path of this module reads through it: ``scan`` turns
+the text into lines of one kind each, ``parse_findings`` and ``table_rows``
+read only those lines. What does not match the grammar inside a counted
+section is a ``Gap`` — the report is then incomplete and exits non-zero —
+never a row skipped or counted in silence.
 
-A row is a duplicate when its status names another row id after ``same as``,
-``duplicate of``, ``repeat``, ``repeats`` or ``repeat of``, matched without
-regard to case (decisions Q-3, F-15); a marker without a row id is an
-ordinary row. Duplicates earn nothing; a chain of markers credits only its
-non-duplicate roots (decisions Q-4, F-14). A reference without a row and a
-cycle of markers are gaps (criterion 16).
+=================  ==========================================================
+Element            Form
+=================  ==========================================================
+line               text split at LF, CRLF or a lone CR (CommonMark's line
+                   endings); a leading byte-order mark is dropped; U+2028,
+                   VT, FF and the other Unicode separators are cell text
+front matter       line 1 ``---`` through the next ``---`` or ``...`` line:
+                   opaque; unclosed is a gap
+code fence         ```` ``` ```` or ``~~~`` (up to three spaces in) through a
+                   closing run of the same character at least as long:
+                   opaque; unclosed is a gap
+HTML comment       a line beginning ``<!--`` (up to three spaces in) through
+                   the first ``-->``: opaque; unclosed is a gap
+heading            ATX: up to three spaces, ``#`` × 1–6, then a space or tab
+                   or the line end; the text is trimmed and an optional
+                   closing ``#`` run dropped. Its label is ``#`` × level,
+                   one space, the text. Setext: a plain-text line with a
+                   ``=`` (level 1) or ``-`` (level 2) underline below it; it
+                   never opens a counted section. A heading of ANY level
+                   ends the section before it.
+phase-6 heading    level 2, ``Phase 6 — <who>, <date>``: ``<who>`` is one
+                   or more characters, first and last not blank; ``<date>``
+                   a calendar date ``YYYY-MM-DD``; the dash is U+2014
+released heading   level 2, ``Phase 4b — loop rows, released <date>`` or
+                   ``Phase 4b — GLM loop rows, released <date>``
+near miss          a line starting with ``#`` whose text is one of the two
+                   forms above once dashes, spaces and case are loosened,
+                   but which is not that heading (another level, a hyphen or
+                   en dash, no space after ``#``, an impossible date, the
+                   setext form): a gap; the line is then read as what it is
+call line          column 0, ``Stage-2 call, <date>: <verb> · … model <id>
+                   · …``; a column-0 line beginning ``Stage-2 call`` in
+                   another shape is a gap
+kept line          ``Kept from the loop record:``: ends a released section
+table line         up to three spaces, then ``|`` … ``|`` with the last pipe
+                   unescaped; cells split at unescaped pipes (``\|`` and
+                   ``\\|`` are cell text, as GitHub reads them) and
+                   trimmed. A line beginning ``|`` without that end, or
+                   indented four or more columns, is a broken table line
+header             a table line whose first cell is ``ID`` (any case) or
+                   whose cells 2–6 name Severity … Finding; in a counted
+                   section it must be one of ``KNOWN_HEADERS`` and fixes
+                   the width of the rows below it
+separator          every cell ``:?-+:?``
+row                any other table line; a blank line or another block ends
+                   the table, a plain-text line directly below a row is a
+                   gap (GitHub renders it as one more row)
+=================  ==========================================================
+
+Sections and rows. A counted section is a released section (it ends with
+its first table, a kept line or the next heading) or a phase-6 section (it
+ends at the next heading or kept line). In a counted section every row must
+pass ``row_error`` — width 10 released, 7, 9 or 10 phase-6, matching its
+header when one stands above; an id of ``ROW_ID`` form (``LOOP_ID`` when
+released); severity ``BLOCKER``/``MAJOR``/``MINOR``; dimension ``SPEC``/
+``MAINT``/``CODE``; origin ``base``/``loop``/``fix-r<N>`` (historical
+seven-cell ``CODE`` rows have none); no blank location, finding, reviewer,
+test or Phase 6 cell; a status of the closed set. A row whose id begins
+``2a-`` in a phase-6 section is never counted (criterion 19) and is listed
+with the phase-2a tables. Outside a counted section, a table whose first
+cell is a finding id stands outside the count (criterion 18) and is listed
+under its heading of any level — "headingless" only before the first
+heading — and never supplies a row's current state (decisions F-20).
+
+Eligible rows (spec, criterion 1) are thus released loop rows and phase-6
+rows; rejected phase-6 answers and phase-2a blocks are excluded because
+their headings are not counted.
 """
 
 from __future__ import annotations
 
+import datetime
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
 # The runner's own row shapes (scripts/stage2.py writes them; the mirror is
 # pinned by tests/test_findings_per_model.py::test_row_shapes_match_the_runner).
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
+# The seven-column header of the template's Claude-path phase-6 table (templates/findings.md).
+TEMPLATE_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Status"]
+KNOWN_HEADERS = {
+    "released": (tuple(RELEASED_COLUMNS),),
+    "phase6": (tuple(TEMPLATE_COLUMNS), tuple(ROW_COLUMNS), tuple(RELEASED_COLUMNS)),
+}
+ROW_WIDTHS = {"released": (10,), "phase6": (7, 9, 10)}
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 GLM_RELEASE_HEADING = "## Phase 4b — GLM loop rows, released"
-RELEASE_HEADING_PATTERN = re.compile(r"^## Phase 4b — (?:GLM )?loop rows, released \d{4}-\d{2}-\d{2}$")
+_DATE = r"(?P<date>\d{4}-\d{2}-\d{2})"
+RELEASE_HEADING_PATTERN = re.compile(rf"## Phase 4b — (?:GLM )?loop rows, released {_DATE}")
 REJECTED_ANSWER_HEADING = "## Rejected phase-6 answer"
 PHASE2A_HEADING = "## Phase 2a"
 PHASE2A_ID_PREFIX = "2a-"
 KEPT_FROM = re.compile(r"^Kept from the loop record:[ \t]*$")
 LOOP_ID = re.compile(r"L\d+-\d+")
-# The runner's phase-6 heading: `## Phase 6 — <who>, <date>`. Older shapes
-# (`## Phase 6, round 3 (…)`, `## Phase 6 follow-up — …`) are not eligible
-# (decisions F-13, F-20).
-PHASE6_HEADING = re.compile(r"^## Phase 6 — \S.*\S, \d{4}-\d{2}-\d{2}$")
+# The runner's phase-6 heading: `## Phase 6 — <who>, <date>`, any non-blank
+# <who> of one character or more (F6-1). Older shapes (`## Phase 6, round 3
+# (…)`, `## Phase 6 follow-up — …`) are not eligible (decisions F-13, F-20).
+PHASE6_HEADING = re.compile(rf"## Phase 6 — (?P<who>\S(?:.*\S)?), {_DATE}")
+# A near miss of the two counted headings: dashes, spaces and case loosened.
+_LOOSE_DASH = "[-‐-―−]"
+_LOOSE_DATE = rf"\d{{4}}\s*{_LOOSE_DASH}\s*\d{{1,2}}\s*{_LOOSE_DASH}\s*\d{{1,2}}"
+NEAR_COUNTED_HEADING = re.compile(
+    rf"#+\s*phase\s*(?:6\s*{_LOOSE_DASH}+\s*(?:\S(?:.*\S)?)?\s*,"
+    rf"|4b\s*{_LOOSE_DASH}+\s*(?:glm\s+)?loop\s+rows\s*,?\s*released)"
+    rf"\s*{_LOOSE_DATE}[\W_]*",
+    re.I,
+)
+# The grammar's line forms (see the module docstring).
+ATX_HEADING = re.compile(r" {0,3}(?P<marks>#{1,6})(?:[ \t]+(?P<text>.*?))??(?:[ \t]+#+)?[ \t]*")
+FENCE = re.compile(r" {0,3}(?P<run>`{3,}|~{3,}).*")
+FRONT_MATTER_END = ("---", "...")
+LINE_ENDING = re.compile(r"\r\n|\r|\n")
+COMMENT_OPEN = re.compile(r" {0,3}<!--")
+COMMENT_CLOSE = "-->"
+SETEXT_UNDERLINE = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
+# A line that starts another Markdown block and so ends a table without being a row.
+BLOCK_START = re.compile(r" {0,3}(?:>|[-+*](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)|<|(?:[*_-][ \t]*){3,}$)")
+SEPARATOR_CELL = re.compile(r":?-+:?")
 # The audit line of one checked call (scripts/stage2.py `call_line` and
 # `begin_work_call`); a `Stage-2 session` line is not a call.
 CALL_LINE = re.compile(r"^Stage-2 call, (?P<date>\d{4}-\d{2}-\d{2}): (?P<rest>.*)$")
+# A column-0 line meant as a call line: anything else in that shape is a gap.
+CALL_PREFIX = re.compile(r"Stage-2 call(?:[,:]| \d)")
 MODEL_FIELD = re.compile(r"·\s+model\s+(\S+)\s+·")
 # A model id, not a vendor: lowercase token with at least one digit
 # (`glm-5.3-flash`, `gpt-6.1-terra`, `hy3`), never `GLM`, `Codex`, `Opus 5.5`
@@ -70,6 +155,7 @@ ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
 # Duplicate targets use exactly the same grammar as readable row IDs.
 FINDING_ID = ROW_ID
 DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repeats?)", re.I)
+# A pipe not escaped by a backslash; `\\|` counts as escaped, as GitHub reads it.
 _PIPE = re.compile(r"(?<!\\)\|")
 
 UNATTRIBUTED = "unattributed"
@@ -80,17 +166,207 @@ OUTCOMES = ("raised", "defects_accepted", "questions_settled", "rejected")
 
 
 def split_row(line: str) -> list[str] | None:
-    """The cells of a table line, or None when the line is not one (the runner's own rule)."""
-    stripped = line.strip()
-    if len(stripped) < 2 or not (stripped.startswith("|") and stripped.endswith("|")):
+    """The cells of a complete table line, or None when the line is not one.
+
+    A table line holds at most three spaces before its first pipe and ends with
+    an unescaped pipe; cells split at unescaped pipes and are trimmed.
+    """
+    if table_line_error(line) is not None:
         return None
+    stripped = line.strip()
     return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
 
 
-def furniture(cells: list[str]) -> bool:
-    """The header or the separator of a table (the runner's own rule)."""
+def table_line_error(line: str) -> str | None:
+    """Why a line beginning with a pipe is not a complete table line; None when it is one."""
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return "not a table line"
+    lead = line[: len(line) - len(line.lstrip())]
+    if lead.replace(" ", "") or len(lead) > 3:
+        return "table line indented four or more columns (Markdown reads it as code)"
+    if len(stripped) < 2 or not stripped.endswith("|") or stripped.endswith("\\|"):
+        return "incomplete table row (missing final pipe)"
+    return None
+
+
+def is_separator(cells: list[str]) -> bool:
+    """The separator line under a table header."""
+    return all(SEPARATOR_CELL.fullmatch(cell) for cell in cells)
+
+
+def is_header(cells: list[str]) -> bool:
+    """A header line: first cell `ID`, or cells 2-6 naming Severity … Finding."""
     named = [cell.lower() for cell in cells[1:6]] == [column.lower() for column in ROW_COLUMNS[1:6]]
-    return cells[0].lower() == "id" or named or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
+    return cells[0].lower() == "id" or named
+
+
+def furniture(cells: list[str]) -> bool:
+    """The header or the separator of a table."""
+    return is_header(cells) or is_separator(cells)
+
+
+def heading_kind(heading: str | None) -> str:
+    """`released`, `phase6` or `other` for a heading label (`#` × level, a space, the text)."""
+    if heading is None:
+        return "other"
+    for kind, pattern in (("released", RELEASE_HEADING_PATTERN), ("phase6", PHASE6_HEADING)):
+        matched = pattern.fullmatch(heading)
+        if matched is not None and _calendar_date(matched.group("date")):
+            return kind
+    return "other"
+
+
+def _calendar_date(text: str) -> bool:
+    try:
+        datetime.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+@dataclass(frozen=True)
+class Line:
+    """One line of a findings.md as the grammar reads it.
+
+    ``kind`` is one of ``opaque`` (front matter, code fences), ``blank``,
+    ``heading``, ``call``, ``kept``, ``row`` (cells set), ``broken`` (a line
+    beginning with a pipe that is no complete table line), ``block`` (another
+    Markdown block) or ``text``. ``gap`` carries a grammar fault the line holds
+    whatever its kind; ``reason`` explains a ``broken`` line.
+    """
+
+    position: int
+    kind: str
+    raw: str
+    heading: str | None = None
+    cells: tuple[str, ...] | None = None
+    call: CallLine | None = None
+    reason: str = ""
+    gap: str = ""
+    setext: bool = False  # a setext heading never opens a counted section
+
+
+def physical_lines(text: str) -> list[str]:
+    """The lines of a text: split at LF, CRLF or a lone CR (CommonMark's line endings), a leading BOM dropped."""
+    if text.startswith("﻿"):
+        text = text[1:]
+    lines = LINE_ENDING.split(text)
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def scan(text: str) -> Iterator[Line]:
+    """Every line of a findings.md, classified by the one grammar of this module."""
+    lines = physical_lines(text)
+    index = 0
+    if lines and lines[0] == "---":
+        end = next((at for at in range(1, len(lines)) if lines[at] in FRONT_MATTER_END), None)
+        last = len(lines) if end is None else end + 1
+        for at in range(last):
+            gap = "unclosed front matter" if end is None and at == 0 else ""
+            yield Line(at + 1, "opaque", lines[at], gap=gap)
+        index = last
+    fence: str | None = None
+    comment = False
+    opened = 0
+    previous = "blank"
+    at = index
+    while at < len(lines):
+        raw = lines[at]
+        position = at + 1
+        at += 1
+        if fence is not None:
+            closing = FENCE.fullmatch(raw)
+            run = closing.group("run") if closing else ""
+            if run and run[0] == fence[0] and len(run) >= len(fence) and not raw.strip().strip(fence[0]):
+                fence = None
+            yield Line(position, "opaque", raw)
+            previous = "opaque"
+            continue
+        if comment:
+            comment = COMMENT_CLOSE not in raw
+            yield Line(position, "opaque", raw)
+            previous = "opaque"
+            continue
+        opening = FENCE.fullmatch(raw)
+        if opening is not None and not (
+            opening.group("run")[0] == "`" and "`" in raw.strip()[len(opening.group("run")) :]
+        ):
+            fence, opened = opening.group("run"), position
+            yield Line(position, "opaque", raw)
+            previous = "opaque"
+            continue
+        if COMMENT_OPEN.match(raw):
+            comment, opened = COMMENT_CLOSE not in raw[raw.index("<!--") + 4 :], position
+            yield Line(position, "opaque", raw)
+            previous = "opaque"
+            continue
+        line = _classify(raw, position)
+        below_table, previous = previous in ("row", "broken"), line.kind
+        if line.kind == "text" and not below_table and at < len(lines) and SETEXT_UNDERLINE.fullmatch(lines[at]):
+            # A setext heading: the text line is the heading, the underline is not content.
+            # Directly below a table the text line is one more row, never a heading.
+            label = ("#" if "=" in lines[at] else "##") + " " + raw.strip()
+            near = NEAR_COUNTED_HEADING.fullmatch("## " + raw.strip()) or heading_kind("## " + raw.strip()) != "other"
+            gap = f"setext heading {raw.strip()!r} resembles a counted heading but is not its form" if near else ""
+            yield Line(position, "heading", raw, heading=label, gap=gap, setext=True)
+            yield Line(at + 1, "opaque", lines[at])
+            at += 1
+            previous = "heading"
+            continue
+        yield line
+    if fence is not None:
+        yield Line(len(lines), "opaque", "", gap=f"unclosed code fence opened at line {opened}")
+    if comment:
+        yield Line(len(lines), "opaque", "", gap=f"unclosed HTML comment opened at line {opened}")
+
+
+def _classify(raw: str, position: int) -> Line:
+    """One line outside front matter, code fences and HTML comments."""
+    heading = ATX_HEADING.fullmatch(raw)
+    if heading is not None:
+        text = (heading.group("text") or "").strip()
+        label = heading.group("marks") + (f" {text}" if text else "")
+        near = NEAR_COUNTED_HEADING.fullmatch(raw.strip()) is not None and heading_kind(label) == "other"
+        gap = f"heading {label!r} resembles a counted heading but is not its form" if near else ""
+        return Line(position, "heading", raw, heading=label, gap=gap)
+    near_gap = ""
+    if raw.lstrip().startswith("#") and NEAR_COUNTED_HEADING.fullmatch(raw.strip()):
+        near_gap = f"line {raw.strip()!r} resembles a counted heading but is not a Markdown heading"
+    if not raw.strip():
+        return Line(position, "blank", raw)
+    if CALL_PREFIX.match(raw):
+        call = parse_call_line(raw, position)
+        if call is None:
+            return Line(position, "text", raw, gap=f"unreadable call line {raw.strip()[:60]!r}")
+        return Line(position, "call", raw, call=call)
+    if KEPT_FROM.match(raw):
+        return Line(position, "kept", raw)
+    if raw.strip().startswith("|"):
+        error = table_line_error(raw)
+        if error is None:
+            return Line(position, "row", raw, cells=tuple(split_row(raw) or ()))
+        return Line(position, "broken", raw, reason=error)
+    if BLOCK_START.match(raw):
+        return Line(position, "block", raw, gap=near_gap)
+    return Line(position, "text", raw, gap=near_gap)
+
+
+def table_rows(text: str) -> Iterator[tuple[int, list[str]]]:
+    """Every complete table row of any section whose first cell is a finding id, in file order.
+
+    Headers, separators and rows without content are not finding rows; front
+    matter and code fences hold none. The duplicate gate reads rows here.
+    """
+    for line in scan(text):
+        if line.kind != "row" or line.cells is None:
+            continue
+        cells = list(line.cells)
+        if furniture(cells) or not any(cells) or ROW_ID.fullmatch(cells[0]) is None:
+            continue
+        yield line.position, cells
 
 
 def status_cell(cells: list[str]) -> str | None:
@@ -239,11 +515,17 @@ def parse_call_line(line: str, position: int) -> CallLine | None:
     return CallLine(matched.group("date"), verb, model_match.group(1) if model_match else None, position)
 
 
-def row_error(cells: list[str], kind: str) -> str | None:
-    """Validate a whole eligible row before any consumer can count it."""
-    widths = (10,) if kind == "released" else (7, 9, 10)
+def row_error(cells: list[str], kind: str, header: tuple[str, ...] | None = None) -> str | None:
+    """Validate a whole eligible row before any consumer can count it.
+
+    ``header`` is the header line standing above the row in its table, if any:
+    the row must then have its width.
+    """
+    widths = ROW_WIDTHS[kind]
     if len(cells) not in widths:
         return f"a {kind} row needs {' or '.join(map(str, widths))} cells, found {len(cells)}"
+    if header is not None and len(header) != len(cells):
+        return f"the row has {len(cells)} cells under a header of {len(header)}"
     id_pattern = LOOP_ID if kind == "released" else ROW_ID
     if not id_pattern.fullmatch(cells[0]):
         return f"unreadable {kind} finding id"
@@ -252,8 +534,9 @@ def row_error(cells: list[str], kind: str) -> str | None:
     if cells[2] not in {"SPEC", "MAINT", "CODE"}:
         return f"invalid dimension {cells[2]!r}"
     # Historical seven-cell CODE rows predate the Origin column: their final
-    # three fields before Status are Where, Finding and Reviewer.
-    legacy = len(cells) == 7 and cells[2] == "CODE"
+    # three fields before Status are Where, Finding and Reviewer. A header
+    # above the row names its columns, so only a row without one is read so.
+    legacy = len(cells) == 7 and cells[2] == "CODE" and header is None
     if not legacy and not re.fullmatch(r"(?:base|loop|fix-r[0-9]+)", cells[3]):
         return f"invalid origin {cells[3]!r}"
     for index, name in (
@@ -271,99 +554,125 @@ def row_error(cells: list[str], kind: str) -> str | None:
     return None
 
 
+COUNTED = ("released", "phase6")
+# Outside tables that group across headings (criterion 18); every other
+# heading is its own group, so two equal headings stay two entries.
+GROUPED_OUTSIDE = (
+    (PHASE2A_HEADING, "phase-2a tables"),
+    (REJECTED_ANSWER_HEADING, "rejected phase-6 answer tables"),
+)
+
+
 @dataclass
 class Section:
-    """The innermost heading and the row table it owns."""
+    """The innermost heading, its kind and the table being read under it."""
 
     heading: str | None = None
+    position: int = 0
     kind: str = "other"
-    table_started: bool = False
+    table_started: bool = False  # a released section ends with its first table
+    in_table: bool = False  # the line before was a table line of this section
+    header: tuple[str, ...] | None = None
 
 
 def parse_findings(text: str, *, change: str, path: str) -> Parsed:
-    """The eligible rows, the outside tables and the unreadable rows of one findings.md."""
+    """The eligible rows, the outside tables and the gaps of one findings.md, read by ``scan``."""
     blocks: list[Block] = []
     gaps: list[Gap] = []
     calls: list[CallLine] = []
-    groups: dict[str, OutsideTable] = {}
+    groups: dict[tuple[str, int], OutsideTable] = {}
     section = Section()
     last_release_heading = 0
     last_phase6_heading = 0
 
-    def outside(label: str, position: int) -> None:
-        group = groups.get(label)
+    def gap(row_id: str | None, position: int, reason: str) -> None:
+        gaps.append(Gap(path, row_id, f"line {position}: {reason}"))
+
+    def outside(position: int, *, grouped: str | None = None) -> None:
+        # criterion 18: a finding table under a heading that is not counted stands
+        # outside the count with its heading of any level; "headingless" only
+        # before the first heading (F6-2).
+        if grouped is not None:
+            key = (grouped, 0)
+        elif section.heading is None:
+            key = ("headingless tables", 0)
+        else:
+            key = next(((label, 0) for prefix, label in GROUPED_OUTSIDE if section.heading.startswith(prefix)), None)
+            key = key or (section.heading, section.position)
+        group = groups.get(key)
         if group is None:
-            groups[label] = OutsideTable(label, position, 1, change, path)
+            groups[key] = OutsideTable(key[0], position, 1, change, path)
         else:
             group.rows += 1
 
-    for position, line in enumerate(text.splitlines(), start=1):
-        if line.startswith("## "):
-            section = Section(heading=line)
-            if RELEASE_HEADING_PATTERN.fullmatch(line):
-                section.kind = "released"
-            elif PHASE6_HEADING.match(line):
-                section.kind = "phase6"
-            else:
+    for line in scan(text):
+        position = line.position
+        if line.gap:
+            gap(None, position, line.gap)
+        if section.in_table and line.kind not in ("row", "broken"):
+            # The table ends here. A plain-text line directly below a row is
+            # one more row to a Markdown reader, so a counted section cannot
+            # pass it by; a released section ends with its first table.
+            if line.kind == "text" and section.kind in COUNTED:
+                gap(None, position, "a plain-text line directly below a table row (Markdown renders it as a row)")
+            if section.kind == "released":
                 section.kind = "other"
-            if section.kind in ("released", "phase6"):
+            section.in_table, section.header = False, None
+        if line.kind == "heading":
+            section = Section(
+                heading=line.heading, position=position, kind="other" if line.setext else heading_kind(line.heading)
+            )
+            if section.kind in COUNTED:
                 window = last_phase6_heading if section.kind == "phase6" else last_release_heading
                 preceding = tuple(call for call in calls if call.line > window)
                 blocks.append(Block(BlockIdentity(change, path, section.heading, position, preceding), section.kind))
                 if section.kind == "released":
                     last_release_heading = position
-                if section.kind == "phase6":
+                else:
                     last_phase6_heading = position
             continue
-        if re.match(r"^#{3,6}[ \t]+", line):
-            section = Section(heading=line)
-            continue
-        if KEPT_FROM.match(line):
+        if line.kind == "kept":
             section.kind = "other"
             continue
-        if line.startswith("Stage-2 call, "):
-            call = parse_call_line(line, position)
-            if call is not None:
-                calls.append(call)
+        if line.kind == "call" and line.call is not None:
+            calls.append(line.call)
             continue
-        cells = split_row(line)
-        if cells is None and line.strip().startswith("|") and section.kind in ("released", "phase6"):
-            first = _PIPE.split(line.strip()[1:], maxsplit=1)[0].strip()
-            row_id = first if ROW_ID.fullmatch(first) else None
-            gaps.append(Gap(path, row_id, f"line {position}: incomplete table row (missing final pipe)"))
+        if line.kind not in ("row", "broken"):
             continue
-        if section.kind == "released":
-            if cells is not None:
-                section.table_started = True
-            elif section.table_started:
-                section.kind = "other"
-        if cells is None or furniture(cells):
+        section.in_table = True
+        section.table_started = True
+        counted = section.kind in COUNTED
+        if line.kind == "broken":
+            if counted:
+                first = _PIPE.split(line.raw.strip()[1:], maxsplit=1)[0].strip()
+                gap(first if ROW_ID.fullmatch(first) else None, position, line.reason)
             continue
-        if not any(cell.strip() for cell in cells):
-            continue  # a decorative line of empty cells is no row
-        if section.kind in ("released", "phase6"):
+        cells = list(line.cells or ())
+        if is_separator(cells):
+            continue
+        if is_header(cells):
+            section.header = tuple(cells)
+            known = {tuple(column.lower() for column in header) for header in KNOWN_HEADERS.get(section.kind, ())}
+            if counted and tuple(cell.lower() for cell in cells) not in known:
+                gap(None, position, f"unknown {section.kind} table header {' | '.join(cells)!r}")
+            continue
+        if not any(cells):
+            if counted:
+                gap(None, position, "a table row without content")
+            continue
+        if counted:
             if section.kind == "phase6" and cells[0].startswith(PHASE2A_ID_PREFIX):
-                continue  # criterion 19: a phase-2a row never counts
-            error = row_error(cells, section.kind)
+                outside(position, grouped="phase-2a tables")  # criterion 19: listed, never counted
+                continue
+            error = row_error(cells, section.kind, section.header)
             if error is not None:
-                row_id = cells[0] if ROW_ID.fullmatch(cells[0]) else None
-                gaps.append(Gap(path, row_id, f"line {position}: {error}"))
+                gap(cells[0] if ROW_ID.fullmatch(cells[0]) else None, position, error)
             else:
                 blocks[-1].rows.append(RowRecord(cells, position))
             continue
-        if section.kind in ("", "other") and ROW_ID.fullmatch(cells[0]):
-            # criterion 18: a table whose first cell holds a finding id, under a heading
-            # that is not counted, stands outside the count with its heading; a table
-            # before any heading is labelled headingless.
-            if section.heading is None:
-                outside("headingless tables", position)
-            elif section.heading.startswith(PHASE2A_HEADING):
-                outside("phase-2a tables", position)
-            elif section.heading.startswith(REJECTED_ANSWER_HEADING):
-                outside("rejected phase-6 answer tables", position)
-            else:
-                outside(section.heading, position)
-    return Parsed(blocks, [groups[label] for label in sorted(groups)], gaps)
+        if ROW_ID.fullmatch(cells[0]):
+            outside(position)
+    return Parsed(blocks, [groups[key] for key in sorted(groups)], gaps)
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +706,8 @@ class LegacyAttributionSource(AttributionSource):
     def attribute(self, block: BlockIdentity) -> str:
         if block.heading is None:
             return UNATTRIBUTED
-        released = bool(RELEASE_HEADING_PATTERN.fullmatch(block.heading))
-        phase6 = PHASE6_HEADING.match(block.heading) is not None
+        kind = heading_kind(block.heading)
+        released, phase6 = kind == "released", kind == "phase6"
         if not released and not phase6:
             return UNATTRIBUTED
         if not block.preceding_calls:

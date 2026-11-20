@@ -37,8 +37,8 @@ CANONICAL = re.compile(
     rf"rejected — duplicate of (?P<ids>{reader.FINDING_ID.pattern}"
     rf"(?: and {reader.FINDING_ID.pattern})*)(?:: .+)?"
 )
-# A row the gate reads: a table line that is no furniture, a finding id in its
-# first cell, and a width whose Status cell the reader knows.
+# A row the gate reads: a finding row of the reader's grammar (`table_rows`),
+# with a width whose Status cell the reader knows.
 RowCells = tuple[str, ...]
 
 
@@ -108,12 +108,7 @@ def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
     except UnicodeDecodeError:
         raise CannotMeasure(f"check-duplicates: cannot measure — {path} at {rev[:12]} is not valid UTF-8 (3)") from None
     rows: dict[str, list[RowCells]] = {}
-    for line in text.splitlines():
-        cells = reader.split_row(line)
-        if cells is None or reader.furniture(cells) or not any(cell.strip() for cell in cells):
-            continue
-        if reader.ROW_ID.fullmatch(cells[0]) is None:
-            continue
+    for _, cells in reader.table_rows(text):  # the reader's one input grammar
         rows.setdefault(cells[0], []).append(tuple(cells))
     return rows
 
