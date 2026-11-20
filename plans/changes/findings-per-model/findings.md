@@ -455,3 +455,14 @@ Stage-2 call, 2026-11-20: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4847 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4876 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | review | `scripts/findings_reader.py`: `parse_findings` | A seven-cell phase-6 row with an empty ID is accepted as a finding. Two such rows collapse into one because both have the same empty key, yet the report records no gap and presents the count as complete. An unreadable ID must instead make the report incomplete. [Criteria 2, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f8a1-afab-7333-b3af-a41e91aafa65, 2026-11-20
+Reviewer session: codex 01a1f8a1-afab-7333-b3af-a41e91aafa65 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
