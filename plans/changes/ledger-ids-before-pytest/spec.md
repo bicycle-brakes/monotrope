@@ -29,13 +29,13 @@ The runner identifies missing criterion tests before pytest, permits a repair to
 
 ## Terms
 
-**Ledger test:** a test reference in either test form of the accepted plan's criterion ledger. **Standing:** the named file and top-level test function exist according to the runner's pre-launch check. **Attempt record:** the runner's persistent record of an implement or repair attempt.
+**Ledger test:** a test reference in either test form of the accepted plan's criterion ledger. **Standing:** the runner's parsed-name check finds the referenced name in the file; it recognizes top-level async functions and ignores definitions inside strings. **Attempt record:** for an accepted attempt, its line under `## Time used` in `plan.md`; for a failed attempt, its diagnostics block in `findings.md`.
 
 ## Acceptance criteria
 
 1. When an implement or repair attempt selects tests, the runner checks every ledger test for existence before invoking pytest.
    *Refuted by:* a missing ledger test reaches pytest as a test ID.
-2. When one or more ledger tests are missing, the attempt record names each missing test ID.
+2. When test selection finds one or more missing ledger tests, the attempt record names each missing test ID.
    *Refuted by:* a missing ID is absent from the record, including for an otherwise successful repair.
 3. When missing ledger tests coexist with other selected targets, pytest runs the standing selected targets without the missing IDs.
    *Refuted by:* a missing ID prevents a standing selected test from running or is passed to pytest.
@@ -43,18 +43,28 @@ The runner identifies missing criterion tests before pytest, permits a repair to
    *Refuted by:* pytest is launched with no standing target.
 5. When an implement attempt has a missing ledger test, the attempt fails even if all standing selected tests pass.
    *Refuted by:* an implement attempt with a missing ledger test is accepted.
-6. When a repair attempt has an unrelated missing ledger test, that missing test alone does not fail the attempt.
-   *Refuted by:* an otherwise successful repair is rejected solely for an unrelated missing ledger test.
-7. When a repair attempt addresses a finding, the finding's required proof remains the repair's obligation.
-   *Refuted by:* a repair is accepted without the required proof of its finding.
+6. When a repair attempt finds a missing test of a ledger entry still marked `not yet written`, that missing test alone does not fail the attempt unless the repair claims it as a finding's proof.
+   *Refuted by:* an otherwise successful repair is rejected solely for a missing unclaimed test of an unwritten entry.
+7. When a repair attempt finds a missing test of a written ledger entry, the attempt fails.
+   *Refuted by:* a repair that removed a written ledger test is accepted.
 8. When a selected standing test fails, the attempt fails even if missing ledger tests were also reported.
    *Refuted by:* a repair or implement attempt accepts a failing selected test.
-9. When the current plan contains a ledger entry marked `not yet written`, phase 6 refuses before calling the reviewer and names each such entry and the next step.
-   *Refuted by:* the reviewer starts, an entry is omitted, or the refusal omits how to proceed.
+9. When the current plan contains a ledger entry marked `not yet written`, phase 6 refuses before calling the reviewer and names each such entry and the next step: take a finding that names the tests and run `repair <change>` for it.
+   *Refuted by:* the reviewer starts, an entry is omitted, or the refusal omits that repair route; the marker still refuses even if the test already exists.
 10. When the current plan has no `not yet written` ledger entry, this checkpoint does not refuse phase 6.
     *Refuted by:* a plan with only written tests and non-test entries is refused by this checkpoint.
-11. If the runner cannot read or assess the ledger or selected test files, it reports the failure instead of treating the tests as absent or the checkpoint as clear.
+11. If the runner cannot read or parse the ledger or selected test files, it fails and identifies the input and fault instead of treating the tests as absent or the checkpoint as clear.
     *Refuted by:* an unreadable or unparseable input yields a successful check or a missing-test-only diagnosis.
+12. When a repair claims a test as a finding's proof, a missing claimed test fails the cheap check.
+    *Refuted by:* the cheap check accepts a missing test named in a `fixed —` or `fixed — guard test —` claim.
+13. When a repair addresses a finding, its existing required proof remains an obligation.
+    *Refuted by:* a repair is accepted without the required proof of its finding.
+14. When an implement prompt describes the ledger tests, it requires every ledger test, including entries marked `not yet written`.
+    *Refuted by:* the implement prompt permits a missing unwritten ledger test.
+15. When a repair prompt describes the ledger tests, it requires the tests of its findings and says missing unwritten ledger tests are named but otherwise not owed.
+    *Refuted by:* the repair prompt requires all unwritten ledger tests or omits the finding's proof obligation.
+16. When a repair prompt asks the model to run pytest, its ledger test list excludes IDs that do not stand.
+    *Refuted by:* a missing ledger ID is included in the repair's pytest command list.
 
 ## Non-goals
 
@@ -66,6 +76,10 @@ The runner identifies missing criterion tests before pytest, permits a repair to
 
 The ledger gate and its governance remain unchanged: the new phase-6 checkpoint belongs to the runner, not a second ledger format or a change to archive policy. Held paths remain untouched by the implementation attempt.
 
+## Boundary
+
+The runner's parsed-name check and the ledger gate's existing text-based check can disagree on async definitions and text inside strings; reconciling the gate and marker clearing is outside this change.
+
 ## Definition of Done
 
 - `make verify` green; focused checks exercise implement, repair and phase 6.
@@ -76,4 +90,4 @@ The ledger gate and its governance remain unchanged: the new phase-6 checkpoint 
 
 ## Open decisions
 
-None open. [DETAIL] The phase-4 appetite is four hours including repairs: neither research nor the answered decision specifies one, and a finite stop makes the card actionable. [DETAIL] Existence means a readable file and a top-level function, matching the ledger's existing test form; collection and execution errors still belong to pytest.
+None open. [DETAIL] The phase-4 appetite is four hours including repairs: neither research nor the answered decision specifies one, and a finite stop makes the card actionable. [DETAIL] Use the runner's existing parsed-name check for selected IDs; read or parse faults fail separately, and collection and execution errors remain pytest's responsibility. [DETAIL] Selection follows the existing lint checks, so an earlier lint failure does not also report missing ledger IDs. [DETAIL] The record locations and repair route above follow the existing runner-owned evidence and repair paths.
