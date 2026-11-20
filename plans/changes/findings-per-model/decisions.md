@@ -143,6 +143,21 @@ context: |
 
 In the context of a per-model report over protected historical findings, facing rows whose severity, dimension or origin is free text although those cells decide no count, we decided that the reader asks only that they are not blank while ID, reviewer and Status stay strict, and that the fixed vocabulary is enforced on new or changed rows by the existing new-row gate, to achieve a report that counts the real history and a vocabulary that holds from now on, accepting that historical rows keep their free vocabulary for good. — 2026-11-20
 
+## Q-8 · Released loop sections with a second table after a blank line (phase-6 re-check RF6-2)
+
+asked: 2026-11-20
+answer: "Option 1" — repair RF6-1 (digitless free-swarm model IDs such as `space-bunny-free`) in `MODEL_NAME` and record RF6-2 as an accepted `Boundary` in `spec.md`: a released loop section counts only its first table because `release-loop` writes one table per release heading.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: handling phase-6 re-check findings RF6-1 and RF6-2 in the fourth phase-6 round of findings-per-model (bead coding-harness-qut1).
+  Intention: under the repeated-mechanism stop rule, the orchestrator asks before another grammar repair round.
+  Today: all four phase-6 rounds found input-grammar edge cases in scripts/findings_reader.py. RF6-1 is a real bug for digitless free-swarm model IDs (one-line fix); RF6-2 concerns a second table separated by a blank line under one released-loop heading, which release-loop never writes.
+  Repository change: broaden MODEL_NAME to accept hyphenated lowercase model IDs without digits, add a regression test, and state the single-table released-section limit under Boundary in spec.md, followed by one final phase-6 re-check.
+  Architecture change: none; the shared reader interface and spec structure remain unchanged.
+
+In the context of the fourth phase-6 review round of findings-per-model, facing a genuine attribution bug for digitless free-swarm model IDs (RF6-1) alongside a second-table edge case under one released-loop heading that release-loop never produces (RF6-2), we decided to fix RF6-1 in `MODEL_NAME` and state in `spec.md` Boundary that a released loop section counts only its first table, to achieve accurate attribution for all live free-swarm models while avoiding miscounting unrelated tables after a release block, accepting that a hand-split second table under one release heading stands outside the count. — 2026-11-20
+
 ## Agent decisions on the second phase-2a rows F-12..F-19 — 2026-11-18
 
 Second spec-review round (maintainer rule of 2026-11-18: triage each round,

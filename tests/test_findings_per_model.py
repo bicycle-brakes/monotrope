@@ -160,6 +160,15 @@ def test_loop_model_attribution():
     assert read(no_call).findings[0].model is None, "a vendor-only row without a call line must be unattributed"
 
 
+def test_digitless_free_swarm_model_is_attributed():
+    """Released loop rows from digitless free-swarm model IDs credit that model (RF6-1)."""
+    text = doc(RELEASE, lrow("L1-1", "space-bunny-free", "open"), lrow("L1-2", "big-pickle", "fixed"))
+    models = {finding.id: finding.model for finding in read(text).findings}
+    assert models == {"L1-1": "space-bunny-free", "L1-2": "big-pickle"}
+    vendor = doc(RELEASE, lrow("L1-3", "Codex", "open"), lrow("L1-4", "reviewer", "open"))
+    assert all(finding.model is None for finding in read(vendor).findings)
+
+
 # --- criterion 4 ---------------------------------------------------------------------
 
 

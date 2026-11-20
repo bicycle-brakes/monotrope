@@ -520,8 +520,8 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| RF6-1 | MAJOR | SPEC | review | scripts/findings_reader.py:153 | A released loop row naming `space-bunny-free` as its reviewer is placed in the unattributed bucket because the model-name pattern requires a digit. Free-swarm model IDs can have no digits; the named model must receive the credit. [criterion 3] | Codex | open | — |
-| RF6-2 | MAJOR | SPEC | review | scripts/findings_reader.py:608 | When a released-loop section contains two tables separated by a blank line, the reader counts only the first table and lists the second as outside the count. The report is marked complete although eligible rows under the release heading are omitted. [criteria 1, 16] | Codex | open | — |
+| RF6-1 | MAJOR | SPEC | review | scripts/findings_reader.py:153 | A released loop row naming `space-bunny-free` as its reviewer is placed in the unattributed bucket because the model-name pattern requires a digit. Free-swarm model IDs can have no digits; the named model must receive the credit. [criterion 3] | Codex | fixed — tests/test_findings_per_model.py::test_digitless_free_swarm_model_is_attributed | — |
+| RF6-2 | MAJOR | SPEC | review | scripts/findings_reader.py:608 | When a released-loop section contains two tables separated by a blank line, the reader counts only the first table and lists the second as outside the count. The report is marked complete although eligible rows under the release heading are omitted. [criteria 1, 16] | Codex | fixed — not a test — spec.md Boundary states that a released loop section counts only its first table (decisions Q-8, maintainer decision 2026-11-20) | — |
 
 Phase 6 verdict: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19, 2026-11-20
 Reviewer session: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
