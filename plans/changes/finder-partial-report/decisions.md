@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-19
 created: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-yd8w
@@ -197,8 +197,8 @@ the model answered (`subtype` naming a turn, budget or API limit), is a
 failed call (criterion 16). Reason: a format failure must not read as a
 process failure, which is the incident this change repairs.
 
-[DETAIL] **S-14 (stdout of a rejected Claude finder record)**: on every path
-the stored `stdout` of a Claude finder call holds only the envelope's
+[DETAIL] **S-14 (stdout of a rejected Claude finder record)**: on success
+the stored `stdout` is the serialized structured output; on every other path it holds only the envelope's
 `result` text, or nothing; the session id and the cost are never stored or
 published. Reason: the S-9 rule must hold on the failure paths too.
 
@@ -231,3 +231,16 @@ are outside this repair.
 [DETAIL] **Plan order (orchestrator note)**: the orchestrator creates the
 schema file and the `finder.md` edit (held paths) before the implementation
 attempt, not after, so the code reads the real file from the start.
+
+
+[DETAIL] **Superseded research-swarm verification commitments**: this change
+supersedes criterion 24 of the archived research-swarm plan (2026-11-06),
+whose fifth-field fault stopped the whole report. An extra field now drops the
+entry; `test_finder_filter_reports_each_invalid_entry` verifies that boundary.
+It also supersedes finding F-47's commitment that malformed finder entries are
+neither accepted nor reused: valid retained entries and the empty-category marker
+are accepted and reusable, as `test_finder_filtered_record_is_reused_on_resume`
+verifies. Invalid outer shapes still stop, as
+`test_finder_invalid_outer_shape_stops` verifies. The former commitments were
+exercised by `test_finder_trio_locates_four_categories_without_judging` and
+`test_malformed_finder_reasons_block_progress_and_reuse`, respectively.

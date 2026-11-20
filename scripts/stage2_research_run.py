@@ -180,7 +180,11 @@ def claude_finder_output(stdout: str) -> tuple[str, dict | None, dict | None]:
     on success and otherwise the result text; session id and cost are not stored.
     """
     try:
-        envelope = json.loads((stdout or "").strip())
+        envelope = json.loads(
+            (stdout or "").strip(),
+            object_pairs_hook=stage2_research_map._json_object,
+            parse_constant=stage2_research_map._bad_json_constant,
+        )
     except ValueError:
         envelope = None
     if not isinstance(envelope, dict):
@@ -594,11 +598,8 @@ class Run:
         name = f"prompts/research-swarm/{LOCATOR_SCHEMA}"
         try:
             text = prompt_text(self.root, LOCATOR_SCHEMA)
-        except OSError as error:
-            raise Stop(f"the locator schema {name} is unreadable: {error}; no finder call starts.", 1) from error
-        try:
             self.locator_schema = stage2_research_map.interpret_locator_schema(text)
-        except stage2_research_map.ResearchMapError as error:
+        except Exception as error:
             raise Stop(f"the locator schema {name} is unusable: {error}; no finder call starts.", 1) from error
         self.locator_schema_text = text
 
@@ -791,7 +792,7 @@ class Run:
         if result.outcome != "ok":
             return
         subtype = envelope.get("subtype") if isinstance(envelope, dict) else None
-        if isinstance(subtype, str) and LIMITED_FINDER_SUBTYPE.search(subtype):
+        if structured is None and isinstance(subtype, str) and LIMITED_FINDER_SUBTYPE.search(subtype):
             record["outcome"] = "failed"
             record["error"] = f"the Claude finder call ended before an answer: {subtype}"
         elif structured is None:
@@ -1389,7 +1390,9 @@ class Run:
         record["stdout"] = json.dumps(retained, ensure_ascii=False, sort_keys=True)
         record["filtered"] = rows
         assert self.store is not None and self.run_id is not None
+        self.unstored.add(record["slot_id"])
         self.store.write_result(self.run_id, record["slot_id"], record)
+        self.unstored.discard(record["slot_id"])
 
     def map_merge(self, record: dict) -> dict:
         try:
@@ -1943,6 +1946,8 @@ class Run:
                 # A filtered success publishes its dropped entries only (S-11): the retained
                 # answer already appears in the map, so the raw answer stays out of the fence.
                 partial = {k: record.get(k) for k in ("slot_id", "outcome", "filtered")}
+                if slot_id in self.unstored:
+                    partial["stdout"] = record.get("stdout")
                 parts.append(
                     fence("research-swarm/v2 partial", json.dumps(partial, ensure_ascii=False, sort_keys=True))
                 )

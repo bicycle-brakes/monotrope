@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-yd8w
@@ -90,7 +90,7 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
     *Refuted by:* a non-finder Claude call requesting JSON output.
     *Basis:* decisions.md, agent detail S-9.
 
-21. When a Claude finder record stores stdout, it contains only the envelope's `result` text or is empty, including on failure paths.
+21. When a Claude finder succeeds, its stored stdout is the serialized `structured_output` object; on every other path it contains only the envelope's `result` text or is empty.
     *Refuted by:* stored or published stdout containing the envelope, session ID or cost.
     *Basis:* decisions.md, agent detail S-14.
 22. When finder validation checks an answer, it derives the outer shape as well as entry rules from the schema, and a violation inside a category array item is an entry fault while another schema violation is an outer fault.

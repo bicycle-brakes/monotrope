@@ -4725,3 +4725,59 @@ def test_malformed_required_schema_stops_before_calls(sworld: SwarmWorld, locati
     text = sworld.research.read_text(encoding="utf-8")
     assert "incomplete" in status_line(text)
     assert stage2_research_run.LOCATOR_SCHEMA in text
+
+
+def test_claude_finder_duplicate_structured_keys_stop(sworld: SwarmWorld) -> None:
+    body = locator_report()
+    duplicate = body[:-1] + ',"code":' + json.dumps(json.loads(body)["code"]) + "}"
+    envelope = '{"result":"safe", "structured_output":' + duplicate + "}"
+    sworld.complete(**{"finder:None:claude-haiku-5-5": [{"stdout": envelope}]})
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-3")
+    assert slot["outcome"] == "invalid-report"
+
+
+def test_claude_finder_answer_precedes_limit(sworld: SwarmWorld) -> None:
+    envelope = json.loads(claude_finder_envelope())
+    envelope["subtype"] = "error_max_turns"
+    sworld.complete(judge=[{"exit": 1}], **{"finder:None:claude-haiku-5-5": [{"stdout": json.dumps(envelope)}]})
+    assert sworld.run() == 1
+    manifest = manifest_of(sworld)
+    path = store_dir(sworld) / manifest["run_id"] / "finders-0-3.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "ok"
+    assert json.loads(record["stdout"]) == json.loads(locator_report())
+    assert sworld.calls("merge")
+
+
+def test_filtered_finder_output_survives_failed_terminal_write(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = stage2_research_store.Store.write_result
+
+    def broken(self, run_id, slot_id, record):
+        if record.get("filtered"):
+            raise stage2_research_store.StoreWriteError("disk full")
+        return original(self, run_id, slot_id, record)
+
+    monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+    sworld.complete(finder=[{"stdout": partial_finder_report()}])
+    assert sworld.run() == 1
+    partial = next(p for p in partials_of(sworld.research.read_text(encoding="utf-8")) if p.get("filtered"))
+    assert "holds the value" in partial.get("stdout", "")
+    assert partial["filtered"] == dropped_row()
+
+
+def test_undecodable_finder_schema_stops_cleanly(sworld: SwarmWorld) -> None:
+    path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
+    path.write_bytes(b"\xff")
+    try:
+        outcome = sworld.run()
+    except UnicodeDecodeError as error:
+        pytest.fail(f"undecodable schema must stop cleanly: {error}")
+    assert outcome == 1
+    assert sworld.calls() == []
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    assert stage2_research_run.LOCATOR_SCHEMA in text
