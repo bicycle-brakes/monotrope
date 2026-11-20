@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-19
 created: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-x9ed
@@ -248,8 +248,8 @@ Stage-2 call, 2026-11-19: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MAJOR | SPEC | base | tests/test_provenance.py::_normalised_target | An elision followed by underscore emphasis, as in `_docs/journal/handover/…_`, is reported as an undated citation. The elision should remain a placeholder when trailing formatting is present. [Acceptance criterion 4] | Codex | taken — in-spec fault: the elision test runs after trailing emphasis is stripped, so `_…_` stays a placeholder (criterion 4) (provisional agent decision, autonomous run 2026-11-19) | — |
-| R-2 | MAJOR | SPEC | base | tests/test_provenance.py::_is_change_findings, _is_change_research | The path checks match anywhere in a path. For example, `docs/plans/changes/demo/findings.md` is treated as a change’s findings file, so an undated citation in it passes. A similarly nested `research.md` can receive envelope exemptions. Both are outside the repository’s change folders and must be scanned. [Acceptance criteria 5 and 6] | Codex | taken — in-spec fault: the change-folder checks match only paths rooted at plans/changes/ (active or archive), never a nested look-alike (criteria 5 and 6) (provisional agent decision, autonomous run 2026-11-19) | — |
+| R-1 | MAJOR | SPEC | base | tests/test_provenance.py::_normalised_target | An elision followed by underscore emphasis, as in `_docs/journal/handover/…_`, is reported as an undated citation. The elision should remain a placeholder when trailing formatting is present. [Acceptance criterion 4] | Codex | fixed — tests/test_provenance.py::test_emphasised_elisions_remain_placeholders | no |
+| R-2 | MAJOR | SPEC | base | tests/test_provenance.py::_is_change_findings, _is_change_research | The path checks match anywhere in a path. For example, `docs/plans/changes/demo/findings.md` is treated as a change’s findings file, so an undated citation in it passes. A similarly nested `research.md` can receive envelope exemptions. Both are outside the repository’s change folders and must be scanned. [Acceptance criteria 5 and 6] | Codex | fixed — tests/test_provenance.py::test_nested_change_lookalikes_are_scanned | no |
 
 Phase 6 verdict: codex 01a1f5e6-2dce-78a3-8c01-78e4937d5a57, 2026-11-19
 Reviewer session: codex 01a1f5e6-2dce-78a3-8c01-78e4937d5a57 — a fresh session reviewed: no phase-2a session was recorded
@@ -283,3 +283,50 @@ Kept from the loop record:
 > No finding.
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1118 files, 4825 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_provenance.py` +43 -11
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/journal-citation-gate/plan.md, plans/changes/journal-citation-gate/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - R-1: tests/test_provenance.py::test_emphasised_elisions_remain_placeholders: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - R-2: tests/test_provenance.py::test_nested_change_lookalikes_are_scanned: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/journal-citation-gate/stage2/attempts/journal-citation-gate/attempt-1-20261119T222151886572Z-9a5b08c1.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1118 files, 4829 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/journal-citation-gate/plan.md, plans/changes/journal-citation-gate/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/journal-citation-gate/stage2/attempts/journal-citation-gate/attempt-2-20261119T222151886572Z-9a5b08c1.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1118 files, 4831 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/journal-citation-gate/plan.md, plans/changes/journal-citation-gate/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_provenance.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/journal-citation-gate/stage2/attempts/journal-citation-gate/attempt-3-20261119T222151886572Z-9a5b08c1.md
+> ```

@@ -49,10 +49,10 @@ _PATH_CHAR = re.compile(r"[A-Za-z0-9._/*-]")
 _EMPHASIS_TAIL = re.compile(r"[*_]+\Z")
 _MD_TAIL = re.compile(r"\.md\Z")
 _ELISIONS = ("…", "...")
-_RESEARCH_ACTIVE = re.compile(r"(?:\A|/)plans/changes/(?!archive/)[^/]+/research\.md\Z")
-_RESEARCH_ARCHIVE = re.compile(r"(?:\A|/)plans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/research\.md\Z")
-_FINDINGS_ACTIVE = re.compile(r"(?:\A|/)plans/changes/(?!archive/)[^/]+/findings\.md\Z")
-_FINDINGS_ARCHIVE = re.compile(r"(?:\A|/)plans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/findings\.md\Z")
+_RESEARCH_ACTIVE = re.compile(r"\Aplans/changes/(?!archive/)[^/]+/research\.md\Z")
+_RESEARCH_ARCHIVE = re.compile(r"\Aplans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/research\.md\Z")
+_FINDINGS_ACTIVE = re.compile(r"\Aplans/changes/(?!archive/)[^/]+/findings\.md\Z")
+_FINDINGS_ARCHIVE = re.compile(r"\Aplans/changes/archive/[0-9]{4}-[0-9]{2}-[0-9]{2}-[^/]+/findings\.md\Z")
 _REASON = "cites a journal record without its date (add the dated file name or mark it as a placeholder)"
 
 
@@ -62,6 +62,7 @@ def _normalised_target(target: str) -> str:
     candidate = target
     while candidate and candidate[-1] != "…" and not _PATH_CHAR.match(candidate[-1]):
         candidate = candidate[:-1]
+    candidate = candidate.rstrip("*_")
     if candidate in _ELISIONS:
         return candidate
     # Every other target: trailing possessives, sentence-final periods and characters outside the path
@@ -98,19 +99,27 @@ def _undatierte_zitate(text: str) -> list[str]:
     return [fund.group(0) for fund in _undated_matches(text)]
 
 
+def _repository_path(path: Path) -> str:
+    if path.is_absolute():
+        try:
+            path = path.relative_to(REPO_ROOT)
+        except ValueError:
+            return ""
+    return path.as_posix()
+
+
 def _is_change_research(path: Path) -> bool:
     """The research.md of an active or archived change; no other file is exempt (spec S-3).
 
-    The shape is matched on the path string, not on `parts`: the enforcer hands in absolute paths
-    under its repository root, while the tests hand in absolute paths under a temporary tree.
+    Absolute paths are first made relative to the repository root.
     """
-    posix = path.as_posix()
+    posix = _repository_path(path)
     return bool(_RESEARCH_ACTIVE.search(posix) or _RESEARCH_ARCHIVE.search(posix))
 
 
 def _is_change_findings(path: Path) -> bool:
     """The findings.md of an active or archived change: a runner record as a whole (agent detail S-13)."""
-    posix = path.as_posix()
+    posix = _repository_path(path)
     return bool(_FINDINGS_ACTIVE.search(posix) or _FINDINGS_ARCHIVE.search(posix))
 
 
@@ -207,8 +216,9 @@ def test_patterns_are_not_journal_citations() -> None:
     assert _undatierte_zitate("siehe `docs/journal/handover/coding-harness-bootstrap.md`")
 
 
-def test_runner_envelopes_are_not_journal_citations(tmp_path: Path) -> None:
+def test_runner_envelopes_are_not_journal_citations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 2: records and audit prose of a parseable envelope are exempt, at parse level (Q-1, S-8)."""
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
     pfad = tmp_path / "plans" / "changes" / "demo" / "research.md"
     zitat = "Siehe `docs/journal/handover/bootstrap.md`."
     run = run_text(RUN1)
@@ -291,8 +301,9 @@ def test_existing_exemptions_and_elisions() -> None:
     assert _undatierte_zitate("siehe `docs/journal/handover/coding-harness-bootstrap.md`")
 
 
-def test_malformed_or_forged_envelopes_remain_scannable(tmp_path: Path) -> None:
+def test_malformed_or_forged_envelopes_remain_scannable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 5: only a reader-accepted envelope in a change research file is exempt (S-3, S-4, S-8)."""
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
     pfad = tmp_path / "plans" / "changes" / "demo" / "research.md"
     zitat = "Siehe `docs/journal/handover/bootstrap.md`."
     header = "---\ntitle: Research\n---\n\n# Research\n\n"
@@ -347,8 +358,9 @@ def test_malformed_or_forged_envelopes_remain_scannable(tmp_path: Path) -> None:
         assert befunde and "bootstrap.md" in befunde[0], str(fremd)
 
 
-def test_change_findings_are_runner_records(tmp_path: Path) -> None:
+def test_change_findings_are_runner_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Agent detail S-13: a change's findings.md is exempt as a whole; the same text elsewhere stays red."""
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
     zitat = 'Row S-6: see "*docs/journal/handover/bootstrap.md*."\n'
     for exempt in (
         tmp_path / "plans" / "changes" / "demo" / "findings.md",
@@ -378,3 +390,23 @@ def test_failure_message_never_repeats_the_target(tmp_path: Path) -> None:
     assert "bootstrap" not in message and "docs/journal/handover" not in message
     # Quoting the red message into any record cannot create a new hit.
     assert _undatierte_zitate(message) == []
+
+
+def test_emphasised_elisions_remain_placeholders() -> None:
+    for text in (
+        "_docs/journal/handover/…_",
+        "_docs/journal/handover/..._",
+    ):
+        assert not _undatierte_zitate(text), text
+    assert _undatierte_zitate("_docs/journal/handover/bootstrap.md_")
+
+
+def test_nested_change_lookalikes_are_scanned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    citation = "See `docs/journal/handover/bootstrap.md`."
+    run = run_text(RUN1).replace(f"run {RUN1} status: complete.", f"run {RUN1} status: complete. {citation}")
+    for name, text in (("findings.md", citation), ("research.md", run)):
+        nested = tmp_path / "docs" / "plans" / "changes" / "demo" / name
+        assert _file_findings(nested, text), str(nested)
+        rooted = tmp_path / "plans" / "changes" / "demo" / name
+        assert not _file_findings(rooted, text), str(rooted)

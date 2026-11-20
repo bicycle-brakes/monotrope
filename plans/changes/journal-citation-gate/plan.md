@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-x9ed
@@ -55,6 +55,10 @@ make verify
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-19 17:13:02–17:14:16 UTC, 74 s — draft · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -65,3 +69,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-19 18:17:31–18:28:24 UTC, 653 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-19 18:28:35–18:29:17 UTC, 42 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-19 18:29:29–18:32:19 UTC, 170 s — implement · hand finish · route orchestrator · model claude-opus-5-5 · accepted · targeted tests 141 passed; full `make verify` green afterwards (6330 passed, 17 skipped; 784 s execution, 1356 s admission wait); root cause: review row S-6 quotes an emphasised undated example and each failed attempt's record quoted the message back; fix by agent detail S-13 (findings.md exempt, message without target) · measured by the orchestrator
+2026-11-19 22:22:04–23:06:52 UTC, 2688 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 23:07:03–23:08:16 UTC, 74 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-19 23:08:27–23:09:10 UTC, 43 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
