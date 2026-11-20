@@ -633,9 +633,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-deep-a/spec.md`](changes/review-loop-deep-a/spec.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/runner-stamps-provenance/decisions.md`](changes/runner-stamps-provenance/decisions.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/findings.md`](changes/runner-stamps-provenance/findings.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
-| [`changes/runner-stamps-provenance/plan.md`](changes/runner-stamps-provenance/plan.md) | draft | none | 2026-11-18 | coding-harness-f9sv |
+| [`changes/runner-stamps-provenance/plan.md`](changes/runner-stamps-provenance/plan.md) | draft | partial | 2026-11-18 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/research.md`](changes/runner-stamps-provenance/research.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
-| [`changes/runner-stamps-provenance/spec.md`](changes/runner-stamps-provenance/spec.md) | draft | none | 2026-11-20 | coding-harness-f9sv |
+| [`changes/runner-stamps-provenance/spec.md`](changes/runner-stamps-provenance/spec.md) | draft | partial | 2026-11-20 | coding-harness-f9sv |
 | [`changes/slip-counter/decisions.md`](changes/slip-counter/decisions.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/findings.md`](changes/slip-counter/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/plan.md`](changes/slip-counter/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |

@@ -9586,13 +9586,12 @@ def _committed_fault(relative: str, reason: str) -> CommittedRecordFault:
     )
 
 
-def parse_producer_records(field: str, relative: str) -> list[dict]:
+def parse_producer_records(field: str, relative: str, *, allow_legacy: bool = False) -> list[dict]:
     """The producer records one committed `produced_by` field holds.
 
-    A duplicate key, a non-mapping record, an unknown program or a version that is not one
-    calendar day is a committed fault: the field must be readable, or the header belongs to
-    the migration (bead coding-harness-2i7x). The record contract is the census's, so the
-    stamp and the census cannot disagree about what a producer record is.
+    Duplicate keys and non-mapping records cannot be safely retained. The strict route also
+    applies the census contract; the stamp may retain readable legacy records outside active
+    research without granting that exception to newly written records.
     """
     import research_census  # the census reads this module back, so the import stands at call time
 
@@ -9616,7 +9615,7 @@ def parse_producer_records(field: str, relative: str) -> list[dict]:
     problems: list[str] = []
     for record in records:
         problems.extend(research_census.producer_record_problems(record))
-    if problems:
+    if any(not isinstance(record, dict) for record in records) or (problems and not allow_legacy):
         raise _committed_fault(relative, "; ".join(problems))
     return records
 
@@ -9640,7 +9639,7 @@ def _field_value_raw(block: str, key: str, relative: str) -> str | None:
     return raw[raw.index(":") + 1 :]
 
 
-def committed_producer_field(root: Path, relative: str) -> str | None:
+def committed_producer_field(root: Path, relative: str, *, allow_legacy: bool = False) -> str | None:
     """The `produced_by` field's value exactly as HEAD commits it, or None when HEAD has none.
 
     Only records committed before the run count as earlier contributions (Q-10): the
@@ -9661,7 +9660,7 @@ def committed_producer_field(root: Path, relative: str) -> str | None:
     field = _field_value_raw(match.group(1), "produced_by", relative)
     if field is not None:
         # The field must be readable now: a committed fault stops the verb here, before a route is spent.
-        parse_producer_records(field, relative)
+        parse_producer_records(field, relative, allow_legacy=allow_legacy)
     return field
 
 
@@ -9694,7 +9693,7 @@ def refuse_committed_structural_header_fault(root: Path, relative: str) -> None:
         raise _committed_fault(relative, f"invalid YAML ({error})") from None
 
 
-def refuse_committed_header_fault(root: Path, relative: str) -> None:
+def refuse_committed_header_fault(root: Path, relative: str, *, allow_legacy: bool = False) -> None:
     """Stop the verb before a route is spent when the committed header cannot be stamped.
 
     A producer field the committed baseline carries but no stamp can read is the stock
@@ -9718,7 +9717,7 @@ def refuse_committed_header_fault(root: Path, relative: str) -> None:
                 raise _committed_fault(relative, "produced_by is held more than once")
         except (ValueError, yaml.YAMLError) as error:
             raise _committed_fault(relative, f"invalid YAML ({error})") from None
-    committed_producer_field(root, relative)
+    committed_producer_field(root, relative, allow_legacy=allow_legacy)
 
 
 def inline_producer_record(record: dict) -> str:
@@ -9742,7 +9741,9 @@ def _block_record_lines(record: dict, eol: str, indent: str = "") -> str:
     return eol.join(lines)
 
 
-def retained_producer_field(baseline_field: str | None, records: list[dict], *, eol: str = "\n") -> str:
+def retained_producer_field(
+    baseline_field: str | None, records: list[dict], *, eol: str = "\n", allow_legacy: bool = False
+) -> str:
     """The `produced_by` replacement the stamp writes, without its `produced_by:` key prefix.
 
     A committed field whose records are already exactly this publication's keeps its own bytes
@@ -9756,7 +9757,7 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
     if baseline_field is None:
         # The rendering already leads with the one space after the key's colon.
         return research_producer_field(records).removeprefix("produced_by:")
-    earlier = parse_producer_records(baseline_field, "<retained>") if records else []
+    earlier = parse_producer_records(baseline_field, "<retained>", allow_legacy=allow_legacy) if records else []
     if earlier == records:
         return baseline_field
     added = [record for record in records if record not in earlier]
@@ -9866,7 +9867,8 @@ def stamp_artifact(
     path = root / relative
     # A committed fault no route can stamp stops the verb before any working-tree check can
     # fail this attempt generically (L2-12): the migration owns that header.
-    refuse_committed_header_fault(root, relative)
+    allow_legacy = not ACTIVE_RESEARCH.fullmatch(relative)
+    refuse_committed_header_fault(root, relative, allow_legacy=allow_legacy)
     try:
         text = path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as error:
@@ -9893,8 +9895,12 @@ def stamp_artifact(
             raise ValueError("produced_by is held more than once")
     except (ValueError, yaml.YAMLError) as error:
         raise Refused(f"{relative}: cannot be stamped safely ({error})") from error
-    baseline_field = committed_producer_field(root, relative)
-    records = parse_producer_records(baseline_field, relative) if baseline_field is not None else []
+    baseline_field = committed_producer_field(root, relative, allow_legacy=allow_legacy)
+    records = (
+        parse_producer_records(baseline_field, relative, allow_legacy=allow_legacy)
+        if baseline_field is not None
+        else []
+    )
     committed_count = len(records)
     contribution = {"kind": "llm-session", "name": producer, "version": day}
     if model:
@@ -9904,7 +9910,10 @@ def stamp_artifact(
             records.append(record)
     if ledger is not None:
         ledger[relative] = records[committed_count:]
-    fields = {"produced_by": "produced_by:" + retained_producer_field(baseline_field, records, eol=eol)}
+    fields = {
+        "produced_by": "produced_by:"
+        + retained_producer_field(baseline_field, records, eol=eol, allow_legacy=allow_legacy)
+    }
     head = committed_bytes(root, relative)
     head_block = None
     if head is not None:
@@ -9921,8 +9930,8 @@ def stamp_artifact(
             committed_state = None
         if _is_approval(committed_state):
             # The approval survives only a stamp that touches nothing else (criterion 9).
-            body_changed = _unowned_content(text, "produced_by", "updated") != _unowned_content(
-                head.decode("utf-8", "surrogateescape"), "produced_by", "updated"
+            body_changed = _unowned_content(text, "produced_by", "updated", "review") != _unowned_content(
+                head.decode("utf-8", "surrogateescape"), "produced_by", "updated", "review"
             )
             if body_changed:
                 approver = committed_state.get("approved_by")
@@ -10200,7 +10209,7 @@ def _problem_field(relative: str, problem: str) -> str | None:
 
 
 def _partition_header_problems(
-    relative: str, head: bytes | None, current: bytes, problems: list[str]
+    relative: str, head: bytes | None, current: bytes, problems: list[str], *, runner_reset: bool = False
 ) -> tuple[list[str], list[str]]:
     """Split `problems` at field level into (changed_or_new, untouched_committed) (Q-19, L9-1, L9-4).
 
@@ -10213,11 +10222,36 @@ def _partition_header_problems(
     if head is None:
         return list(problems), []
     committed = set(header_problems(relative, head, head))
+    stamped_legacy = False
+    if runner_reset:
+        import research_census
+
+        before = _header_field_slices(head, "produced_by")
+        after = _header_field_slices(current, "produced_by")
+        if before and after and len(before) == len(after) == 1:
+            try:
+                old_field = before[0].split(":", 1)[1]
+                new_field = after[0].split(":", 1)[1]
+                old_records = parse_producer_records(old_field, relative, allow_legacy=True)
+                new_records = parse_producer_records(new_field, relative, allow_legacy=True)
+                added = new_records[len(old_records) :]
+                eol = "\r\n" if b"\r\n" in current else "\n"
+                stamped_legacy = (
+                    new_records[: len(old_records)] == old_records
+                    and all(not research_census.producer_record_problems(record) for record in added)
+                    and new_field == retained_producer_field(old_field, new_records, eol=eol, allow_legacy=True)
+                )
+            except (CommittedRecordFault, ValueError, yaml.YAMLError):
+                pass
     changed_or_new: list[str] = []
     untouched_committed: list[str] = []
     for problem in problems:
         field = _problem_field(relative, problem)
-        if problem in committed and field is not None and _field_unchanged(head, current, field):
+        if (
+            problem in committed
+            and field is not None
+            and (_field_unchanged(head, current, field) or (field == "produced_by" and stamped_legacy))
+        ):
             untouched_committed.append(problem)
         else:
             changed_or_new.append(problem)
@@ -10255,7 +10289,7 @@ def touched_header_problems(
             # that preserves it fails here and spends its route (criterion 14).
             found = header_problems(relative, head, current, runner_reset=runner_reset, reject_added=reject_added)
             if head is not None and not ACTIVE_RESEARCH.fullmatch(relative):
-                found, _ = _partition_header_problems(relative, head, current, found)
+                found, _ = _partition_header_problems(relative, head, current, found, runner_reset=runner_reset)
             problems.extend(found)
         except CommittedRecordFault:
             raise

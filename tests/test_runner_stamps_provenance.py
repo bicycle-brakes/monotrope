@@ -716,6 +716,35 @@ def test_preserves_prior_contributions(repo):
     ], "the session's own self-description never survives as history"
 
 
+@pytest.mark.parametrize(
+    "legacy",
+    [
+        '{kind: llm-session, name: Cline, version: "2026-11-04"}',
+        '{kind: llm-session, name: codex, version: "legacy-version"}',
+    ],
+)
+def test_stamp_retains_readable_legacy_producer(repo, legacy):
+    relative = "docs/legacy.md"
+    original = f"---\ntitle: Legacy\nproduced_by: {legacy}\nreview: {PENDING_REVIEW}\n---\nBody.\n"
+    _commit_file(repo, relative, original)
+    _write(repo, relative, original.replace("Body.", "Body changed."))
+    try:
+        stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day="2026-11-20")
+    except stage2.CommittedRecordFault as error:
+        pytest.fail(f"a readable legacy producer must be retained: {error}")
+    assert f"produced_by: [{legacy}, " in (repo / relative).read_text()
+    assert stage2.touched_header_problems(repo, [relative], runner_reset=True) == []
+
+
+def test_review_only_edit_does_not_report_body_change(repo):
+    relative = "plans/changes/demo/spec.md"
+    head = stage2.committed_bytes(repo, relative).decode("utf-8")
+    _write(repo, relative, head.replace(APPROVED_REVIEW, PENDING_REVIEW))
+    notice = stage2.stamp_artifact(repo, relative, producer="codex", model="gpt-6.1-terra", day="2026-11-20")
+    assert notice is None, "a review-only edit is not a document change"
+    assert stage2.touched_header_problems(repo, [relative], runner_reset=True), "the invalid reset remains refused"
+
+
 def test_body_change_resets_approval(repo, monkeypatch):
     day = stage2.today()
     relative = "plans/changes/demo/spec.md"

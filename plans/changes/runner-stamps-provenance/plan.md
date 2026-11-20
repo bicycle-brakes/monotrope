@@ -1,10 +1,10 @@
 ---
 title: "Plan — runner-stamps-provenance"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-16
 last_reviewed: 2026-11-18
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -145,6 +145,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-16 16:05:48–16:16:58 UTC, 670 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -181,3 +185,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 12:55:18–14:39:51 UTC, 6273 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-20 16:51:19–17:19:17 UTC, 1678 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-20 19:22–19:48 UTC, 26 min — repair · orchestrator hand finishing of round 9 (maintainer Option 2, Q-19): appetite raised to 16 h in decisions/spec/plan, L9-3 kept (`findings_header` names `stage2`), L9-1/L9-2/L9-4 repaired with field-level header classification in `scripts/stage2.py`, shared producer-record contract hoisted to `scripts/plans_registry.py` with blocking active-change gate, 21 legacy active-change headers migrated once, rows L9-1 and L9-3 marked fixed; targeted ruff, pytest (265 + 8 passed) and fast document/schema gates green (full `make verify` deferred until verify slot clears) · measured by hand from task timestamps
+2026-11-20 20:34:33–21:58:16 UTC, 5024 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-20 21:58:28–22:53:49 UTC, 3320 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-20 22:54:01–23:30:15 UTC, 2175 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

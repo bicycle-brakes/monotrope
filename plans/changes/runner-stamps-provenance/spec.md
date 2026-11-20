@@ -1,10 +1,10 @@
 ---
 title: "Spec — runner-stamps-provenance"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-11-16
 last_reviewed: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
