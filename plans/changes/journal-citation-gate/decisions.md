@@ -141,3 +141,9 @@ loop rows and attempt records in `findings.md` are written by the runner and
 hand repairs only change a Status cell, so Q-1's exemption of runner-written
 record blocks covers it; and a message that repeats its own finding makes the
 record of a failure a new failure.
+
+Confirmed by the maintainer on 2026-11-20 in the conversation: S-11, S-12
+(one general normalisation) and S-13 (a change's `findings.md` is exempt;
+the failure message never repeats the target) are no longer provisional, and
+so is the orchestrator's hand acceptance of phase-6 rows R-1 and R-2 (the
+code under test moves to `scripts/` under bead coding-harness-bf9m).
