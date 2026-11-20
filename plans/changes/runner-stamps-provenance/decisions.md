@@ -4,13 +4,13 @@ status: draft
 implementation_status: none
 date: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-18
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: claude-code, model: claude-opus-5-5, version: "2026-11-16"}
+produced_by: [{kind: llm-session, name: claude-code, model: claude-opus-5-5, version: "2026-11-16"}, {kind: llm-session, name: codex, version: "2026-11-20", model: "gpt-6.1-terra"}]
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [decisions, interview]
 ---
@@ -368,6 +368,8 @@ F-9). Reason: measured on 2026-11-16 at origin/main aed8eaf0, all 623
 an approval given to other content does not cover changed content, and
 naming the reset keeps it visible to the maintainer.
 
+### Historical agent decision — superseded by Q-7
+
 [DETAIL] **The post-run check judges only the producer records this run
 wrote, plus the well-formedness of the `produced_by` list; an earlier
 record that fails the census rule is reported, not refused, until
@@ -380,6 +382,8 @@ Superseded on 2026-11-16 by the maintainer's answer in Q-7: any fault
 stops the run, earlier readable records included.
 
 ## Q-13 · Which header rules the post-run check applies outside research.md
+
+Superseded by the maintainer’s later answer in Q-18 on 2026-11-18: the shared check also judges provenance and review against the committed header.
 
 asked: 2026-11-18, conversation (spec review finding F-22)
 answer: "A" (the producer record only)

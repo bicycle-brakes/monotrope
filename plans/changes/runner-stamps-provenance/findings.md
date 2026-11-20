@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-16
 created: 2026-11-16
 last_reviewed: 2026-11-16
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-f9sv
@@ -1246,3 +1246,9 @@ Stage-2 call, 2026-11-19: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 4 errors.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261119T215855192121Z-e0fe28da.md
 > ```
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1115 files, 4834 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4836 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
