@@ -946,3 +946,14 @@ Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4902 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4917 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | scripts/stage2.py `release` | If worktree A was superseded by B, then later supersedes a record from C, A’s release before its first new round can find B’s older archive first. It returns success and may append `Loop rows: superseded by …` instead of refusing without changing findings. [Criterion 10] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f981-3cc7-75d1-9d23-e669f22227c2, 2026-11-20
+Reviewer session: codex 01a1f981-3cc7-75d1-9d23-e669f22227c2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
