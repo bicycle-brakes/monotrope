@@ -743,8 +743,8 @@ class _Check:
 
     `certain` means valid, unambiguous evidence: a complete run whose
     repository, change, checked tree(s) and gate configuration are all known,
-    whose completion does not precede its start and, for a targeted check,
-    whose tree is the same at both ends. Anything else is uncertain and counts
+    whose completion does not precede its start and whose recorded trees agree.
+    Targeted checks require both tree readings. Anything else is uncertain and counts
     as incomplete once. `completion` is None while no valid completion exists.
     """
 
@@ -754,7 +754,7 @@ class _Check:
     completion: datetime.datetime | None
     verdict: str | None
     change: str | None
-    trees: frozenset[str]  # every checked tree the run may stand for; a moved targeted check has two
+    trees: frozenset[str]  # every checked tree the run may stand for
     config: str | None
     selected: bool
     certain: bool
@@ -777,7 +777,7 @@ def _compatible(first: _Check, second: _Check) -> bool:
     """Whether the known identity fields of two checks do not conflict.
 
     An unknown field never proves a match and never rules one out; two known,
-    different values rule it out. A moved targeted check matches either tree.
+    different values rule it out. A moved check matches either tree.
     """
     if first.change and second.change and first.change != second.change:
         return False
@@ -867,10 +867,12 @@ def _collect(
         tree_start = _text(start.get("tree_id"))
         tree_end = _text(end.get("tree_id")) if end is not None and run_id not in damaged else None
         config = _text(start.get("config_sha256"))
-        trees = {tree_start, tree_end} if kind == "targeted" else {tree_start}
+        trees = {tree_start, tree_end}
         certain = not outside and kind in CHECK_KINDS and valid_end and bool(change and tree_start and config)
         if kind == "targeted":
             certain = certain and tree_end == tree_start  # both readings must exist and agree
+        elif tree_end is not None:
+            certain = certain and tree_end == tree_start
         verdict = end.get("verdict") if valid_end and end is not None else None
         tally.checks.append(
             _Check(

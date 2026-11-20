@@ -1943,6 +1943,22 @@ def test_moved_targeted_end_tree_is_possible_match(
     assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
 
 
+@pytest.mark.parametrize("target_tree", [TREE, "moved"])
+def test_moved_full_tree_makes_pair_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], target_tree: str
+) -> None:
+    """A full run with differing recorded trees is uncertain on either tree."""
+
+    def build(repository: str) -> list[dict]:
+        return [
+            *_check("t-1", "targeted", _at("09:00"), _at("09:05"), "green", repository, tree=target_tree),
+            *_check("f-1", "full", _at("11:00"), _at("11:30"), "red", repository, end_tree="moved"),
+        ]
+
+    code, out = _slips_of(tmp_path, monkeypatch, capsys, build)
+    assert code == 1 and "slips: 0; incomplete/not countable runs: 2" in out, out
+
+
 def test_incomplete_run_exits_partial(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
