@@ -785,7 +785,7 @@ class Run:
         elif result.started or result.outcome != "cancelled":
             self.line(
                 f"Swarm outcome, {self.runner.today()}: {self.what(entry)} · run {self.run_id} · "
-                f"model {entry['model']} · {result.outcome}."
+                f"model {entry['model']} · {record['outcome']}."
             )
         self.records[slot.slot_id] = record
         self.unstored.add(slot.slot_id)  # until its terminal record is written (F-22)

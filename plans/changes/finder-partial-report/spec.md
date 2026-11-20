@@ -105,6 +105,9 @@ On 2026-11-19, research found that one malformed locator invalidates a whole fin
 25. When a locator field passes the schema's type, closed-field and non-whitespace checks, its path and reference form remains subject to existing merge resolution rather than new finder filtering rules.
     *Refuted by:* a nonblank locator being filtered solely for its path or reference form or bypassing existing merge resolution.
     *Basis:* decisions.md, agent detail S-19.
+26. Before any finder call, the installed Claude Code must meet the declared minimum version for `--json-schema`; otherwise the run ends incomplete.
+    *Refuted by:* a finder call starting with an older version or the run failing to report the minimum and installed versions.
+    *Basis:* decisions.md, spec-review round 2 facts; findings.md, review row L3-3.
 
 ## Non-goals
 

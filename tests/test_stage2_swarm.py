@@ -4590,6 +4590,14 @@ def test_claude_finder_missing_structured_output_is_invalid(sworld: SwarmWorld, 
     assert slot["outcome"] == "invalid-report", "a missing answer is not accepted and not a failed call"
 
 
+def test_claude_finder_audit_reports_final_outcome(sworld: SwarmWorld) -> None:
+    sworld.complete(**{"finder:None:claude-haiku-5-5": [{"stdout": claude_finder_envelope_without_structured()}]})
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if "Swarm outcome" in line and "model claude-haiku-5-5" in line]
+    assert len(lines) == 1 and lines[0].endswith(" · invalid-report.")
+
+
 @pytest.mark.parametrize(
     "exit_code,stdout",
     [
