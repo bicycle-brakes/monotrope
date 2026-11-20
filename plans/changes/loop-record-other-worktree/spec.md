@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -28,7 +28,7 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 
 ## Terms
 
-**Record key:** the change name and digest identifying one worktree's state directory. **Supersede:** archive the selected old loop record and account for it before a fresh run. **Other worktree keys:** keys derived from the currently listed worktrees of this repository; removed worktrees and other repositories are excluded.
+**Record key:** the change name and digest identifying one worktree's state directory. **Supersede:** archive the selected old loop record and account for it before a fresh run. **Other worktree keys:** keys derived from the currently listed worktrees of this repository; worktrees no longer listed by git and other repositories are excluded. A worktree still listed by git remains eligible even if its directory is gone.
 
 ## Acceptance criteria
 
@@ -77,7 +77,7 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 - Change research state, availability receipt binding, phase-6 verdict rules or the model ladder.
 - Amend an architecture decision record.
 - Recover or abandon an interrupted supersession whose key set changes or whose remaining record becomes unreadable; the follow-up is coding-harness-0aht (abandon or roll back an interrupted supersession).
-- Discover records of removed worktrees or other repositories.
+- Discover records of worktrees no longer listed by git or of other repositories.
 
 ## Protected areas
 

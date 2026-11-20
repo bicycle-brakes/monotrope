@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-19
+updated: 2026-11-20
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1243,15 +1243,18 @@ into a shell. Thirteen verbs exist:
   change, the plain restart refuses and names those keys: the maintainer
   supersedes them instead with `--restart --supersedes <key> --reason <text>`,
   repeating `--supersedes` for every active other-worktree key the refusal
-  names. Supersession archives each selected record — everything a release
+  names. Supersede before any new record exists in this worktree: a `review-loop` here can
+  start a fresh run when no audit call is unaccounted for, and its record must be released
+  after a phase-6 verdict before supersession can proceed. Supersession archives each selected record — everything a release
   would delete, `availability.json` included, never the research siblings —
   in one directory under
   `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/`, and
   writes one accounting line naming every key, its round-number range, its
   archive subdirectory and the audit calls pending since the last release or
   restart; zero calls are allowed and reported as zero. The keys are discovered
-  from `git worktree list` of this repository only — a removed worktree's or
-  another repository's record is never adopted. If a removed worktree path is reused, its old
+  from `git worktree list` of this repository only — a worktree still listed by git remains
+  discoverable even if its directory is gone; one pruned from git metadata and another
+  repository's record are excluded. If a removed worktree path is reused, its old
   unarchived record has the same key and can continue; follow-up coding-harness-0aht addresses this
   limit. A plain restart checks records under their locks and reports unreadable or symlinked records;
   readable active records require supersession. Each selected record is
@@ -1670,12 +1673,14 @@ beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
-(also the release inside `review`), `prepare-loop`, `triage` and
-`release-loop --stage-failed` refuse. When unaccounted audit calls reveal a missing record, the
+(also the release inside `review`), `prepare-loop` and
+`release-loop --stage-failed` refuse. `triage` separately refuses whenever this worktree
+has no record of the change, regardless of pending audit calls. When unaccounted audit calls reveal a missing record, the
 refusal names the expected record path. When active records of the same change stand under other
 worktree keys of this repository in the same state directory, it names every such key.
-The keys are derived from `git worktree list` alone; records of removed
-worktrees, of other repositories and of other changes are never named, and
+The keys are derived from `git worktree list` alone; a listed worktree remains discoverable
+even if its directory is gone. Records of worktrees no longer listed by git, of other
+repositories and of other changes are never named, and
 neither is anything already archived. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
@@ -1703,8 +1708,7 @@ maintainer supersedes it explicitly: `release-loop <change> --restart
 Supersession reads each selected record only under its lock, moves everything
 a release would delete — `availability.json` included — into one unique
 archive directory
-`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding
-digest>@<UTC timestamp>/`, one subdirectory per key, keeps the research state
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/`, one subdirectory per key, keeps the research state
 at its own key, and then writes one `Loop restarted:` line whose tail begins
 with the fixed clause `superseded record` and names every key, its
 round-number range, its archive subdirectory, the audit calls pending since

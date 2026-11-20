@@ -29288,6 +29288,23 @@ def test_stage_retirement_names_foreign_key_with_findings(world: World, capsys) 
     assert key in capsys.readouterr().err
 
 
+def test_release_without_record_survives_worktree_listing_failure(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (stage2.record_base().parent / stage2.ARCHIVE_DIR_NAME).mkdir(parents=True, exist_ok=True)
+    world.write_findings(VERDICT)
+
+    def fail_listing(*_args, **_kwargs):
+        raise stage2.Refused("worktree discovery failed: unavailable")
+
+    monkeypatch.setattr(stage2, "_git_output", fail_listing)
+    try:
+        stage2.release(world.root, "demo")
+    except stage2.Refused as error:
+        pytest.fail(f"release without a record should retain its ordinary behavior: {error}")
+    assert "Loop rows: none — the loop did not run for this change." in world.text()
+
+
 def test_superseded_worktree_release_records_superseder(world: World) -> None:
     other = other_worktree(world)
     key = stage2.record_key("demo", other)

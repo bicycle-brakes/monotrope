@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-18
 created: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -85,7 +85,7 @@ to the maintainer as one list, who accepted them as proposed on 2026-11-18
   `lost_record_refusal` counts. When the scan finds more than one other key
   of the change, the supersession must name all of them in one call
   (`--supersedes` repeatable) or it refuses and names them. With no pending
-  call it refuses: there is nothing to account for. Reason: audit lines carry
+  call it refuses: there is nothing to account for (superseded by S-15). Reason: audit lines carry
   no key, so any attribution to one record would be a guess.
 - **S-3, the kind of line.** A restart under the ADR 0021 restart amendment:
   `Loop restarted: <date> after round <N> — superseded record <key> (rounds
@@ -175,8 +175,8 @@ session (Opus 5.5), shown as one list and accepted as proposed ("A: So
 - **S-16, which keys are "other worktree keys".** Only digests of this
   repository's worktrees as `git worktree list` reports them; a record of
   another repository with a change of the same name is never named, refused
-  on or archived. A record of a removed worktree is therefore not seen — a
-  named limit. Reason: no command may touch another repository's state.
+  on or archived. A worktree still listed by git remains discoverable even if its directory
+  is gone; once pruned from git metadata, its record is not seen — a named limit. Reason: no command may touch another repository's state.
 - **S-17, archive layout for several keys.**
   `<change>@<digest of the superseding worktree>@<UTC timestamp>/<key>/…`,
   one subdirectory per superseded key, with the manifest at the top; the

@@ -4706,7 +4706,10 @@ def superseded_by(root: Path, change: str) -> str | None:
     base = record_base().parent / ARCHIVE_DIR_NAME
     if not base.is_dir():
         return None
-    listing = _git_output(root, "worktree", "list", "--porcelain")
+    try:
+        listing = _git_output(root, "worktree", "list", "--porcelain")
+    except Refused:
+        return None
     worktrees = [Path(line[9:]) for line in listing.splitlines() if line.startswith("worktree ")]
     for archive in sorted(base.iterdir(), reverse=True):
         if archive.name.startswith(STAGING_PREFIX) or not (archive / own / "loop.md").is_file():
