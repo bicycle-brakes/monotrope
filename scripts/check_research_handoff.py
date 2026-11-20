@@ -41,6 +41,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
+import venv_guard  # noqa: F401
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -84,6 +85,10 @@ class ParsedRun:
     inventory: dict | None = None
     blocks: dict[str, list] = field(default_factory=dict)
     derived: dict | None = None
+    # The character span of the whole run envelope, from the first character of its opening marker
+    # line through the last character of its closing marker line (change journal-citation-gate, S-10):
+    # the one extent the journal-date check trusts, read from this one parser.
+    span: tuple[int, int] | None = None
 
     @property
     def complete(self) -> bool:
@@ -200,15 +205,29 @@ def _lines(text: str) -> list[str]:
     return re.split(r"\r\n|\r|\n", text)
 
 
+def _line_starts(text: str) -> list[int]:
+    """The start offset of every line, split exactly like `_lines` (LF, CRLF and CR only)."""
+    starts = [0]
+    for separator in re.finditer(r"\r\n|\r|\n", text):
+        starts.append(separator.end())
+    return starts
+
+
 def parse_text(text: str, label: str) -> list[ParsedRun]:
     """Every v2 run envelope of one research.md, validated; raises CannotMeasure on anything ambiguous.
 
     A run envelope's opening and closing lines are hard boundaries (deep review RS-1-9): they end a foreign
-    Markdown fence that earlier prose left open, so such a fence never hides a run from the gate.
+    Markdown fence that earlier prose left open, so such a fence never hides a run from the gate. Each parsed
+    run also carries its character span, from the first character of its opening marker line through the last
+    character of its closing marker line, computed over the same line split as the parse - so the spans land
+    exactly on the accepted marker boundaries whatever mix of LF, CRLF, CR or Unicode separators the file uses
+    (change journal-citation-gate, S-10). The verdicts and messages do not change.
     """
     runs: list[ParsedRun] = []
     lines = _lines(text)
+    starts = _line_starts(text)
     envelope: str | None = None
+    envelope_line = 0
     blocks: dict[str, list[tuple[str, str]]] = {}
     index = 0
     other: tuple[str, int] | None = None
@@ -252,10 +271,13 @@ def parse_text(text: str, label: str) -> list[ParsedRun]:
             if envelope is not None:
                 raise CannotMeasure(f"{label}: run {opened.group(1)} opens inside run {envelope}")
             envelope, blocks = opened.group(1), {}
+            envelope_line = index - 1
         elif line == _CLOSE:
             if envelope is None:
                 raise CannotMeasure(f"{label}: a run envelope closes that never opened")
-            runs.append(_build(envelope, blocks, label))
+            run = _build(envelope, blocks, label)
+            run.span = (starts[envelope_line], starts[index - 1] + len(line))
+            runs.append(run)
             envelope = None
     if envelope is not None:
         raise CannotMeasure(f"{label}: run {envelope} is never closed")

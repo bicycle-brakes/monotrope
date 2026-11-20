@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """verify_duration.py — measured verification durations, recorded locally only.
 
-`scripts.verify_all.sh` calls the small operations of this module around the
-gates it already ran: one `clock` reading immediately before and after each
-gate command and around the whole run, `start` before the report and gate
-selection, `gate` per executed gate, `end` at the final verdict. Each write
+The shared scheduler (`scripts.verify_run`) calls the operations of this
+module around the gates it already runs: `start` one run identity before the
+report and gate selection, `gate` per executed gate (including a cheap pass
+that reruns after a changed tree), `end` at the final verdict. Each write
 appends one version-1 JSON line to `verify-duration.jsonl` under
 `verify_lock.state_root()` — the same shared state root the admission keeps,
 outside the repository, local only: no command output, no credentials, no
@@ -13,8 +13,19 @@ upload (bead coding-harness-1um6, spec "Non-goals").
 **Time.** Elapsed seconds are differences of `time.monotonic()`, so a wall
 clock adjustment cannot produce negative or inflated durations, and an
 inherited admission's wait is recorded as the shared context it is — never
-added into execution seconds. Unavailable readings are recorded as JSON null,
-never as zero by assumption (spec, "Terms").
+added into execution seconds. `run_end.seconds` sums the active gate
+segments of one invocation, so the queue and memory waits stay outside it.
+Unavailable readings are recorded as JSON null, never as zero by assumption
+(spec, "Terms").
+
+**Completion context.** A completion may carry optional additive fields —
+`admission_requested`, the final admission context (`admission_id`,
+`admission_wait_seconds`, `admission_reused`) and the final revision and
+configuration identity (`commit`, `config_sha256`). Their presence switches
+the reader to the completion's context, so a cheap-only run can state that
+no admission was requested and a run that changed trees while queued can
+name its final state; a completion without the fields reads exactly as
+before (bead coding-harness-bxxt.6).
 
 **Interruption.** A killed run can leave a start without an end; the reader
 labels such a run incomplete instead of inventing a verdict. A truncated
@@ -24,7 +35,7 @@ reader never repairs or truncates history.
 **Refusals.** A history destination that is a symlink or not a regular file,
 or a state root that cannot be created, refuses the write with a diagnostic
 on stderr and exit code 2, without writing through the substituted file. The
-caller (`verify_all.sh`) reports the missing history and lets the gates and
+caller (`verify_run`) reports the missing history and lets the gates and
 their verdicts continue unchanged; such a run cannot supply a persisted
 baseline (spec acceptance criterion 7).
 
@@ -35,6 +46,7 @@ Command line:
     python -m scripts.verify_duration gate --run ID --gate GID \
             --start T0 --end T1 --status N --enforcement block
     python -m scripts.verify_duration end --run ID --start T0 --end T1 --verdict green
+    python -m scripts.verify_duration end --run ID --start T0 --end T1 --verdict green --no-admission
     python -m scripts.verify_duration report [--run ID]
     python -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change NAME]
 
@@ -45,8 +57,8 @@ checked tree and gate configuration when that check is a green targeted check
 reader derives the count from the run records the runner already leaves.
 Full checks stay in `verify-duration.jsonl` as version-1 events with additive
 comparison fields (`check_kind`, `change`, `tree_id` and the marker
-`comparison_version`: 2, captured by `cmd_start` from runner-owned environment
-variables). Targeted checks record their start and end through
+`comparison_version`: 2, captured by `record_start` from the runner-owned
+variables of the scheduler's environment). Targeted checks record their start and end through
 `begin_targeted_run`/`finish_targeted_run` into `verify-targeted.jsonl` beside
 it, so no duration reader ever counts a targeted check as a full duration. The
 reader combines both histories, orders checks by UTC completion with strict
@@ -72,6 +84,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -110,6 +123,8 @@ UNRECOGNISED_KIND_PREFIX = "unrecognised:"
 KIND_ENV = "HARNESS_VERIFY_DURATION_KIND"
 CHANGE_ENV = "HARNESS_VERIFY_DURATION_CHANGE"
 TREE_ENV = "HARNESS_VERIFY_DURATION_TREE"
+# All three, for the scheduler to drop from its gates' environment once the start is recorded.
+COMPARISON_ENV_NAMES = (KIND_ENV, CHANGE_ENV, TREE_ENV)
 
 
 class StorageUnusable(Exception):
@@ -120,14 +135,21 @@ class HistoryMissing(Exception):
     """The reader found no history file where one would be recorded."""
 
 
-def history_path() -> Path:
-    """The one history file under the shared verification state root."""
-    return verify_lock.state_root() / HISTORY_NAME
+def history_path(state_root: Path | None = None) -> Path:
+    """The one history file under the shared verification state root.
+
+    An explicit root scopes the file for an in-process caller that must not
+    depend on the environment it happened to inherit; the default resolves
+    the shared root from the environment, as always.
+    """
+    basis = verify_lock.state_root() if state_root is None else Path(state_root)
+    return basis / HISTORY_NAME
 
 
-def targeted_history_path() -> Path:
+def targeted_history_path(state_root: Path | None = None) -> Path:
     """The targeted checks' history file beside the duration history."""
-    return verify_lock.state_root() / TARGETED_HISTORY_NAME
+    basis = verify_lock.state_root() if state_root is None else Path(state_root)
+    return basis / TARGETED_HISTORY_NAME
 
 
 def _log(message: str) -> None:
@@ -149,7 +171,7 @@ def _git(arguments: list[str], cwd: Path | None = None) -> str | None:
     """One git answer, or None when git is absent, fails or times out — never a guess."""
     try:
         done = subprocess.run(
-            ["git", *arguments], cwd=cwd, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False
+            ["git", *arguments], capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False, cwd=cwd
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -161,9 +183,7 @@ def _git(arguments: list[str], cwd: Path | None = None) -> str | None:
 def _common_git_dir(root: Path | None = None) -> str | None:
     """Resolve the shared Git directory at recording or reader time."""
     base = root or Path.cwd()
-    answer = (
-        _git(["rev-parse", "--git-common-dir"], root) if root is not None else _git(["rev-parse", "--git-common-dir"])
-    )
+    answer = _git(["rev-parse", "--git-common-dir"], cwd=root)
     if not answer:
         return None
     return str((base / answer).resolve())
@@ -171,27 +191,29 @@ def _common_git_dir(root: Path | None = None) -> str | None:
 
 def _gate_file_digest(root: Path | None = None) -> str | None:
     """The SHA-256 of the one gate file this run measured, or None when absent."""
+    basis = Path(root) if root is not None else Path.cwd()
     try:
-        return hashlib.sha256(((root or Path.cwd()) / GATE_FILE).read_bytes()).hexdigest()
+        return hashlib.sha256((basis / GATE_FILE).read_bytes()).hexdigest()
     except OSError:
         return None
 
 
-def _worker_setting() -> str | None:
+def _worker_setting(env: dict[str, str] | None = None) -> str | None:
     """The effective worker setting passed to the gates; unset means xdist decides."""
-    value = os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")
+    value = (os.environ if env is None else env).get("PYTEST_XDIST_AUTO_NUM_WORKERS", "")
     return value if value else None
 
 
-def _open_history(destination: Path | None = None) -> int:
+def _open_history(destination: Path | None = None, *, state_root: Path | None = None) -> int:
     """A private regular history file for appending; an aliased or nonregular destination refuses.
 
     The same shape as the admission's lock files: the no-follow open fails on
     a symlink standing in the file's place, a FIFO cannot pass the regular
     check, and nothing is ever written through a substituted destination.
     `destination` names the targeted history; the default is the duration history.
+    `state_root` scopes the default for an in-process caller (`history_path`).
     """
-    root = verify_lock.state_root()
+    root = verify_lock.state_root() if state_root is None else Path(state_root)
     try:
         root.mkdir(parents=True, exist_ok=True)
     except OSError as error:
@@ -200,7 +222,7 @@ def _open_history(destination: Path | None = None) -> int:
         ) from error
     if root.is_symlink() or not root.is_dir():
         raise StorageUnusable(f"the shared state directory {root} is not a usable directory")
-    path = destination or history_path()
+    path = destination or history_path(root)
     try:
         return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND | os.O_NOFOLLOW, 0o600)
     except FileExistsError:
@@ -224,10 +246,13 @@ def _open_history(destination: Path | None = None) -> int:
     return fd
 
 
-def append_event(event: dict, destination: Path | None = None) -> None:
-    """Append one complete JSON line under a file lock, so concurrent runs never mix identities."""
+def append_event(event: dict, destination: Path | None = None, *, state_root: Path | None = None) -> None:
+    """Append one complete JSON line under a file lock, so concurrent runs never mix identities.
+
+    `destination` names the targeted history; `state_root` scopes the default duration history.
+    """
     line = json.dumps(event, sort_keys=True) + "\n"
-    fd = _open_history(destination)
+    fd = _open_history(destination, state_root=state_root)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         try:
@@ -263,20 +288,22 @@ def _context_fields() -> dict:
     }
 
 
-def _comparison_fields() -> dict:
+def _comparison_fields(env: dict[str, str] | None = None) -> dict:
     """The comparison context of a full run, when its launcher supplied one.
 
     Only the runner's own full checks carry these variables (`full_verify` hands
-    them to the one `make verify` it starts); a start without them stays a
+    them to the shared scheduler's environment, which `record_start` reads; a
+    shell launch exports them to `verify_all.sh`); a start without them stays a
     legacy duration record. Empty values become the explicit unknown. Any other
     kind than `full` (`targeted` included: the environment must not be able to
     mint a targeted predecessor) is kept with the `unrecognised:` prefix, which
     is no known kind, so the reader diagnoses the run as not countable instead
     of reading a null kind as a legacy record (loop row L4-1).
     """
-    if KIND_ENV not in os.environ:
+    source = os.environ if env is None else env
+    if KIND_ENV not in source:
         return {}
-    kind = os.environ.get(KIND_ENV, "").strip()
+    kind = source.get(KIND_ENV, "").strip()
     if not kind:
         recorded = None
     elif kind in ENVIRONMENT_KINDS:
@@ -285,18 +312,19 @@ def _comparison_fields() -> dict:
         recorded = UNRECOGNISED_KIND_PREFIX + kind
     return {
         "check_kind": recorded,
-        "change": os.environ.get(CHANGE_ENV, "").strip() or None,
-        "tree_id": os.environ.get(TREE_ENV, "").strip() or None,
+        "change": source.get(CHANGE_ENV, "").strip() or None,
+        "tree_id": source.get(TREE_ENV, "").strip() or None,
         "comparison_version": COMPARISON_VERSION,
     }
 
 
 def full_run_context(tree: str | None, change: str | None) -> dict[str, str]:
-    """The runner-owned environment of one full `make verify` launch, for `cmd_start` to capture.
+    """The runner-owned environment of one full check, for `record_start` to capture.
 
-    The launcher (`full_verify`) adds these to that one child's environment and
-    never to its own; ambient variables of the same names cannot leak in, since
-    the runner's allow-list already stripped them. Empty means the explicit
+    The launcher (`full_verify`) adds these to the environment it hands the shared
+    scheduler (`verify_run.run_verification`) for that one run and never to its
+    own; ambient variables of the same names cannot leak in, since the runner's
+    allow-list already stripped them. Empty means the explicit
     unknown in the start record.
     """
     return {
@@ -391,75 +419,161 @@ def cmd_clock(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_start(args: argparse.Namespace) -> int:
-    """Create one run identity and append its start record with the machine context."""
+def record_start(
+    job: str,
+    placement: str,
+    *,
+    root: Path | None = None,
+    state_root: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> str:
+    """Create one run identity and append its start record with the machine context.
+
+    `root` binds the machine context to one checkout — the repository, the
+    commit and the gate configuration are the caller's, never the importer's
+    checkout by accident (bead coding-harness-bxxt.6).
+    """
+    basis = Path(root) if root is not None else Path.cwd()
     memory = verify_lock.read_available_memory()
-    porcelain = _git(["status", "--porcelain"])
+    porcelain = _git(["status", "--porcelain"], cwd=basis)
     event = {
         "v": EVENT_VERSION,
         "event": RUN_START,
         "run_id": uuid.uuid4().hex,
         "utc": _utc_now(),
-        "repository": str(Path.cwd()),
-        "common_git_dir": _common_git_dir(),
-        "commit": _git(["rev-parse", "HEAD"]),
+        "repository": str(basis),
+        "common_git_dir": _common_git_dir(basis),
+        "commit": _git(["rev-parse", "HEAD"], cwd=basis),
         # None means git could not answer; only an answer decides yes or no.
         "dirty": None if porcelain is None else bool(porcelain),
-        "config_sha256": _gate_file_digest(),
-        "job": args.job,
-        "placement": args.placement,
+        "config_sha256": _gate_file_digest(basis),
+        "job": job,
+        "placement": placement,
         "memory_pct": memory,
-        "workers": _worker_setting(),
+        "workers": _worker_setting(env),
         **_context_fields(),
-        **_comparison_fields(),
+        **_comparison_fields(env),
     }
-    append_event(event)
+    append_event(event, state_root=state_root)
     if event.get("comparison_version") == COMPARISON_VERSION:
         try:
-            os.close(_open_history(targeted_history_path()))
+            os.close(_open_history(targeted_history_path(state_root), state_root=state_root))
         except (StorageUnusable, OSError) as error:
             _log(f"the targeted history could not be created: {error}")
-    print(event["run_id"])
+    return str(event["run_id"])
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    """Create one run identity and append its start record with the machine context."""
+    print(record_start(args.job, args.placement))
     return 0
+
+
+def record_gate(
+    run_id: str,
+    gate: str,
+    start: float,
+    end: float,
+    status: int,
+    enforcement: str,
+    *,
+    state_root: Path | None = None,
+) -> float:
+    """Append one gate record and return its measured seconds for the console."""
+    seconds = _seconds(start, end)
+    event = {
+        "v": EVENT_VERSION,
+        "event": GATE,
+        "run_id": run_id,
+        "utc": _utc_now(),
+        "gate": gate,
+        "seconds": seconds,
+        "exit": status,
+        "enforcement": enforcement,
+    }
+    append_event(event, state_root=state_root)
+    return seconds
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
     """Append one gate record and print its measured seconds for the console."""
-    seconds = _seconds(args.start, args.end)
-    event = {
-        "v": EVENT_VERSION,
-        "event": GATE,
-        "run_id": args.run,
-        "utc": _utc_now(),
-        "gate": args.gate,
-        "seconds": seconds,
-        "exit": args.status,
-        "enforcement": args.enforcement,
-    }
-    append_event(event)
+    seconds = record_gate(args.run, args.gate, args.start, args.end, args.status, args.enforcement)
     print(f"{seconds:.3f}")
     return 0
 
 
-def cmd_end(args: argparse.Namespace) -> int:
-    """Append the run's completion record and print the execution/wait summary line."""
-    seconds = _seconds(args.start, args.end)
-    event = {
-        "v": EVENT_VERSION,
-        "event": RUN_END,
-        "run_id": args.run,
-        "utc": _utc_now(),
-        "seconds": seconds,
-        "verdict": args.verdict,
-    }
-    append_event(event)
-    context = verify_lock.admission_context()
+def _summary_line(seconds: float, context: verify_lock.AdmissionContext) -> str:
+    """The execution/wait summary: an explicit unknown or a reused wait, never a fabricated one."""
     wait = "unknown"
     if context.wait_seconds is not None:
         wait = f"{context.wait_seconds:.3f}s"
         if context.reused:
             wait += " (reused from the inherited admission, not re-counted)"
-    print(f"execution {seconds:.3f}s · admission wait {wait}")
+    return f"execution {seconds:.3f}s · admission wait {wait}"
+
+
+def record_end(
+    run_id: str,
+    verdict: str,
+    *,
+    segments: Sequence[tuple[float, float]],
+    state_root: Path | None = None,
+    context: verify_lock.AdmissionContext | None = None,
+    admission_requested: bool | None = None,
+    final_commit: str | None = None,
+    final_config: str | None = None,
+) -> str:
+    """Append the run's completion record and return the execution/wait summary line.
+
+    `segments` are the active (start, end) windows of the gates that actually
+    executed; their sum is `run_end.seconds`, so the queue and memory waits
+    stay outside it. With `admission_requested` the completion carries the
+    additive context fields — the reader prefers them when present; without
+    it the record keeps the old shape and the caller's environment decides
+    the shown wait.
+    """
+    if verdict not in ("green", "red"):
+        raise StorageUnusable(f"invalid verdict {verdict!r}; refusing to record it")
+    seconds = sum(_seconds(start, end) for start, end in segments)
+    event = {
+        "v": EVENT_VERSION,
+        "event": RUN_END,
+        "run_id": run_id,
+        "utc": _utc_now(),
+        "seconds": seconds,
+        "verdict": verdict,
+    }
+    if admission_requested is not None:
+        final = context if context is not None else verify_lock.AdmissionContext(None, None, None)
+        event.update(
+            {
+                "admission_requested": admission_requested,
+                "admission_id": final.admission_id,
+                "admission_wait_seconds": final.wait_seconds,
+                "admission_reused": final.reused,
+                "commit": final_commit,
+                "config_sha256": final_config,
+            }
+        )
+    append_event(event, state_root=state_root)
+    if admission_requested is False:
+        return f"execution {seconds:.3f}s · admission wait none (no admission was requested)"
+    return _summary_line(seconds, context if context is not None else verify_lock.admission_context())
+
+
+def cmd_end(args: argparse.Namespace) -> int:
+    """Append the run's completion record and print the execution/wait summary line."""
+    if args.no_admission:
+        summary = record_end(
+            args.run,
+            args.verdict,
+            segments=[(args.start, args.end)],
+            context=verify_lock.AdmissionContext(None, None, None),
+            admission_requested=False,
+        )
+    else:
+        summary = record_end(args.run, args.verdict, segments=[(args.start, args.end)])
+    print(summary)
     return 0
 
 
@@ -568,6 +682,20 @@ def _record_error(event: dict) -> str | None:
         )
     else:
         fields.update({"seconds": seconds, "verdict": lambda v: v in ("green", "red")})
+        if "admission_requested" in event:
+            # The additive completion context (bead coding-harness-bxxt.6):
+            # present or not, never half-present — every field of the block
+            # is validated when the marker is there, and unknowns stay null.
+            fields.update(
+                {
+                    "admission_requested": lambda v: type(v) is bool,
+                    "admission_id": lambda v: v is None or text(v),
+                    "admission_wait_seconds": lambda v: v is None or seconds(v),
+                    "admission_reused": lambda v: v is None or type(v) is bool,
+                    "commit": lambda v: v is None or text(v),
+                    "config_sha256": lambda v: v is None or text(v),
+                }
+            )
     invalid = [name for name, check in fields.items() if name not in event or not check(event[name])]
     return f"invalid {kind} fields: {', '.join(invalid)}" if invalid else None
 
@@ -690,8 +818,16 @@ def _shown(value: object, unknown: str = "unknown") -> str:
 
 
 def _detail(run: dict) -> str:
-    """One run's machine context, per-gate durations and outcome, as the reader shows it."""
+    """One run's machine context, per-gate durations and outcome, as the reader shows it.
+
+    A completion that carries the additive context fields speaks for the
+    whole run: its admission line shows the final context, a cheap-only run
+    states that no admission was requested, and the final revision and
+    configuration line appears after a changed tree made the queued wait
+    move the run. An old start-only record reads exactly as before.
+    """
     start = run["start"]
+    end = run["end"]
     lines = [
         f"run {start['run_id']}",
         f"  started (UTC): {_shown(start.get('utc'))}",
@@ -701,10 +837,26 @@ def _detail(run: dict) -> str:
         f"  job: {_shown(start.get('job'))} · placement: {_shown(start.get('placement'))}",
         f"  free memory at start: {_shown(start.get('memory_pct'))}",
         f"  workers: {_shown(start.get('workers'), 'unset (xdist decides)')}",
-        f"  admission: {_shown(start.get('admission_id'))} · wait:"
-        f" {_shown(start.get('admission_wait_seconds'))} · reused: {_shown(start.get('admission_reused'))}",
-        "  gates:",
     ]
+    if end is not None and "admission_requested" in end:
+        if end.get("admission_requested") is False:
+            lines.append("  admission: none (no admission was requested)")
+        else:
+            lines.append(
+                f"  admission (final): {_shown(end.get('admission_id'))} · wait:"
+                f" {_shown(end.get('admission_wait_seconds'))} · reused: {_shown(end.get('admission_reused'))}"
+            )
+        if end.get("commit") is not None or end.get("config_sha256") is not None:
+            lines.append(
+                f"  final revision: {_shown(end.get('commit'))}"
+                f" · final gate configuration (sha256): {_shown(end.get('config_sha256'))}"
+            )
+    else:
+        lines.append(
+            f"  admission: {_shown(start.get('admission_id'))} · wait:"
+            f" {_shown(start.get('admission_wait_seconds'))} · reused: {_shown(start.get('admission_reused'))}"
+        )
+    lines.append("  gates:")
     for gate in run["gates"]:
         lines.append(
             f"    {gate.get('gate')}  {_fmt_seconds(gate.get('seconds'))}  exit {gate.get('exit')}"
@@ -1178,6 +1330,11 @@ def main(argv: list[str] | None = None) -> int:
     end.add_argument("--start", required=True, help="the monotonic reading taken before the report")
     end.add_argument("--end", required=True, help="the monotonic reading taken at the final verdict")
     end.add_argument("--verdict", required=True, choices=("green", "red"), help="the run's final verdict")
+    end.add_argument(
+        "--no-admission",
+        action="store_true",
+        help="record the completion context of a run that never requested admission",
+    )
     end.set_defaults(handler=cmd_end)
 
     report = operations.add_parser("report", help="list recorded runs, or show one with --run")
