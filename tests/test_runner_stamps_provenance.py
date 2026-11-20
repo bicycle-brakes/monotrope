@@ -1481,3 +1481,33 @@ def test_selection_and_census_read_one_frontmatter_pattern(text):
 
     assert stage2.has_frontmatter(text.encode("utf-8")) == (research_census.FRONTMATTER.match(text) is not None)
     assert stage2.frontmatter_pattern() is research_census.FRONTMATTER
+
+
+def test_implement_refuses_an_added_producer(repo):
+    extra = '{kind: llm-session, name: codex, version: "2026-11-20"}'
+    original = 'produced_by: {kind: llm-session, name: codex, version: "2026-11-10", model: "gpt-6.1-terra"}'
+    _write(repo, SPEC_PATH, SPEC_SEED.replace(original, f"produced_by: [{original[len('produced_by: ') :]}, {extra}]"))
+    try:
+        problems = stage2.touched_header_problems(repo, [SPEC_PATH], reject_added=True)
+    except TypeError as error:
+        pytest.fail(f"the shared check cannot reject added producer records: {error}")
+    assert any("session added a producer record" in problem for problem in problems), problems
+
+
+def test_runner_findings_stamp_does_not_judge_legacy_header(repo, monkeypatch):
+    relative = "plans/changes/demo/findings.md"
+    legacy = (
+        "---\ntitle: Findings\nproduced_by: {kind: llm-session, name: Claude Code, version: '2026-11-10'}\n"
+        f"provenance: ai-drafted-reviewed\nreview: {PENDING_REVIEW}\nupdated: 2026-11-10\n---\n\n# Findings\n"
+    )
+    _commit_file(repo, relative, legacy, "seed legacy findings")
+    path = repo / relative
+
+    def writes_and_stamps(*_args):
+        path.write_text(legacy + "\nA row was decided.\n", encoding="utf-8")
+        stage2.stamp_updated(path)
+
+    monkeypatch.setitem(stage2.VERBS, "probe", writes_and_stamps)
+    assert stage2.main(["probe", "demo", "--root", str(repo)]) == 0
+    assert "A row was decided." in path.read_text(encoding="utf-8")
+    assert "updated: 2026-11-10" not in path.read_text(encoding="utf-8")

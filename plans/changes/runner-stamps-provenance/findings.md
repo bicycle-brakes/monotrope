@@ -1252,3 +1252,214 @@ Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4836 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1115 files, 4838 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1115 files, 4839 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4841 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/runner-stamps-provenance/spec.md` +1 -1
+> - `scripts/stage2.py` +37 -6
+> - `tests/test_runner_stamps_provenance.py` +30 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 71 lines of this gate left out …]
+> ........................................................................ [ 77%]
+> ........................................................................ [ 78%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 99%]
+> .............................................................            [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _undatierte_zitate(text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal [… 682 characters left out …]
+> E       assert not ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-proven...: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", ...]
+>
+> tests/test_provenance.py:55: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=43983) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/tests/test_stage2.py:23783: DeprecationWarning: This process (pid=43988) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 6379 passed, 17 skipped, 5 warnings in 634.95s (0:10:34)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47542 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-1-20261120T063731768911Z-5b04f1b1.md
+> ````
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1115 files, 4849 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/runner-stamps-provenance/spec.md` +1 -1
+> - `scripts/stage2.py` +3 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .......F................                                                 [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _undatierte_zitate(text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal [… 1188 characters left out …]
+> E       assert not ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-proven...: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", ...]
+>
+> tests/test_provenance.py:55: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 23 passed in 3.12s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-2-20261120T063731768911Z-5b04f1b1.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1115 files, 4849 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +3 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .......F................                                                 [100%]
+> =================================== FAILURES ===================================
+> __________________ test_journal_is_never_cited_without_a_date __________________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/.venv/bin/python3
+>
+>     def test_journal_is_never_cited_without_a_date() -> None:
+>         """RB-P5, zweiter Halbsatz: das Zitat traegt das Datum mit dem Pfad."""
+>         befunde = []
+>         for pfad in _verfolgte_markdown():
+>             text = pfad.read_text(encoding="utf-8")
+>             for zitat in _undatierte_zitate(text):
+>                 befunde.append(f"{pfad.relative_to(REPO_ROOT)}: {zitat}")
+> >       assert not befunde, (
+>             "Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — "
+>             "den dated Dateinamen ergaenzen oder die Nennung als Konvention "
+>             f"kenntlich machen (Platzhalter): {befunde}"
+>         )
+> E       AssertionError: Diese Stellen zitieren eine Verlaufs-Aufzeichnung ohne ihr Datum — den dated Dateinamen ergaenzen oder die Nennung als Konvention kenntlich machen (Platzhalter): ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal [… 1694 characters left out …]
+> E       assert not ['plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md', "plans/changes/runner-stamps-proven...: docs/journal/handover/*.md'", "plans/changes/runner-stamps-provenance/findings.md: docs/journal/handover/*.md'", ...]
+>
+> tests/test_provenance.py:55: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_provenance.py::test_journal_is_never_cited_without_a_date
+> 1 failed, 23 passed in 3.44s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261120T063731768911Z-5b04f1b1.md
+> ```

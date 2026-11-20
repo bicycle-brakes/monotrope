@@ -1592,12 +1592,21 @@ def publish_research(path: Path, prepared: bytes, text: str) -> None:
     write_atomic(path, stamped)
 
 
+_findings_written_header: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "findings_written_header", default=None
+)
+
+
 def stamp_updated(path: Path) -> None:
     """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
 
     The stamp edits that one line. A file without a header, like the loop record, is left as it is.
     """
+    snapshot = _findings_written_header.get()
+    before = path.read_bytes() if snapshot is not None and path == snapshot[0] and path.exists() else None
     check_frontmatter_current.stamp(path, clock_now().local_date)
+    if before is not None and snapshot[1] is not None and header_of(before) == header_of(snapshot[1]):
+        snapshot[1] = path.read_bytes()
 
 
 def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) -> list[str]:
@@ -9551,8 +9560,9 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
     A committed field whose records are already exactly this publication's keeps its own bytes
     verbatim. Otherwise the earlier records keep their bytes: a single inline record and a flow
     list grow a flow list in place, a block sequence and a block mapping grow compact sequence
-    items - the mapping's first record line's indentation becomes `- `, later lines unchanged
-    (agent decision F-35). A file with no committed field gets the canonical rendering.
+    items - the mapping's first record line's indentation becomes `- ` and every later line moves
+    with it to the item's content column (unchanged bytes at the usual two spaces; a deeper
+    mapping is re-indented so it stays valid YAML, loop row L3-7; agent decision F-35). A file with no committed field gets the canonical rendering.
     """
     if baseline_field is None:
         # The rendering already leads with the one space after the key's colon.
@@ -9828,7 +9838,9 @@ def retained_changed_paths(root: Path) -> list[str]:
     return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
 
 
-def header_problems(relative: str, baseline: bytes | None, current: bytes, *, runner_reset: bool = False) -> list[str]:
+def header_problems(
+    relative: str, baseline: bytes | None, current: bytes, *, runner_reset: bool = False, reject_added: bool = False
+) -> list[str]:
     """The shared post-run judgement for one touched file, as lines that name the file.
 
     Active research is judged by the census contract itself, so a draft or repair result that
@@ -9857,7 +9869,7 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes, *, ru
         return [f"{relative}: unreadable header (malformed YAML)"]
     if not isinstance(header, dict):
         return [f"{relative}: unreadable header (not a mapping)"]
-    if ACTIVE_RESEARCH.fullmatch(relative):
+    if ACTIVE_RESEARCH.fullmatch(relative) and not reject_added:
         return research_census.text_findings(relative, text)
     problems: list[str] = []
     node = yaml.compose(block)
@@ -9909,6 +9921,17 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes, *, ru
         kept = as_records(header.get("produced_by"))
         if any(record not in kept for record in as_records(baseline_header["produced_by"])):
             problems.append(f"{relative}: produced_by: a committed producer record was rewritten or dropped")
+    if reject_added:
+        prior = baseline_header.get("produced_by") if isinstance(baseline_header, dict) else None
+        prior_records = prior if isinstance(prior, list) else ([] if prior is None else [prior])
+        current_value = header.get("produced_by")
+        current_records = (
+            current_value if isinstance(current_value, list) else ([] if current_value is None else [current_value])
+        )
+        if any(record not in prior_records for record in current_records):
+            problems.append(f"{relative}: produced_by: a session added a producer record")
+    if ACTIVE_RESEARCH.fullmatch(relative):
+        return research_census.text_findings(relative, text) + problems
     if baseline_header is None or not isinstance(baseline_header, dict):
         # A new file (criterion 11): ai-drafted-reviewed provenance and a pending review; a new
         # ADR may keep its human-decided provenance, its review still pending.
@@ -9947,7 +9970,9 @@ def header_problems(relative: str, baseline: bytes | None, current: bytes, *, ru
     return problems
 
 
-def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: bool = False) -> list[str]:
+def touched_header_problems(
+    root: Path, candidates: list[str], *, runner_reset: bool = False, reject_added: bool = False
+) -> list[str]:
     """The shared check over every touched file with frontmatter, each failing file named.
 
     One judgement for every file-writing verb, implement included and the writing verbs to
@@ -9972,7 +9997,9 @@ def touched_header_problems(root: Path, candidates: list[str], *, runner_reset: 
         try:
             # A readable baseline the census contract rejects is no committed fault: an attempt
             # that preserves it fails here and spends its route (criterion 14).
-            problems.extend(header_problems(relative, head, current, runner_reset=runner_reset))
+            problems.extend(
+                header_problems(relative, head, current, runner_reset=runner_reset, reject_added=reject_added)
+            )
         except CommittedRecordFault:
             raise
         except Exception as error:  # any read or YAML failure is this file's finding (EP6-14)
@@ -10473,7 +10500,9 @@ def run_attempts(
                 # Every file the run retained is judged, not only this attempt's own changes
                 # (criterion 4, L3-4). Only a verb that stamps may reset an approval; elsewhere a
                 # reset is a fault (L2-9).
-                stamp_problems = touched_header_problems(root, sorted(run_touched), runner_reset=verb == "repair")
+                stamp_problems = touched_header_problems(
+                    root, sorted(run_touched), runner_reset=verb == "repair", reject_added=verb == "implement"
+                )
             except (CommittedRecordFault, RestorationRefused):
                 # A committed header no route can stamp stops the verb; the migration owns it
                 # (spec, criterion 15). A safety refusal propagates unwritten. The attempt's own
@@ -12322,10 +12351,15 @@ def _run(args: argparse.Namespace) -> int:
     # The audit file as it stands before the verb, for the one post-run check point every verb
     # passes (Q-17, loop row L3-5): the change's findings.md, written by every verb that audits,
     # is judged after the verb returns or stops clean - new verbs included, none with a call of its own.
-    written = findings_snapshot(Path(args.root), args.change)
+    initial = findings_snapshot(Path(args.root), args.change)
+    written = list(initial) if initial is not None else None
+    token = _findings_written_header.set(written)
     try:
         try:
-            _dispatch(args)
+            try:
+                _dispatch(args)
+            finally:
+                _findings_written_header.reset(token)
         except CleanStop:
             check_written_findings(Path(args.root), written)
             raise
