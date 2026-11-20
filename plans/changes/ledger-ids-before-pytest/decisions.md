@@ -46,3 +46,27 @@ runs the rest, that implement owes every ledger test while repair owes only
 its findings' tests, and that phase 6 refuses while a ledger entry is still
 unwritten, to achieve one place where that debt is collected, accepting a
 new refusal at the phase-6 entry — 2026-11-20
+
+## Q-2 · Recut after the third spec-review round
+
+asked: 2026-11-20
+answer: "Neu schneiden (Recommended)" — this change builds parts 1 and 2 of Q-1 only: the runner names every selected ledger id that does not stand before pytest and still runs the rest; an implement attempt owes every ledger test, a repair attempt only its findings' tests. Part 3, the phase-6 check point for entries still marked `not yet written`, becomes bead coding-harness-bxxt.10 with its own interview. The final draft after round three gets no new review.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 3 of this change, row S-16 (BLOCKER).
+  Intention: part 3 did not settle in three rounds: after a phase-6 refusal no route writes the debt row, and five further rows concern its form, status and edge cases.
+  Today: without part 3 an unwritten ledger test shows only when the change is archived; the criterion-ledger gate turns it red there.
+  Repository change: scripts/stage2.py without the phase-6 check point.
+  Architecture change: none in this change; the debt route is decided in bead coding-harness-bxxt.10.
+alternatives: |
+  - Recut (chosen): the bug that lets repairs fail unnamed goes quickly.
+  - A fourth round with a new debt route: one change, more scope and an undecided route.
+  - Send the lane back to implement: no new route, but whether implement may rerun after acceptance is unchecked.
+
+In the context of a phase-6 check point that three spec-review rounds left
+without a route for its debt rows, facing a BLOCKER in the last allowed
+round, we decided to build only the naming of missing ledger ids and the
+narrower repair duty here and to move the check point to bead
+coding-harness-bxxt.10, to achieve a quick fix of unnamed repair failures,
+accepting that unwritten ledger tests show only at archiving until then — 2026-11-20
