@@ -535,7 +535,7 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1393 | On resume, if a filtered finder record is reusable but the installed Claude Code is older than the declared minimum, the version check stops the run before it adopts any finder records. The retained answer and its filtered gaps are therefore not republished, even when no Claude finder call is needed. The version check must prevent an incompatible call without blocking reuse. [Criterion 10] | Codex | open | — |
+| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1393 | On resume, if a filtered finder record is reusable but the installed Claude Code is older than the declared minimum, the version check stops the run before it adopts any finder records. The retained answer and its filtered gaps are therefore not republished, even when no Claude finder call is needed. The version check must prevent an incompatible call without blocking reuse. [Criterion 10] | Codex | taken — criterion 10: the version check must guard only a new Claude finder call, not the reuse of retained records (provisional agent decision, night run 2026-11-20-a) | — |
 
 Phase 6 verdict: codex 01a1fac2-8b11-7761-ac83-5be1fe6780c9, 2026-11-20
 Reviewer session: codex 01a1fac2-8b11-7761-ac83-5be1fe6780c9 — a fresh session reviewed: no phase-2a session was recorded
