@@ -4495,6 +4495,29 @@ def test_finder_filtered_record_is_reused_on_resume(sworld: SwarmWorld) -> None:
     assert fence["outcome"] == "ok" and fence["filtered"] == record["filtered"]
 
 
+def test_finder_resume_reuses_filtered_claude_with_old_version(sworld: SwarmWorld) -> None:
+    # R6-1: an old installation must not prevent reuse and publication of a filtered answer.
+    sworld.complete(
+        **{"finder:None:claude-haiku-5-5": [{"stdout": claude_finder_envelope(json.loads(partial_finder_report()))}]},
+        judge=[{"exit": 1}],
+    )
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-3.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert record["outcome"] == "ok" and record["filtered"] == dropped_row()
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete(claude_version="2.1.327")
+    assert sworld.run() == 0, "an old Claude version must not block reuse"
+    assert sworld.calls("finder") == []
+    slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-3")
+    assert slot["reused_from"] == first["run_id"] and slot["filtered"] == record["filtered"]
+    text = sworld.research.read_text(encoding="utf-8")
+    fence = next(p for p in partials_of(text) if p.get("slot_id") == "finders-0-3")
+    assert fence["filtered"] == record["filtered"]
+    assert any(e["path"] == "src/app.py" for e in map_of(text)["entries"])
+
+
 def test_finder_filtered_merge_preserves_exact_union(sworld: SwarmWorld) -> None:
     # Criterion 11. Planted fault: the exact union accepts an added or missing retained locator or
     # an altered finder origin once a seat's answer was filtered.

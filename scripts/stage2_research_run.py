@@ -1158,6 +1158,8 @@ class Run:
                 "launched_in": record.get("launched_in") or self.source.run_id,
             }
         launch_ids = {item["slot_id"] for item in reuse.to_launch}
+        if stage == "finders" and any(e["slot_id"] in launch_ids and e["program"] == "claude-code" for e in entries):
+            self.check_claude_finder_version()
         slots = [
             Slot(
                 slot_id=e["slot_id"],
@@ -1390,8 +1392,6 @@ class Run:
 
     def stage_finders(self) -> None:
         self.load_locator_schema()
-        if any(stage2_swarm.LAUNCHERS[seat["endpoint"]] == "claude-code" for seat in self.roles["finder_agents"]):
-            self.check_claude_finder_version()
         prompt = self.finder_prompt()
         entries = []
         for number, seat in enumerate(self.roles["finder_agents"], 1):

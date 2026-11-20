@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-19
 created: 2026-11-19
 last_reviewed: 2026-11-19
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-yd8w
@@ -535,7 +535,7 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1393 | On resume, if a filtered finder record is reusable but the installed Claude Code is older than the declared minimum, the version check stops the run before it adopts any finder records. The retained answer and its filtered gaps are therefore not republished, even when no Claude finder call is needed. The version check must prevent an incompatible call without blocking reuse. [Criterion 10] | Codex | taken — criterion 10: the version check must guard only a new Claude finder call, not the reuse of retained records (provisional agent decision, night run 2026-11-20-a) | — |
+| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1393 | On resume, if a filtered finder record is reusable but the installed Claude Code is older than the declared minimum, the version check stops the run before it adopts any finder records. The retained answer and its filtered gaps are therefore not republished, even when no Claude finder call is needed. The version check must prevent an incompatible call without blocking reuse. [Criterion 10] | Codex | fixed — tests/test_stage2_swarm.py::test_finder_resume_reuses_filtered_claude_with_old_version | — |
 
 Phase 6 verdict: codex 01a1fac2-8b11-7761-ac83-5be1fe6780c9, 2026-11-20
 Reviewer session: codex 01a1fac2-8b11-7761-ac83-5be1fe6780c9 — a fresh session reviewed: no phase-2a session was recorded
@@ -653,3 +653,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-20: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4976 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4978 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
