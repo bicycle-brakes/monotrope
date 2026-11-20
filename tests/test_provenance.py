@@ -252,16 +252,25 @@ def test_runner_envelopes_are_not_journal_citations(tmp_path: Path, monkeypatch:
     assert befunde and "bootstrap.md" in befunde[0]
 
 
-def test_undated_citations_outside_runner_envelopes_are_reported(tmp_path: Path) -> None:
+def test_undated_citations_outside_runner_envelopes_are_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Criterion 3: a hand-written undated citation stays red, also beside a trusted envelope (Q-1, S-2)."""
-    pfad = tmp_path / "plans" / "changes" / "demo" / "research.md"
-    zitat = "Siehe `docs/journal/handover/bootstrap.md`."
-    run = run_text(RUN1)
-    header = "---\ntitle: Research\n---\n\n# Research\n\n"
-    befunde = _file_findings(pfad, f"{header}{zitat}\n\n" + run)
-    assert befunde and "bootstrap.md" in befunde[0], "a citation before the envelope is scanned"
-    befunde = _file_findings(pfad, f"{header}{run}\n\n{zitat}\n")
-    assert befunde and "bootstrap.md" in befunde[0], "a citation after the envelope is scanned"
+    # The path must be a change's research.md under the repository root, so the envelope is parsed
+    # and trusted; only then does the test show the citation beside it is still scanned.
+    with monkeypatch.context() as patch:
+        patch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+        pfad = tmp_path / "plans" / "changes" / "demo" / "research.md"
+        zitat = "Siehe `docs/journal/handover/bootstrap.md`."
+        inner = "See `docs/journal/handover/runner-only.md`."
+        run = run_text(RUN1).replace(f"run {RUN1} status: complete.", f"run {RUN1} status: complete. {inner}")
+        assert inner in run
+        header = "---\ntitle: Research\n---\n\n# Research\n\n"
+        assert _file_findings(pfad, f"{header}{run}\n") == [], "the trusted envelope is exempt"
+        befunde = _file_findings(pfad, f"{header}{zitat}\n\n" + run)
+        assert len(befunde) == 1 and "bootstrap.md" in befunde[0], "a citation before the envelope is scanned"
+        befunde = _file_findings(pfad, f"{header}{run}\n\n{zitat}\n")
+        assert len(befunde) == 1 and "bootstrap.md" in befunde[0], "a citation after the envelope is scanned"
     fremd = tmp_path / "docs" / "notes.md"
     assert _file_findings(fremd, zitat), "a file that is no change research is scanned wholly"
     # Emphasis, a closing quote and a typographic possessive do not rescue a citation (S-2, S-12).
