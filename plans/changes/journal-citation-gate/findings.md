@@ -330,3 +330,14 @@ Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claud
 > - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/journal-citation-gate/stage2/attempts/journal-citation-gate/attempt-3-20261119T222151886572Z-9a5b08c1.md
 > ```
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1118 files, 4841 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-1 | MINOR | SPEC | current diff | tests/test_provenance.py:255 | The test intended to check citations before and after a trusted envelope uses an absolute temporary path outside `REPO_ROOT`. The path therefore is not recognised as a change’s `research.md`, and the whole text is scanned without parsing the envelope. No test checks that a citation after a trusted envelope is reported while the envelope remains exempt. [Acceptance criteria 2 and 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f7ad-2d5a-7142-ab90-0758c1ac1157, 2026-11-20
+Reviewer session: codex 01a1f7ad-2d5a-7142-ab90-0758c1ac1157 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
