@@ -155,3 +155,54 @@ def test_unknown_width_finding_row_is_reported(tmp_path):
     head = commit(root, {PATH: HEADER + table(("L1-1", "fixed")) + malformed})
     found = gate.measure(root, base, head)
     assert any("L1-2" in item and "width" in item for item in found)
+
+
+def test_gate_checks_staged_unstaged_and_untracked_working_tree_rows(tmp_path, capsys):
+    """F6-1: the local gate checks working-tree changes relative to the merge base before commit."""
+    rows = [(f"L1-{number}", "fixed") for number in range(3, 30)]
+    history = table(("L1-1", "fixed"), ("L1-2", "rejected — Same as L1-1"), *rows)
+    root, _ = base_repo(tmp_path, {PATH: HEADER + history})
+
+    # unstaged bad duplicate row fails, while unchanged historical L1-2 stays exempt
+    bad_row = table(("L1-30", "rejected — same as L1-1"))
+    (root / PATH).write_text(HEADER + history + bad_row, encoding="utf-8")
+    assert gate.main(["--root", str(root)]) == 1, "an unstaged bad duplicate row passed"
+    out = capsys.readouterr().out
+    assert "L1-30" in out and "L1-2" not in out
+
+    # staged bad duplicate row also fails
+    git(root, "add", PATH)
+    assert gate.main(["--root", str(root)]) == 1, "a staged bad duplicate row passed"
+    out = capsys.readouterr().out
+    assert "L1-30" in out and "L1-2" not in out
+
+    # canonical replacement passes in working tree before commit
+    good_row = table(("L1-30", "rejected — duplicate of L1-1"))
+    (root / PATH).write_text(HEADER + history + good_row, encoding="utf-8")
+    assert gate.main(["--root", str(root)]) == 0
+    capsys.readouterr()
+
+    # untracked findings.md with a bad duplicate row fails
+    untracked = root / "plans/changes/c2/findings.md"
+    untracked.parent.mkdir(parents=True, exist_ok=True)
+    untracked.write_text(HEADER + table(("L1-1", "rejected — same as L1-2")), encoding="utf-8")
+    assert gate.main(["--root", str(root)]) == 1, "an untracked bad duplicate row passed"
+    out = capsys.readouterr().out
+    assert "c2/findings.md:L1-1" in out
+    untracked.unlink()
+
+    # staged rename (archive) keeps historical rows exempt and catches a new bad row
+    git(root, "checkout", "--", PATH)
+    git(root, "reset", "-q", PATH)
+    moved = "plans/changes/archive/2026-11-20-c1/findings.md"
+    (root / moved).parent.mkdir(parents=True, exist_ok=True)
+    git(root, "mv", PATH, moved)
+    (root / moved).write_text(HEADER.replace("draft", "archived") + history, encoding="utf-8")
+    assert gate.main(["--root", str(root)]) == 0, "an unchanged staged-archived row was treated as new"
+    capsys.readouterr()
+    (root / moved).write_text(
+        HEADER.replace("draft", "archived") + history + table(("L1-99", "rejected — same as L1-1")),
+        encoding="utf-8",
+    )
+    assert gate.main(["--root", str(root)]) == 1, "a new bad row in a staged-archived file passed"
+    assert "L1-99" in capsys.readouterr().out

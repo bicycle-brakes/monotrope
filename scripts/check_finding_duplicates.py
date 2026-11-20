@@ -16,6 +16,10 @@ rename-aware ``git diff -M``).
 
     python3 scripts/check_finding_duplicates.py [--root DIR] [--base REV] [--head REV]
 
+Without ``--head``, the gate compares the merge base against the working tree
+(committed, staged, unstaged and untracked ``findings.md`` files, rename-aware
+for tracked files). With ``--head REV``, it compares against that commit.
+
 Exit: 0 = nothing found, 1 = findings, 2 = bad usage, 3 = cannot measure.
 """
 
@@ -66,12 +70,17 @@ def head_commit(root: Path, rev: str) -> str:
     return done.stdout.decode().strip()
 
 
-def changed_files(root: Path, base: str, head: str) -> list[tuple[str | None, str]]:
-    """The findings.md files added, changed or renamed between base and head, as (old, new) paths.
+def changed_files(root: Path, base: str, head: str | None = None) -> list[tuple[str | None, str]]:
+    """The findings.md files added, changed or renamed between base and head (or working tree), as (old, new) paths.
 
-    An added file has no old path (None); a deleted file carries no new rows and is skipped.
+    An added or untracked file has no old path (None); a deleted file carries no new rows and is skipped.
     """
-    done = git(root, "diff", "-M", "-z", "--name-status", base, head, "--", "plans/changes")
+    diff_args = (
+        ("diff", "-M", "-z", "--name-status", base, "--", "plans/changes")
+        if head is None
+        else ("diff", "-M", "-z", "--name-status", base, head, "--", "plans/changes")
+    )
+    done = git(root, *diff_args)
     if done.returncode != 0:
         raise CannotMeasure(f"check-duplicates: cannot measure — the diff failed: {done.stderr.decode().strip()} (3)")
     tokens = done.stdout.decode().split("\0")
@@ -95,11 +104,42 @@ def changed_files(root: Path, base: str, head: str) -> list[tuple[str | None, st
                 continue
         if new.endswith("/findings.md"):
             pairs.append((old, new))
+    if head is None:
+        untracked = git(root, "ls-files", "--others", "--exclude-standard", "-z", "--", "plans/changes")
+        if untracked.returncode != 0:
+            raise CannotMeasure(
+                f"check-duplicates: cannot measure — listing untracked files failed: "
+                f"{untracked.stderr.decode().strip()} (3)"
+            )
+        seen = {new for _, new in pairs}
+        for path in sorted(p for p in untracked.stdout.decode().split("\0") if p):
+            if path.endswith("/findings.md") and path not in seen:
+                pairs.append((None, path))
+                seen.add(path)
     return pairs
 
 
-def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
-    """Every readable row of one findings.md at one commit, by id, in file order."""
+def _rows_from_text(text: str) -> dict[str, list[RowCells]]:
+    rows: dict[str, list[RowCells]] = {}
+    for _, cells in reader.table_rows(text):  # the reader's one input grammar
+        rows.setdefault(cells[0], []).append(tuple(cells))
+    return rows
+
+
+def rows_at(root: Path, rev: str | None, path: str) -> dict[str, list[RowCells]]:
+    """Every readable row of one findings.md at one commit or in the working tree, by id, in file order."""
+    if rev is None:
+        try:
+            raw = (root / path).read_bytes()
+        except OSError as exc:
+            raise CannotMeasure(f"check-duplicates: cannot measure — cannot read {path}: {exc} (3)") from None
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise CannotMeasure(
+                f"check-duplicates: cannot measure — {path} in working tree is not valid UTF-8 (3)"
+            ) from None
+        return _rows_from_text(text)
     done = git(root, "show", f"{rev}:{path}")
     if done.returncode != 0:
         raise CannotMeasure(f"check-duplicates: cannot measure — {path} is not in {rev[:12]} (3)")
@@ -107,10 +147,7 @@ def rows_at(root: Path, rev: str, path: str) -> dict[str, list[RowCells]]:
         text = done.stdout.decode("utf-8")
     except UnicodeDecodeError:
         raise CannotMeasure(f"check-duplicates: cannot measure — {path} at {rev[:12]} is not valid UTF-8 (3)") from None
-    rows: dict[str, list[RowCells]] = {}
-    for _, cells in reader.table_rows(text):  # the reader's one input grammar
-        rows.setdefault(cells[0], []).append(tuple(cells))
-    return rows
+    return _rows_from_text(text)
 
 
 def marks_duplicate(status: str) -> bool:
@@ -118,7 +155,7 @@ def marks_duplicate(status: str) -> bool:
     return reader.is_duplicate(status)
 
 
-def measure(root: Path, base: str, head: str) -> list[str]:
+def measure(root: Path, base: str, head: str | None = None) -> list[str]:
     """The findings of the gate: changed rows whose duplicate form is not the canonical one."""
     findings: list[str] = []
     for old, new in changed_files(root, base, head):
@@ -148,12 +185,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help="repository to measure (default: this checkout)")
     parser.add_argument("--base", default=None, help="the base revision (default: the merge base with origin/main)")
-    parser.add_argument("--head", default="HEAD", help="the head revision (default: HEAD)")
+    parser.add_argument("--head", default=None, help="the head revision (default: working tree)")
     args = parser.parse_args(argv)
     root = args.root.resolve()
     try:
-        head = head_commit(root, args.head)
-        base = head_commit(root, args.base) if args.base else merge_base(root, head)
+        head = head_commit(root, args.head) if args.head is not None else None
+        if args.base:
+            base = head_commit(root, args.base)
+        else:
+            base = merge_base(root, head if head is not None else head_commit(root, "HEAD"))
         findings = measure(root, base, head)
     except CannotMeasure as exc:
         print(exc, file=sys.stderr)

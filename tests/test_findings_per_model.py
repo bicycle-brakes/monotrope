@@ -839,3 +839,46 @@ def test_incomplete_table_lines_make_report_incomplete(tmp_path, monkeypatch):
     assert any(r.get("id") == "F-3" and r.get("path") == path for r in records if r["type"] == "gap")
     parsed = read(doc(RELEASE, lrow("L1-1", "hy3", "open"), lrow("L1-2", "hy3", "open")[:-1]))
     assert any(g.id == "L1-2" for g in parsed.gaps)
+
+
+def test_deep_duplicate_chain_and_cycle_resolve_without_recursion_error(tmp_path, monkeypatch):
+    """F6-2: a 1,200-node duplicate chain and a 1,200-node cycle resolve iteratively without RecursionError."""
+    depth = 1200
+    chain_rows = [lrow(f"L1-{i:04d}", "hy3", f"rejected — duplicate of L1-{i + 1:04d}") for i in range(1, depth + 1)]
+    chain_rows.append(lrow(f"L1-{depth + 1:04d}", "glm-5.3-flash", "fixed"))
+    chain_dir = tmp_path / "chain"
+    chain_dir.mkdir()
+    root, sha = repo(chain_dir, {findings_path("deep"): doc(RELEASE, *chain_rows)})
+    state = tmp_path / "state-chain"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    assert code == 0, "a valid 1,200-node duplicate chain failed to complete"
+    output = "".join(chunks)
+    assert "| glm-5.3-flash | 1 | 1 | 0 | 0 |" in output
+    assert "| hy3 |" not in output
+    records = jsonl(Path(chunks[-1].strip()))
+    assert records[0] == {"type": "metadata", "commit": sha, "complete": True}
+    models = [record for record in records if record["type"] == "model"]
+    assert models == [
+        {
+            "type": "model",
+            "model": "glm-5.3-flash",
+            "raised": 1,
+            "defects_accepted": 1,
+            "questions_settled": 0,
+            "rejected": 0,
+        }
+    ]
+
+    cycle_rows = [
+        lrow(f"L1-{i:04d}", "hy3", f"rejected — duplicate of L1-{(i % depth) + 1:04d}") for i in range(1, depth + 1)
+    ]
+    cycle_dir = tmp_path / "cycle"
+    cycle_dir.mkdir()
+    cycle_root, _ = repo(cycle_dir, {findings_path("deep-cycle"): doc(RELEASE, *cycle_rows)})
+    cycle_state = tmp_path / "state-cycle"
+    cycle_code, cycle_chunks = run_report(cycle_root, None, monkeypatch, cycle_state)
+    assert cycle_code != 0
+    assert "duplicate cycle" in "".join(cycle_chunks)
+    cycle_records = jsonl(Path(cycle_chunks[-1].strip()))
+    assert cycle_records[0]["complete"] is False
+    assert any(r["type"] == "gap" and "duplicate cycle" in r["reason"] for r in cycle_records)

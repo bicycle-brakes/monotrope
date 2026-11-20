@@ -833,29 +833,38 @@ def resolve(rows: list[AttributedRow]) -> tuple[list[Finding], list[Gap]]:
 
 
 def _cycles(edges: dict[tuple[str, str], list[str]]) -> list[list[tuple[str, str]]]:
-    """Cycles of duplicate references, each reported once, deterministically."""
+    """Cycles of duplicate references, each reported once, deterministically (iterative DFS)."""
     WHITE, GREY, BLACK = 0, 1, 2
     color = {node: WHITE for node in edges}
     found: list[list[tuple[str, str]]] = []
 
-    def visit(node: tuple[str, str], path: list[tuple[str, str]]) -> None:
-        color[node] = GREY
-        path.append(node)
-        for target in edges[node]:
-            key = (node[0], target)
+    for start_node in sorted(edges):
+        if color[start_node] != WHITE:
+            continue
+        color[start_node] = GREY
+        path = [start_node]
+        pos = {start_node: 0}
+        stack: list[tuple[tuple[str, str], int]] = [(start_node, 0)]
+        while stack:
+            node, idx = stack[-1]
+            targets = edges[node]
+            if idx == len(targets):
+                stack.pop()
+                path.pop()
+                del pos[node]
+                color[node] = BLACK
+                continue
+            stack[-1] = (node, idx + 1)
+            key = (node[0], targets[idx])
             if key not in edges:
                 continue
             if color[key] == GREY:
-                start = path.index(key)
-                found.append([*path[start:], key])
+                found.append([*path[pos[key] :], key])
             elif color[key] == WHITE:
-                visit(key, path)
-        path.pop()
-        color[node] = BLACK
-
-    for node in sorted(edges):
-        if color[node] == WHITE:
-            visit(node, [])
+                color[key] = GREY
+                pos[key] = len(path)
+                path.append(key)
+                stack.append((key, 0))
     return found
 
 
