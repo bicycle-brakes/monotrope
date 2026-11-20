@@ -25,7 +25,10 @@ the status (`docs/WORKFLOW.md` §4). Write a `|` inside a cell as `\|`.
 The Severity cell is exactly `BLOCKER`, `MAJOR` or `MINOR`, or begins with the
 mark `[AMBIGUITY]`. Any other severity, and any table line that is not such a
 row, makes the whole answer unreadable, and an unreadable answer counts as no
-review.
+review. A row is an open ambiguity when the mark `[AMBIGUITY]` stands in either
+of two places: at the start of the Severity cell, or at the start of the Finding
+cell beside one of the three severities. Either one holds implement until the
+row is settled.
 
 A validator checks that the sections are there. It cannot check that they say
 the right thing. A clean, complete spec describing the wrong thing passes every
