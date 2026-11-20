@@ -121,7 +121,21 @@ queue active (rule RB-G7), that word admits them to the queue, and each counts
 as merged only once GitHub shows it merged; a failing group leaves its pull
 request open. Every step is committed and pushed at once, tracker first, so an
 interrupted session loses nothing. A lane ledger with UTC times backs the
-handover.
+handover. A lane that ran verification also reports its missed-verification
+observations: the slip count and the incomplete or not countable runs beside
+it, read from the local history with `python3 -m scripts.verify_duration
+slips`, together with the reader's partial status — a diagnosed gap travels
+with the numbers, never as a bare zero (bead coding-harness-bxxt.7). Only the
+runner's targeted repair checks supply targeted evidence; implement and draft
+checks do not, so a zero does not measure misses from those checks. Runs
+recorded before the counter existed carry no comparison identity: the reader
+reports them on a separate line outside the count, and they do not make the
+read partial. A lane reads its change with `--change <name>` and `--since` set
+to the lane's start in UTC. This includes other lanes working on the same change;
+the outside line holds runs of this repository; the unattributed line can also
+include runs of other repositories on the machine. The reader also reports flaky-test signals (a full green then a
+full red of one identity) and, when evidence is incomplete, names the
+incomplete runs on both sides of a possible pair.
 
 ## Stated, enforced, planned
 

@@ -723,6 +723,11 @@ def run_verification(
     run_id_holder: dict[str, str | None] = {
         "id": record(verify_duration.record_start, job, "ci" if ci else "local", root=wurzel, env=base_env)
     }
+    # The runner-owned comparison context (`verify_duration.full_run_context`) names this run's own
+    # start record and nothing else: a gate never inherits it, so a check a gate starts in turn is
+    # never recorded as a second full run of the same change and tree (bead coding-harness-bxxt.7).
+    for name in verify_duration.COMPARISON_ENV_NAMES:
+        base_env.pop(name, None)
     selection_holder: dict[str, list[dict[str, Any]]] = {"selection": []}
 
     def run_gate(gate: dict[str, Any], gate_env: dict[str, str]) -> bool:

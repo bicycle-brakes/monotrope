@@ -2297,6 +2297,51 @@ def test_runner_list_does_not_record_or_duplicate_runs(tmp_path: Path) -> None:
     assert ends[0]["verdict"] == "green"
 
 
+def test_runner_start_record_carries_the_full_run_comparison_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real shell's start record captures the runner-owned context, and the reader pairs it.
+
+    Fault this pins (loop row L2-4, bead coding-harness-bxxt.7): the copied
+    `verify_all.sh` — not a stub of `make` — drops the comparison variables
+    `full_verify` hands it, through an environment filter, the admission
+    re-exec or another `--job`/`--placement` spelling, so every full run is
+    stored as a legacy row and a real slip reads as not countable.
+    """
+    base = tmp_path / "pairing"
+    tree = _runner_tree(base, "exit 1")
+    # A run belongs to a repository only through its common Git directory (spec
+    # Term "Repository", decisions Q-5): the copied tree must be a Git repository.
+    subprocess.run(["git", "init", "-q", str(tree)], check=True, capture_output=True)
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tree.parent / "state"))
+    receipt = verify_duration.begin_targeted_run(tree, "demo", "tree-x")
+    assert receipt.run_id is not None, receipt.notes
+    assert verify_duration.finish_targeted_run(receipt, "tree-x", "green") == []
+
+    context = verify_duration.full_run_context("tree-x", "demo")
+    done = _run_runner(tree, tmp_path / "home", [], extra_env=context)
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+
+    starts = [e for e in _tree_history(tree) if e["event"] == "run_start" and e.get("check_kind") != "targeted"]
+    assert len(starts) == 1, starts
+    assert (starts[0]["job"], starts[0]["placement"]) == ("verify", "local"), starts[0]
+    assert (starts[0]["check_kind"], starts[0]["change"], starts[0]["tree_id"]) == ("full", "demo", "tree-x")
+    assert starts[0]["comparison_version"] == verify_duration.COMPARISON_VERSION
+    # The targeted check sits in its own history, never among the full-run durations.
+    assert all(e.get("check_kind") != "targeted" for e in _tree_history(tree))
+
+    read = subprocess.run(
+        [sys.executable, str(tree / "scripts" / "verify_duration.py"), "slips"],
+        cwd=tree,
+        env=_runner_env(tree, tmp_path / "home", []),
+        capture_output=True,
+        text=True,
+    )
+    assert read.returncode == 0, f"exit {read.returncode}\n{read.stdout}\n{read.stderr}"
+    assert "slips: 1; incomplete/not countable runs: 0" in read.stdout, read.stdout
+
+
 def test_duration_storage_failure_warns_without_changing_verdict(tmp_path: Path) -> None:
     """Criterion 7: unusable measurement storage warns, and gates and verdicts continue unchanged.
 
