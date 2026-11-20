@@ -370,3 +370,5 @@ Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claud
 > - L3-4: tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/finder-partial-report/stage2/attempts/finder-partial-report/attempt-3-20261120T102655717416Z-03165124.md
 > ```
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model hy3 · leak check clean over 1145 files, 4899 commits, 12 rules.
