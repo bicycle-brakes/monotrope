@@ -1094,3 +1094,14 @@ Stage-2 call, 2026-11-19: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4821 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/slip-counter/plan.md, plans/changes/slip-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1115 files, 4839 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R1 | MAJOR | SPEC | base | scripts/verify_duration.py:881 | Wenn eine vollständige Prüfung am Anfang Baum A und am Ende ausdrücklich Baum B aufzeichnet, behandelt der Leser sie trotzdem als gültig. Nach einer grünen gezielten Prüfung von A und einem roten Abschluss der vollständigen Prüfung meldet er dadurch einen Slip statt unvollständiger Evidenz. Auch wenn der aktuelle Schreiber am Ende keinen Baum aufzeichnet, muss der Leser vorhandene Baumangaben an beiden Enden vergleichen. [Gültiger Lauf; Akzeptanzkriterien 6 und 7] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f7a0-b5bf-7ee0-afa3-07ea691b5495, 2026-11-20
+Reviewer session: codex 01a1f7a0-b5bf-7ee0-afa3-07ea691b5495 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
