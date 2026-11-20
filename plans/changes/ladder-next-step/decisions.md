@@ -44,7 +44,7 @@ round, facing lanes that stopped overnight because the refusal named no next
 step, we decided that review-loop ends with exit 0 and one fixed `next:` line
 naming `review` or `repair` for the change, and does not start phase 6
 itself, to achieve that any session — and the night-run wake — follows the
-rule mechanically, accepting that the session still starts the named verb.
+rule mechanically, accepting that the session still starts the named verb — 2026-11-20
 
 ## Interview minimum
 
