@@ -8757,6 +8757,53 @@ def test_final_draft_after_three_spec_review_rounds(
         assert world.calls() == []
 
 
+def test_final_draft_with_uncommitted_only_spec(world: World) -> None:
+    # L4-1: after three rounds the single-edit admission (criterion 19) also holds for a spec never committed.
+    folder = world.root / "plans" / "changes" / "fresh"
+    folder.mkdir()
+    (folder / "research.md").write_text(
+        "---\ntitle: Research fresh\nbead: other-fresh\nclass: bounded\n---\n\n# Research\n", encoding="utf-8"
+    )
+    spec = folder / "spec.md"
+    spec.write_text(
+        "---\ntitle: Spec fresh\nbead: other-fresh\n---\n\n# Spec\n\nThe reviewed body.\n", encoding="utf-8"
+    )
+    mark = stage2.spec_body_fingerprint(spec)
+    blocks = [opus_review_block(world, 1, fingerprint=mark) for _ in range(3)]
+    (folder / "findings.md").write_text("# Findings — fresh\n\n" + "\n\n".join(blocks) + "\n", encoding="utf-8")
+    assert stage2.spec_body_versions(world.root, "fresh") == [], "the spec must live on disk only"
+    assert stage2.review_admission(world.root, "fresh").review_problem is None
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nThe final draft.\n", encoding="utf-8")
+    admission = stage2.review_admission(world.root, "fresh")
+    assert admission.rounds == 3
+    assert admission.review_problem is None, admission.review_problem
+
+
+def test_inventory_continues_after_measurement_error(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # L4-2: an error while measuring one change is reported for that change, and the list goes on.
+    base = world.root / "plans" / "changes"
+    for name in ("broken", "later"):
+        (base / name).mkdir()
+        (base / name / "spec.md").write_text(
+            f"---\ntitle: Spec {name}\nbead: other-{name}\n---\n\n# Spec\n", encoding="utf-8"
+        )
+    original = stage2.review_admission
+
+    def failing(root: Path, change: str) -> stage2.ReviewAdmission:
+        if change == "broken":
+            raise FileNotFoundError("git could not be launched")
+        return original(root, change)
+
+    monkeypatch.setattr(stage2, "review_admission", failing)
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    assert "broken" in out and "git could not be launched" in out
+    assert "\n- later (" in out, "the change after the failing one was not measured"
+    assert "None. Every change" not in out
+
+
 def test_a_review_whose_bytes_change_mid_call_writes_no_block(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

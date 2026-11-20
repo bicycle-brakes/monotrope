@@ -3969,10 +3969,14 @@ def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, dis
     A fingerprinted block is located by its digest among the committed bodies; an undigested
     legacy block counts the versions committed on a UTC day after its heading day (same-day edits
     cannot be told apart; the first version existed when the review was written). An uncommitted body difference counts as one more version.
+    A spec with no committed version has two bodies only, the reviewed one and the one on disk: a
+    fingerprinted block then counts one edit when they differ and none when they agree (review row L4-1).
     """
     versions = spec_body_versions(root, change)
     dirty = 1 if not versions or versions[-1][1] != disk else 0
     if block.fingerprint is not None:
+        if not versions:
+            return 0 if "sha256:" + hashlib.sha256(disk).hexdigest() == block.fingerprint else 1
         matches = [
             index
             for index, (_, body) in enumerate(versions)
@@ -4429,12 +4433,14 @@ def spec_review_inventory(root: Path) -> int:
     applied; and changes whose newest current qualifying review is a fallback, named for an
     Opus re-check in the next day session - the re-check replaces the fallback review in the
     same round. Spikes and folders without a spec stand outside. A change that cannot be read
-    is reported, never silently omitted.
+    is reported, never silently omitted: any error while measuring one change - a git launch
+    failure included - names that change in a group of its own, and the list goes on (review row L4-2).
     """
     base = root / "plans" / "changes"
     class_refused: list[str] = []
     review_refused: list[str] = []
     rechecks: list[str] = []
+    unmeasured: list[str] = []
     folders = []
     if base.is_dir():
         folders = sorted(entry for entry in base.iterdir() if entry.is_dir() and entry.name != "archive")
@@ -4442,7 +4448,11 @@ def spec_review_inventory(root: Path) -> int:
         name = folder.name
         if not (folder / "spec.md").is_file():
             continue
-        admission = review_admission(root, name)
+        try:
+            admission = review_admission(root, name)
+        except Exception as error:  # noqa: BLE001 - one change's failure is reported, the list goes on
+            unmeasured.append(f"{name} ({type(error).__name__}: {error})")
+            continue
         if admission.class_problem is not None:
             class_refused.append(f"{name} ({admission.class_problem})")
         if admission.review_problem is not None:
@@ -4459,7 +4469,10 @@ def spec_review_inventory(root: Path) -> int:
     if rechecks:
         print("\nFallback review to re-check with Opus in the next day session (same round):")
         print("\n".join(f"- {line}" for line in rechecks))
-    if not (class_refused or review_refused or rechecks):
+    if unmeasured:
+        print("\nNot measured (an error while measuring the change):")
+        print("\n".join(f"- {line}" for line in unmeasured))
+    if not (class_refused or review_refused or rechecks or unmeasured):
         print("\nNone. Every change with a spec holds a current qualifying review.")
     return 0
 
