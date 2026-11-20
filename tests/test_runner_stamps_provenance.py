@@ -1530,3 +1530,35 @@ def test_runner_findings_stamp_does_not_judge_legacy_header(repo, monkeypatch):
     assert stage2.main(["probe", "demo", "--root", str(repo)]) == 0
     assert "A row was decided." in path.read_text(encoding="utf-8")
     assert "updated: 2026-11-10" not in path.read_text(encoding="utf-8")
+
+
+def test_implement_accepts_new_file_with_valid_producer():
+    current = (
+        b"---\nprovenance: ai-drafted-reviewed\n"
+        b'produced_by: {kind: llm-session, name: codex, version: "2026-11-20"}\n'
+        b"review: {status: pending, approved_by: null, approved_at: null}\n---\nBody\n"
+    )
+    assert stage2.header_problems("plans/new.md", None, current, reject_added=True) == []
+
+
+def test_crlf_block_mapping_preserves_record_lines():
+    field = '\r\n  kind: llm-session\r\n  name: codex\r\n  version: "2026-11-04"'
+    earlier = stage2.parse_producer_records(field, "test")
+    added = {"kind": "llm-session", "name": "pi", "version": "2026-11-05"}
+    result = stage2.retained_producer_field(field, [*earlier, added], eol="\r\n")
+    assert result.startswith('\r\n- kind: llm-session\r\n  name: codex\r\n  version: "2026-11-04"\r\n')
+    assert yaml.safe_load("produced_by:" + result)["produced_by"] == [*earlier, added]
+
+
+def test_session_judges_new_findings_before_writing(repo, monkeypatch):
+    from types import SimpleNamespace
+
+    import stage2_session
+
+    path = repo / "plans/changes/demo/findings.md"
+    path.unlink(missing_ok=True)
+    faulty = f"---\ntitle: Findings\nprovenance: human-written\nreview: {PENDING_REVIEW}\n---\n"
+    monkeypatch.setattr(stage2, "findings_header", lambda *_: faulty)
+    with pytest.raises(stage2.Refused, match="findings.md"):
+        stage2_session.write_pending(SimpleNamespace(findings=path), stage2, "pending", "codex")
+    assert not path.exists()

@@ -560,7 +560,7 @@ def write_pending(ctx, runner, line: str, producer: str) -> None:
     """Persist the pending audit before anything is dispatched; an unwritable audit starts no session."""
     try:
         if not ctx.findings.exists():
-            ctx.findings.write_text(runner.findings_header(ctx, producer), encoding="utf-8")
+            runner.write_findings(ctx.findings, runner.findings_header(ctx, producer).encode("utf-8"))
         runner.append(ctx.findings, line)
     except OSError as error:
         raise runner.CallFailed(f"the pending audit could not be written: {error}; no session starts.") from error

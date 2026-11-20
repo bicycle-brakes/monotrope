@@ -9688,7 +9688,7 @@ def retained_producer_field(baseline_field: str | None, records: list[dict], *, 
         return f" [{inner}, {rest}]" if inner else f" [{rest}]"
     # A block value begins with the line ending that followed `produced_by:`; the record
     # lines follow. The first record line's indentation becomes `- `; a mapping's later lines follow it.
-    body = baseline_field[1:] if baseline_field[0] in "\r\n" else baseline_field
+    body = baseline_field.removeprefix("\r\n") if baseline_field.startswith("\r\n") else baseline_field.lstrip("\r\n")
     lines = body.replace("\r\n", "\n").split("\n")
     first = lines[0]
     indent = first[: len(first) - len(first.lstrip(" "))]
@@ -9955,8 +9955,8 @@ def header_problems(
     `runner_reset` says the verb stamps, so the runner itself may have reset a committed
     approval beside a document change (criterion 8); on a verb that does not stamp, such a
     reset is a fault (L2-9). `reject_added` says the verb never stamps (implement), so any
-    producer record the commit does not hold was written by the session and is refused, on
-    active research as on every other file (L6-1).
+    producer record a committed header does not hold was written by the session and is refused, on
+    active research as on every other file (L6-1); a new header has no committed records.
     """
     import research_census  # the census reads this module back, so the import stands at call time
 
@@ -10027,7 +10027,11 @@ def header_problems(
     # holds must stand unchanged, on implement as on every verb. A dropped or rewritten one is a fault.
     if any(record not in current_records for record in committed_records):
         problems.append(f"{relative}: produced_by: a committed producer record was rewritten or dropped")
-    if reject_added and any(record not in committed_records for record in current_records):
+    if (
+        reject_added
+        and baseline_header is not None
+        and any(record not in committed_records for record in current_records)
+    ):
         # On a verb that never stamps, no record may appear that the commit does not hold: only the
         # runner's stamp adds producer records (Q-10, loop row L6-1).
         problems.append(f"{relative}: produced_by: a session added a producer record")
