@@ -513,3 +513,15 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1f98e-46dd-72a3-9809-0839d1239123, 2026-11-20
 Reviewer session: codex 01a1f98e-46dd-72a3-9809-0839d1239123 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 4951 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| RF6-1 | MAJOR | SPEC | review | scripts/findings_reader.py:153 | A released loop row naming `space-bunny-free` as its reviewer is placed in the unattributed bucket because the model-name pattern requires a digit. Free-swarm model IDs can have no digits; the named model must receive the credit. [criterion 3] | Codex | open | — |
+| RF6-2 | MAJOR | SPEC | review | scripts/findings_reader.py:608 | When a released-loop section contains two tables separated by a blank line, the reader counts only the first table and lists the second as outside the count. The report is marked complete although eligible rows under the release heading are omitted. [criteria 1, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19, 2026-11-20
+Reviewer session: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
