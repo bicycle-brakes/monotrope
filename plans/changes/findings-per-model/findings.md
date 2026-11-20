@@ -486,3 +486,14 @@ Reviewer session: codex 01a1f906-b20b-7601-ae7f-f7a326efe4fc — a fresh session
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4896 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4907 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | scripts/findings_reader.py:315 | A phase-6 row such as `\| F-1 \| \| \| \| \| \| open \|` has the expected number of cells but leaves severity, dimension, origin, location and finding empty. The reader counts it and reports no gap, so both outputs can claim completeness for a malformed finding. The report must identify the row as incomplete and exit non-zero. [Criterion 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f966-3933-7df0-bca5-d042e91cbacf, 2026-11-20
+Reviewer session: codex 01a1f966-3933-7df0-bca5-d042e91cbacf — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
