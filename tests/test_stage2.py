@@ -30626,3 +30626,70 @@ def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatc
     assert not commands.of("gate")
     assert "deferred to full check" in scope
     assert all(gate["id"] in scope for gate in protected)
+
+
+def test_interrupted_supersession_refuses_another_worktree(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    first = other_worktree(world, "repo-first")
+    second = other_worktree(world, "repo-second")
+    rival = other_worktree(world, "repo-rival")
+    keys = sorted([stage2.record_key("demo", first), stage2.record_key("demo", second)])
+    for root in (first, second):
+        write_foreign_record(root, [1])
+    real_move = stage2._move_archive_entry
+    moved = 0
+
+    def interrupt(source: Path, target: Path) -> None:
+        nonlocal moved
+        if moved == 1:
+            raise OSError("interrupted")
+        real_move(source, target)
+        moved += 1
+
+    monkeypatch.setattr(stage2, "_move_archive_entry", interrupt)
+    assert supersede(world, *keys) == 1
+    monkeypatch.setattr(stage2, "_move_archive_entry", real_move)
+    remaining = [key for key in keys if (stage2.record_base() / key / "loop.md").exists()]
+    assert len(remaining) == 1
+    before = (stage2.record_base() / remaining[0] / "loop.md").read_bytes()
+    rival_world = World(rival, world.bin, world.state)
+    assert supersede(rival_world, *remaining) == 2
+    assert (stage2.record_base() / remaining[0] / "loop.md").read_bytes() == before
+    assert supersede(world, *keys) == 0
+
+
+def test_superseded_release_refuses_new_unaccounted_calls(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    findings = other / "plans/changes/demo/findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text("Stage-2 call, 2026-11-18: review-loop · old\n", encoding="utf-8")
+    assert supersede(world, key) == 0
+    git(world.root, "add", "plans/changes/demo/findings.md")
+    git(world.root, "commit", "-m", "Account for supersession")
+    with findings.open("a", encoding="utf-8") as handle:
+        handle.write("Stage-2 call, 2026-11-20: review-loop · new\n")
+    before = findings.read_bytes()
+    try:
+        stage2.release(other, "demo")
+    except stage2.Refused as error:
+        assert "record is lost" in str(error)
+    else:
+        pytest.fail("release accepted a new unaccounted call after supersession")
+    assert findings.read_bytes() == before
+
+
+def test_repository_supersession_lock_blocks_release_and_supersession(world: World, capsys) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    before = record.read_bytes()
+    with stage2.holding_supersession("demo", world.root):
+        rival = World(other, world.bin, world.state)
+        assert rival.run("release-loop") == 2
+        assert stage2.record_key("demo", world.root) in capsys.readouterr().err
+        assert supersede(world, key) == 2
+        assert stage2.record_key("demo", world.root) in capsys.readouterr().err
+    assert record.read_bytes() == before
+    assert not world.findings.exists()
+    assert supersede(world, key) == 0

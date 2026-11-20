@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-18
 created: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -968,8 +968,12 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:5005 (`_supersession_resumes`) | If worktree A starts superseding two records and stops after moving the first, worktree B can supersede the remaining active record alone. Discovery ignores A’s unfinished staging manifest because B is a different superseder, so B changes the key set and leaves the first record stranded without accounting. The incomplete request must refuse without changing either record. [Criteria 5 and 7] | Codex | taken — closed by criterion 19, the repository-wide supersession lock (maintainer decision 2026-11-20, option A) | — |
-| P6-2 | MAJOR | SPEC | base | scripts/stage2.py:4779 (`release`) | After a worktree’s old record was superseded and the accounting line was committed, a later review-loop attempt in that worktree can leave new audit calls without a record. Release finds the old archive first, writes `Loop rows: superseded by …` and exits successfully, even though the new calls are unrelated to that archive and require the missing-record refusal. [Criterion 9] | Codex | taken — closed by criterion 19, the repository-wide supersession lock (maintainer decision 2026-11-20, option A) | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:5005 (`_supersession_resumes`) | If worktree A starts superseding two records and stops after moving the first, worktree B can supersede the remaining active record alone. Discovery ignores A’s unfinished staging manifest because B is a different superseder, so B changes the key set and leaves the first record stranded without accounting. The incomplete request must refuse without changing either record. [Criteria 5 and 7] | Codex | fixed — tests/test_stage2.py::test_interrupted_supersession_refuses_another_worktree | — |
+| P6-2 | MAJOR | SPEC | base | scripts/stage2.py:4779 (`release`) | After a worktree’s old record was superseded and the accounting line was committed, a later review-loop attempt in that worktree can leave new audit calls without a record. Release finds the old archive first, writes `Loop rows: superseded by …` and exits successfully, even though the new calls are unrelated to that archive and require the missing-record refusal. [Criterion 9] | Codex | fixed — tests/test_stage2.py::test_superseded_release_refuses_new_unaccounted_calls | — |
 
 Phase 6 verdict: codex 01a1fa92-a5c5-7262-b4d8-2bc82677d229, 2026-11-20
 Reviewer session: codex 01a1fa92-a5c5-7262-b4d8-2bc82677d229 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 4972 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged

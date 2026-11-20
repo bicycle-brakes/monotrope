@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-18
 last_reviewed: 2026-11-18
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-e82i
@@ -53,6 +53,9 @@ Starts unless you say stop.
 - 16: tests/test_stage2.py::test_supersede_retry_matches_archive_directory — retry matches another archive or duplicates accounting.
 - 17: tests/test_stage2.py::test_plain_restart_after_supersession_uses_highest_round — a clean round or the prior floor is omitted from the restart number.
 - 18: tests/test_stage2.py::test_supersede_without_pending_audit_calls — zero calls blocks supersession or is reported incorrectly.
+- 19: tests/test_stage2.py::test_interrupted_supersession_refuses_another_worktree — a competing worktree strands a partly archived record.
+- 19: tests/test_stage2.py::test_superseded_release_refuses_new_unaccounted_calls — an old archive conceals new unaccounted calls.
+- 19: tests/test_stage2.py::test_repository_supersession_lock_blocks_release_and_supersession — concurrent operations interleave or fail to name the holder.
 - 12: not a test — phase-6 review compares `docs/WORKFLOW.md` with the command and the spec.
 
 ## Verification
@@ -101,3 +104,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 08:24:04–08:53:04 UTC, 1740 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-20 13:13:13–14:10:29 UTC, 3436 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-20 14:10:39–14:54:58 UTC, 2659 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-20 20:31:04–23:31:55 UTC, 10851 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

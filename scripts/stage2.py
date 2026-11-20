@@ -4099,6 +4099,31 @@ def holding_record(change: str, root: Path) -> Iterator[None]:
         yield
 
 
+@contextlib.contextmanager
+def holding_supersession(change: str, root: Path) -> Iterator[None]:
+    """Serialize release and supersession across this repository's worktrees."""
+    common = os.fsdecode(run_git(root, "rev-parse", "--git-common-dir").stdout).strip()
+    common_path = (root / common).resolve()
+    digest = hashlib.sha256(str(common_path).encode("utf-8")).hexdigest()[:16]
+    path = record_base() / f"supersession-{digest}-{change}.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            handle.seek(0)
+            holder = handle.read().strip() or "unknown worktree"
+            raise Refused(f"supersession lock for {change} is held by {holder}; nothing is changed") from error
+        try:
+            handle.seek(0)
+            handle.truncate()
+            handle.write(record_key(change, root))
+            handle.flush()
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def read_record(change: str, root: Path) -> str | None:
     path = record_dir(change, root) / "loop.md"
     try:
@@ -4736,6 +4761,14 @@ def superseded_by(root: Path, change: str, after_round: int | None = None) -> st
                     continue
                 needle = f"{ARCHIVE_PATH_FORM}/{archive.name}/{own}"
                 if any(needle in match.group(3) for match in SUPERSEDED_RESTART_LINE.finditer(text)):
+                    findings = folder_of(root, change) / "findings.md"
+                    current_text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+                    calls = [line for line in current_text.splitlines() if LOOP_AUDIT_LINE.match(line)]
+                    previous = manifest.get("audit_calls", {}).get(own)
+                    if (
+                        previous is None or calls[: len(previous)] != previous or len(calls) > len(previous)
+                    ) and pending_audit_calls(current_text):
+                        return None
                     return superseder
         except (OSError, ValueError, KeyError, TypeError):
             continue
@@ -4743,6 +4776,11 @@ def superseded_by(root: Path, change: str, after_round: int | None = None) -> st
 
 
 def release(root: Path, change: str) -> list[list[str]]:
+    with holding_supersession(change, root):
+        return _release_locked(root, change)
+
+
+def _release_locked(root: Path, change: str) -> list[list[str]]:
     """The loop rows into findings.md, after the phase-6 verdict. Returns the rows released."""
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
@@ -4995,7 +5033,9 @@ def _write_supersession_manifest(staging: Path, change: str, superseder: str, ke
     )
 
 
-def _supersession_resumes(change: str, superseder: str, keys: list[str], archive_base: Path) -> dict | None:
+def _supersession_resumes(
+    change: str, superseder: str, keys: list[str], archive_base: Path, worktrees: dict[str, Path]
+) -> dict | None:
     """The staged or archived supersession of this worktree whose key set is exactly `keys`.
 
     Only a manifest of the same change, the same superseding worktree key and the same complete key
@@ -5010,15 +5050,35 @@ def _supersession_resumes(change: str, superseder: str, keys: list[str], archive
         name = entry.name[len(STAGING_PREFIX) :] if staging else entry.name
         if not name.startswith(f"{change}@"):
             continue
+        owner = next((key for key in worktrees if name.startswith(f"{key}@")), None)
+        if owner is None:
+            continue
         try:
             manifest = json.loads((entry / MANIFEST_NAME).read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
-            if staging and name.startswith(f"{change}@{superseder.split(chr(64))[-1]}@"):
+            if staging and owner != superseder:
+                raise Refused(
+                    f"unfinished supersession by {owner} has an unreadable manifest; nothing is changed"
+                ) from error
+            if staging and owner == superseder:
                 if entry.is_dir() and not any(entry.iterdir()):
                     found.append({"path": entry, "staging": True, "empty": True})
                     continue
                 raise Refused(f"staged supersession manifest cannot be read at `{entry}`: {error}") from error
             continue
+        if isinstance(manifest, dict) and manifest.get("change") == change and owner != superseder:
+            if staging:
+                raise Refused(f"unfinished supersession is held by {owner}; nothing is changed")
+            findings = worktrees[owner] / "plans" / "changes" / change / "findings.md"
+            text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+            needle = f"{ARCHIVE_PATH_FORM}/{entry.name}/"
+            if not any(needle in match.group(3) for match in SUPERSEDED_RESTART_LINE.finditer(text)):
+                try:
+                    committed = _git_output(worktrees[owner], "show", f"HEAD:plans/changes/{change}/findings.md")
+                except Refused:
+                    committed = ""
+                if not any(needle in match.group(3) for match in SUPERSEDED_RESTART_LINE.finditer(committed)):
+                    raise Refused(f"unfinished supersession is held by {owner}; nothing is changed")
         if (
             staging
             and isinstance(manifest, dict)
@@ -5073,6 +5133,11 @@ def _supersede_accounting_line(
 
 
 def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> None:
+    with holding_supersession(change, root):
+        _supersede_loop_locked(root, change, keys, reason)
+
+
+def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str) -> None:
     """Archive another worktree's loop record and restart the loop here (bead coding-harness-e82i).
 
     The maintainer repeats `--supersedes <key>` for every active other-worktree key a refusal names.
@@ -5104,7 +5169,13 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
             )
         if (base / key).is_symlink():
             raise Refused(f"the record directory of `{key}` is a symlink; supersession takes a real record directory.")
-    resume = _supersession_resumes(change, current, keys, archive_base)
+    listing = _git_output(root, "worktree", "list", "--porcelain")
+    worktrees = {
+        record_key(change, Path(line[9:])): Path(line[9:])
+        for line in listing.splitlines()
+        if line.startswith("worktree ")
+    }
+    resume = _supersession_resumes(change, current, keys, archive_base, worktrees)
     if resume is not None and resume.get("empty"):
         # Before the manifest exists no records have moved; validate the complete active set.
         refusal = _supersede_request_refusal(change, root, keys, None)
@@ -5163,6 +5234,20 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
                 if resume is None or not resume["staging"]:
                     staging.mkdir(parents=True)
                     _write_supersession_manifest(staging, change, current, keys)
+                    listing = _git_output(root, "worktree", "list", "--porcelain")
+                    snapshots = {}
+                    for line in listing.splitlines():
+                        if line.startswith("worktree "):
+                            worktree = Path(line[9:])
+                            key = record_key(change, worktree)
+                            if key in keys:
+                                path = worktree / "plans" / "changes" / change / "findings.md"
+                                source = path.read_text(encoding="utf-8") if path.exists() else ""
+                                snapshots[key] = [line for line in source.splitlines() if LOOP_AUDIT_LINE.match(line)]
+                    manifest_path = staging / MANIFEST_NAME
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    manifest["audit_calls"] = snapshots
+                    replace_record(manifest_path, json.dumps(manifest, sort_keys=True, indent=2) + "\n")
                 for key in keys:
                     source = base / key
                     target = staging / key
