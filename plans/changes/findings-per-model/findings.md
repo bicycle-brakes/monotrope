@@ -525,3 +525,15 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19, 2026-11-20
 Reviewer session: codex 01a1fa45-2ee2-7cf3-98bc-eb7f634f8e19 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 4957 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/check_finding_duplicates.py`, `main` and `measure` | A new finding row with status `rejected — same as L1-1` passes the local duplicate gate while the row is staged or unstaged: the gate compares the merge base with `HEAD` and reads only committed blobs. This also lets the gate pass during `make verify` before the commit. A row added or changed relative to the merge base must be checked. [Criterion 9] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `_cycles` | A valid chain of 1,200 duplicate findings ending in a non-duplicate root raises `RecursionError` during cycle detection. The report stops before producing its table or JSON Lines file, so the root receives no reported credit. Duplicate chains must be resolved and the report produced. [Criteria 8, 14, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fa61-011f-74c1-867d-f2e3caa65054, 2026-11-20
+Reviewer session: codex 01a1fa61-011f-74c1-867d-f2e3caa65054 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
