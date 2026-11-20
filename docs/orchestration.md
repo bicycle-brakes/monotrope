@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-06
-updated: 2026-11-19
+updated: 2026-11-20
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -121,7 +121,21 @@ queue active (rule RB-G7), that word admits them to the queue, and each counts
 as merged only once GitHub shows it merged; a failing group leaves its pull
 request open. Every step is committed and pushed at once, tracker first, so an
 interrupted session loses nothing. A lane ledger with UTC times backs the
-handover.
+handover. A lane that ran verification also reports its missed-verification
+observations: the slip count and the incomplete or not countable runs beside
+it, read from the local history with `python3 -m scripts.verify_duration
+slips`, together with the reader's partial status — a diagnosed gap travels
+with the numbers, never as a bare zero (bead coding-harness-bxxt.7). Only the
+runner's targeted repair checks supply targeted evidence; implement and draft
+checks do not, so a zero does not measure misses from those checks. Runs
+recorded before the counter existed carry no comparison identity: the reader
+reports them on a separate line outside the count, and they do not make the
+read partial. A lane reads its change with `--change <name>` and `--since` set
+to the lane's start in UTC. This includes other lanes working on the same change;
+the outside line holds runs of this repository; the unattributed line can also
+include runs of other repositories on the machine. The reader also reports flaky-test signals (a full green then a
+full red of one identity) and, when evidence is incomplete, names the
+incomplete runs on both sides of a possible pair.
 
 The morning handover also carries the findings per model (bead
 coding-harness-qut1): the table `make findings-per-model` prints, with its
@@ -136,7 +150,7 @@ its own commit; reports at different commits are never combined into one.
 | Rule | Today | Planned |
 | --- | --- | --- |
 | Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
-| One verify-bearing step at a time, memory floor | enforced: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) | — |
+| One protected verify step at a time, memory floor | enforced for protected work only: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) cover the `minutes` gates and marked `seconds` gates. The cheap gates and the runner's full-mode preparation run outside it, in every lane at once, so a lane's red lint appears before any wait (bead coding-harness-bxxt.6); the [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md) found them free of shared writes | a disk bound for concurrent work (bead coding-harness-87b0) |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |

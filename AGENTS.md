@@ -181,6 +181,12 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without asking; style rows
   are accepted limits named in the PR. A second finding of one mechanism ends case repair; a mechanism no choke point closes gets a `Boundary` in its spec; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
+- **An exhausted review ladder goes to phase 6** (maintainer, 2026-11-20): when
+  `review-loop` refuses because every stage of its run is consumed and the last
+  round was not clean, and every taken row of that round is repaired, the lane
+  goes to the phase-6 review instead of a new loop run; phase 6 checks that last
+  repair. Reason: a run's history cannot be reset, and asking each time stopped
+  lanes overnight.
 
 ## Sibling repositories
 

@@ -74,6 +74,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_SCRIPTS = Path(__file__).resolve().parent

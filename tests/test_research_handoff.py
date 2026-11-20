@@ -1071,3 +1071,53 @@ def test_a_malformed_claim_beside_a_valid_one_fails_the_handoff(world, capsys, l
     world.write([run_text(RUN1)], spec=spec_text(basis=(f"`{good}` and `{bad}`",)))
     code, output = world.check(capsys)
     assert code == 1 and bad in output
+
+
+def test_envelope_spans_share_reader_validation() -> None:
+    # change journal-citation-gate, criterion 5. Planted fault: a span misses the accepted marker boundaries
+    # (the journal-date check would exempt prose or scan inside a record), parsing verdicts or messages change,
+    # or mixed line endings and a raw Unicode separator shift the span.
+    marker_open = f"<!-- research-swarm/v2 run {RUN1} -->"
+    marker_close = "<!-- /research-swarm/v2 -->"
+    header = "---\ntitle: Research\n---\n\n# Research\n\n"
+    run = run_text(RUN1)
+    text = header + run
+    (parsed,) = gate.parse_text(text, "demo")
+    start, end = parsed.span
+    assert (start, end) == (text.index(marker_open), text.index(marker_close) + len(marker_close))
+    assert text[start:end] == run[:-1], "the span runs from the opening marker through the closing marker"
+    assert parsed.run_id == RUN1 and parsed.complete, "the parsing verdict is unchanged"
+    # CRLF and CR line endings do not shift the span off the marker boundaries.
+    for line_break in ("\r\n", "\r"):
+        variant = text.replace("\n", line_break)
+        (other,) = gate.parse_text(variant, "demo")
+        expected = run.replace("\n", line_break)
+        assert other.span == (variant.index(marker_open), variant.index(marker_close) + len(marker_close))
+        assert variant[other.span[0] : other.span[1]] == expected[: -len(line_break)], line_break
+    # A raw Unicode separator stays inside its line, so the span keeps covering the whole envelope.
+    separator = chr(0x2028)
+    # The literal on the next line is a raw U+2028 on purpose: the assert pins it, so a
+    # tool-mangled byte turns this test red instead of silently passing.
+    assert chr(0x2028) == " "
+    escaped = json.dumps(separator)[1:-1]
+    unicode_run = run_text(RUN1, decision=f"Which store{separator}format?").replace(escaped, separator)
+    assert separator in unicode_run
+    unicode_text = header + unicode_run
+    (separated,) = gate.parse_text(unicode_text, "demo")
+    assert separated.span == (
+        unicode_text.index(marker_open),
+        unicode_text.index(marker_close) + len(marker_close),
+    ), "a raw U+2028 inside a record is no line break for the span"
+    # Two envelopes carry two disjoint spans; the prose between them stays outside every span.
+    first, second = run_text(RUN1), run_text(RUN2, decision="Which queue?")
+    both = header + first + "prose between the runs\n\n" + second
+    parsed_both = gate.parse_text(both, "demo")
+    assert [item.run_id for item in parsed_both] == [RUN1, RUN2]
+    spans = [item.span for item in parsed_both]
+    assert spans[0][1] < spans[1][0], "two envelopes never overlap"
+    assert both[spans[0][0] : spans[0][1]] == first[:-1]
+    assert both[spans[1][0] : spans[1][1]] == second[:-1]
+    assert "prose between" in both[spans[0][1] : spans[1][0]], "prose outside the spans stays scannable"
+    # The verdicts and messages are unchanged: an unclosed run still raises.
+    with pytest.raises(gate.CannotMeasure, match="is never closed"):
+        gate.parse_text(header + run.replace(marker_close, ""), "demo")

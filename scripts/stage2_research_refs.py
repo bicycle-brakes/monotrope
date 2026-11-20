@@ -15,6 +15,7 @@ import re
 from datetime import date, datetime
 from pathlib import PurePosixPath
 
+import venv_guard  # noqa: F401
 import yaml
 
 
