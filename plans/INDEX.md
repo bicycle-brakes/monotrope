@@ -618,6 +618,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/journal-citation-gate/research.md`](changes/journal-citation-gate/research.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/spec.md`](changes/journal-citation-gate/spec.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
+| [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
+| [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
@@ -633,6 +636,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/runner-stamps-provenance/plan.md`](changes/runner-stamps-provenance/plan.md) | draft | none | 2026-11-18 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/research.md`](changes/runner-stamps-provenance/research.md) | draft | none | 2026-11-16 | coding-harness-f9sv |
 | [`changes/runner-stamps-provenance/spec.md`](changes/runner-stamps-provenance/spec.md) | draft | none | 2026-11-20 | coding-harness-f9sv |
+| [`changes/slip-counter/decisions.md`](changes/slip-counter/decisions.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/findings.md`](changes/slip-counter/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/plan.md`](changes/slip-counter/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/research.md`](changes/slip-counter/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/spec.md`](changes/slip-counter/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |

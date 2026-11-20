@@ -60,6 +60,7 @@ import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
 import time_records  # noqa: E402
+import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
@@ -28880,6 +28881,9 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
 ) -> None:
     """coding-harness-dq4u: the targeted pytest step shares the full check's step limit (it measured 8.5 to 10.5
     minutes on the swarm tests, past the 5-minute tool limit); the gates keep the tool limit."""
+    # The real recording path writes its run evidence into the state root: this
+    # unit test keeps that root in the test's own directory (isolated state roots).
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     python = tmp_path / stage2.PYTEST[0]
     python.parent.mkdir(parents=True)
     python.write_text("", encoding="utf-8")
@@ -28898,6 +28902,310 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
     assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
     assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+
+
+# ---------------------------------------------------------------------------
+# Slips — the runner's own history, from targeted evidence to full-run evidence
+# (bead coding-harness-bxxt.7: derived observations, never persisted ones)
+# ---------------------------------------------------------------------------
+
+
+def slip_history(world: World, name: str | None = None) -> list[dict]:
+    """The isolated state root's targeted history, then the duration history, oldest first.
+
+    `name` picks one of the two files; nothing creates either.
+    """
+    names = [name] if name else [verify_duration.TARGETED_HISTORY_NAME, verify_duration.HISTORY_NAME]
+    rows: list[dict] = []
+    for each in names:
+        path = world.state / "coding-harness" / each
+        if path.exists():
+            rows.extend(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    return rows
+
+
+def measuring_make(world: World, verdict_marker: Path) -> None:
+    """Replace the scripted `make` stand-in with a gate whose verdict a marker file decides.
+
+    The world's full check is the shared scheduler with this stub as its one protected gate
+    (bead coding-harness-bxxt.6). The scheduler itself records the run's start, gate and end in
+    process, so the start record carries whatever comparison context `full_verify` handed it.
+    The stub records nothing and asserts it never sees that context: a gate that inherited it
+    could record a second full run of the same change and tree. Only the gate itself stays
+    mocked — never the history writer, the tree capture, the finalization or the reader.
+    """
+    names = list(verify_duration.COMPARISON_ENV_NAMES)
+    stub = f"""#!{sys.executable}
+import os
+import sys
+
+leaked = [name for name in {names!r} if name in os.environ]
+if leaked:
+    print("the gate inherited the comparison context: " + ", ".join(leaked))
+    sys.exit(3)
+verdict = "red" if os.path.exists({str(verdict_marker)!r}) else "green"
+print(verdict)
+sys.exit(0 if verdict == "green" else 1)
+"""
+    program = world.bin / "make"
+    program.write_text(stub, encoding="utf-8")
+    program.chmod(0o755)
+
+
+def slips_report(world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    """One in-process `slips` reading of the world's history, from the world's root."""
+    monkeypatch.chdir(world.root)
+    code = verify_duration.main(["slips"])
+    return code, capsys.readouterr().out
+
+
+def test_slip_history_captures_targeted_and_full_evidence(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Criteria 4 and 5. Planted fault: the real runner path from a targeted attempt to the phase-6 full
+    check yields no comparable pair, or the history gains a persisted slip record.
+
+    The repair's targeted check records its start and completion through the
+    production dispatch, the phase-6 boundary records the full check's start
+    through the shared scheduler both entry points use, and the reader pairs
+    them: a red full check of the unchanged tree is one slip, a later green
+    re-check counts nothing, and no slip row is ever written.
+    """
+    # One gate configuration on both sides (the world's committed one): its digest is part of the match key.
+    marker = tmp_path / "full-verdict-red"
+    measuring_make(world, marker)
+    baseline = repair_world(world)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0
+    assert commands.of("make") == [], "a targeted repair ran the full check"
+    # The review below must run the stub for real: give the runner its launch back.
+    monkeypatch.setattr(stage2, "launch", commands.real)
+
+    events = slip_history(world)
+    starts = [event for event in events if event["event"] == "run_start"]
+    ends = [event for event in events if event["event"] == "run_end"]
+    assert len(starts) == 1 and len(ends) == 1, events
+    targeted = starts[0]
+    assert targeted["check_kind"] == "targeted"
+    assert targeted["change"] == "demo"
+    assert targeted["repository"] == str(world.root)
+    assert targeted["config_sha256"] == verify_duration._gate_file_digest(world.root)
+    # The runner's time line and call record landed in the change's plan.md and
+    # findings.md after the check; the comparison identity leaves exactly those
+    # out (decisions Q-3), so the committed head still names the checked tree.
+    assert targeted["tree_id"] == stage2._checked_tree(world.root, "demo")
+    assert targeted["tree_id"] != stage2.worktree_tree(world.root)
+    assert ends[0]["run_id"] == targeted["run_id"] and ends[0]["verdict"] == "green"
+    assert ends[0]["tree_id"] == targeted["tree_id"], "the tree moved during a check that touched nothing"
+    assert targeted["comparison_version"] == verify_duration.COMPARISON_VERSION
+    assert {event["event"] for event in events} <= set(verify_duration.EVENTS), "a slip record was persisted"
+    # The targeted check lives in its own history; the duration history holds no targeted duration.
+    assert slip_history(world, verify_duration.HISTORY_NAME) == []
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+
+    # A red full check of the same tree, before any reviewer call: one slip, and
+    # the observation stays complete — exit 0 with a positive count.
+    marker.write_text("red\n", encoding="utf-8")
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
+    assert world.run("review") == 1
+    code, out = slips_report(world, monkeypatch, capsys)
+    assert code == 0, out
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    full_starts = [event for event in slip_history(world) if event.get("check_kind") == "full"]
+    assert len(full_starts) == 1
+    assert full_starts[0]["change"] == "demo" and full_starts[0]["tree_id"] == targeted["tree_id"]
+    assert full_starts[0]["comparison_version"] == verify_duration.COMPARISON_VERSION
+    assert full_starts[0]["config_sha256"] == targeted["config_sha256"]
+    duration_starts = [e for e in slip_history(world, verify_duration.HISTORY_NAME) if e["event"] == "run_start"]
+    assert {event.get("check_kind") for event in duration_starts} == {"full"}
+
+    # The re-check measures fresh: a green full run of the same tree counts
+    # nothing, and the red one stays counted exactly once.
+    marker.unlink()
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    assert world.run("review") == 0
+    code, out = slips_report(world, monkeypatch, capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    full_rows = slip_history(world)
+    full_starts = [event for event in full_rows if event.get("check_kind") == "full"]
+    verdicts = {event["run_id"]: event["verdict"] for event in full_rows if event["event"] == "run_end"}
+    assert [verdicts[event["run_id"]] for event in full_starts] == ["red", "green"]
+    assert all(event["tree_id"] == targeted["tree_id"] for event in full_starts)
+    assert {event["event"] for event in full_rows} <= set(verify_duration.EVENTS)
+
+
+def test_slip_comparison_tree_leaves_out_only_the_changes_bookkeeping(world: World) -> None:
+    """Criterion 3. Planted fault: the comparison identity follows the change's own plan.md and
+    findings.md, or it also hides any other path (decisions Q-3).
+
+    The two bookkeeping files of the change are the only paths left out: another
+    change's findings, the change's spec, code and an untracked file still move
+    the identity, and a missing change name stays the explicit unknown.
+    """
+    repair_world(world)
+    base = stage2._checked_tree(world.root, "demo")
+    assert isinstance(base, str)
+    assert stage2._checked_tree(world.root, None) is None
+    for name in ("plan.md", "findings.md"):
+        path = world.root / "plans" / "changes" / "demo" / name
+        path.write_text(path.read_text(encoding="utf-8") if path.exists() else "", encoding="utf-8")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\nrunner bookkeeping\n")
+    assert stage2._checked_tree(world.root, "demo") == base, "the change's own bookkeeping moved the identity"
+    assert stage2.worktree_tree(world.root) != base
+    for relative in (
+        "plans/changes/other/findings.md",
+        "plans/changes/demo/spec.md",
+        "tests/test_a.py",
+        "notes.txt",
+    ):
+        path = world.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = path.read_bytes() if path.exists() else None
+        path.write_text((original or b"").decode("utf-8") + "\nmoved\n", encoding="utf-8")
+        assert stage2._checked_tree(world.root, "demo") != base, f"{relative} was hidden from the comparison"
+        if original is None:
+            path.unlink()
+        else:
+            path.write_bytes(original)
+    assert stage2._checked_tree(world.root, "demo") == base
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "red-pytest",
+        "targeted-timeout",
+        "crash-mid-check",
+        "pytest-launch-failure",
+        "tree-moved",
+    ],
+)
+def test_slip_history_never_records_unfinished_targeted_green(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 4. Planted fault: a red, interrupted, timed-out or failed-to-start targeted check,
+    or one whose inputs moved under it, leaves green comparable evidence in the history.
+
+    The cheap checks run the same command kinds before the targeted check, so
+    every plant answers the targeted check's own pytest launch - the second one -
+    and leaves the preparation green.
+    """
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+
+    def at_targeted(_command: list[str]) -> bool:
+        """Whether this launch is the targeted check's own pytest, not the preparation's."""
+        return len(commands.of("pytest")) == 2
+
+    if case == "red-pytest":
+        commands.outcomes["pytest"] = lambda _command: RED_PYTEST if at_targeted(_command) else None
+        assert world.run("repair") != 0
+    elif case == "targeted-timeout":
+        # The targeted body contains the timeout: the check completes red, and a
+        # red completion is no green predecessor.
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.StepTimedOut("the runner's targeted-test limit stopped pytest") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    elif case == "crash-mid-check":
+        # An exception the targeted body cannot contain escapes `run_targeted`
+        # between its begin and its finish: the check never completes, so no end
+        # row can exist.
+        commands.outcomes["pytest"] = lambda _command: (
+            RuntimeError("the targeted check crashed mid-run: planted") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    elif case == "pytest-launch-failure":
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.CallFailed("pytest could not be started: planted") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    else:  # tree-moved
+
+        def move(_command: list[str]) -> tuple[int, str]:
+            # A file no test reads: the later fixed-code proof clones the tree as
+            # the check left it, so the moved byte must not break any test.
+            if at_targeted(_command):
+                (world.root / "notes.txt").write_text("moved while the check ran\n", encoding="utf-8")
+            return (0, "")
+
+        commands.outcomes["pytest"] = move
+        assert world.run("repair") == 0
+
+    events = slip_history(world)
+    starts = [event for event in events if event["event"] == "run_start"]
+    ends = [event for event in events if event["event"] == "run_end"]
+    assert len(starts) == 1 and starts[0]["check_kind"] == "targeted", events
+    if case == "crash-mid-check":
+        assert ends == [], "interrupted targeted work grew a completion"
+    elif case == "tree-moved":
+        assert len(ends) == 1 and ends[0]["verdict"] == "green"
+        assert ends[0]["tree_id"] != starts[0]["tree_id"], "moved inputs kept comparison evidence"
+    else:
+        assert len(ends) == 1 and ends[0]["verdict"] == "red", "unfinished targeted work ended green"
+
+
+def test_slip_measurement_failure_preserves_verification_result(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 11. Planted fault: a refused history write changes the attempt's verdict, or it
+    disappears without a diagnostic."""
+    repair_world(world)
+    refused = "the history file refuses the write: planted"
+
+    def refuse(_event: dict, _destination: Path | None = None) -> None:
+        raise verify_duration.StorageUnusable(refused)
+
+    monkeypatch.setattr(verify_duration, "append_event", refuse)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0, "a measurement failure must not turn a green attempt red"
+    assert commands.of("pytest"), "the checks never ran because of the refused write"
+    assert slip_history(world) == [], "a refused write left history rows behind"
+    seen = capsys.readouterr()
+    # The refused appends are reported without blocking in the passing attempt's
+    # scope record: the plan's time line carries it beside the verdict word.
+    evidence = (
+        seen.out + seen.err + world.plan.read_text(encoding="utf-8") + (world.text() if world.findings.exists() else "")
+    )
+    assert refused in evidence and "reported without blocking" in evidence, evidence[-2000:]
+
+
+def test_targeted_history_requires_end_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a targeted green whose tree moved during the check, followed by a red
+    full run of its starting tree, is counted as a slip.
+
+    Both runs are written by the production writers: the targeted check through
+    `begin_targeted_run`/`finish_targeted_run` with a different tree at its
+    end, the full run through the shell's own `start` and `end` operations with
+    the runner-owned context. The reader cannot say which tree the targeted
+    check proved, so both runs are incomplete and nothing counts as a slip.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    (repo / "decisions").mkdir()
+    (repo / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    receipt = verify_duration.begin_targeted_run(repo, "demo", "tree-a")
+    assert receipt.run_id is not None, receipt.notes
+    assert verify_duration.finish_targeted_run(receipt, "tree-b", "green") == []
+    for name, value in verify_duration.full_run_context("tree-a", "demo").items():
+        monkeypatch.setenv(name, value)
+    assert verify_duration.main(["start", "--job", "verify", "--placement", "local"]) == 0
+    run_id = capsys.readouterr().out.strip()
+    assert verify_duration.main(["end", "--run", run_id, "--start", "0.0", "--end", "1.0", "--verdict", "red"]) == 0
+    capsys.readouterr()
+    for name in (verify_duration.KIND_ENV, verify_duration.CHANGE_ENV, verify_duration.TREE_ENV):
+        monkeypatch.delenv(name)
+
+    assert verify_duration.main(["slips"]) == 1
+    out = capsys.readouterr().out
+    assert "slips: 0; incomplete/not countable runs: 2" in out, out
 
 
 def test_scheduled_refusal_retains_cheap_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29356,6 +29664,29 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    commands = targeted_mode(monkeypatch)
+    world.script(claude=[dict(COVERED_IMPLEMENT)])
+    assert world.run("implement") == 0, world.text()
+    assert commands.of("gate")
+    assert slip_history(world) == []
+
+
+def test_default_full_attempt_uses_named_comparison_context(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default full attempt supplies the same comparison context as other full checks."""
+    world.script(make=[{"stdout": "green"}])
+    calls = []
+    original = stage2.verify_duration.full_run_context
+
+    def context(tree: str | None, change: str | None) -> dict[str, str]:
+        calls.append((tree, change))
+        return original(tree, change)
+
+    monkeypatch.setattr(stage2.verify_duration, "full_run_context", context)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert calls == [(stage2._checked_tree(world.root, "demo"), "demo")]
 
 
 def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
