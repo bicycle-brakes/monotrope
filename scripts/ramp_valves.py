@@ -118,9 +118,10 @@ def _roster_handles() -> set[str]:
     karte = REPO_ROOT / "provenance.yaml"
     if not karte.exists():
         return set()
-    try:
-        import yaml
+    import venv_guard  # noqa: F401
+    import yaml
 
+    try:
         daten = yaml.safe_load(karte.read_text(encoding="utf-8")) or {}
     except Exception:
         return set()
@@ -241,11 +242,9 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "2026-12-31",
     ),
     # --- 2ee triage 2026-09-19: demotions from the mapping (wave 2) --------
-    "agents-evidence-contract": (
-        "RB-A1: the evidence clause is byte-identical in every agent definition",
-        "tests/test_agents.py::test_every_agent_carries_the_evidence_contract",
-        "2026-11-30",
-    ),
+    # "agents-evidence-contract" (RB-A1) closed on 2026-11-18: the clause test in
+    # tests/test_regelwerk.py compares section 6 with every agent definition; rule
+    # set 7.0.0 records it.
     "agents-tool-scopes": (
         "RB-A2: read-only agents carry no shell, executors declare their scope",
         "tests/test_agents.py::test_read_only_agents_have_no_bash",

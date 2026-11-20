@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import venv_guard  # noqa: F401
 import yaml
 
 PROVIDER = "opencode-go"

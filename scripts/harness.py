@@ -54,6 +54,7 @@ from typing import Any
 import check_adr_answers as gate
 import check_frontmatter_current
 import time_records
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

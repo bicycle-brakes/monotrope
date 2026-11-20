@@ -20,6 +20,7 @@ red elsewhere, or it would be a ratchet over an empty set.
 from __future__ import annotations
 
 import argparse
+import ast
 import functools
 import json
 import os
@@ -30,13 +31,115 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import yaml
+# This file lives one directory below `scripts/`, so its own directory is what Python puts first on the path:
+# the guard and `_verdict` are found only once `scripts/` is added.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import venv_guard  # noqa: E402, F401
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 MANIFEST = Path(__file__).resolve().parent / "manifest.yaml"
-
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import yaml  # noqa: E402
 from _verdict import Verdict  # noqa: E402
+
+THIRD_PARTY = frozenset({"yaml", "jinja2", "pydantic"})
+
+
+def _is_guard(statement: ast.stmt) -> bool:
+    return isinstance(statement, ast.Import) and len(statement.names) == 1 and statement.names[0].name == "venv_guard"
+
+
+def _third_party(statement: ast.stmt) -> list[str]:
+    if isinstance(statement, ast.Import):
+        names = [alias.name.split(".")[0] for alias in statement.names]
+    elif isinstance(statement, ast.ImportFrom) and statement.level == 0 and statement.module:
+        names = [statement.module.split(".")[0]]
+    else:
+        return []
+    return [name for name in names if name in THIRD_PARTY]
+
+
+def unguarded_imports(source: str) -> list[tuple[int, str]]:
+    """Direct imports of a guarded dependency with no `import venv_guard` before them.
+
+    A guard counts when it is a statement of the same block or of an enclosing one and stands earlier: a comment,
+    a string or a guard buried in a branch that does not enclose the import is no guard.
+    """
+    problems: list[tuple[int, str]] = []
+
+    def blocks(statement: ast.stmt) -> list[list[ast.stmt]]:
+        found = [getattr(statement, field) for field in ("body", "orelse", "finalbody") if hasattr(statement, field)]
+        found += [handler.body for handler in getattr(statement, "handlers", [])]
+        found += [case.body for case in getattr(statement, "cases", [])]
+        return [block for block in found if isinstance(block, list)]
+
+    def walk(block: list[ast.stmt], guarded: bool) -> None:
+        for statement in block:
+            if _is_guard(statement):
+                guarded = True
+            elif not guarded:
+                problems.extend((statement.lineno, name) for name in _third_party(statement))
+            for inner in blocks(statement):
+                walk(inner, guarded)
+
+    walk(ast.parse(source).body, False)
+    return problems
+
+
+def _is_path_setup(statement: ast.stmt) -> bool:
+    """`sys.path.insert(...)` / `sys.path.append(...)`: the one effect a nested script needs to reach the guard."""
+    if not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)):
+        return False
+    function = statement.value.func
+    return (
+        isinstance(function, ast.Attribute)
+        and function.attr in ("insert", "append")
+        and ast.unparse(function.value) == "sys.path"
+    )
+
+
+def _evaluated_call(statement: ast.stmt) -> bool:
+    """Find calls evaluated at definition time, excluding deferred function bodies."""
+
+    class Calls(ast.NodeVisitor):
+        found = False
+
+        def visit_Call(self, _node: ast.Call) -> None:
+            self.found = True
+
+        def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+            for part in [*node.decorator_list, *node.args.defaults, *node.args.kw_defaults]:
+                if part is not None:
+                    self.visit(part)
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+    visitor = Calls()
+    visitor.visit(statement)
+    return visitor.found
+
+
+def effects_before_guard(source: str) -> list[int]:
+    """Lines of top-level statements with an effect that stand before the script's top-level guard (Q-4).
+
+    A restart replays the whole entry script, so anything that prints or acts before the guard runs twice. Imports,
+    docstrings, definitions and plain assignments without evaluated calls, and `sys.path` setup, are no effect.
+    A script whose guard is not a
+    top-level statement (a lazy import inside a function) has no start-up position to check.
+    """
+    lines: list[int] = []
+    for statement in ast.parse(source).body:
+        if _is_guard(statement):
+            return lines
+        no_effect = ast.Import | ast.ImportFrom | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Assign
+        harmless = (
+            isinstance(statement, no_effect | ast.AnnAssign)
+            or (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
+            or _is_path_setup(statement)
+        )
+        if not harmless or (not _is_path_setup(statement) and _evaluated_call(statement)):
+            lines.append(statement.lineno)
+    return []
+
 
 # ---------------------------------------------------------------------------
 # What does not travel, and why
