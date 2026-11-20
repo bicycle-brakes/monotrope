@@ -612,12 +612,20 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/journal-citation-gate/decisions.md`](changes/journal-citation-gate/decisions.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/journal-citation-gate/findings.md`](changes/journal-citation-gate/findings.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/journal-citation-gate/plan.md`](changes/journal-citation-gate/plan.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/journal-citation-gate/research.md`](changes/journal-citation-gate/research.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/journal-citation-gate/spec.md`](changes/journal-citation-gate/spec.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/loop-record-other-worktree/decisions.md`](changes/loop-record-other-worktree/decisions.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/findings.md`](changes/loop-record-other-worktree/findings.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/plan.md`](changes/loop-record-other-worktree/plan.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/research.md`](changes/loop-record-other-worktree/research.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/spec.md`](changes/loop-record-other-worktree/spec.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
+| [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
+| [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
@@ -628,6 +636,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/research.md`](changes/review-loop-deep-a/research.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/spec.md`](changes/review-loop-deep-a/spec.md) | draft | partial | 2026-10-25 | to be filed |
+| [`changes/slip-counter/decisions.md`](changes/slip-counter/decisions.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/findings.md`](changes/slip-counter/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/plan.md`](changes/slip-counter/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/research.md`](changes/slip-counter/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slip-counter/spec.md`](changes/slip-counter/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
@@ -640,4 +653,15 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/venv-guard/decisions.md`](changes/venv-guard/decisions.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/findings.md`](changes/venv-guard/findings.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/plan.md`](changes/venv-guard/plan.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/research.md`](changes/venv-guard/research.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/venv-guard/spec.md`](changes/venv-guard/spec.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/verify-cheap-before-admission/decisions.md`](changes/verify-cheap-before-admission/decisions.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/findings.md`](changes/verify-cheap-before-admission/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/plan.md`](changes/verify-cheap-before-admission/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/research.md`](changes/verify-cheap-before-admission/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/seconds-gate-audit.md`](changes/verify-cheap-before-admission/seconds-gate-audit.md) | draft | none | 2026-11-14 | coding-harness-bxxt.6 |
+| [`changes/verify-cheap-before-admission/spec.md`](changes/verify-cheap-before-admission/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |

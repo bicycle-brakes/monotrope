@@ -540,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # local gates, cheap first; stop at the first blocking failure
+make verify     # local gates; every cheap gate first, admission only for protected work
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -552,21 +552,45 @@ make index      # regenerate plans/INDEX.md
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
 
-Local verification orders selected gates by declared cost (`seconds` before
-`minutes`) and stops at the first blocking failure. It names every remaining
-selected gate as not run because of that failure; a red run is therefore not
-a complete check. Hosted CI and `--ci` continue through all selected gates.
-See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
+Local verification runs in two phases (`scripts/verify_run.py`, the one
+scheduler behind `verify_all.sh` and the Stage-2 checks). The **unprotected**
+gates — every selected `seconds` gate without the explicit shared-state mark —
+execute first, all of them, and every one's diagnostic is collected even past
+a blocking red, so a lint failure never hides behind a queue wait again. Only
+when the cheap phase holds no blocking red does the run take **one admission**
+for the protected work — the `minutes` gates and the `seconds` gates marked
+`needs_admission` — where a local run stops at its first blocking failure and
+names the remaining selected gates as not run. A selection with no protected
+gate, such as the `docs` job, never waits for the slot at all. When admission
+follows a green cheap phase and the tree is unchanged in the meantime, the
+cheap results are reused instead of executed twice; a changed tree reloads
+the gate list, reselects and reruns the complete cheap pass inside the held
+admission, so stale results cannot survive a reclassification. A run with
+protected work measures the tree around its cheap pass: a tree that cannot be
+measured (no named HEAD, an unreadable entry) or that changes while the cheap
+gates run refuses the run with a request to rerun, names what moved and the
+gates not run; unmeasured cheap results are never relied on. A selection
+without protected work, and a cheap pass that ended blocking red, rely on no
+baseline and measure none. Hosted CI and
+`--ci` continue through all selected gates of both phases whatever failed
+before. See the [gate catalog](governance/gate-catalog.md) for costs,
+admission marks and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Before its
-gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+**One admission per user and machine** (bead coding-harness-p6mu). Only
+protected work enters it: before its protected gates, the shared scheduler
+hands the run to `scripts.verify_lock` — protected work
 of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the three-lane trial's
-concurrent full checks cannot happen again. Waiters are admitted in
+— shared across repositories and worktrees, so the protected gates of
+concurrent full checks never run together again, as they did in the three-lane
+trial. The admission does not serialise the rest: the seconds gates and the
+runner's full-mode preparation (formatting, its cheap checks) run in every
+lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+records why that is safe today and what it did not measure; free disk space
+is not checked (bead coding-harness-87b0). Waiters are admitted in
 registration order; while waiting, an entry logs its wait immediately and
 every five minutes, naming the holder's process id, command and start time.
 A nested protected entry — a check descended from a live admission — carries
@@ -589,14 +613,62 @@ executing check. Hosted CI is untouched: its gate steps never enter the
 runner's shell path, and nothing disables admission because CI is set.
 
 Verification durations are appended locally to `verify-duration.jsonl` in
-that shared state directory. Each run records gate and execution durations,
-outcomes, revision, configuration and machine context; admission wait is
-reported separately, with inherited waits marked as reused. Read summaries
-with `python3 -m scripts.verify_duration report`, or inspect one run with
-`python3 -m scripts.verify_duration report --run <run-id>`. Interrupted runs
-remain incomplete, and malformed rows are diagnosed. Unusable measurement
-storage warns without changing gate execution or verdicts; raw history stays
-outside Git.
+that shared state directory. One invocation is one run identity spanning the
+cheap and the protected phase: every executed gate is recorded, including a
+cheap gate run twice after a changed-tree recheck, and a gate's seconds sum
+its active segments before and after admission — queue and memory waits are
+reported separately, never as execution time, with inherited waits marked as
+reused. A run that finished on the cheap phase alone states explicitly that
+no admission was requested; interrupted runs remain incomplete, and malformed
+rows are diagnosed. Read summaries with `python3 -m scripts.verify_duration
+report`, or inspect one run with `python3 -m scripts.verify_duration report
+--run <run-id>`. Unusable measurement storage warns without changing gate
+execution or verdicts; raw history stays outside Git.
+
+A slip is one completed red local full verification run that answers the
+immediately preceding completed check of the same repository, change, checked
+tree and gate configuration when that check is a green targeted check (bead
+coding-harness-bxxt.7). The count is derived, never stored. The runner's
+targeted check (repair only) records its start and end, each with the checked
+tree, in `verify-targeted.jsonl` beside `verify-duration.jsonl`; the runner's
+admitted full check (`full_verify`) carries its comparison context in
+runner-owned environment variables that the shell's start record captures as
+additive version-1 fields with a version-2 marker, so older duration readers
+still read the history and never count a targeted check as a full duration.
+`python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change
+NAME]` combines both histories and reports two numbers side by side: the slip
+count and the incomplete or not countable runs. Checks are ordered by UTC
+completion, strictly earlier-than; equal completion times establish no order
+and make both runs incomplete. An intervening check of the same identity ends
+the pairing, so each red run counts at most once and only for its immediate
+predecessor. A potentially matching pair with a gap on either side — a missing
+end, conflicting records, a moved tree, an unknown identity, an unpaired
+completion, a full run still running — is counted as incomplete on each
+selected side, never as a slip or a clean non-slip. A full green immediately
+followed by a full red of one identity is reported separately as a flaky-test
+signal (undecided when an uncertain full run may stand between them). Legacy
+duration runs and change-less full runs are reported on an outside-the-count
+line and never make the report partial; legacy runs that name no repository
+appear as unattributed outside runs. A completion without a start is outside
+the count before the first version-2 comparison record and partial after it.
+Missing history is unavailable, never a counted zero: once the duration
+history holds a version-2 record, a missing targeted history is unavailable,
+and a targeted history without a duration history is too. A scope that selects
+no run at all (a misspelled `--change`, another checkout, an empty window)
+reads "0 runs selected, no statement possible" with exit 1. Exit 0 means
+complete evidence, 1 partial or unavailable evidence, 2 an invalid interval or
+refused storage. Reading never appends to either history, and no slip event,
+counter or consumed marker exists; trees are compared by contents and modes,
+never by commit identity, which the checkpoint commit, stamping and audit
+finalization move between the two checks. The comparison tree leaves out the
+change's own `plan.md` and `findings.md`, where the runner's and phase 6's
+bookkeeping lands between the checks; an edit to those two files in between
+goes unseen and can count one slip too many. An edit to another change file,
+such as `spec.md`, `decisions.md` or `research.md`, moves the comparison tree
+between the checks; the pair then no longer matches and a slip can go
+uncounted. The full run records its tree
+only at its start, so a tree that moved during a red full run can also count
+one slip too many (follow-up bead coding-harness-cf9h).
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has

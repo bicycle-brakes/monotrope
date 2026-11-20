@@ -38,6 +38,7 @@ import time
 import types
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -59,6 +60,7 @@ import stage2  # noqa: E402
 import stage2_go  # noqa: E402
 import stage2_runs  # noqa: E402
 import time_records  # noqa: E402
+import verify_duration  # noqa: E402
 import verify_lock  # noqa: E402
 from atomic_test_log import read_records  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
@@ -98,6 +100,19 @@ OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 # The real bash, resolved when this module loads, before any test puts its stand-in first on PATH:
 # the stand-in hands every non-document bash call to it, wherever the host keeps bash.
 REAL_BASH = shutil.which("bash") or "/bin/bash"
+# The real sh, likewise. The world's `sh` stand-in answers green without running the command; a
+# test whose gate must really run launches its gates under this shell (`_real_gate_shell`).
+REAL_SH = shutil.which("sh") or "/bin/sh"
+# The world's document gate, a seconds member of the verify job that the full check launches itself;
+# the `bash` stand-in answers exactly this vector from the scenario's `docs` steps.
+DOCS_ARGV = ["scripts/verify_all.sh", "--job", "docs"]
+# The world's two gate commands as its gate list declares them. Each starts as `sh -c <command>`
+# (decisions.md Q-9); the `sh` stand-in hands these, and any other `make` gate, to the real sh, so
+# `make` and the `bash` document vector reach their own stand-ins.
+WORLD_GATE_COMMANDS = ["make verify", " ".join(["bash", *DOCS_ARGV])]
+# The launch vectors of those two gates, as the runner hands them to `launch`.
+FULL_CHECK_ARGV = ["sh", "-c", WORLD_GATE_COMMANDS[0]]
+DOCS_GATE_ARGV = ["sh", "-c", WORLD_GATE_COMMANDS[1]]
 
 STAND_IN = """#!@PYTHON@
 # stage2-stand-in: records its call, prints canned output, contacts nothing.
@@ -137,15 +152,34 @@ asked = RETIRED & set(scenario).union(
 if asked:
     sys.stderr.write("stage2-stand-in: retired timing keys are not served: " + ", ".join(sorted(asked)) + "\\n")
     sys.exit(97)
-if alias == "bash":
-    # No runner verb launches bash any more: every gate goes through `sh -c` in the shared
-    # gate executor, so a bash call in a test is never scripted - it runs the real bash, and
-    # it neither consumes a scripted step nor answers green for a command no test scripted.
+# The world's gate list declares its document subset as the gate `bash scripts/verify_all.sh
+# --job docs` (bead coding-harness-bxxt.6): the full check's scheduler launches it under `sh -c`
+# before the protected `make verify`, the `sh` stand-in below hands it to the real sh, and its steps
+# are keyed `docs`, so no other bash call consumes them. The vector comes from the test module's
+# `DOCS_ARGV` (`World.script` writes it).
+docs_argv = scenario.get("_docs_argv") or []
+docs_check = alias == "bash" and bool(docs_argv) and argv == docs_argv
+if alias == "bash" and not docs_check:
+    # No runner verb launches bash itself: any other bash call runs the real bash, and it neither
+    # consumes a scripted step nor answers green for a command no test scripted.
     # A step scripted under the key `bash` is a test mistake: end loudly instead of dropping it.
     if scenario.get("bash"):
         sys.stderr.write("stage2-stand-in: a scripted bash step is not served\\n")
         sys.exit(97)
     os.execv(scenario["_bash"], [scenario["_bash"], *argv])
+# Every gate starts as `sh -c <command>` (decisions.md Q-9), the world's own gates included. A gate
+# that names a program with its own stand-in here (any `make` gate, the `bash` document vector)
+# runs under the real sh, so that program's stand-in records the call and serves its scripted `make`
+# or `docs` steps exactly as the shell entry point's `sh` would reach it. Any other `sh` call stays
+# this stand-in's: it records and answers from the scenario's `sh` steps.
+world_gates = scenario.get("_world_gates") or []
+if (
+    alias == "sh"
+    and len(argv) == 2
+    and argv[0] == "-c"
+    and (argv[1] in world_gates or argv[1].split()[:1] == ["make"])
+):
+    os.execv(scenario["_sh"], [scenario["_sh"], *argv])
 log = here / "calls.jsonl"
 
 
@@ -160,7 +194,7 @@ def agent_settings_text():
 previous = read_records(log)
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
-steps = scenario.get(alias, [])
+steps = scenario.get("docs" if docs_check else alias, [])
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
 # A step that names a `model` is kept for the call that asks for that model, so
@@ -179,6 +213,8 @@ def fits(step_, a):
 assigned = []
 for call_ in previous:
     if call_["name"] != alias or call_.get("kind"):
+        continue
+    if docs_check != (bool(docs_argv) and call_["argv"] == docs_argv):
         continue
     for k in range(len(steps)):
         if k not in assigned and fits(steps[k], call_["argv"]):
@@ -352,7 +388,14 @@ class World:
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
         since = len(read_records(log))
-        scenario = {**steps, "_since": since, "_bash": REAL_BASH}
+        scenario = {
+            **steps,
+            "_since": since,
+            "_docs_argv": DOCS_ARGV,
+            "_bash": REAL_BASH,
+            "_sh": REAL_SH,
+            "_world_gates": WORLD_GATE_COMMANDS,
+        }
         (self.bin / "scenario.json").write_text(json.dumps(scenario), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
@@ -660,7 +703,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "paths:\n  - {prefix: 'plans/', frontmatter: required}\nexcluded: []\n", encoding="utf-8"
     )
     (root / "scripts").mkdir()
-    for script in (Path(plans_registry.__file__).name, "_verdict.py"):
+    for script in (Path(plans_registry.__file__).name, "_verdict.py", "venv_guard.py"):
         shutil.copy(REPO_ROOT / "scripts" / script, root / "scripts" / script)
 
     home = tmp_path / "home"
@@ -714,6 +757,52 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+
+    # The one gate list of the test world (bead coding-harness-bxxt.6): the runner's checks run
+    # through the shared two-phase scheduler, so the world declares its own gates. The full check
+    # stands as a protected `minutes` gate whose command is the scripted `make verify` stand-in,
+    # the document subset as an unprotected `seconds` gate that matches the stand-in's document
+    # vector — a test that needs another shape rewrites this file and commits the rewrite.
+    (root / "decisions").mkdir()
+    (root / "decisions" / "gates.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "tools": {"python": ["3.12"]},
+                "gates": [
+                    {
+                        "id": "verify-all",
+                        "title": "The full check",
+                        "job": "verify",
+                        "command": "make verify",
+                        "enforcement": "block",
+                        "cost": "minutes",
+                        "floor": True,
+                        "needs_tracker": False,
+                        "needs_history": False,
+                        "placement": "both",
+                        "reason": "The world's stand-in for the repository's whole full check.",
+                    },
+                    {
+                        "id": "docs-all",
+                        "title": "The document subset",
+                        "job": "verify",
+                        "subsets": ["docs"],
+                        "command": "bash scripts/verify_all.sh --job docs",
+                        "enforcement": "block",
+                        "cost": "seconds",
+                        "floor": True,
+                        "needs_tracker": False,
+                        "needs_history": False,
+                        "placement": "both",
+                        "reason": "The world's stand-in for the document subset check.",
+                    },
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
     git(root, "init", "--quiet", "--initial-branch=main")
     git(root, "add", "-A")
@@ -2464,6 +2553,24 @@ def test_stamp_tests_pin_the_date_they_compare() -> None:
 # ---------------------------------------------------------------------------
 
 
+def uncovered_implementation(world: World) -> None:
+    """One model edit without a linked test: the targeted coverage is not safe, so the full check runs.
+
+    The full check's scheduler (bead coding-harness-bxxt.6) is reached only through this fallback since
+    the targeted implement route; the passing `make` stand-in answers its protected gate.
+    """
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+
+
 def successful_implementation(world: World, *, stdout: str = "implemented") -> None:
     """One covered model edit — code and the test that reaches it — a measured plan line.
 
@@ -3134,6 +3241,43 @@ def test_scripted_process_names_an_unserved_member(monkeypatch: pytest.MonkeyPat
         subprocess.Popen(["doubled"]).wait()
 
 
+def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
+    """A genuine admission holder on the world's state root: a supervised probe child.
+
+    The world fixture pins the shared state root and a floor of zero, so the
+    holder queues exactly where the runner's own checks queue — never on this
+    machine's real lock.
+    """
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "scripts.verify_lock",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, pathlib, time; "
+            "pathlib.Path(os.environ['HOLDER_READY']).write_text(str(os.getpid())); "
+            f"time.sleep({seconds})",
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "HOLDER_READY": str(ready)},
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _holder_acquired(ready: Path, seconds: float = 10.0) -> int:
+    """Wait until the holder owns its admission and answer the holder pid it published."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if ready.exists():
+            return int(ready.read_text(encoding="utf-8"))
+        time.sleep(0.05)
+    raise AssertionError("the holder never acquired its admission")
+
+
 def test_verification_admission_is_outside_execution_timeout(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     # Criterion 4 of the machine lock. Planted fault: the admission wait counted against the
     # step limit — a short passing check times out after queueing — or the limit dropped, so
@@ -3152,11 +3296,11 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     programs = ScriptedPrograms(
         monkeypatch,
         clock,
-        [(lambda command: command == ["make", "verify"], {"duration": 1.0, "stdout": "green\n"})],
+        [(lambda command: command == ["sh", "-c", "make verify"], {"duration": 1.0, "stdout": "green\n"})],
     )
     assert stage2.verify_attempt(world.root, world.plan) == []
     assert admissions == ["queued"], "the verification ran without its admission"
-    (make,) = programs.waits(["make", "verify"])
+    (make,) = programs.waits(["sh", "-c", "make verify"])
     assert make["timeout"] == 2.0, "the admission wait consumed the step limit"
     assert make["outcome"] == "completed", "a timely check failed because it queued"
 
@@ -3164,13 +3308,13 @@ def test_verification_admission_is_outside_execution_timeout(world: World, monke
     programs = ScriptedPrograms(
         monkeypatch,
         clock,
-        [(lambda command: command == ["make", "verify"], {"duration": 30.0, "stdout": "too late"})],
+        [(lambda command: command == ["sh", "-c", "make verify"], {"duration": 30.0, "stdout": "too late"})],
     )
     problems = stage2.verify_attempt(world.root, world.plan)
-    (make,) = programs.waits(["make", "verify"])
+    (make,) = programs.waits(["sh", "-c", "make verify"])
     assert make["timeout"] == 2.0, "an over-budget check was handed more than its allowance"
     assert make["outcome"] == "timeout"
-    (drain,) = [row for row in programs.of(["make", "verify"]) if row["outcome"] == "drained"]
+    (drain,) = [row for row in programs.of(["sh", "-c", "make verify"]) if row["outcome"] == "drained"]
     assert drain["timeout"] == stage2.KILL_DRAIN_SECONDS, "the stop's cleanup drain is unbounded"
     assert len(problems) == 1 and "did not finish" in problems[0], problems
 
@@ -3222,6 +3366,213 @@ def test_local_checks_preserve_nested_admission(world: World, monkeypatch: pytes
     assert verify_lock.LOCK_ENV not in gate_env, "the draft path claimed the inherited admission"
     assert verify_lock.TOKEN_ENV not in gate_env, "the draft path carried the admission token"
     assert gate_env["XDG_STATE_HOME"] == str(world.state), "the draft path lost the shared state root"
+
+
+def _gate_launch(command: list[str]) -> str | None:
+    """The gate command a scheduler launch started, or None for any other launch (a tool, git, a model).
+
+    Every gate starts as `sh -c <command>` (decisions.md Q-9) — the world's full check as
+    `sh -c "make verify"`, its document subset as `sh -c "bash scripts/verify_all.sh --job docs"`.
+    """
+    if command[1:2] == ["-c"]:
+        return command[2]
+    return None
+
+
+def _real_gate_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Launch every gate under the real sh instead of the world's stand-in.
+
+    Every gate runs under `sh -c` (`verify_run.shell_argv`, loop row L3-4, decisions.md Q-9); the
+    world's `sh` stand-in records any gate but the world's own two and answers green without running
+    it, so a test that reads what the gate wrote must reach the real shell. The vector keeps its `-c`
+    shape, so `_gate_launch` still reads it as a gate.
+    """
+    monkeypatch.setattr(stage2.verify_run, "shell_argv", lambda resolved: [REAL_SH, "-c", resolved])
+
+
+def test_full_and_draft_checks_share_before_admission_scheduler(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 10 of the cheap-before-admission change. Planted fault: one of the three consumers —
+    # the full attempt check, the repair's full fallback, the draft's document check — keeps an outer
+    # whole-run admission, wraps the whole check in one launch instead of the per-gate callback, or
+    # loses its job's gate selection.
+    marker = world.state / "quick.ran"
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].insert(
+        0,
+        {
+            "id": "quick-check",
+            "title": "The cheap gate",
+            "job": "verify",
+            "command": f"echo quick > {marker}",
+            "enforcement": "block",
+            "cost": "seconds",
+            "floor": True,
+            "needs_tracker": False,
+            "needs_history": False,
+            "placement": "both",
+            "reason": "The cheap gate a consumer must run before it asks for the machine slot.",
+        },
+    )
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a cheap gate joins the verify job")
+
+    order: list[str] = []
+    admissions: list[list[str]] = []
+    real_hold = stage2.verify_lock.hold_admission
+    real_launch = stage2.launch
+
+    def hold_admission(command):
+        admissions.append(list(command))
+        order.append("admission")
+        return real_hold(command)
+
+    def launch(command, root, env, *rest, **kwargs):
+        gate = _gate_launch(command)
+        if gate is not None:
+            order.append(f"gate: {gate}")
+        return real_launch(command, root, env, *rest, **kwargs)
+
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+    monkeypatch.setattr(stage2, "launch", launch)
+    _real_gate_shell(monkeypatch)
+    cheap_order = [
+        f"gate: echo quick > {marker}",
+        "gate: bash scripts/verify_all.sh --job docs",
+        "admission",
+        "gate: make verify",
+    ]
+
+    # 1. The full attempt: every cheap gate first, then one admission for the protected set.
+    uncovered_implementation(world)
+    assert world.run("implement") == 0
+    assert order == cheap_order, order
+    assert admissions == [[sys.executable, *sys.argv]], "one admission, held by the scheduler, naming the full check"
+    assert marker.read_text(encoding="utf-8").strip() == "quick"
+
+    # 2. The repair's full fallback runs the same scheduler with the same verify selection.
+    order.clear()
+    admissions.clear()
+    marker.unlink(missing_ok=True)
+    (world.root / "verification-scope.txt").write_text("requires full verification\n", encoding="utf-8")
+    env = stage2.runner_env(
+        stage2.foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+            }
+        ),
+        world.root,
+    )
+    problems = stage2._targeted_body(world.root, world.plan, env, None, None, None, None, [], "HEAD", [])
+    assert problems == [], problems
+    assert order == cheap_order, order
+    assert admissions == [[sys.executable, *sys.argv]], "the fallback took an admission of its own"
+    assert marker.exists(), "the fallback lost the verify selection's cheap gate"
+    (world.root / "verification-scope.txt").unlink()
+
+    # 3. The draft's document check: the docs subset only — cheap, no admission, no full check. Since
+    # bead coding-harness-0swp the draft runs the registry's local document gates directly, outside
+    # any admission, so the scheduler's verify selection never reaches it.
+    order.clear()
+    admissions.clear()
+    marker.unlink(missing_ok=True)
+    forget_the_run(world)
+    draft_world(world)
+    passing_draft(world)
+    assert world.run("draft") == 0
+    assert "gate: make verify" not in order and order, order
+    assert admissions == [], "the document subset queued for a slot it does not need"
+    assert not marker.exists(), "the draft ran the verify selection instead of the docs subset"
+
+
+def test_before_admission_execution_budget_is_shared_and_wait_free(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 10 of the cheap-before-admission change. Planted fault: the per-gate callback resets
+    # the runner's step allowance for every gate, or the queue wait is charged to it — a slow cheap
+    # gate plus a real queue wait would starve the protected check either way.
+    marker = world.state / "cheap-done"
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].insert(
+        0,
+        {
+            "id": "slow-check",
+            "title": "The slow cheap gate",
+            "job": "verify",
+            # The world's PATH holds only the stand-ins and git, so `sleep` is named by its path.
+            "command": f"/bin/sleep 1.5 && echo done > {marker}",
+            "enforcement": "block",
+            "cost": "seconds",
+            "floor": True,
+            "needs_tracker": False,
+            "needs_history": False,
+            "placement": "both",
+            "reason": "The cheap gate whose active seconds the shared allowance must survive.",
+        },
+    )
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a slow cheap gate joins the verify job")
+
+    ready = world.state / "holder-ready-budget"
+    holder = _real_holder(ready, seconds=30.0)
+    deadlines: list[float] = []
+    waits: list[float] = []
+    real_launch = stage2.launch
+    real_hold = stage2.verify_lock.hold_admission
+
+    def launch(command, root, env, *rest, **kwargs):
+        if _gate_launch(command) is not None:
+            deadlines.append(kwargs.get("deadline"))
+        return real_launch(command, root, env, *rest, **kwargs)
+
+    @contextlib.contextmanager
+    def hold_admission(command):
+        # The wait happens when the admission is entered, not when it is requested.
+        entered = time.monotonic()
+        with real_hold(command) as owned:
+            waits.append(time.monotonic() - entered)
+            yield owned
+
+    def release_when_queued() -> None:
+        # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
+        # for a real second before the holder lets go.
+        queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not (queue.is_dir() and any(queue.iterdir())):
+            time.sleep(0.02)
+        time.sleep(1.0)
+        holder.terminate()
+
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
+    monkeypatch.setattr(stage2, "launch", launch)
+    _real_gate_shell(monkeypatch)
+    monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+    releaser = threading.Thread(target=release_when_queued)
+    releaser.start()
+    try:
+        _holder_acquired(ready)
+        uncovered_implementation(world)
+        assert world.run("implement") == 0, "the queue wait starved the shared allowance"
+        assert marker.read_text(encoding="utf-8").strip() == "done"
+    finally:
+        releaser.join(timeout=90)
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait(timeout=10)
+
+    # Three gate launches: the slow cheap gate, the document subset, then the protected full check.
+    assert len(deadlines) == 3, deadlines
+    assert len(waits) == 1 and waits[0] > 0.8, waits
+    # One allowance: the cheap gates share one deadline, and it moves once, by exactly the measured
+    # admission wait. A per-gate reset would move it by the slow gate's seconds too; a charged wait
+    # would not move it at all.
+    assert deadlines[0] == deadlines[1], deadlines
+    assert abs((deadlines[2] - deadlines[1]) - waits[0]) < 0.5, (deadlines, waits)
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
@@ -3411,8 +3762,11 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
     )
     assert world.run("implement") == 0
     prompt = world.calls("claude")[1]["prompt_file"]
+    # Since the shared scheduler frames every gate it runs (bead coding-harness-bxxt.6), the noisy
+    # output is the full-check gate's own red section, bounded by the per-gate window.
     assert "`make verify` exited 1" in prompt and "line-99" in prompt
-    assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
+    assert "line-0" not in prompt and "line-19" not in prompt and "line-50" in prompt
+    assert "lines of this gate left out" in prompt
 
 
 def _gate(name: str, body: list[str], verdict: str) -> list[str]:
@@ -3450,13 +3804,46 @@ def _red_run(world: World, output: str) -> str:
 
 def test_the_repair_prompt_names_the_gate_that_blocked_not_the_report_tail(world: World) -> None:
     # runner-red-gate criterion 1. Planted fault: the tail instead of the red sections.
-    output = "\n".join(
-        _gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1", "1 failed, 9 passed"], "red")
-        + _gate("ruff-check", ["All checks passed!"], "green")
-        + _gate("markdownlint", [f"README.md:{n} error MD013" for n in range(500)], "report")
-        + ["VERIFY RED — at least one gate failed; the report above names it."]
+    # The shared scheduler frames every gate itself (bead coding-harness-bxxt.6), so the world's gate
+    # list carries the three gates, each a `make` stand-in call: the two seconds gates run first,
+    # before the protected suite.
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    template = next(gate for gate in doc["gates"] if gate["id"] == "verify-all")
+    doc["gates"] = [
+        {**template, "id": "ruff-check", "command": "make ruff-check", "cost": "seconds"},
+        {**template, "id": "markdownlint", "command": "make markdownlint", "cost": "seconds", "enforcement": "report"},
+        {**template, "id": "pytest", "command": "make pytest", "cost": "minutes"},
+    ]
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "three framed gates")
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {
+                "stdout": "fixed",
+                "append": {
+                    "src/scenario-work.txt": "declared attempt work\n",
+                    "plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n",
+                },
+            },
+        ],
+        make=[
+            {"stdout": "All checks passed!\n"},
+            {"stdout": "\n".join(f"README.md:{n} error MD013" for n in range(500)), "exit": 1},
+            {"stdout": "FAILED tests/test_app.py::test_value - assert 2 == 1\n1 failed, 9 passed\n", "exit": 1},
+            {"stdout": "green\n"},
+            {"stdout": "green\n"},
+            {"stdout": "green\n"},
+        ],
     )
-    prompt = _red_run(world, output)
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
     assert "FAILED tests/test_app.py::test_value" in prompt and "── [pytest] RED (block)" in prompt
     assert "MD013" not in prompt and "[ruff-check]" not in prompt, "only blocking sections travel"
 
@@ -3583,15 +3970,22 @@ def test_a_frame_printed_onto_a_gates_last_line_is_still_a_frame() -> None:
 def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
     # runner-red-gate pre-mortem: verify_all.sh renames its frame lines and the parser finds nothing.
     # The printed format, not the shell spelling (loop row L1-3): `── [<gate>] $ ` and `── [<gate>] RED (block)`.
-    script = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
-    assert re.search(r"── \[\$\{?\w+\}?\] \$ ", script) and re.search(r"── \[\$\{?\w+\}?\] RED \(block\)", script)
+    # Since bead coding-harness-bxxt.6 the shared scheduler prints the frames for both callers.
+    script = (REPO_ROOT / "scripts" / "verify_run.py").read_text(encoding="utf-8")
+    assert re.search(r"── \[\{\w+\}\] \$ ", script) and re.search(r"── \[\{\w+\}\] \{VERDICT_RED\}", script)
+    assert stage2.verify_run.VERDICT_RED.startswith("RED (block)")
     assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_END.match("── [pytest] RED (block) — x")
+    assert stage2.GATE_END.match(f"── [pytest] {stage2.verify_run.VERDICT_RED}")
 
 
-def test_without_a_red_frame_the_repair_prompt_keeps_the_tail(world: World) -> None:
+@pytest.mark.usefixtures("world")
+def test_without_a_red_frame_the_repair_prompt_keeps_the_tail() -> None:
     # runner-red-gate criterion 3. Planted fault: empty diagnostics when nothing is framed.
-    prompt = _red_run(world, "\n".join(f"make-{n}" for n in range(100)))
-    assert "make-99" in prompt and "make-20" in prompt and "make-19" not in prompt
+    # The shared scheduler frames every gate it runs (bead coding-harness-bxxt.6); an unframed red
+    # run is one it refused before any gate, so the fallback is proved on the evidence function.
+    # The world fixture gives the evidence scrub its stand-in denylist; without it CI has none.
+    evidence = stage2.verify_evidence_text("\n".join(f"make-{n}" for n in range(100)), "", None)
+    assert "make-99" in evidence and "make-20" in evidence and "make-19" not in evidence
 
 
 def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
@@ -4310,7 +4704,7 @@ def test_a_make_start_diagnostic_refusal_restores_repair_findings(
     original_launch = stage2.launch
 
     def no_make(command, root, env, secret=None, **kwargs):
-        if command[:2] == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             if unusable_denylist:
                 set_denylist("")
             raise stage2.CallFailed(f"make could not be started: {LEAK}")
@@ -5123,13 +5517,15 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
     world.script(codex=[codex_step(step, 1)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
     # `LocalCommands` still records every local command, `make` included, instead of running it.
-    assert [record["command"] for record in commands.of("make")] == [["make", "verify"]], (
+    assert [record["command"] for record in commands.of("make")] == [FULL_CHECK_ARGV], (
         "repair skipped required full fallback"
     )
     assert "verification-scope.txt" in world.plan.read_text(encoding="utf-8"), (
         "the fallback must report its unsupported input in the plan time line"
     )
-    assert world.calls("bash") == [], "repair ran the document subset"
+    # The fallback's subset gate is part of the full check's verify selection (bead coding-harness-bxxt.6),
+    # never a document check of its own.
+    assert [call["argv"] for call in world.calls("bash")] == [DOCS_ARGV], "repair ran the subset on its own"
 
 
 FEATURE_SPEC = (
@@ -6368,7 +6764,7 @@ def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit
     original_launch = stage2.launch
 
     def no_make(command, root, env, secret=None, **kwargs):
-        if command[:2] == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             raise stage2.CallFailed(f"make could not be started: [Errno 2] no such file {KEY}")
         return original_launch(command, root, env, secret, **kwargs)
 
@@ -6687,6 +7083,7 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
         "ruff",
         "ruff",
         "python3",
+        "bash",  # the world's docs gate, a seconds member of the verify job, runs before the protected make
         "make",
     ]
     targets = ["scripts/a.py", "scripts/old.py", "tests/test_b.py"]
@@ -6781,8 +7178,24 @@ def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> N
     assert world.run("implement") == 0
     make_env = world.calls("make")[0]["env"]
     assert world.calls("ruff"), "the attempt started no ruff"
+    # Since bead coding-harness-bxxt.6 ruff runs in the preparation outside the admission, and the
+    # scheduler adds only the gate's own settings to the same verify environment: the locked
+    # interpreter, its directory on PATH, the worker default and the admission markers.
+    added = {
+        "PATH",
+        "PYTHON",
+        "PYTEST_XDIST_AUTO_NUM_WORKERS",
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    }
     for call in world.calls("ruff"):
-        assert call["env"] == {name: make_env[name] for name in call["env"]}, "ruff got another environment"
+        assert {k: v for k, v in call["env"].items() if k not in added} == {
+            k: make_env.get(k) for k in call["env"] if k not in added
+        }, "ruff got another environment"
+        assert make_env["PATH"].endswith(call["env"]["PATH"]), "the gate lost the verify environment's PATH"
+        assert verify_lock.LOCK_ENV not in call["env"], "ruff claimed an admission the preparation never takes"
         assert KEY not in call["env"].values()
         for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
             assert name not in call["env"], name
@@ -7633,7 +8046,13 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     assert stage2.verify_attempt(world.root, world.plan, None, None, stage2.tool_state(world.root)) == []
     assert ("renderer", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
     assert ("ruff", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
-    assert ("make", 7 * 60, "the runner's step limit after 7 minutes") in seen
+    gate_limits = [
+        timeout
+        for name, timeout, limit in seen
+        # Every gate starts under `sh -c` (decisions.md Q-9), the world's `make verify` included.
+        if name == "sh" and limit == "the runner's step limit after 7 minutes"
+    ]
+    assert gate_limits and all(0 < timeout <= 7 * 60 for timeout in gate_limits), seen
     assert all(timeout is not None for _, timeout, _ in seen), seen
 
 
@@ -7643,7 +8062,7 @@ def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monke
     original = stage2.launch
 
     def hang(command, root, env, secret=None, timeout=None, limit=None, **kwargs):
-        if command == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             raise stage2.StepTimedOut(f"make was stopped by the runner's step limit after {minutes} minutes")
         return original(command, root, env, secret, timeout=timeout, limit=limit, **kwargs)
 
@@ -8275,10 +8694,8 @@ def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) ->
     assert env["PATH"] == str(outside)
 
 
-def test_a_make_planted_on_a_repository_path_entry_does_not_run(
-    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+def test_gate_command_uses_repository_path_entry(world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A declared gate command uses the same PATH as shell verification."""
     marker = tmp_path / "planted-make-ran"
     planted = world.root / ".venv" / "bin"
     planted.mkdir(parents=True, exist_ok=True)
@@ -8289,8 +8706,7 @@ def test_a_make_planted_on_a_repository_path_entry_does_not_run(
     with world.plan.open("a", encoding="utf-8") as handle:
         handle.write("2026-10-07 10:00–10:05, 5 min\n")
     assert stage2.verify_attempt(world.root, world.plan) == []
-    assert not marker.exists(), "a make planted inside the worktree ran"
-    assert len(world.calls("make")) == 1
+    assert marker.exists(), "the gate did not use the worktree's PATH entry"
 
 
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
@@ -8764,6 +9180,15 @@ def test_review_lock_preserves_normal_flow(world: World) -> None:
     assert len(world.calls("codex")) == 1, "a no-record release asked for marks"
 
 
+def _beside_docs_gate(calls: list[dict]) -> list[dict]:
+    """The calls apart from the world's document gate, which every full check runs as a verify-job member.
+
+    Since bead coding-harness-bxxt.6 the full check runs the gates of the one list itself, the
+    document subset among them, so a full check is a `bash` (docs) and a `make` (suite) call.
+    """
+    return [call for call in calls if not (call["name"] == "bash" and call["argv"] == DOCS_ARGV)]
+
+
 def test_review_releases_record_lock_on_exit(world: World) -> None:
     """Criterion 5. Planted fault: an exit keeps the lock, or the cleanup changes the outcome it reports."""
     world.write_record([("L1-1", "taken — test_a", "no")])
@@ -8771,7 +9196,7 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     commit_review_findings(world)
     assert world.run("review") == 0
-    assert len(world.calls()) == 3 and not world.record().exists()
+    assert len(_beside_docs_gate(world.calls())) == 3 and not world.record().exists()
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
     world.write_record([("L1-1", "", "")])
@@ -8784,13 +9209,13 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
     commit_review_findings(world)
-    assert world.run("review") == 1 and len(world.calls()) == 2
+    assert world.run("review") == 1 and len(_beside_docs_gate(world.calls())) == 2
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
     commit_review_findings(world)
-    assert world.run("review") == 1 and len(world.calls()) == 3
+    assert world.run("review") == 1 and len(_beside_docs_gate(world.calls())) == 3
     assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
 
@@ -25473,7 +25898,7 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     seen: list[str] = []
 
     def record(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             seen.append(git(root, "ls-files"))
         return original_launch(command, root, env, secret, **kwargs)
 
@@ -25517,7 +25942,7 @@ def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
     seen = []
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             listed = subprocess.run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
             seen.append(set(os.fsdecode(listed).split("\0")))
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -25559,7 +25984,7 @@ def test_make_verify_preserves_raw_byte_paths_and_drops_both_entries(
         return original_run(command, *args, **kwargs)
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             listed = original_run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
             seen.append(set(listed.split(b"\0")))
             return subprocess.CompletedProcess(command, 0, "", "")
@@ -25636,7 +26061,7 @@ def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
     original_launch = stage2.launch
 
     def verify(command, root, env, secret=None, **kwargs):
-        if list(command) == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             if failure == "index.lock":
                 lock.write_text("interrupted Git operation\n")
             if verification == "timeout":
@@ -26512,7 +26937,7 @@ def test_the_ledger_is_cleared_after_formatting_before_stamping_and_verify(
         return real_prepare(*args, **kwargs)
 
     def watching_launch(command, *args, **kwargs):
-        if command == ["make", "verify"]:
+        if list(command) == FULL_CHECK_ARGV:
             assert_ready("verify")
         return real_launch(command, *args, **kwargs)
 
@@ -27276,6 +27701,12 @@ class LocalCommands:
             return "ruff"
         if program.endswith(".venv/bin/python3") and command[1:3] == ["-m", "pytest"]:
             return "pytest"
+        # The world's full check keeps its own kind, and its document gate still reaches the
+        # `bash` stand-in's `docs` steps, now that both start under `sh -c` (decisions.md Q-9).
+        if list(command) == FULL_CHECK_ARGV:
+            return "make"
+        if list(command) == DOCS_GATE_ARGV:
+            return None
         if program == "sh" and command[1:2] == ["-c"]:
             return "gate"
         if program == "make":
@@ -27750,7 +28181,7 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     commands.records.clear()
     env = stage2.runner_env(stage2.foreign_env({}), world.root)
     assert stage2.full_verify(world.root, env, None) == []
-    assert entered == [["make", "verify"]], "the full check did not acquire its admission"
+    assert entered == [[sys.executable, *sys.argv]], "the full check did not acquire its admission"
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
 
@@ -27780,7 +28211,7 @@ def test_targeted_stage2_test_file_requires_full_verification(
     assert bool(problems) == bool(full_result), problems
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the shared step limit"
+    assert 0 < make["timeout"] <= stage2.VERIFY_SECONDS == 7 * 60, "the full check ignored the remaining limit"
     assert make["limit"] == "the runner's step limit after 7 minutes", "the label ignored the shared step limit"
     assert commands.of("gate") == []
     assert all("tests/test_stage2.py" not in targets for targets in pytest_targets(commands))
@@ -27932,6 +28363,36 @@ def test_targeted_pytest_uses_the_memory_derived_worker_bound(tmp_path: Path, mo
     assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "3"
     chosen = stage2.targeted_pytest_env(tmp_path, {"PYTEST_XDIST_AUTO_NUM_WORKERS": "2"})
     assert chosen["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "2", "a caller's own choice passes through"
+
+
+def test_targeted_and_full_check_size_workers_by_one_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row L2-6. Planted fault: the targeted check keeps its own copy of the worker rule.
+
+    Both readers hand their readings to `verify_run.worker_bound`; a rule changed there reaches both.
+    """
+    seen: list[tuple[int | None, int | None]] = []
+
+    def rule(cores: int | None, memory: int | None) -> int:
+        seen.append((cores, memory))
+        return 5
+
+    readings = {"hw.logicalcpu": "16\n", "hw.memsize": str(8 * 2147483648) + "\n"}
+
+    def fake_launch(command, *_args, **_kwargs):
+        return subprocess.CompletedProcess(command, 0, stdout=readings[command[-1]], stderr="")
+
+    monkeypatch.setattr(stage2.verify_run, "worker_bound", rule)
+    monkeypatch.setattr(stage2, "launch", fake_launch)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert stage2.targeted_pytest_env(tmp_path, {})["PYTEST_XDIST_AUTO_NUM_WORKERS"] == "5"
+    monkeypatch.setattr(
+        stage2.verify_run,
+        "_reading",
+        lambda command: "Darwin" if command[0] == "uname" else readings[command[-1]].strip(),
+    )
+    assert stage2.verify_run.worker_default() == 5
+    assert seen == [(16, 8 * 2147483648), (16, 8 * 2147483648)], seen
+    assert stage2.verify_run.worker_bound is rule
 
 
 @pytest.mark.parametrize("failure", ["red-pytest", "red-block-gate", "timeout", "launch-error"])
@@ -28155,7 +28616,7 @@ def test_review_requires_fresh_full_verification_before_model_call(
     real = stage2.launch
 
     def launch(command, cwd, env, *args, **kwargs):
-        if command[0] != "make":
+        if list(command) != FULL_CHECK_ARGV:
             return real(command, cwd, env, *args, **kwargs)
         if case == "head-moved":
             git(Path(cwd), "commit", "--quiet", "--allow-empty", "-m", "moved while the check ran")
@@ -28266,7 +28727,7 @@ def test_review_admits_only_runner_audit_changes_outside_phase6(
     real = stage2.launch
 
     def launch(command, cwd, env, *args, **kwargs):
-        if command[0] == "make":
+        if list(command) == FULL_CHECK_ARGV:
             if case in ("audit-moved", "new-audit-during-check"):
                 world.findings.write_bytes(body + b"\n" + audit.encode() + b"\n")
             elif case == "index-moved":
@@ -28805,7 +29266,7 @@ def test_implement_preserves_full_fallback_boundaries(
     assert world.run("implement") == 0
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
-    assert make["timeout"] == stage2.VERIFY_SECONDS
+    assert 0 < make["timeout"] <= stage2.VERIFY_SECONDS, "the full fallback ignored the remaining limit"
     assert commands.of("gate") == [], "the full fallback also ran targeted gates"
     # A passing attempt's scope stands in its time line in plan.md, not in findings.md (Q-6).
     scope = world.plan.read_text(encoding="utf-8")
@@ -29002,6 +29463,9 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
 ) -> None:
     """coding-harness-dq4u: the targeted pytest step shares the full check's step limit (it measured 8.5 to 10.5
     minutes on the swarm tests, past the 5-minute tool limit); the gates keep the tool limit."""
+    # The real recording path writes its run evidence into the state root: this
+    # unit test keeps that root in the test's own directory (isolated state roots).
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     python = tmp_path / stage2.PYTEST[0]
     python.parent.mkdir(parents=True)
     python.write_text("", encoding="utf-8")
@@ -29020,6 +29484,707 @@ def test_targeted_pytest_has_its_own_limit_and_the_other_tools_keep_the_tool_lim
     pytest_limit = f"the runner's targeted-test limit after {minutes} minutes"
     assert (stage2.PYTEST[0], stage2.TARGETED_PYTEST_SECONDS, pytest_limit) in seen
     assert ("sh", stage2.TOOL_SECONDS, "the runner's tool limit after 5 minutes") in seen
+
+
+# ---------------------------------------------------------------------------
+# Slips — the runner's own history, from targeted evidence to full-run evidence
+# (bead coding-harness-bxxt.7: derived observations, never persisted ones)
+# ---------------------------------------------------------------------------
+
+
+def slip_history(world: World, name: str | None = None) -> list[dict]:
+    """The isolated state root's targeted history, then the duration history, oldest first.
+
+    `name` picks one of the two files; nothing creates either.
+    """
+    names = [name] if name else [verify_duration.TARGETED_HISTORY_NAME, verify_duration.HISTORY_NAME]
+    rows: list[dict] = []
+    for each in names:
+        path = world.state / "coding-harness" / each
+        if path.exists():
+            rows.extend(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    return rows
+
+
+def measuring_make(world: World, verdict_marker: Path) -> None:
+    """Replace the scripted `make` stand-in with a gate whose verdict a marker file decides.
+
+    The world's full check is the shared scheduler with this stub as its one protected gate
+    (bead coding-harness-bxxt.6). The scheduler itself records the run's start, gate and end in
+    process, so the start record carries whatever comparison context `full_verify` handed it.
+    The stub records nothing and asserts it never sees that context: a gate that inherited it
+    could record a second full run of the same change and tree. Only the gate itself stays
+    mocked — never the history writer, the tree capture, the finalization or the reader.
+    """
+    names = list(verify_duration.COMPARISON_ENV_NAMES)
+    stub = f"""#!{sys.executable}
+import os
+import sys
+
+leaked = [name for name in {names!r} if name in os.environ]
+if leaked:
+    print("the gate inherited the comparison context: " + ", ".join(leaked))
+    sys.exit(3)
+verdict = "red" if os.path.exists({str(verdict_marker)!r}) else "green"
+print(verdict)
+sys.exit(0 if verdict == "green" else 1)
+"""
+    program = world.bin / "make"
+    program.write_text(stub, encoding="utf-8")
+    program.chmod(0o755)
+
+
+def slips_report(world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    """One in-process `slips` reading of the world's history, from the world's root."""
+    monkeypatch.chdir(world.root)
+    code = verify_duration.main(["slips"])
+    return code, capsys.readouterr().out
+
+
+def test_slip_history_captures_targeted_and_full_evidence(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Criteria 4 and 5. Planted fault: the real runner path from a targeted attempt to the phase-6 full
+    check yields no comparable pair, or the history gains a persisted slip record.
+
+    The repair's targeted check records its start and completion through the
+    production dispatch, the phase-6 boundary records the full check's start
+    through the shared scheduler both entry points use, and the reader pairs
+    them: a red full check of the unchanged tree is one slip, a later green
+    re-check counts nothing, and no slip row is ever written.
+    """
+    # One gate configuration on both sides (the world's committed one): its digest is part of the match key.
+    marker = tmp_path / "full-verdict-red"
+    measuring_make(world, marker)
+    baseline = repair_world(world)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0
+    assert commands.of("make") == [], "a targeted repair ran the full check"
+    # The review below must run the stub for real: give the runner its launch back.
+    monkeypatch.setattr(stage2, "launch", commands.real)
+
+    events = slip_history(world)
+    starts = [event for event in events if event["event"] == "run_start"]
+    ends = [event for event in events if event["event"] == "run_end"]
+    assert len(starts) == 1 and len(ends) == 1, events
+    targeted = starts[0]
+    assert targeted["check_kind"] == "targeted"
+    assert targeted["change"] == "demo"
+    assert targeted["repository"] == str(world.root)
+    assert targeted["config_sha256"] == verify_duration._gate_file_digest(world.root)
+    # The runner's time line and call record landed in the change's plan.md and
+    # findings.md after the check; the comparison identity leaves exactly those
+    # out (decisions Q-3), so the committed head still names the checked tree.
+    assert targeted["tree_id"] == stage2._checked_tree(world.root, "demo")
+    assert targeted["tree_id"] != stage2.worktree_tree(world.root)
+    assert ends[0]["run_id"] == targeted["run_id"] and ends[0]["verdict"] == "green"
+    assert ends[0]["tree_id"] == targeted["tree_id"], "the tree moved during a check that touched nothing"
+    assert targeted["comparison_version"] == verify_duration.COMPARISON_VERSION
+    assert {event["event"] for event in events} <= set(verify_duration.EVENTS), "a slip record was persisted"
+    # The targeted check lives in its own history; the duration history holds no targeted duration.
+    assert slip_history(world, verify_duration.HISTORY_NAME) == []
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+
+    # A red full check of the same tree, before any reviewer call: one slip, and
+    # the observation stays complete — exit 0 with a positive count.
+    marker.write_text("red\n", encoding="utf-8")
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    commit_review_findings(world)
+    assert world.run("review") == 1
+    code, out = slips_report(world, monkeypatch, capsys)
+    assert code == 0, out
+    assert "slips: 1; incomplete/not countable runs: 0" in out, out
+    full_starts = [event for event in slip_history(world) if event.get("check_kind") == "full"]
+    assert len(full_starts) == 1
+    assert full_starts[0]["change"] == "demo" and full_starts[0]["tree_id"] == targeted["tree_id"]
+    assert full_starts[0]["comparison_version"] == verify_duration.COMPARISON_VERSION
+    assert full_starts[0]["config_sha256"] == targeted["config_sha256"]
+    duration_starts = [e for e in slip_history(world, verify_duration.HISTORY_NAME) if e["event"] == "run_start"]
+    assert {event.get("check_kind") for event in duration_starts} == {"full"}
+
+    # The re-check measures fresh: a green full run of the same tree counts
+    # nothing, and the red one stays counted exactly once.
+    marker.unlink()
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    assert world.run("review") == 0
+    code, out = slips_report(world, monkeypatch, capsys)
+    assert code == 0 and "slips: 1; incomplete/not countable runs: 0" in out, out
+    full_rows = slip_history(world)
+    full_starts = [event for event in full_rows if event.get("check_kind") == "full"]
+    verdicts = {event["run_id"]: event["verdict"] for event in full_rows if event["event"] == "run_end"}
+    assert [verdicts[event["run_id"]] for event in full_starts] == ["red", "green"]
+    assert all(event["tree_id"] == targeted["tree_id"] for event in full_starts)
+    assert {event["event"] for event in full_rows} <= set(verify_duration.EVENTS)
+
+
+def test_slip_comparison_tree_leaves_out_only_the_changes_bookkeeping(world: World) -> None:
+    """Criterion 3. Planted fault: the comparison identity follows the change's own plan.md and
+    findings.md, or it also hides any other path (decisions Q-3).
+
+    The two bookkeeping files of the change are the only paths left out: another
+    change's findings, the change's spec, code and an untracked file still move
+    the identity, and a missing change name stays the explicit unknown.
+    """
+    repair_world(world)
+    base = stage2._checked_tree(world.root, "demo")
+    assert isinstance(base, str)
+    assert stage2._checked_tree(world.root, None) is None
+    for name in ("plan.md", "findings.md"):
+        path = world.root / "plans" / "changes" / "demo" / name
+        path.write_text(path.read_text(encoding="utf-8") if path.exists() else "", encoding="utf-8")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("\nrunner bookkeeping\n")
+    assert stage2._checked_tree(world.root, "demo") == base, "the change's own bookkeeping moved the identity"
+    assert stage2.worktree_tree(world.root) != base
+    for relative in (
+        "plans/changes/other/findings.md",
+        "plans/changes/demo/spec.md",
+        "tests/test_a.py",
+        "notes.txt",
+    ):
+        path = world.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = path.read_bytes() if path.exists() else None
+        path.write_text((original or b"").decode("utf-8") + "\nmoved\n", encoding="utf-8")
+        assert stage2._checked_tree(world.root, "demo") != base, f"{relative} was hidden from the comparison"
+        if original is None:
+            path.unlink()
+        else:
+            path.write_bytes(original)
+    assert stage2._checked_tree(world.root, "demo") == base
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "red-pytest",
+        "targeted-timeout",
+        "crash-mid-check",
+        "pytest-launch-failure",
+        "tree-moved",
+    ],
+)
+def test_slip_history_never_records_unfinished_targeted_green(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Criterion 4. Planted fault: a red, interrupted, timed-out or failed-to-start targeted check,
+    or one whose inputs moved under it, leaves green comparable evidence in the history.
+
+    The cheap checks run the same command kinds before the targeted check, so
+    every plant answers the targeted check's own pytest launch - the second one -
+    and leaves the preparation green.
+    """
+    repair_world(world)
+    commands = targeted_mode(monkeypatch)
+
+    def at_targeted(_command: list[str]) -> bool:
+        """Whether this launch is the targeted check's own pytest, not the preparation's."""
+        return len(commands.of("pytest")) == 2
+
+    if case == "red-pytest":
+        commands.outcomes["pytest"] = lambda _command: RED_PYTEST if at_targeted(_command) else None
+        assert world.run("repair") != 0
+    elif case == "targeted-timeout":
+        # The targeted body contains the timeout: the check completes red, and a
+        # red completion is no green predecessor.
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.StepTimedOut("the runner's targeted-test limit stopped pytest") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    elif case == "crash-mid-check":
+        # An exception the targeted body cannot contain escapes `run_targeted`
+        # between its begin and its finish: the check never completes, so no end
+        # row can exist.
+        commands.outcomes["pytest"] = lambda _command: (
+            RuntimeError("the targeted check crashed mid-run: planted") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    elif case == "pytest-launch-failure":
+        commands.outcomes["pytest"] = lambda _command: (
+            stage2.CallFailed("pytest could not be started: planted") if at_targeted(_command) else None
+        )
+        assert world.run("repair") != 0
+    else:  # tree-moved
+
+        def move(_command: list[str]) -> tuple[int, str]:
+            # A file no test reads: the later fixed-code proof clones the tree as
+            # the check left it, so the moved byte must not break any test.
+            if at_targeted(_command):
+                (world.root / "notes.txt").write_text("moved while the check ran\n", encoding="utf-8")
+            return (0, "")
+
+        commands.outcomes["pytest"] = move
+        assert world.run("repair") == 0
+
+    events = slip_history(world)
+    starts = [event for event in events if event["event"] == "run_start"]
+    ends = [event for event in events if event["event"] == "run_end"]
+    assert len(starts) == 1 and starts[0]["check_kind"] == "targeted", events
+    if case == "crash-mid-check":
+        assert ends == [], "interrupted targeted work grew a completion"
+    elif case == "tree-moved":
+        assert len(ends) == 1 and ends[0]["verdict"] == "green"
+        assert ends[0]["tree_id"] != starts[0]["tree_id"], "moved inputs kept comparison evidence"
+    else:
+        assert len(ends) == 1 and ends[0]["verdict"] == "red", "unfinished targeted work ended green"
+
+
+def test_slip_measurement_failure_preserves_verification_result(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 11. Planted fault: a refused history write changes the attempt's verdict, or it
+    disappears without a diagnostic."""
+    repair_world(world)
+    refused = "the history file refuses the write: planted"
+
+    def refuse(_event: dict, _destination: Path | None = None) -> None:
+        raise verify_duration.StorageUnusable(refused)
+
+    monkeypatch.setattr(verify_duration, "append_event", refuse)
+    commands = targeted_mode(monkeypatch)
+    assert world.run("repair") == 0, "a measurement failure must not turn a green attempt red"
+    assert commands.of("pytest"), "the checks never ran because of the refused write"
+    assert slip_history(world) == [], "a refused write left history rows behind"
+    seen = capsys.readouterr()
+    # The refused appends are reported without blocking in the passing attempt's
+    # scope record: the plan's time line carries it beside the verdict word.
+    evidence = (
+        seen.out + seen.err + world.plan.read_text(encoding="utf-8") + (world.text() if world.findings.exists() else "")
+    )
+    assert refused in evidence and "reported without blocking" in evidence, evidence[-2000:]
+
+
+def test_targeted_history_requires_end_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a targeted green whose tree moved during the check, followed by a red
+    full run of its starting tree, is counted as a slip.
+
+    Both runs are written by the production writers: the targeted check through
+    `begin_targeted_run`/`finish_targeted_run` with a different tree at its
+    end, the full run through the shell's own `start` and `end` operations with
+    the runner-owned context. The reader cannot say which tree the targeted
+    check proved, so both runs are incomplete and nothing counts as a slip.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    (repo / "decisions").mkdir()
+    (repo / "decisions" / "gates.yaml").write_text("gates: []\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    receipt = verify_duration.begin_targeted_run(repo, "demo", "tree-a")
+    assert receipt.run_id is not None, receipt.notes
+    assert verify_duration.finish_targeted_run(receipt, "tree-b", "green") == []
+    for name, value in verify_duration.full_run_context("tree-a", "demo").items():
+        monkeypatch.setenv(name, value)
+    assert verify_duration.main(["start", "--job", "verify", "--placement", "local"]) == 0
+    run_id = capsys.readouterr().out.strip()
+    assert verify_duration.main(["end", "--run", run_id, "--start", "0.0", "--end", "1.0", "--verdict", "red"]) == 0
+    capsys.readouterr()
+    for name in (verify_duration.KIND_ENV, verify_duration.CHANGE_ENV, verify_duration.TREE_ENV):
+        monkeypatch.delenv(name)
+
+    assert verify_duration.main(["slips"]) == 1
+    out = capsys.readouterr().out
+    assert "slips: 0; incomplete/not countable runs: 2" in out, out
+
+
+def test_scheduled_refusal_retains_cheap_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused protected phase retains output from cheap work already executed."""
+
+    def schedule(_root, **kwargs):
+        kwargs["out"].write("── [cheap] $ echo diagnostic\ncheap diagnostic\n")
+        kwargs["err"].write("cheap report-level diagnostic\n")
+        raise stage2.verify_lock.VerifyLockError("protected admission refused")
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    # The full-check handler must receive a normal red result, not an exception
+    # which would throw the captured streams away.
+    try:
+        problems = stage2.full_verify(world.root, dict(os.environ), None)
+    except stage2.verify_lock.VerifyLockError:
+        pytest.fail("an admission refusal must retain cheap diagnostics as a failed verification")
+    text = "\n".join(problems)
+    assert "cheap diagnostic" in text and "cheap report-level diagnostic" in text, text
+    assert "protected admission refused" in text
+    assert "was not started" not in text
+
+
+def test_scheduled_holder_identifies_runner_process(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Holder metadata identifies the running orchestrator, regardless of selected job."""
+    monkeypatch.setattr(sys, "argv", ["scripts/stage2.py", "repair", "example"])
+    seen = []
+
+    def schedule(_root, **kwargs):
+        seen.append(kwargs["admission_command"])
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    for job in ("verify", "docs", "drift"):
+        stage2._scheduled_verify(world.root, dict(os.environ), job)
+    assert seen == [[sys.executable, *sys.argv]] * 3
+
+
+def test_scheduled_full_check_guards_pytest_basetemp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-1: the Stage-2 full check installs the temporary-area guard the shell entry point has.
+
+    Planted fault: the scheduler is given the caller's environment unchanged, so a `--basetemp`
+    outside the run's area is accepted and pytest clears that directory.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "sentinel"
+    sentinel.write_text("keep", encoding="utf-8")
+    probe = tmp_path / "test_probe.py"
+    probe.write_text("def test_probe():\n    assert True\n", encoding="utf-8")
+    seen: dict[str, object] = {}
+
+    def schedule(_root, **kwargs):
+        area = Path(kwargs["env"]["HARNESS_VERIFY_TMP_AREA"])
+        seen["area"] = area
+        done = subprocess.run(
+            [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--basetemp", str(outside), str(probe)],
+            cwd=tmp_path,
+            env={**kwargs["env"], "PATH": os.environ.get("PATH", "")},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        seen["returncode"] = done.returncode
+        seen["output"] = done.stdout + done.stderr
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        stage2._scheduled_verify(tmp_path, {"PATH": os.environ.get("PATH", ""), "PYTEST_ADDOPTS": ""}, "verify")
+    except KeyError:
+        pytest.fail("the full check must hand the gates a run area with the pytest guard")
+    assert sentinel.exists(), "a --basetemp outside the run's area was cleared"
+    assert seen["returncode"] != 0 and "outside this run's area" in str(seen["output"]), seen["output"]
+    assert not Path(str(seen["area"])).exists(), "the run's area must be removed when the run ends"
+
+
+def test_scheduled_full_check_honours_an_explicit_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Row F6-2: a caller's `PYTHON` is the interpreter of the Stage-2 full check, as in the shell.
+
+    Planted fault: the worktree's locked interpreter replaces it, so the two entry points test
+    different environments for the same input.
+    """
+    root = tmp_path / "repo"
+    venv_bin = root / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python3").symlink_to(sys.executable)
+    marker = tmp_path / "explicit-used"
+    chosen = tmp_path / "chosen-python"
+    chosen.write_text(f'#!/bin/sh\necho used > "{marker}"\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    chosen.chmod(0o755)
+
+    def schedule(_root, **kwargs):
+        result = kwargs["executor"]({}, "python3 -c pass", kwargs["env"])
+        assert result.returncode == 0, result.stderr
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    env = {"PATH": os.environ.get("PATH", ""), "PYTHON": str(chosen)}
+    out, err, code = stage2._scheduled_verify(root, env, "verify")
+    assert code == 0, out + err
+    assert marker.exists(), "the explicit PYTHON was replaced by another interpreter"
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("gate list missing"), ValueError("gate schema invalid")])
+def test_scheduled_selection_errors_are_red(world: World, monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
+    """Loader failures are failed checks with diagnostics, never unhandled verb failures."""
+
+    def schedule(_root, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, dict(os.environ), "docs")
+    except (FileNotFoundError, ValueError) as caught:
+        pytest.fail(f"a gate-list loader error must become an ordinary red check: {caught}")
+    assert code != 0 and str(error) in out + err
+
+
+@pytest.mark.parametrize("global_ruff", [False, True])
+def test_full_verify_gate_uses_worktree_pinned_ruff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, global_ruff: bool
+) -> None:
+    """A bare gate command resolves the same pinned tool as the shell verification."""
+    root = tmp_path / "repo"
+    venv_bin = root / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python3").symlink_to(sys.executable)
+    marker = tmp_path / "called"
+    pinned = venv_bin / "ruff"
+    pinned.write_text(f"#!/bin/sh\necho pinned > {marker}\n", encoding="utf-8")
+    pinned.chmod(0o755)
+    global_bin = tmp_path / "global"
+    global_bin.mkdir()
+    if global_ruff:
+        other = global_bin / "ruff"
+        other.write_text(f"#!/bin/sh\necho global > {marker}\n", encoding="utf-8")
+        other.chmod(0o755)
+
+    def schedule(_root, **kwargs):
+        result = kwargs["executor"]({}, "ruff check scripts/", kwargs["env"])
+        assert result.returncode == 0
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    # The gate's shell is found on `PATH`, as the shell entry point's `sh` is (decisions.md Q-9), so
+    # the planted `PATH` keeps the real shell's directory behind the global tool directory.
+    gate_path = os.pathsep.join([str(global_bin), str(Path(REAL_SH).parent)])
+    try:
+        out, err, code = stage2._scheduled_verify(root, {"PATH": gate_path}, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"the pinned gate command must start: {error}")
+    assert code == 0, out + err
+    assert marker.read_text(encoding="utf-8").strip() == "pinned"
+
+
+def test_non_executable_plain_gate_is_a_gate_result_not_an_abort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Row F6-1: a plain gate command that exists but is not executable is that gate's result.
+
+    The shell entry point gets exit 126 from `sh` and goes on by the gate's enforcement; Stage 2
+    must launch every gate the same way, so a later gate still runs. Planted fault: a direct launch
+    of a plain command raises `CallFailed` on `PermissionError` and ends the whole check.
+    """
+    root = tmp_path / "repo"
+    root.mkdir()
+    plain = root / "plain-gate"
+    plain.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    plain.chmod(0o644)
+    results = []
+
+    def schedule(_root, **kwargs):
+        env = {**kwargs["env"], "PATH": os.environ.get("PATH", "")}
+        try:
+            results.append(kwargs["executor"]({}, "./plain-gate", env).returncode)
+        except stage2.CallFailed as error:
+            pytest.fail(f"a non-executable gate must be that gate's result, not an abort: {error}")
+        results.append(kwargs["executor"]({}, "true", env).returncode)
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    stage2._scheduled_verify(root, {"PATH": os.environ.get("PATH", "")}, "verify")
+    assert results[0] == 126, results
+    assert results[1] == 0, "a later gate must still run"
+
+
+def test_scheduled_gate_timeout_is_remaining_allowance(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The launch contract bounds each gate by the remaining shared execution allowance."""
+    now = [100.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 60)
+    timeouts = []
+
+    def launch(command, _root, _env, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def schedule(_root, **kwargs):
+        now[0] += 17
+        kwargs["executor"]({}, "/bin/true", dict(os.environ))
+        now[0] += 11
+        kwargs["executor"]({}, "/bin/true", dict(os.environ))
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+    assert timeouts == [43, 32], "the callback must clamp without relying on launch's private implementation"
+
+
+def test_allowance_expiring_between_gates_is_a_verification_timeout(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared allowance running out between two gates keeps the timeout's diagnostic (row F6-4).
+
+    The first gate ends after the allowance is spent; the second must fail as a verification that
+    did not finish — a repairable `StepTimedOut` — not as a reviewer round that could not start.
+    Planted fault: `launch`'s `remaining(deadline)` raises its `NotStarted`, which escapes the
+    verification handlers, and the runner classifies the check as unable to start.
+    """
+    monkeypatch.setattr(stage2, "VERIFY_SECONDS", 60)
+    real_monotonic = time.monotonic
+    offset = [0.0]
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: real_monotonic() + offset[0])
+
+    def schedule(_root, **kwargs):
+        kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        offset[0] += 61  # the first gate used the whole allowance
+        kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    try:
+        with pytest.raises(stage2.StepTimedOut) as stopped:
+            stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+        assert "step limit after 1 minutes" in str(stopped.value), stopped.value
+        assert "reviewer" not in str(stopped.value) and "round" not in str(stopped.value), stopped.value
+        offset[0] = 0.0
+        problems = stage2.full_verify(world.root, dict(os.environ), None)
+    finally:
+        monkeypatch.setattr(stage2.time, "monotonic", real_monotonic)
+    text = "\n".join(problems)
+    assert "`make verify` did not finish" in text, text
+    assert "reviewer" not in text and "no further reviewer starts" not in text, text
+
+
+def test_an_interrupted_runner_between_gates_stays_not_started(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a spent allowance becomes a timeout: an interrupted runner's refusal stays `NotStarted` (row F6-4)."""
+
+    def schedule(_root, **kwargs):
+        stage2._LAUNCH_STOPPED.set()
+        try:
+            kwargs["executor"]({}, "/usr/bin/true", dict(os.environ))
+        finally:
+            stage2._LAUNCH_STOPPED.clear()
+        return SimpleNamespace(exit_code=0)
+
+    monkeypatch.setattr(stage2.verify_run, "run_verification", schedule)
+    with pytest.raises(stage2.NotStarted) as stopped:
+        stage2._scheduled_verify(world.root, dict(os.environ), "verify")
+    assert not isinstance(stopped.value, stage2.StepTimedOut)
+    assert "interrupted" in str(stopped.value)
+
+
+def test_malformed_gate_list_fails_the_runner_check_with_a_diagnostic(world: World) -> None:
+    """A malformed gate list in the measured checkout is a failed check, not a crashed verb (row L1-12).
+
+    Planted fault: the gate-list reader raises an error it does not name as its own (a non-mapping
+    gate entry), the scheduler lets it escape, and `full_verify` aborts the verb with it.
+    """
+    datei = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    doc["gates"].append("not a mapping")
+    datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        problems = stage2.full_verify(world.root, env, None)
+    except Exception as error:  # noqa: BLE001 - the planted fault is exactly an escaping error
+        pytest.fail(f"a malformed gate list aborted the runner check: {error!r}")
+    text = "\n".join(problems)
+    assert "`make verify` exited 2" in text, text
+    assert "liess sich nicht erzeugen" in text, text
+    assert world.calls("make") == [], "a gate ran from a malformed list"
+
+
+def test_scheduled_gate_shell_is_the_shell_entry_points():
+    # Criterion 10 (loop row L3-4, decisions.md Q-9). Planted fault: Stage 2 runs a gate command under
+    # another shell than `make verify`'s executor, or starts a plain command as its own vector, so a
+    # shell-specific command reads differently on the two paths and a missing or non-executable
+    # program aborts the check instead of returning the shell's 127 or 126.
+    import verify_run
+
+    command = 'FOO=1 python3 -c "print(1)" | cat'
+    argv = stage2._gate_argv(command, "/pinned/python")
+    assert argv == verify_run.shell_argv('FOO=1 /pinned/python -c "print(1)" | cat')
+    assert argv[0] == "sh"
+    for plain in ("make verify", "python3 scripts/check.py --strict", "./plain-gate"):
+        resolved = plain.replace("python3", "/pinned/python", 1)
+        assert stage2._gate_argv(plain, "/pinned/python") == verify_run.shell_argv(resolved), plain
+
+
+@pytest.mark.parametrize("enforcement", ["block", "report"])
+def test_scheduled_missing_executable_keeps_gate_verdict_and_continues(
+    world: World, monkeypatch: pytest.MonkeyPatch, enforcement: str
+) -> None:
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    template = copy.deepcopy(doc["gates"][0])
+    later = world.state / "later"
+    protected = world.state / "protected"
+    gates = []
+    for identifier, command, cost, level in [
+        ("missing-command", "missing_verify_gate_executable_8f42", "seconds", enforcement),
+        ("later-cheap", f"/usr/bin/touch {later}", "seconds", "block"),
+        ("protected-work", f"/usr/bin/touch {protected}", "minutes", "block"),
+    ]:
+        gate = copy.deepcopy(template)
+        gate.update(id=identifier, command=command, cost=cost, enforcement=level, job="verify")
+        gates.append(gate)
+    doc["gates"] = gates
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, env, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"a missing executable must be a gate failure: {error}")
+    assert "missing-command" in out and "missing_verify_gate_executable_8f42" in out + err
+    assert later.exists(), out + err
+    assert protected.exists() == (enforcement == "report"), out + err
+    assert (code == 0) == (enforcement == "report"), out + err
+
+
+@pytest.mark.parametrize("enforcement", ["block", "report"])
+def test_scheduled_nonexecutable_gate_keeps_verdict_and_continues(
+    world: World, monkeypatch: pytest.MonkeyPatch, enforcement: str
+) -> None:
+    """A non-executable command is a shell gate failure, not a launcher failure (F6-1)."""
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    template = copy.deepcopy(doc["gates"][0])
+    nonexecutable = world.root / "nonexecutable-gate"
+    nonexecutable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    nonexecutable.chmod(0o644)
+    later = world.state / "later-nonexecutable"
+    protected = world.state / "protected-nonexecutable"
+    gates = []
+    for identifier, command, cost, level in [
+        ("denied-command", "./nonexecutable-gate", "seconds", enforcement),
+        ("later-cheap", f"/usr/bin/touch {later}", "seconds", "block"),
+        ("protected-work", f"/usr/bin/touch {protected}", "minutes", "block"),
+    ]:
+        gate = copy.deepcopy(template)
+        gate.update(id=identifier, command=command, cost=cost, enforcement=level, job="verify")
+        gates.append(gate)
+    doc["gates"] = gates
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        out, err, code = stage2._scheduled_verify(world.root, env, "verify")
+    except stage2.CallFailed as error:
+        pytest.fail(f"a non-executable command must return a gate verdict: {error}")
+    assert "denied-command" in out and "nonexecutable-gate" in out + err
+    assert later.exists(), out + err
+    assert protected.exists() == (enforcement == "report"), out + err
+    assert (code == 0) == (enforcement == "report"), out + err
+
+
+@pytest.mark.parametrize("command, expected", [(":", 0), ("exit 1", 1), ("command exit 1", 1)])
+def test_scheduled_shell_builtins_keep_gate_verdicts(
+    world: World, monkeypatch: pytest.MonkeyPatch, command: str, expected: int
+) -> None:
+    """A builtin runs as a shell gate, with blocking red retained as repair evidence (row F6-7).
+
+    Planted fault: the plain-vector shortcut attempts to spawn the builtin itself. The scheduler
+    then reports an incomplete check (or launch raises CallFailed), losing the gate's verdict.
+    """
+    _real_gate_shell(monkeypatch)
+    path = world.root / "decisions" / "gates.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    gate = copy.deepcopy(doc["gates"][0])
+    gate.update(id="shell-builtin", command=command, cost="seconds", enforcement="block", job="verify")
+    doc["gates"] = [gate]
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    try:
+        stdout, stderr, code = stage2._scheduled_verify(world.root, env, "verify")
+    except (stage2.CallFailed, FileNotFoundError) as error:
+        pytest.fail(f"a shell builtin must return an ordinary gate verdict, not a launch failure: {error}")
+    assert code == expected, f"{command!r} must keep its shell exit status: {stdout}\n{stderr}"
+    assert "verification could not complete" not in stderr, stderr
+    if expected:
+        evidence = stage2.verify_evidence_text(stdout, stderr, None)
+        assert "shell-builtin" in evidence and command in evidence, evidence
+        assert "The gates that blocked" in evidence, evidence
 
 
 @pytest.mark.parametrize(
@@ -29422,3 +30587,42 @@ def test_supersede_locks_inactive_worktree_before_archiving(world: World, monkey
     monkeypatch.setattr(stage2, "_move_archive_entry", competing_move)
     assert supersede(world, key) == 0
     assert checked and all(checked), "an inactive worktree could create a record during archiving"
+
+
+def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    commands = targeted_mode(monkeypatch)
+    world.script(claude=[dict(COVERED_IMPLEMENT)])
+    assert world.run("implement") == 0, world.text()
+    assert commands.of("gate")
+    assert slip_history(world) == []
+
+
+def test_default_full_attempt_uses_named_comparison_context(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default full attempt supplies the same comparison context as other full checks."""
+    world.script(make=[{"stdout": "green"}])
+    calls = []
+    original = stage2.verify_duration.full_run_context
+
+    def context(tree: str | None, change: str | None) -> dict[str, str]:
+        calls.append((tree, change))
+        return original(tree, change)
+
+    monkeypatch.setattr(stage2.verify_duration, "full_run_context", context)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert calls == [(stage2._checked_tree(world.root, "demo"), "demo")]
+
+
+def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Protected document gates are named but never executed, even when all are deferred."""
+    commands = targeted_mode(monkeypatch)
+    original = stage2.document_gates()
+    assert len(original) >= 2
+    protected = [{**gate, "admission": True} for gate in original]
+    monkeypatch.setattr(stage2, "document_gates", lambda: protected)
+    world.plan.write_text(PLAN_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert not problems, problems
+    assert not commands.of("gate")
+    assert "deferred to full check" in scope
+    assert all(gate["id"] in scope for gate in protected)

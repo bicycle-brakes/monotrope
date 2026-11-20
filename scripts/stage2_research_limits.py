@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 
+import venv_guard  # noqa: F401
 import yaml
 
 FILE_NAME = "research-swarm-limits.yaml"
