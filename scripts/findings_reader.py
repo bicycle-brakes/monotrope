@@ -47,6 +47,7 @@ ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Rev
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 GLM_RELEASE_HEADING = "## Phase 4b — GLM loop rows, released"
+RELEASE_HEADING_PATTERN = re.compile(r"^## Phase 4b — (?:GLM )?loop rows, released \d{4}-\d{2}-\d{2}$")
 REJECTED_ANSWER_HEADING = "## Rejected phase-6 answer"
 PHASE2A_HEADING = "## Phase 2a"
 PHASE2A_ID_PREFIX = "2a-"
@@ -131,8 +132,8 @@ def status_outcome(status: str) -> str | None:
 
 def known_status(status: str) -> bool:
     """Whether the status is in the closed set (decisions F-27); duplicates are known."""
-    if is_duplicate(status):
-        return True  # a marker with a row id is a recognized duplicate form
+    if DUPLICATE_MARKER.match(normalized_status(status)) and is_duplicate(status):
+        return True  # standalone historical duplicate form
     return starts_with_status(normalized_status(status), KNOWN_STATUS_PREFIXES)
 
 
@@ -268,7 +269,7 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
     for position, line in enumerate(text.splitlines(), start=1):
         if line.startswith("## "):
             section = Section(heading=line)
-            if line.startswith(RELEASE_HEADING) or line.startswith(GLM_RELEASE_HEADING):
+            if RELEASE_HEADING_PATTERN.fullmatch(line):
                 section.kind = "released"
             elif PHASE6_HEADING.match(line):
                 section.kind = "phase6"
@@ -370,7 +371,7 @@ class LegacyAttributionSource(AttributionSource):
     def attribute(self, block: BlockIdentity) -> str:
         if block.heading is None:
             return UNATTRIBUTED
-        released = block.heading.startswith(RELEASE_HEADING) or block.heading.startswith(GLM_RELEASE_HEADING)
+        released = bool(RELEASE_HEADING_PATTERN.fullmatch(block.heading))
         phase6 = PHASE6_HEADING.match(block.heading) is not None
         if not released and not phase6:
             return UNATTRIBUTED
@@ -476,10 +477,10 @@ def resolve(rows: list[AttributedRow]) -> tuple[list[Finding], list[Gap]]:
     paths: dict[tuple[str, str], str] = {}
     for finding in findings:
         paths[(finding.change, finding.id)] = finding.path
+        if not known_status(finding.status):
+            reason = f"row {finding.id}: unknown status {finding.status!r} (the known set is closed)"
+            gaps.append(Gap(finding.path, finding.id, reason))
         if not finding.duplicate:
-            if not known_status(finding.status):
-                reason = f"row {finding.id}: unknown status {finding.status!r} (the known set is closed)"
-                gaps.append(Gap(finding.path, finding.id, reason))
             continue
         targets = duplicate_targets(finding.status)
         known_ids = ids_by_change[finding.change]

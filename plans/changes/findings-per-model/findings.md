@@ -333,9 +333,9 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py:477` | A row with status `nonsense — duplicate of F-1` is accepted as a duplicate when `F-1` exists. The report marks itself complete even though the status is outside the closed set. [Criterion 16] | Codex | taken — in-spec reproduced fault: a duplicate is recognised only in the closed status set's duplicate form; any other leading word is a gap (criterion 16) (provisional agent decision, autonomous run 2026-11-19) | — |
-| F6-2 | MAJOR | SPEC | base | `scripts/findings_per_model.py:94` | If Git cannot list `plans/changes` or `plans/changes/archive` at the requested commit, the failed listing is silently treated as an empty directory. The report can omit every finding from that directory, mark both outputs complete and exit successfully. [Criteria 1, 16] | Codex | taken — in-spec reproduced fault: a failed git listing of plans/changes or its archive is a gap that marks both outputs incomplete, never an empty directory (criteria 1, 16) (provisional agent decision, autonomous run 2026-11-19) | — |
-| F6-3 | MAJOR | SPEC | base | `scripts/findings_reader.py:269` | A table under `## Phase 4b — loop rows, released draft` is counted as released evidence because the heading is checked only by prefix. It should appear outside the count: it does not have the required release date. [Criteria 1, 18] | Codex | taken — in-spec reproduced fault: a released-rows heading counts only with its release date in the exact form; any other heading of that prefix stands outside the count (criteria 1, 18) (provisional agent decision, autonomous run 2026-11-19) | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py:477` | A row with status `nonsense — duplicate of F-1` is accepted as a duplicate when `F-1` exists. The report marks itself complete even though the status is outside the closed set. [Criterion 16] | Codex | fixed — tests/test_findings_per_model.py::test_unknown_status_with_duplicate_marker_is_gap | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/findings_per_model.py:94` | If Git cannot list `plans/changes` or `plans/changes/archive` at the requested commit, the failed listing is silently treated as an empty directory. The report can omit every finding from that directory, mark both outputs complete and exit successfully. [Criteria 1, 16] | Codex | fixed — tests/test_findings_per_model.py::test_failed_change_listing_marks_outputs_incomplete | — |
+| F6-3 | MAJOR | SPEC | base | `scripts/findings_reader.py:269` | A table under `## Phase 4b — loop rows, released draft` is counted as released evidence because the heading is checked only by prefix. It should appear outside the count: it does not have the required release date. [Criteria 1, 18] | Codex | fixed — tests/test_findings_per_model.py::test_release_heading_requires_exact_date | — |
 
 Phase 6 verdict: codex 01a1f7b9-c69f-7661-953b-d8f3fa96816f, 2026-11-20
 Reviewer session: codex 01a1f7b9-c69f-7661-953b-d8f3fa96816f — a fresh session reviewed: no phase-2a session was recorded
@@ -451,3 +451,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-20: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4845 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4847 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged

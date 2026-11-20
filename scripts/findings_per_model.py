@@ -91,13 +91,15 @@ def state_root() -> Path:
     return base / "coding-harness" / STATE_DIR
 
 
-def change_folders(root: Path, sha: str) -> list[str]:
+def change_folders(root: Path, sha: str, gaps: list[reader.Gap]) -> list[str]:
     """Every active and archived change folder at the commit, in deterministic order."""
     folders: list[str] = []
     for base in ("plans/changes", "plans/changes/archive"):
         done = git(root, "ls-tree", "-d", "-z", "--name-only", f"{sha}:{base}")
         if done.returncode == 0:
             folders += sorted(f"{base}/{name}" for name in done.stdout.decode().split("\0") if name)
+        else:
+            gaps.append(reader.Gap(base, None, "cannot list changes at commit"))
     return folders
 
 
@@ -136,7 +138,7 @@ def collect(
     findings: list[reader.Finding] = []
     gaps: list[reader.Gap] = []
     outside: list[reader.OutsideTable] = []
-    for folder in change_folders(root, sha):
+    for folder in change_folders(root, sha, gaps):
         text = read_findings(root, sha, folder, gaps)
         if text is None:
             continue

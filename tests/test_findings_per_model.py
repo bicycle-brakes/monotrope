@@ -82,7 +82,7 @@ def repo(tmp_path: Path, files: dict[str, str | bytes]) -> tuple[Path, str]:
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
-    return root, commit(root, files)
+    return root, commit(root, {"plans/changes/archive/.keep": "", **files})
 
 
 def findings_path(name: str, archived: bool = False) -> str:
@@ -710,3 +710,46 @@ def test_released_section_ends_after_first_table():
     result = read(doc(GLM_RELEASE, lrow("L1-1", "GLM", "open"), "", "Reviewer prose", lrow("L1-2", "GLM", "fixed")))
     assert [finding.id for finding in result.findings] == ["L1-1"]
     assert [(table.label, table.rows) for table in result.outside] == [(GLM_RELEASE, 1)]
+
+
+def test_unknown_status_with_duplicate_marker_is_gap():
+    result = read(doc(PHASE6, p6row("F-1", "open"), p6row("F-2", "nonsense — duplicate of F-1")))
+    assert any(gap.id == "F-2" and "unknown status" in gap.reason for gap in result.gaps)
+
+
+@pytest.mark.parametrize("base", ["plans/changes", "plans/changes/archive"])
+def test_failed_change_listing_marks_outputs_incomplete(tmp_path, monkeypatch, base):
+    root, _ = repo(
+        tmp_path,
+        {
+            findings_path("a"): doc(PHASE6, p6row("F-1", "open")),
+            findings_path("b", archived=True): doc(PHASE6, p6row("F-2", "open")),
+        },
+    )
+    original = fpm.git
+
+    def fail_listing(root, *args):
+        if args[:4] == ("ls-tree", "-d", "-z", "--name-only") and args[4].endswith(":" + base):
+            return SimpleNamespace(returncode=1, stdout=b"", stderr=b"failure")
+        return original(root, *args)
+
+    monkeypatch.setattr(fpm, "git", fail_listing)
+    state = tmp_path / "state"
+    code, output = run_report(root, None, monkeypatch, state)
+    assert code != 0 and "Incomplete" in "".join(output) and base in "".join(output)
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert not records[0]["complete"]
+    assert any(record.get("path") == base for record in records if record["type"] == "gap")
+
+
+def test_release_heading_requires_exact_date():
+    headings = [
+        "## Phase 4b — loop rows, released draft",
+        "## Phase 4b — GLM loop rows, released 2026-11-01 draft",
+        "## Phase 4b — loop rows, released 2026-11-01",
+    ]
+    result = read(
+        doc(*(part for i, heading in enumerate(headings) for part in (heading, lrow(f"L1-{i + 1}", "hy3", "open"))))
+    )
+    assert [finding.id for finding in result.findings] == ["L1-3"]
+    assert {table.label for table in result.outside} == set(headings[:2])
