@@ -318,6 +318,9 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
         if section.kind == "phase6":
             if cells[0].startswith(PHASE2A_ID_PREFIX):
                 continue  # criterion 19: a phase-2a row never counts in a phase-6 block
+            if not ROW_ID.fullmatch(cells[0]):
+                gaps.append(Gap(path, None, f"line {position}: unreadable phase-6 finding id"))
+                continue
             if len(cells) in (7, 9, 10):
                 blocks[-1].rows.append(RowRecord(cells, position))
             else:

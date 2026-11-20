@@ -753,3 +753,17 @@ def test_release_heading_requires_exact_date():
     )
     assert [finding.id for finding in result.findings] == ["L1-3"]
     assert {table.label for table in result.outside} == set(headings[:2])
+
+
+def test_phase6_unreadable_ids_make_report_incomplete(tmp_path, monkeypatch):
+    path = findings_path("bad-id")
+    root, _ = repo(tmp_path, {path: doc(PHASE6, p6row("", "open"), p6row("???", "fixed"))})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert code != 0 and "Incomplete" in "".join(chunks)
+    assert records[0]["complete"] is False
+    gaps = [record for record in records if record["type"] == "gap"]
+    assert len(gaps) == 2 and all(record["path"] == path for record in gaps)
+    assert all("id" in record["reason"].lower() for record in gaps)
+    assert not any(record["type"] == "model" and record["raised"] for record in records)
