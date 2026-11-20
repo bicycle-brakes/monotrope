@@ -69,6 +69,9 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
     *Refuted by:* the line understates that number or a later round repeats a number.
 18. When the named eligible active records have no pending audit calls, supersession is allowed and the accounting line reports zero calls.
     *Refuted by:* the command refuses solely for the lack of calls or reports a nonzero count.
+19. Supersession, its retry and release of a change's loop records run under one repository-wide lock per change in the state directory, held from reading the active and unfinished key set until the accounting line is written; a second worktree that asks while the lock is held refuses, naming the holder, and changes no record or findings.
+    *Refuted by:* two worktrees interleave supersession, retry or release of the same change (rows P6-1, P6-2), or the waiting one changes a record.
+    *Basis:* maintainer decision 2026-11-20 (option A: one choke point closes concurrent supersession instead of case repair).
 
 ## Non-goals
 
