@@ -194,6 +194,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_interview_minimums  # noqa: E402
 import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
@@ -1176,7 +1177,17 @@ def _furniture(cells: list[str]) -> bool:
     return cells[0].lower() == "id" or named or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
 
 
-def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[list[str]], str]:
+def review_severity(cell: str) -> bool:
+    """Whether a spec-review row's Severity cell is one the review reader knows (spec terms).
+
+    BLOCKER, MAJOR or MINOR, or the `[AMBIGUITY]` mark. This one test serves the call-time answer
+    and the stored block alike, so no answer is written that the stored reader then rejects.
+    """
+    stripped = cell.strip()
+    return stripped.upper() in SEVERITIES or stripped.startswith("[AMBIGUITY]")
+
+
+def parse_rows(answer: str, *, notes: list[str] | None = None, ambiguity: bool = False) -> tuple[list[list[str]], str]:
     """The six-cell rows of an answer and the text that is not a row.
 
     Six cells are known. A line of more cells that starts like a row (its second cell is a severity) holds a
@@ -1184,7 +1195,8 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
     pipe escaped; when a caller passes `notes`, that widening is named once per row, because an unescaped
     `|` before the finding moves the columns instead (R-25 of the review-swarm review). A decorative line of
     empty cells is no row and no text: it is dropped. Anything else that is a table line but no row stays
-    in the text, as it came.
+    in the text, as it came. With `ambiguity`, a row whose Severity cell carries the `[AMBIGUITY]` mark is
+    folded the same way (the spec-review reader).
     """
     rows: list[list[str]] = []
     rest: list[str] = []
@@ -1197,7 +1209,7 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
             continue
         elif len(cells) == 6:
             rows.append(cells)
-        elif len(cells) > 6 and cells[1].upper() in SEVERITIES:
+        elif len(cells) > 6 and (cells[1].upper() in SEVERITIES or ambiguity and review_severity(cells[1])):
             rows.append([*cells[:5], " \\| ".join(cells[5:])])
             if notes is not None:
                 notes.append(cells[0])
@@ -3697,7 +3709,11 @@ def spec_body_fingerprint(spec: Path) -> str:
 
 def spec_review_prompt(root: Path, change: str, body: bytes) -> str:
     """The 2a prompt carrying exactly the spec body the review must read (spec criterion 10)."""
-    extra = "## The spec body under review\n\n" + body.decode("utf-8")
+    try:
+        decoded = body.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused(f"plans/changes/{change}/spec.md cannot be read as UTF-8 ({error}).") from error
+    extra = "## The spec body under review\n\n" + decoded
     return phase_prompt(root, "02a-spec-review.md", change, extra)
 
 
@@ -3816,7 +3832,7 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], bool]:
             continue
         if _furniture(cells) or not any(cell.strip() for cell in cells):
             continue
-        severity = cells[1].upper() in SEVERITIES or cells[1].startswith("[AMBIGUITY]")
+        severity = review_severity(cells[1])
         if len(cells) >= 9 and severity:
             rows.append(
                 {
@@ -3836,8 +3852,7 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], bool]:
 def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
     """Every `## Phase 2a` block of findings.md, in file order (spec terms).
 
-    The matching audit line must stand directly above the heading; the runner writes audit
-    line and block in one append, so it does. The block is clean when it says no finding was
+    The matching audit line must be the nearest non-blank line above the heading. The block is clean when it says no finding was
     reported beside the quoted exact answer; anything else without rows is prose and does not
     qualify.
     """
@@ -3847,8 +3862,9 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
         if not line.startswith("## Phase 2a"):
             continue
         audit = None
-        if index > 0 and lines[index - 1].startswith("Stage-2 call, "):
-            audit = lines[index - 1].strip()
+        preceding = next((item for item in reversed(lines[:index]) if item.strip()), "")
+        if preceding.startswith("Stage-2 call, "):
+            audit = preceding.strip()
         body: list[str] = []
         for following in lines[index + 1 :]:
             if following.startswith("## "):
@@ -3951,8 +3967,9 @@ def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecRev
     Qualifying (spec terms): an Opus 5.5 or declared-fallback block with readable rows or the
     exact `No finding.` answer, its matching runner call line directly above the heading, and
     - written on or after the fixed rule day - the `Spec fingerprint:` line. An undigested
-    block qualifies only from before that day, and then only while it is current against the
-    last committed spec change.
+    block qualifies only from before that day. Currency is no part of qualifying: every
+    qualifying block counts as a round, and `review_staleness` decides only whether the newest
+    one admits implement.
     """
     kept: list[SpecReviewBlock] = []
     left_out: list[str] = []
@@ -3977,12 +3994,31 @@ def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecRev
             if written >= LEGACY_SPEC_REVIEW_DAY:
                 left_out.append(f"the block of {day} was written on or after the fingerprint rule and carries none")
                 continue
-            problem = legacy_currency_problem(root, change, written)
-            if problem is not None:
-                left_out.append(f"the legacy block of {day} is not current: {problem}")
-                continue
         kept.append(block)
     return kept, "; ".join(left_out)
+
+
+def review_staleness(root: Path, change: str, block: SpecReviewBlock, current: str) -> str | None:
+    """Why a qualifying block no longer stands for the spec as it is, or None (spec criteria 11 and 12).
+
+    A fingerprinted block is stale when its digest is not the body on disk; an undigested legacy
+    block is measured against the last committed spec change and the disk body.
+    """
+    if block.fingerprint is not None:
+        if block.fingerprint == current:
+            return None
+        return (
+            f"it names {block.fingerprint} and the spec body on disk hashes to {current}; "
+            "the spec body changed after the review"
+        )
+    day = block.heading_day
+    try:
+        written = dt.date.fromisoformat(day) if day else None
+    except ValueError:
+        written = None
+    if written is None:
+        return "it carries no fingerprint and no readable day"
+    return legacy_currency_problem(root, change, written)
 
 
 @dataclass(frozen=True)
@@ -4004,14 +4040,24 @@ def review_admission(root: Path, change: str) -> ReviewAdmission:
     stated and agreeing, a spike stands outside the review rule, and a bounded, feature or
     architectural change needs a qualifying, current spec review with no open ambiguity -
     after three rounds a changed spec body is admitted on the review it has, an open
-    ambiguity never is. A previously implemented change faces the same check again.
+    ambiguity never is. A previously implemented change faces the same check again. A change
+    whose class is refused is measured for its review as well, so the inventory lists it in
+    every group whose check it fails; implement names the class first.
     """
     try:
         klass = declared_class(root, change, None)
     except Refused as error:
-        return ReviewAdmission(class_problem=str(error))
+        part = _review_part(root, change, None)
+        return ReviewAdmission(
+            class_problem=str(error), review_problem=part.review_problem, left_out=part.left_out, rounds=part.rounds
+        )
     if klass == "spike":
         return ReviewAdmission(klass=klass)
+    return _review_part(root, change, klass)
+
+
+def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
+    """The review half of the admission, for a change that is no spike."""
     folder = root / "plans" / "changes" / change
     findings = folder / "findings.md"
     try:
@@ -4049,12 +4095,7 @@ def review_admission(root: Path, change: str) -> ReviewAdmission:
                 "settle the row and review the spec again before a model starts."
             ),
         )
-    stale: str | None = None
-    if newest.fingerprint is not None and newest.fingerprint != current:
-        stale = (
-            f"it names {newest.fingerprint} and the spec body on disk hashes to {current}; "
-            "the spec body changed after the review"
-        )
+    stale = review_staleness(root, change, newest, current)
     if stale is not None and rounds < 3:
         return ReviewAdmission(
             klass=klass,
@@ -4073,9 +4114,20 @@ def readable_review(answer: str) -> list[list[str]]:
     """The rows of a readable spec-review answer; `CallFailed` on anything else (spec terms).
 
     Readable: six-cell rows, or the exact answer `No finding.` Prose, a refusal, a failed
-    call, or one unparseable table line is not.
+    call, or one table line the reader cannot take as a row is not. The same reader (the
+    `review_severity` test and the folding of an over-wide row, the mark included) judges the
+    answer here and the stored block later, so an answer that is written is an answer that reads
+    back: a row whose Severity is anything else, or a table line that is no row, fails the call.
     """
-    rows, rest = parse_rows(answer)
+    rows, rest = parse_rows(answer, ambiguity=True)
+    loose = [line for line in rest.splitlines() if split_row(line) is not None]
+    if loose:
+        raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {loose[0].strip()[:80]}")
+    odd = [row[0] for row in rows if not review_severity(row[1])]
+    if odd:
+        raise CallFailed(
+            f"the answer's row {odd[0]} has a Severity that is none of BLOCKER, MAJOR, MINOR or an `[AMBIGUITY]` mark"
+        )
     if rows:
         return rows
     if answer.strip() == NO_FINDING_ANSWER and not any(split_row(line) is not None for line in rest.splitlines()):
@@ -4093,14 +4145,27 @@ def pause(seconds: int) -> None:
     threading.Event().wait(seconds)
 
 
-def fourth_round_authorized(root: Path, change: str) -> bool:
-    """Whether decisions.md records the maintainer's authorization for a fourth review round (spec criterion 3)."""
+FOURTH_ROUND_TITLE = re.compile(r"fourth spec-review round\b", re.I)
+FOURTH_ROUND_GRANT = re.compile(r"[\"'`\s]*authori[sz]ed\b", re.I)
+
+
+def authorized_extra_rounds(root: Path, change: str) -> int:
+    """How many rounds beyond the third decisions.md lets the maintainer's answers release (spec criterion 3).
+
+    Each counts only as a question of this change, headed `Q-<n> · Fourth spec-review round`,
+    answered by the maintainer (the interview reader's own selection) with an answer that begins
+    `authorized` - one such record releases exactly one round. A note that merely quotes the rule,
+    or an answer that declines, releases none; no wording elsewhere in the file counts.
+    """
     try:
         text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return False
-    lowered = text.lower()
-    return "fourth" in lowered and "authoriz" in lowered
+        return 0
+    return sum(
+        1
+        for record in check_interview_minimums.maintainer_answers(text)
+        if FOURTH_ROUND_TITLE.match(record["title"]) and FOURTH_ROUND_GRANT.match(record["answer"])
+    )
 
 
 def write_review_block(
@@ -4162,7 +4227,7 @@ def run_fallback_review(
             endpoint[1],
             prompt,
             reviewer_key(),
-            free=True,
+            free=False,
             timeout_seconds=int(config["timeout_seconds"]),
         )
     except CallFailed as error:
@@ -4200,13 +4265,13 @@ def spec_review(root: Path, change: str) -> None:
             current = spec_body_fingerprint(ctx.folder / "spec.md")
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
-        newest_current = newest.fingerprint is None or newest.fingerprint == current
-        recheck = newest_current and newest.is_fallback
-    if not recheck and rounds >= 3 and not fourth_round_authorized(root, change):
+        recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
+    if not recheck and rounds >= 3 and rounds - 2 > authorized_extra_rounds(root, change):
         raise Refused(
-            f"three spec-review rounds have run for {change}; a fourth round runs only when "
-            f"plans/changes/{change}/decisions.md records the maintainer's authorization for it, "
-            "or the change is re-sliced."
+            f"{rounds} spec-review rounds have run for {change}; round {rounds + 1} runs only when "
+            f"plans/changes/{change}/decisions.md holds a question headed `Q-<n> · Fourth spec-review round`, "
+            "answered by the maintainer with an answer that begins `authorized` (one such record releases "
+            "one round), or the change is re-sliced."
         )
     spec = ctx.folder / "spec.md"
     body = spec_body_bytes(spec)
@@ -4289,7 +4354,7 @@ def spec_review_inventory(root: Path) -> int:
         admission = review_admission(root, name)
         if admission.class_problem is not None:
             class_refused.append(f"{name} ({admission.class_problem})")
-        elif admission.review_problem is not None:
+        if admission.review_problem is not None:
             review_refused.append(f"{name} ({admission.review_problem})")
         elif admission.recheck:
             rechecks.append(name)
@@ -12077,9 +12142,7 @@ def _run(args: argparse.Namespace) -> int:
             return spec_review_inventory(Path(args.root))
         if not args.verb:
             raise Refused("name a verb, or run --spec-review-inventory for the morning inventory.")
-        # argparse validates an explicit verb against `choices`, and its default against
-        # them too, so a verb-less call - the inventory's shape - would never parse; the
-        # one verb check stands here instead, where the inventory branch has already run.
+        # Validate verbs here, after the verb-less inventory option has been handled.
         known = sorted([*VERBS, "session", "prepare-explore"])
         if args.verb not in known:
             raise Refused(

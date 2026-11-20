@@ -564,3 +564,80 @@ Stage-2 call, 2026-11-19: review-loop · endpoint opencode-go · model hy4-flash
 Stage-2 call, 2026-11-19: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4818 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1114 files, 4834 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1114 files, 4834 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1114 files, 4834 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4839 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-1-20261120T062051723502Z-5c0cb71e.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 4839 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +11 -9
+> - `tests/test_stage2.py` +33 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - L2-1: no fixed line
+> - L2-2: no fixed line
+> - L2-3: no fixed line
+> - L2-4: no fixed line
+> - L2-6: no fixed line
+> - L2-7: no fixed line
+> - L2-9: no fixed line
+> - L2-13: no fixed line
+> - L2-14: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-2-20261120T062051723502Z-5c0cb71e.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1114 files, 4847 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/check_interview_minimums.py` +31 -0
+> - `scripts/stage2.py` +94 -33
+> - `tests/test_stage2.py` +119 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/stage2.py:3964:24: ARG001 Unused function argument: `root`
+>      |
+> 3964 | def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecReviewBlock], str]:
+>      |                        ^^^^ ARG001
+> 3965 |     """The change's qualifying spec-review blocks, in findings order, and the blocks left out.
+>      |
+>
+> scripts/stage2.py:3964:36: ARG001 Unused function argument: `change`
+>      |
+> 3964 | def qualifying_reviews(root: Path, change: str, text: str) -> tuple[list[SpecReviewBlock], str]:
+>      |                                    ^^^^^^ ARG001
+> 3965 |     """The change's qualifying spec-review blocks, in findings order, and the blocks left out.
+>      |
+>
+> Found 2 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-3-20261120T062051723502Z-5c0cb71e.md
+> ```

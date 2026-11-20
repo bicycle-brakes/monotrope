@@ -267,6 +267,37 @@ def _counted(records: list[tuple[str, dict[str, str]]]) -> int:
     return len(seen)
 
 
+def maintainer_answers(text: str) -> list[dict[str, str]]:
+    """The interview records the maintainer answered, as the minimum counts them, with their titles.
+
+    Each entry holds `id`, `title` (the heading text after the `·`) and the record's fields. The
+    selection is `_counted`'s: answered, by the maintainer, with a stated question and answer, the
+    first occurrence of an id only; a fenced example is no record. Callers that need a decision
+    of a given kind (the runner's fourth spec-review round) read it here, never by searching text.
+    """
+    found: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for block in re.split(r"^## ", _unfenced(text), flags=re.M)[1:]:
+        heading = block.split("\n", 1)[0]
+        record = _RECORD.match(heading)
+        if record is None:
+            continue
+        fields: dict[str, str] = {}
+        for line in block[len(heading) :].splitlines():
+            match = _FIELD_LINE.match(line)
+            if match:
+                fields[match.group("name")] = match.group("value").strip()
+        if fields.get("status") != "answered" or fields.get("answered_by") != "maintainer":
+            continue
+        if not fields.get("asked", "").strip() or not fields.get("answer", "").strip():
+            continue
+        if record.group(1) in seen:
+            continue
+        seen.add(record.group(1))
+        found.append({"id": record.group(1), "title": record.group(2).strip(), **fields})
+    return found
+
+
 def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
     return any(s.get("status") == "skipped" and s.get("reason", "").strip() for s in skips)
 

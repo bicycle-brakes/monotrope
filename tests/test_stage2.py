@@ -8313,6 +8313,111 @@ def test_spec_review_retries_then_falls_back(
     assert "no fallback" not in capsys.readouterr().err
 
 
+def test_fallback_review_has_worktree_read_access(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    calls = []
+
+    def reviewer(*_args, **kwargs):
+        calls.append(kwargs)
+        return rows(1)
+
+    monkeypatch.setattr(stage2, "run_reviewer", reviewer)
+    world.script(claude=[{"exit": 1}, {"exit": 1}])
+    assert world.run("spec-review") == 0
+    assert calls and not calls[0].get("free", False)
+
+
+def test_legacy_review_accepts_blank_before_heading(world: World) -> None:
+    text = opus_review_block(world, day="2026-11-17", fingerprint=None)
+    text = text.replace("\n## Phase 2a", "\n\n## Phase 2a")
+    blocks = stage2.spec_review_blocks(text)
+    assert len(blocks) == 1 and blocks[0].audit_matches
+
+
+def test_spec_review_refuses_invalid_utf8(world: World) -> None:
+    try:
+        stage2.spec_review_prompt(world.root, "demo", b"invalid \xff")
+    except stage2.Refused as error:
+        assert "UTF-8" in str(error)
+    except UnicodeDecodeError:
+        pytest.fail("invalid UTF-8 must be refused without a traceback")
+    else:
+        pytest.fail("invalid UTF-8 must be refused")
+
+
+BAD_SEVERITY_ANSWERS = [
+    "| X1 | CRITICAL | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 |  | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | MAJOR (contract) | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | [ambiguity] scope | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | MAJOR | SPEC | criterion 1 | spec.md:1 | a finding |\n| X2 | CRITICAL | SPEC | c | s | one | two |",
+]
+
+
+BAD_SEVERITY_IDS = ["critical", "empty", "qualified", "lowercase-mark", "wide"]
+
+
+@pytest.mark.parametrize("answer", BAD_SEVERITY_ANSWERS, ids=BAD_SEVERITY_IDS)
+def test_spec_review_answer_the_stored_reader_rejects_fails_the_call(answer: str) -> None:
+    """L2-1, L2-3, L2-6, L2-7: an answer whose rows the stored reader could not read is no readable review."""
+    with pytest.raises(stage2.CallFailed):
+        stage2.readable_review(answer)
+
+
+def test_an_overwide_ambiguity_row_reads_and_reads_back_open() -> None:
+    """L2-3, L2-7: an `[AMBIGUITY]` row with an extra unescaped pipe folds like any row and stays an open row."""
+    answer = rows(1) + "\n| A1 | [AMBIGUITY] scope | SPEC | criterion 2 | spec.md:2 | one | two |"
+    parsed = stage2.readable_review(answer)
+    assert [row[0] for row in parsed] == ["X1", "A1"]
+    stored = stage2.answer_block(parsed, answer, "Opus")
+    block = stage2.spec_review_blocks(f"## Phase 2a — Opus 5.5, {FIXED_REVIEW_DAY}\n\n{stored}\n")[0]
+    assert block.table_readable and [row["id"] for row in block.rows] == ["X1", "A1"]
+    assert stage2.open_ambiguity_row(block) == "A1"
+
+
+def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2-1, L2-6: a call whose rows would not read back is retried and then falls back; no such block is written."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    bad = {"stdout": BAD_SEVERITY_ANSWERS[0]}
+    world.script(claude=[bad, bad], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    assert len(world.calls("claude")) == 2
+    assert "CRITICAL" not in world.text()
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+@pytest.mark.parametrize("rounds", [3, 2])
+def test_stale_legacy_blocks_still_count_as_rounds(world: World, monkeypatch: pytest.MonkeyPatch, rounds: int) -> None:
+    """L2-2: legacy blocks the spec body outgrew still count; three admit the edited spec, two do not."""
+    cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
+    day = (cutoff - dt.timedelta(days=10)).isoformat()
+    world.write_findings(*[opus_review_block(world, day=day, fingerprint=None) for _ in range(rounds)])
+    commit_at(world, monkeypatch, cutoff - dt.timedelta(days=4))
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.rounds == rounds
+    if rounds == 3:
+        assert admission.review_problem is None
+    else:
+        assert admission.review_problem is not None and "predates" in admission.review_problem
+
+
+def test_the_inventory_lists_a_change_in_every_failing_group(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L2-14: a change with no class and no review stands in the class group and the review group."""
+    folder = world.root / "plans" / "changes" / "both"
+    folder.mkdir()
+    (folder / "spec.md").write_text("---\ntitle: Spec both\nbead: other-both\n---\n\n# Spec\n", encoding="utf-8")
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    class_group = out.split("Class refused (missing, invalid or disagreeing):", 1)[-1].split("\n\n", 1)[0]
+    review_group = out.split("Review missing, unreadable, stale or ambiguous:", 1)[-1].split("\n\n", 1)[0]
+    assert "\n- both (" in class_group
+    assert "\n- both (" in review_group
+
+
 def test_fallback_spec_review_honours_leak_check(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -8467,13 +8572,58 @@ def test_spec_review_caps_the_fourth_round_without_authorization(
     seed_review_rounds(world, 3)
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 2
-    assert "fourth round" in capsys.readouterr().err
+    assert "Fourth spec-review round" in capsys.readouterr().err
     assert world.calls() == []
     (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
-        "# Decisions\n\nThe maintainer authorized a fourth spec-review round for demo (S-9).\n", encoding="utf-8"
+        fourth_round_record("Q-20", "authorized — one fourth round"), encoding="utf-8"
     )
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
+    assert len(stage2.spec_review_blocks(world.text())) == 4
+
+
+def fourth_round_record(
+    record_id: str, answer: str, *, answered_by: str = "maintainer", title: str | None = None
+) -> str:
+    """A decisions.md question about a fourth spec-review round, in the interview record format."""
+    heading = title or "Fourth spec-review round"
+    return (
+        f"## {record_id} · {heading}\n\nasked: 2026-11-20\nanswer: {answer}\nanswered_by: {answered_by}\n"
+        "status: answered\n\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# Decisions\n\nThe maintainer does not authorize a fourth round.\n",
+        "# Decisions\n\nQ-9 releases a fourth round, which the maintainer authorizes in decisions.md.\n",
+        fourth_round_record("Q-20", "declined — no fourth round is authorized"),
+        fourth_round_record("Q-20", "authorized", answered_by="agent"),
+        fourth_round_record("Q-20", "authorized", title="A BLOCKER after the third review round"),
+    ],
+    ids=["declining-note", "quoted-rule", "declined-answer", "agent-answer", "other-question"],
+)
+def test_fourth_round_is_not_released_by_wording(world: World, text: str) -> None:
+    """L2-4, L2-9, L2-13: only a maintainer-answered fourth-round question that authorizes releases a round."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(text, encoding="utf-8")
+    assert stage2.authorized_extra_rounds(world.root, "demo") == 0
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert world.calls() == []
+
+
+def test_one_authorization_releases_exactly_one_extra_round(world: World) -> None:
+    """L2-4: a single recorded authorization admits round four and not round five."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        fourth_round_record("Q-20", "Authorised — one fourth round"), encoding="utf-8"
+    )
+    assert stage2.authorized_extra_rounds(world.root, "demo") == 1
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    assert world.run("spec-review") == 2
     assert len(stage2.spec_review_blocks(world.text())) == 4
 
 
