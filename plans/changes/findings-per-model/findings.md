@@ -537,3 +537,16 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1fa61-011f-74c1-867d-f2e3caa65054, 2026-11-20
 Reviewer session: codex 01a1fa61-011f-74c1-867d-f2e3caa65054 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 4974 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | AGENTS.md; docs/orchestration.md | The morning handover instructions use `REV=main`, which reads the local `main` branch even when it is stale. On 2026-11-20, local `main` is at `24632499`, while the fetched `origin/main` is at `cd8770ee`; following the instructions therefore produces a main report that omits later merged findings. [Criterion 17] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | base | scripts/check_finding_duplicates.py, `changed_files` | Moving a findings file with an unstaged filesystem rename leaves the old path deleted and the new path untracked. The gate treats the new path as a new file, so unchanged historical duplicate rows with legacy wording fail the gate. Moved, unchanged rows must remain exempt. [Criterion 9] | Codex | open | — |
+| F6-3 | MAJOR | SPEC | base | scripts/findings_reader.py, `duplicate_targets` | A canonical status such as `rejected — duplicate of F-1: not the same as F-3` treats `F-3` in the reason as another duplicate target. If `F-3` does not exist, the report incorrectly marks itself incomplete; if it creates a cycle, the report incorrectly reports one. The optional reason must not add targets to the canonical duplicate reference. [Criteria 9, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1faaf-490e-7eb2-8254-36a31908bc89, 2026-11-20
+Reviewer session: codex 01a1faaf-490e-7eb2-8254-36a31908bc89 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
