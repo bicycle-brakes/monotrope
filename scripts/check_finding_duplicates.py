@@ -34,8 +34,8 @@ import findings_reader as reader  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = re.compile(
-    r"rejected — duplicate of (?P<ids>[A-Za-z0-9]{1,8}(?:-[A-Za-z]?\d+)+"
-    r"(?: and [A-Za-z0-9]{1,8}(?:-[A-Za-z]?\d+)+)*)(?:: .+)?"
+    rf"rejected — duplicate of (?P<ids>{reader.FINDING_ID.pattern}"
+    rf"(?: and {reader.FINDING_ID.pattern})*)(?:: .+)?"
 )
 # A row the gate reads: a table line that is no furniture, a finding id in its
 # first cell, and a width whose Status cell the reader knows.

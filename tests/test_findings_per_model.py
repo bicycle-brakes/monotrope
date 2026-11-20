@@ -767,3 +767,28 @@ def test_phase6_unreadable_ids_make_report_incomplete(tmp_path, monkeypatch):
     assert len(gaps) == 2 and all(record["path"] == path for record in gaps)
     assert all("id" in record["reason"].lower() for record in gaps)
     assert not any(record["type"] == "model" and record["raised"] for record in records)
+
+
+def test_readable_ids_are_duplicate_targets_and_gate_uses_same_grammar():
+    import check_finding_duplicates as gate
+
+    result = read(doc(PHASE6, p6row("R1", "fixed"), p6row("R2", "rejected — same as R1")))
+    assert not result.gaps
+    assert fr.duplicate_targets("rejected — same as R1") == ["R1"]
+    assert sum(item["raised"] for item in fpm.totals_of(result.findings)) == 1
+    assert gate.marks_duplicate("rejected — same as R1")
+    assert not gate.CANONICAL.fullmatch("rejected — same as R1")
+    assert gate.CANONICAL.fullmatch("rejected — duplicate of R1 and L2-5")
+
+
+def test_incomplete_table_lines_make_report_incomplete(tmp_path, monkeypatch):
+    path = findings_path("missing-pipe")
+    root, _ = repo(tmp_path, {path: doc(PHASE6, p6row("F-3", "open")[:-1])})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert code != 0 and "Incomplete" in "".join(chunks)
+    assert records[0]["complete"] is False
+    assert any(r.get("id") == "F-3" and r.get("path") == path for r in records if r["type"] == "gap")
+    parsed = read(doc(RELEASE, lrow("L1-1", "hy3", "open"), lrow("L1-2", "hy3", "open")[:-1]))
+    assert any(g.id == "L1-2" for g in parsed.gaps)

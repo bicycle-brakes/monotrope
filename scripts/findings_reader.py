@@ -67,9 +67,8 @@ MODEL_FIELD = re.compile(r"·\s+model\s+(\S+)\s+·")
 MODEL_NAME = re.compile(r"(?=\S*\d)[a-z0-9][a-z0-9._+-]*")
 # A row id in a first cell: tokens with a digit (`F-1`, `L2-2`, `RB-G7`, `2a-1`).
 ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
-# The strict id shape of a duplicate reference (`L1-1`, `F6-2`): at least one
-# hyphen segment ending in a digit. `Finding 3` names no row id (criterion 7).
-FINDING_ID = re.compile(r"[A-Za-z0-9]{1,8}(?:-[A-Za-z]?\d+)+")
+# Duplicate targets use exactly the same grammar as readable row IDs.
+FINDING_ID = ROW_ID
 DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repeats?)", re.I)
 _PIPE = re.compile(r"(?<!\\)\|")
 
@@ -141,7 +140,7 @@ def duplicate_targets(status: str) -> list[str]:
     """The row ids a duplicate marker names, deduplicated, in deterministic order."""
     targets: set[str] = set()
     pattern = re.compile(
-        rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*)",
+        rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*)(?![A-Za-z0-9._-])",
         re.I,
     )
     for match in pattern.finditer(status):
@@ -296,6 +295,11 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
                 calls.append(call)
             continue
         cells = split_row(line)
+        if cells is None and line.strip().startswith("|") and section.kind in ("released", "phase6"):
+            first = _PIPE.split(line.strip()[1:], maxsplit=1)[0].strip()
+            row_id = first if ROW_ID.fullmatch(first) else None
+            gaps.append(Gap(path, row_id, f"line {position}: incomplete table row (missing final pipe)"))
+            continue
         if section.kind == "released":
             if cells is not None:
                 section.table_started = True
