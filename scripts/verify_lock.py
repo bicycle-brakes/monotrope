@@ -74,10 +74,12 @@ for exactly as long as the protected child and its own children run — and
 releases only after the child's process group is gone, including failure,
 cancellation and signals; signal cleanup kills the child before the lock is
 released, and a grandchild left in the group after the command exits is ended
-before release. `scripts.verify_all.sh` execs this supervisor, and
-`scripts.stage2` holds the same admission around its timed local checks; the
-queue and memory waits consume neither `VERIFY_SECONDS` nor a pytest proof's
-execution timeout — the configured limits still apply to actual execution.
+before release. `scripts.verify_run` holds this admission in-process around
+the protected gates of the shared two-phase scheduler, and `scripts.stage2`
+reaches the same admission through that scheduler for its timed local
+checks; the queue and memory waits consume neither `VERIFY_SECONDS` nor a
+pytest proof's execution timeout — the configured limits still apply to
+actual execution.
 """
 
 from __future__ import annotations
