@@ -454,6 +454,26 @@ def test_gaps_produce_both_incomplete_outputs_and_nonzero(tmp_path, monkeypatch)
     assert record["raised"] == 1 and record["defects_accepted"] == 0, "accepted limit was counted as fixed"
 
 
+def test_malformed_finding_cells_are_gaps_in_both_outputs(tmp_path, monkeypatch):
+    valid = ["F-1", "MAJOR", "SPEC", "base", "spec.md", "a finding", "open"]
+    rows = []
+    for index, value in enumerate(("bad id", "BAD", "BAD", "bad", "", "", "unknown")):
+        cells = valid.copy()
+        cells[index] = value
+        if index != 0:
+            cells[0] = f"F-{index + 1}"
+        rows.append("| " + " | ".join(cells) + " |")
+    rows.append("| F-8 | | | | | | open |")
+    root, _ = repo(tmp_path, {findings_path("bad-cells"): doc(PHASE6, *rows)})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert code != 0 and "Incomplete" in "".join(chunks)
+    assert records[0]["complete"] is False
+    assert len([record for record in records if record["type"] == "gap"]) == len(rows)
+    assert not [record for record in records if record["type"] == "model"]
+
+
 # --- criterion 18 --------------------------------------------------------------------
 
 

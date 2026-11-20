@@ -239,6 +239,38 @@ def parse_call_line(line: str, position: int) -> CallLine | None:
     return CallLine(matched.group("date"), verb, model_match.group(1) if model_match else None, position)
 
 
+def row_error(cells: list[str], kind: str) -> str | None:
+    """Validate a whole eligible row before any consumer can count it."""
+    widths = (10,) if kind == "released" else (7, 9, 10)
+    if len(cells) not in widths:
+        return f"a {kind} row needs {' or '.join(map(str, widths))} cells, found {len(cells)}"
+    id_pattern = LOOP_ID if kind == "released" else ROW_ID
+    if not id_pattern.fullmatch(cells[0]):
+        return f"unreadable {kind} finding id"
+    if cells[1] not in {"BLOCKER", "MAJOR", "MINOR"}:
+        return f"invalid severity {cells[1]!r}"
+    if cells[2] not in {"SPEC", "MAINT", "CODE"}:
+        return f"invalid dimension {cells[2]!r}"
+    # Historical seven-cell CODE rows predate the Origin column: their final
+    # three fields before Status are Where, Finding and Reviewer.
+    legacy = len(cells) == 7 and cells[2] == "CODE"
+    if not legacy and not re.fullmatch(r"(?:base|loop|fix-r[0-9]+)", cells[3]):
+        return f"invalid origin {cells[3]!r}"
+    for index, name in (
+        ((3, "location"), (4, "finding"), (5, "reviewer")) if legacy else ((4, "location"), (5, "finding"))
+    ):
+        if not cells[index].strip():
+            return f"blank {name}"
+    if len(cells) >= 9 and any(not cells[index].strip() for index in (6, 8)):
+        return "blank reviewer or test field"
+    if len(cells) == 10 and not cells[9].strip():
+        return "blank phase 6 field"
+    status = status_cell(cells) or ""
+    if not known_status(status):
+        return f"unknown status {status!r} (the known set is closed)"
+    return None
+
+
 @dataclass
 class Section:
     """The innermost heading and the row table it owns."""
@@ -309,28 +341,15 @@ def parse_findings(text: str, *, change: str, path: str) -> Parsed:
             continue
         if not any(cell.strip() for cell in cells):
             continue  # a decorative line of empty cells is no row
-        if section.kind == "released":
-            if len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
-                blocks[-1].rows.append(RowRecord(cells, position))
-            else:
-                reason = (
-                    f"line {position}: a released loop row needs {len(RELEASED_COLUMNS)} cells "
-                    f"and a loop id, found {len(cells)}"
-                )
-                gaps.append(Gap(path, cells[0], reason))
-            continue
-        if section.kind == "phase6":
-            if cells[0].startswith(PHASE2A_ID_PREFIX):
-                continue  # criterion 19: a phase-2a row never counts in a phase-6 block
-            if not ROW_ID.fullmatch(cells[0]):
-                gaps.append(Gap(path, None, f"line {position}: unreadable phase-6 finding id"))
-                continue
-            if len(cells) in (7, 9, 10):
-                blocks[-1].rows.append(RowRecord(cells, position))
-            else:
+        if section.kind in ("released", "phase6"):
+            if section.kind == "phase6" and cells[0].startswith(PHASE2A_ID_PREFIX):
+                continue  # criterion 19: a phase-2a row never counts
+            error = row_error(cells, section.kind)
+            if error is not None:
                 row_id = cells[0] if ROW_ID.fullmatch(cells[0]) else None
-                reason = f"line {position}: a phase-6 row needs 7, 9 or 10 cells, found {len(cells)}"
-                gaps.append(Gap(path, row_id, reason))
+                gaps.append(Gap(path, row_id, f"line {position}: {error}"))
+            else:
+                blocks[-1].rows.append(RowRecord(cells, position))
             continue
         if section.kind in ("", "other") and ROW_ID.fullmatch(cells[0]):
             # criterion 18: a table whose first cell holds a finding id, under a heading
