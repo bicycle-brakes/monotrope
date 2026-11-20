@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-15
+updated: 2026-11-19
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -624,6 +624,51 @@ rows are diagnosed. Read summaries with `python3 -m scripts.verify_duration
 report`, or inspect one run with `python3 -m scripts.verify_duration report
 --run <run-id>`. Unusable measurement storage warns without changing gate
 execution or verdicts; raw history stays outside Git.
+
+A slip is one completed red local full verification run that answers the
+immediately preceding completed check of the same repository, change, checked
+tree and gate configuration when that check is a green targeted check (bead
+coding-harness-bxxt.7). The count is derived, never stored. The runner's
+targeted check (repair only) records its start and end, each with the checked
+tree, in `verify-targeted.jsonl` beside `verify-duration.jsonl`; the runner's
+admitted full check (`full_verify`) carries its comparison context in
+runner-owned environment variables that the shell's start record captures as
+additive version-1 fields with a version-2 marker, so older duration readers
+still read the history and never count a targeted check as a full duration.
+`python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change
+NAME]` combines both histories and reports two numbers side by side: the slip
+count and the incomplete or not countable runs. Checks are ordered by UTC
+completion, strictly earlier-than; equal completion times establish no order
+and make both runs incomplete. An intervening check of the same identity ends
+the pairing, so each red run counts at most once and only for its immediate
+predecessor. A potentially matching pair with a gap on either side — a missing
+end, conflicting records, a moved tree, an unknown identity, an unpaired
+completion, a full run still running — is counted as incomplete on each
+selected side, never as a slip or a clean non-slip. A full green immediately
+followed by a full red of one identity is reported separately as a flaky-test
+signal (undecided when an uncertain full run may stand between them). Legacy
+duration runs and change-less full runs are reported on an outside-the-count
+line and never make the report partial; legacy runs that name no repository
+appear as unattributed outside runs. A completion without a start is outside
+the count before the first version-2 comparison record and partial after it.
+Missing history is unavailable, never a counted zero: once the duration
+history holds a version-2 record, a missing targeted history is unavailable,
+and a targeted history without a duration history is too. A scope that selects
+no run at all (a misspelled `--change`, another checkout, an empty window)
+reads "0 runs selected, no statement possible" with exit 1. Exit 0 means
+complete evidence, 1 partial or unavailable evidence, 2 an invalid interval or
+refused storage. Reading never appends to either history, and no slip event,
+counter or consumed marker exists; trees are compared by contents and modes,
+never by commit identity, which the checkpoint commit, stamping and audit
+finalization move between the two checks. The comparison tree leaves out the
+change's own `plan.md` and `findings.md`, where the runner's and phase 6's
+bookkeeping lands between the checks; an edit to those two files in between
+goes unseen and can count one slip too many. An edit to another change file,
+such as `spec.md`, `decisions.md` or `research.md`, moves the comparison tree
+between the checks; the pair then no longer matches and a slip can go
+uncounted. The full run records its tree
+only at its start, so a tree that moved during a red full run can also count
+one slip too many (follow-up bead coding-harness-cf9h).
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
