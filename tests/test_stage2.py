@@ -29314,6 +29314,9 @@ def test_superseded_worktree_release_records_superseder(world: World) -> None:
     old_findings.parent.mkdir(parents=True, exist_ok=True)
     old_findings.write_text("# Findings\n\nStage-2 call, 2026-11-18: review-loop · reviewer\n", encoding="utf-8")
     assert supersede(world, key) == 0
+    git(world.root, "add", "plans/changes/demo/findings.md")
+    git(world.root, "commit", "-m", "Record supersession")
+    world.findings.unlink()  # An uncommitted deletion must not hide committed accounting.
     try:
         stage2.release(other, "demo")
     except stage2.Refused as error:
@@ -29344,3 +29347,23 @@ def test_missing_listed_worktree_record_remains_discoverable(world: World) -> No
     assert key in stage2.other_record_keys("demo", world.root)
     assert supersede(world, key) == 0
     assert not (stage2.record_base() / key / "loop.md").exists()
+
+
+def test_restart_no_round_reports_foreign_record_on_second_scan(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    world.write_findings("Stage-2 call, 2026-11-18: review-loop · reviewer")
+    monkeypatch.setattr(stage2, "classified_foreign_records", lambda *_: ([], [key]))
+    with pytest.raises(stage2.Refused) as caught:
+        stage2.restart_loop(world.root, "demo", "reason")
+    assert key in str(caught.value) and "--supersedes" in str(caught.value)
+
+
+def test_malformed_archive_refusal_explains_recovery(world: World) -> None:
+    archive = world.state / "coding-harness" / stage2.ARCHIVE_DIR_NAME / "demo@broken"
+    archive.mkdir(parents=True)
+    (archive / stage2.MANIFEST_NAME).write_text("invalid", encoding="utf-8")
+    with pytest.raises(stage2.Refused) as caught:
+        stage2.archived_round_floor("demo")
+    assert str(archive) in str(caught.value) and "restore" in str(caught.value).lower()

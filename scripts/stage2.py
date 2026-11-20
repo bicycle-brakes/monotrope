@@ -4722,8 +4722,10 @@ def superseded_by(root: Path, change: str) -> str | None:
             for worktree in worktrees:
                 if record_key(change, worktree) != superseder:
                     continue
-                findings = worktree / "plans" / "changes" / change / "findings.md"
-                text = findings.read_text(encoding="utf-8")
+                try:
+                    text = _git_output(worktree, "show", f"HEAD:plans/changes/{change}/findings.md")
+                except Refused:
+                    continue
                 needle = f"{ARCHIVE_PATH_FORM}/{archive.name}/{own}"
                 if any(needle in match.group(3) for match in SUPERSEDED_RESTART_LINE.finditer(text)):
                     return superseder
@@ -4926,11 +4928,11 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         archived_round_floor(change),
     )
     if not last:
-        if lost_record_refusal(change, root, text):
+        refusal = lost_record_refusal(change, root, text)
+        if refusal:
             raise Refused(
-                f"{change} has no completed loop round and its loop record is missing; "
-                "the maintainer must account for the stale audit lines in findings.md by hand before retrying. "
-                "A restart cannot recover the lost record; nothing is written."
+                refusal + " If the record is genuinely lost, account for the stale audit lines in findings.md "
+                "by hand before retrying."
             )
         raise Refused(f"{change} has no completed loop round; a fresh review-loop needs no restart.")
     if restarted_fresh(None, text):
@@ -4961,7 +4963,8 @@ def archived_round_floor(change: str) -> int:
                 highest = max(highest, *(int(m.group().split()[2]) for m in ROUND_HEADING.finditer(record)), 0)
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise Refused(
-                f"cannot read supersession archive `{archive}` to establish the restart floor: {error}"
+                f"cannot read supersession archive `{archive}` to establish the restart floor: {error}; "
+                "restore the archive from a known-good backup before retrying."
             ) from error
     return highest
 
