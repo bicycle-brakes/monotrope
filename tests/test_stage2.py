@@ -29189,7 +29189,7 @@ def test_no_record_retire_and_triage_name_foreign_key(world: World, capsys) -> N
 
 
 @pytest.mark.parametrize("symlinked", [False, True])
-def test_restart_reports_unreadable_foreign_records_without_blocking(world: World, capsys, symlinked: bool) -> None:
+def test_restart_refuses_unreadable_foreign_records(world: World, capsys, symlinked: bool) -> None:
     other = other_worktree(world)
     record = write_foreign_record(other, [1])
     key = stage2.record_key("demo", other)
@@ -29201,9 +29201,12 @@ def test_restart_reports_unreadable_foreign_records_without_blocking(world: Worl
         record.write_bytes(b"\xff")
     original = record.read_bytes()
     world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
+    findings = world.text()
     assert key in stage2.foreign_record_refusal("demo", world.root)
-    assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 0
-    assert key in capsys.readouterr().out
+    assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 2
+    error = capsys.readouterr().err
+    assert key in error and "--supersedes" in error
+    assert world.text() == findings
     assert record.read_bytes() == original
 
 
@@ -29367,3 +29370,38 @@ def test_malformed_archive_refusal_explains_recovery(world: World) -> None:
     with pytest.raises(stage2.Refused) as caught:
         stage2.archived_round_floor("demo")
     assert str(archive) in str(caught.value) and "restore" in str(caught.value).lower()
+
+
+def test_plain_restart_refuses_unreadable_foreign_record(world: World, capsys) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    record.write_bytes(b"\xff")
+    world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 2")
+    before = world.text()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
+    error = capsys.readouterr().err
+    assert key in error and "--supersedes" in error
+    assert world.text() == before and record.read_bytes() == b"\xff"
+
+
+def test_supersede_locks_inactive_worktree_before_archiving(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    third = other_worktree(world, "repo-c")
+    third_key = stage2.record_key("demo", third)
+    move = stage2._move_archive_entry
+    checked = []
+
+    def competing_move(source: Path, target: Path) -> None:
+        try:
+            with stage2.holding_key(third_key):
+                checked.append(False)
+        except stage2.Refused:
+            checked.append(True)
+        move(source, target)
+
+    monkeypatch.setattr(stage2, "_move_archive_entry", competing_move)
+    assert supersede(world, key) == 0
+    assert checked and all(checked), "an inactive worktree could create a record during archiving"

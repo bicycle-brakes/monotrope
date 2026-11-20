@@ -4910,15 +4910,14 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
     # Another worktree's active record stays private (criterion 9); a plain restart here would number
     # the fresh run without accounting for the run that still stands there (criterion 13).
     other, unreadable = classified_foreign_records(change, root)
-    if other:
+    active = sorted(set(other + unreadable))
+    if active:
         raise Refused(
             f"another worktree holds the loop record of {change} under "
-            + ", ".join(f"`{key}`" for key in other)
+            + ", ".join(f"`{key}`" for key in active)
             + "; a plain restart would leave that run unaccounted. Supersede it first: "
             "`release-loop <change> --restart --supersedes <key> --reason <text>`, naming every active key."
         )
-    if unreadable:
-        print("Unreadable other-worktree loop records: " + ", ".join(unreadable))
     findings_path = folder_of(root, change) / "findings.md"
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
     last = max(
@@ -5108,8 +5107,10 @@ def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> Non
     if refusal:
         raise Refused(refusal)
     with contextlib.ExitStack() as stack:
-        for key in sorted({current, *keys}):
+        for key in sorted({current, *listed}):
             stack.enter_context(holding_key(key))
+        if set(record_keys_of_worktrees(change, root)) != listed:
+            raise Refused("the worktree key set changed during supersession; retry with the complete set.")
         # Re-checked under the locks: the first discovery ran before any of them was held.
         refusal = _supersede_request_refusal(change, root, keys, resume, require_current_free=True)
         if refusal:

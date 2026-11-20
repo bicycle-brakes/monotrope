@@ -701,8 +701,8 @@ Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/stage2.py:4918` | Wenn ein anderer Worktree eine aktive, aber nicht lesbare `loop.md` hat und die bisherigen Findings eine abgeschlossene Runde enthalten, meldet ein einfacher Neustart den Schlüssel nur und schreibt anschließend eine Neustartzeile. Er muss stattdessen wegen des aktiven Fremddatensatzes verweigern und auf `--supersedes` verweisen. [Kriterium 13] | Codex | taken — in-spec reproduced fault (criterion 13): an active but unreadable loop record of another worktree refuses a plain restart and names --supersedes, whatever the earlier findings hold (provisional agent decision, autonomous run 2026-11-19) | — |
-| F6-2 | MAJOR | SPEC | base | `scripts/stage2.py:5114` | Wenn ein dritter Worktree unmittelbar nach der Prüfung der vollständigen Schlüsselliste einen neuen Loop-Datensatz anlegt, kann die Supersession trotzdem die ausgewählten Datensätze archivieren und abrechnen. Der neue aktive Schlüssel bleibt unberücksichtigt, weil nur die ausgewählten Schlüssel gesperrt werden; die Supersession müsste bei unvollständiger Schlüsselliste verweigern. [Kriterium 5] | Codex | taken — in-spec reproduced fault (criterion 5): supersession holds the lock over the whole key set it read and refuses when the set changed before archiving (provisional agent decision, autonomous run 2026-11-19) | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/stage2.py:4918` | Wenn ein anderer Worktree eine aktive, aber nicht lesbare `loop.md` hat und die bisherigen Findings eine abgeschlossene Runde enthalten, meldet ein einfacher Neustart den Schlüssel nur und schreibt anschließend eine Neustartzeile. Er muss stattdessen wegen des aktiven Fremddatensatzes verweigern und auf `--supersedes` verweisen. [Kriterium 13] | Codex | fixed — tests/test_stage2.py::test_plain_restart_refuses_unreadable_foreign_record | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/stage2.py:5114` | Wenn ein dritter Worktree unmittelbar nach der Prüfung der vollständigen Schlüsselliste einen neuen Loop-Datensatz anlegt, kann die Supersession trotzdem die ausgewählten Datensätze archivieren und abrechnen. Der neue aktive Schlüssel bleibt unberücksichtigt, weil nur die ausgewählten Schlüssel gesperrt werden; die Supersession müsste bei unvollständiger Schlüsselliste verweigern. [Kriterium 5] | Codex | fixed — tests/test_stage2.py::test_supersede_locks_inactive_worktree_before_archiving | — |
 
 Phase 6 verdict: codex 01a1f913-538d-73d0-b9bc-9248e7c65a52, 2026-11-20
 Reviewer session: codex 01a1f913-538d-73d0-b9bc-9248e7c65a52 — a fresh session reviewed: no phase-2a session was recorded
@@ -821,3 +821,128 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-20: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4896 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1117 files, 4898 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +6 -5
+> - `tests/test_stage2.py` +35 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 111 lines of this gate left out …]
+>         original = record.read_bytes()
+>         world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
+>         assert key in stage2.foreign_record_refusal("demo", world.root)
+> >       assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 0
+> E       AssertionError: assert 2 == 0
+> E        +  where 2 = run('release-loop', 'demo', '--restart', '--reason', 'continue')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypiky/pytest-1/popen-gw2/test_restart_reports_unreadabl0/state')).run
+>
+> tests/test_stage2.py:29205: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> refused: another worktree holds the loop record of demo under `demo@485932a9`; a plain restart would leave that run unaccounted. Supersede it first: `release-loop <change> --restart --supersedes <key> --reason <text>`, naming every active key.
+> ____ test_restart_reports_unreadable_foreign_records_without_blocking[True] ____
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypiky/pytest-1/popen-gw2/test_restart_reports_unreadabl1/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x109a6a180>
+> symlinked = True
+>
+>     @pytest.mark.parametrize("symlinked", [False, True])
+>     def test_restart_reports_unreadable_foreign_records_without_blocking(world: World, capsys, symlinked: bool) -> None:
+>         other = other_worktree(world)
+>         record = write_foreign_record(other, [1])
+>         key = stage2.record_key("demo", other)
+>         if symlinked:
+>             target = world.state / "linked-record"
+>             record.parent.rename(target)
+>             record.parent.symlink_to(target, target_is_directory=True)
+>         else:
+>             record.write_bytes(b"\xff")
+>         original = record.read_bytes()
+>         world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
+>         assert key in stage2.foreign_record_refusal("demo", world.root)
+> >       assert world.run("release-loop", "demo", "--restart", "--reason", "continue") == 0
+> E       AssertionError: assert 2 == 0
+> E        +  where 2 = run('release-loop', 'demo', '--restart', '--reason', 'continue')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypik...zwyfjptgm40000gn/T/verify-runs-501/10685/pytest-of-mikypiky/pytest-1/popen-gw2/test_restart_reports_unreadabl1/state')).run
+>
+> tests/test_stage2.py:29205: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> refused: another worktree holds the loop record of demo under `demo@3efd3305`; a plain restart would leave that run unaccounted. Supersede it first: `release-loop <change> --restart --supersedes <key> --reason <text>`, naming every active key.
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=13895) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/loop-record-other-worktree/tests/test_stage2.py:24360: DeprecationWarning: This process (pid=13890) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_restart_reports_unreadable_foreign_records_without_blocking[False]
+> FAILED tests/test_stage2.py::test_restart_reports_unreadable_foreign_records_without_blocking[True]
+> 2 failed, 6360 passed, 17 skipped, 5 warnings in 602.00s (0:10:02)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47304 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/loop-record-other-worktree/stage2/attempts/loop-record-other-worktree/attempt-1-20261120T131301032679Z-869d1adc.md
+> ````
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1117 files, 4902 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
