@@ -8,7 +8,7 @@ declared fallback reviewer reads the same prompt through Pi.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** a current review of the spec, no open `[AMBIGUITY]`; at most three
-rounds (`docs/WORKFLOW.md` §4, "The spec review before the plan card").
+spec-review rounds (`docs/WORKFLOW.md` §4, "The spec review before the plan card").
 **Session:** the same reviewer later runs phase 6 for a spike. On the by-hand
 path (a spike), start it with a fixed id, `claude --model claude-opus-5-5
 --session-id <uuid> -n review-<name>`, and write the id under the table in

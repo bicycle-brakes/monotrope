@@ -20908,19 +20908,25 @@ DRAFT_ORDER_NEEDLES = (
     ("`python3 scripts/stage2.py draft <change>`", "Codex writes"),
     ("reads the whole draft",),
     ("`python3 scripts/stage2.py spec-review <change>`", "Opus 5.5"),
-    ("second `draft <change>`", "open rows in"),
+    ("triages the rows",),
+    ("second `draft <change>`", "works the rows in"),
+    ("After the third round", "final draft"),
     ("unchanged",),
 )
 
 
 def draft_order_problems(workflow: str) -> list[str]:
-    """The draft section's five numbered steps, each carrying its own needles (spec, criterion 33)."""
+    """The draft section's seven numbered steps, each carrying its own needles (spec, criterion 33).
+
+    Seven since mandatory-spec-review: the triage, the repeated draft and review, and the final draft
+    after round three stand between the spec review and the plan card.
+    """
     draft = section(workflow, "### The draft (phases 2, 2b and 3)")
     if not draft:
         return ["section 4 has no draft section"]
     steps = re.findall(r"^\d+\. (.*)$", draft, re.M)
-    if len(steps) != 5:
-        return [f"the draft section holds {len(steps)} numbered steps, not 5"]
+    if len(steps) != len(DRAFT_ORDER_NEEDLES):
+        return [f"the draft section holds {len(steps)} numbered steps, not {len(DRAFT_ORDER_NEEDLES)}"]
     found = []
     for step, needles in zip(steps, DRAFT_ORDER_NEEDLES, strict=True):
         one = flat(step)
@@ -20931,7 +20937,7 @@ def draft_order_problems(workflow: str) -> list[str]:
 
 
 def test_the_workflow_states_the_order_of_a_drafted_change() -> None:
-    # Criterion 33. Planted fault: one of the five steps removed from the draft section.
+    # Criterion 33. Planted fault: one of the seven steps removed from the draft section.
     text = WORKFLOW.read_text(encoding="utf-8")
     assert draft_order_problems(text) == []
     steps = re.findall(r"^(\d+\. .*)$", section(text, "### The draft (phases 2, 2b and 3)"), re.M)
