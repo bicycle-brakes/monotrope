@@ -8404,19 +8404,70 @@ def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
     assert stage2.review_admission(world.root, "demo").review_problem is None
 
 
-@pytest.mark.parametrize("rounds", [3, 2])
-def test_stale_legacy_blocks_still_count_as_rounds(world: World, monkeypatch: pytest.MonkeyPatch, rounds: int) -> None:
-    """L2-2: legacy blocks the spec body outgrew still count; three admit the edited spec, two do not."""
+@pytest.mark.parametrize(
+    ("rounds", "edits", "admitted"),
+    [(3, 1, True), (3, 2, False), (2, 1, False)],
+    ids=["three-rounds-one-final-draft", "three-rounds-later-edit", "two-rounds"],
+)
+def test_stale_legacy_blocks_still_count_as_rounds(
+    world: World, monkeypatch: pytest.MonkeyPatch, rounds: int, edits: int, admitted: bool
+) -> None:
+    """L2-2, L3-1: legacy blocks still count; three admit one final draft, a later edit needs a review again."""
     cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
     day = (cutoff - dt.timedelta(days=10)).isoformat()
     world.write_findings(*[opus_review_block(world, day=day, fingerprint=None) for _ in range(rounds)])
-    commit_at(world, monkeypatch, cutoff - dt.timedelta(days=4))
+    for step in range(edits):
+        commit_at(world, monkeypatch, cutoff - dt.timedelta(days=4 - step))
     admission = stage2.review_admission(world.root, "demo")
     assert admission.rounds == rounds
-    if rounds == 3:
+    if admitted:
         assert admission.review_problem is None
     else:
-        assert admission.review_problem is not None and "predates" in admission.review_problem
+        assert admission.review_problem is not None
+        assert "predates" in admission.review_problem or "stale" in admission.review_problem
+
+
+def test_a_later_spec_edit_after_the_final_draft_needs_a_review_again(world: World) -> None:
+    """L3-1: three rounds admit one final draft only; a second body version after the review is refused."""
+    seed_review_rounds(world, 3)
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    for sentence in ("The final draft.", "A much later edit."):
+        spec.write_text(spec.read_text(encoding="utf-8") + f"\n{sentence}\n", encoding="utf-8")
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", sentence)
+        problem = stage2.review_admission(world.root, "demo").review_problem
+        if sentence == "The final draft.":
+            assert problem is None
+    assert problem is not None and "final draft" in problem
+
+
+def test_an_ambiguity_with_no_round_left_is_settled_in_decisions(world: World) -> None:
+    """L3-8: when no review can run, the maintainer's recorded answer settles the row; before that the gate says how."""
+    seed_review_rounds(world, 2)
+    world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "open ambiguity row R1" in problem
+    assert "Ambiguity R1" in problem and "review the spec again" not in problem
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        fourth_round_record("Q-30", "the boundary stays as drafted", title="Ambiguity R1"), encoding="utf-8"
+    )
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+def test_a_committed_spec_body_that_is_not_utf8_reads_byte_exact(world: World) -> None:
+    """L3-9: a committed body with a non-UTF-8 byte is read as bytes - current when unchanged, never a traceback."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_bytes(spec.read_bytes() + b"\nbyte \xff here\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spec body with a non-UTF-8 byte")
+    later = dt.datetime.now(dt.UTC).date() + dt.timedelta(days=1)
+    try:
+        committed = stage2.spec_last_commit_day(world.root, "demo")
+        problem = stage2.legacy_currency_problem(world.root, "demo", later)
+    except (UnicodeEncodeError, UnicodeDecodeError) as error:
+        pytest.fail(f"a committed non-UTF-8 spec body must be read as bytes, not decoded: {error}")
+    assert committed is not None
+    assert problem is None, "the committed body equals the disk body byte for byte, so the review stands"
 
 
 def test_the_inventory_lists_a_change_in_every_failing_group(world: World, capsys: pytest.CaptureFixture[str]) -> None:

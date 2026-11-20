@@ -641,3 +641,37 @@ Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 2 errors.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-3-20261120T062051723502Z-5c0cb71e.md
 > ```
+
+Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1114 files, 4854 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 4857 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-1-20261120T081453994758Z-ad24d19a.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 4858 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-2-20261120T081453994758Z-ad24d19a.md
+> ```
+
+Stage-2 call, 2026-11-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1114 files, 4858 commits, 12 rules.
+
+Runner restoration, 2026-11-20: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged

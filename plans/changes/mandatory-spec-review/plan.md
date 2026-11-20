@@ -77,6 +77,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-17 22:27:44–22:29:55 UTC, 131 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -93,3 +97,6 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 06:22:15–07:04:47 UTC, 2552 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-20 07:04:55–07:08:18 UTC, 203 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-20 07:09–07:20 UTC — repair · round 2 · orchestrator hand finishing (Opus subagent) on runner attempt 3 (Sonnet): ruff ARG001 fixed, one interview-record reader for the fourth round (round four only), strict severity in the 2a answer format, row-named tests; targeted tests green (106), full `tests/test_stage2.py` green (2165 passed, 1 skipped); full `make verify` green (6384 passed, 17 skipped; 778 s execution) · measured with `date -u`
+2026-11-20 08:15:06–08:16:17 UTC, 71 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-20 08:16:29–08:17:36 UTC, 67 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-20 08:17:47–08:52:57 UTC, 2111 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

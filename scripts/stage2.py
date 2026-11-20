@@ -3930,21 +3930,63 @@ def review_rounds(blocks: list[SpecReviewBlock]) -> int:
     return rounds
 
 
-def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
-    """The UTC committer day of the latest committed spec body change."""
+def _git_bytes(root: Path, *args: str) -> bytes:
+    """A git command's stdout as the exact bytes (a committed spec body is read one way, never decoded)."""
+    try:
+        out = run_git(root, *args, text=False).stdout
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    return out if isinstance(out, bytes) else os.fsencode(out)
+
+
+def spec_body_versions(root: Path, change: str) -> list[tuple[int, bytes]]:
+    """The committed spec bodies, oldest first, each with the committer timestamp that introduced it.
+
+    Consecutive commits that leave the body bytes alone (front-matter-only edits) form one version.
+    """
     path = f"plans/changes/{change}/spec.md"
     lines = _git_output(root, "log", "--format=%H %ct", "--", path).splitlines()
-    previous_body = None
-    previous_timestamp = None
-    for line in lines:
+    versions: list[tuple[int, bytes]] = []
+    for line in reversed(lines):
         commit, timestamp = line.split()
-        body = spec_body_of(_git_output(root, "show", f"{commit}:{path}", preserve_newlines=True).encode("utf-8"))
-        if previous_body is not None and body != previous_body:
-            return dt.datetime.fromtimestamp(int(previous_timestamp), dt.UTC).date()
-        previous_body, previous_timestamp = body, timestamp
-    if previous_timestamp is not None:
-        return dt.datetime.fromtimestamp(int(previous_timestamp), dt.UTC).date()
-    return None
+        body = spec_body_of(_git_bytes(root, "show", f"{commit}:{path}"))
+        if not versions or versions[-1][1] != body:
+            versions.append((int(timestamp), body))
+    return versions
+
+
+def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
+    """The UTC committer day of the latest committed spec body change."""
+    versions = spec_body_versions(root, change)
+    if not versions:
+        return None
+    return dt.datetime.fromtimestamp(versions[-1][0], dt.UTC).date()
+
+
+def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, disk: bytes) -> int | None:
+    """How many spec body versions followed the reviewed one, or None when the reviewed body is unknown.
+
+    A fingerprinted block is located by its digest among the committed bodies; an undigested
+    legacy block counts the versions committed on a UTC day after its heading day (same-day edits
+    cannot be told apart; the first version existed when the review was written). An uncommitted body difference counts as one more version.
+    """
+    versions = spec_body_versions(root, change)
+    dirty = 1 if not versions or versions[-1][1] != disk else 0
+    if block.fingerprint is not None:
+        matches = [
+            index
+            for index, (_, body) in enumerate(versions)
+            if "sha256:" + hashlib.sha256(body).hexdigest() == block.fingerprint
+        ]
+        if not matches:
+            return None
+        return len(versions) - 1 - matches[-1] + dirty
+    try:
+        written = dt.date.fromisoformat(block.heading_day or "")
+    except ValueError:
+        return None
+    later = sum(1 for stamp, _ in versions[1:] if dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written)
+    return later + dirty
 
 
 def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None:
@@ -3963,7 +4005,7 @@ def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None
         disk = spec_body_bytes(root / "plans" / "changes" / change / "spec.md")
     except (OSError, UnicodeDecodeError) as error:
         return f"the spec body cannot be read ({error})"
-    head = spec_body_of(_git_output(root, "show", f"HEAD:plans/changes/{change}/spec.md").encode("utf-8"))
+    head = spec_body_of(_git_bytes(root, "show", f"HEAD:plans/changes/{change}/spec.md"))
     if disk != head:
         return "the spec body changed on disk without a commit after it"
     return None
@@ -4075,9 +4117,10 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
             klass=klass, review_problem=f"plans/changes/{change}/findings.md cannot be read ({error})."
         )
     try:
-        current = spec_body_fingerprint(folder / "spec.md")
+        disk = spec_body_bytes(folder / "spec.md")
     except (OSError, UnicodeDecodeError) as error:
         return ReviewAdmission(klass=klass, review_problem=f"plans/changes/{change}/spec.md cannot be read ({error}).")
+    current = "sha256:" + hashlib.sha256(disk).hexdigest()
     kept, left_out = qualifying_reviews(text)
     if not kept:
         detail = f" The blocks read were left out: {left_out}." if left_out else ""
@@ -4092,30 +4135,47 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
         )
     newest = kept[-1]
     rounds = review_rounds(kept)
-    ambiguity = open_ambiguity_row(newest)
-    if ambiguity is not None:
-        return ReviewAdmission(
-            klass=klass,
-            left_out=left_out,
-            rounds=rounds,
-            review_problem=(
-                f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; "
-                "settle the row and review the spec again before a model starts."
-            ),
-        )
     stale = review_staleness(root, change, newest, current)
-    if stale is not None and rounds < 3:
+    recheck = stale is None and newest.is_fallback
+    can_run = review_round_open(root, change, rounds, recheck)
+    ambiguity = open_ambiguity_row(newest)
+    if ambiguity is not None and (can_run or not ambiguity_settled(root, change, ambiguity)):
+        if can_run:
+            remedy = "settle the row and review the spec again before a model starts."
+        else:
+            remedy = (
+                "no further review round can run, so the maintainer settles the row in decisions.md with a "
+                f"question headed `Q-<n> · Ambiguity {ambiguity}` and an answer, or the change is re-sliced."
+            )
         return ReviewAdmission(
             klass=klass,
             left_out=left_out,
             rounds=rounds,
             review_problem=(
-                f"the newest qualifying spec review of {change} is stale: {stale}. Run "
-                f"`python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
-                "spec-review rounds have run)."
+                f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; {remedy}"
             ),
         )
-    return ReviewAdmission(klass=klass, left_out=left_out, rounds=rounds, recheck=stale is None and newest.is_fallback)
+    if stale is not None:
+        edits = body_edits_after_review(root, change, newest, disk) if rounds >= 3 else None
+        if edits is None or edits > 1:
+            if can_run:
+                remedy = (
+                    f"Run `python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
+                    "spec-review rounds have run)."
+                )
+            else:
+                remedy = (
+                    f"{rounds} spec-review rounds have run and the final draft after the third admits one spec "
+                    "body edit only; the maintainer authorizes a fourth round in decisions.md or the change "
+                    "is re-sliced."
+                )
+            return ReviewAdmission(
+                klass=klass,
+                left_out=left_out,
+                rounds=rounds,
+                review_problem=f"the newest qualifying spec review of {change} is stale: {stale}. {remedy}",
+            )
+    return ReviewAdmission(klass=klass, left_out=left_out, rounds=rounds, recheck=recheck)
 
 
 def readable_review(answer: str) -> list[list[str]]:
@@ -4172,6 +4232,29 @@ def fourth_round_authorized(root: Path, change: str) -> bool:
         return False
     return any(
         FOURTH_ROUND_TITLE.match(record["title"]) and FOURTH_ROUND_GRANT.match(record["answer"])
+        for record in check_interview_minimums.maintainer_answers(text)
+    )
+
+
+def review_round_open(root: Path, change: str, rounds: int, recheck: bool) -> bool:
+    """Whether the `spec-review` verb may run another round: the one rule the verb and the admission share."""
+    return recheck or rounds < 3 or (rounds == 3 and fourth_round_authorized(root, change))
+
+
+def ambiguity_settled(root: Path, change: str, row_id: str) -> bool:
+    """Whether the maintainer settled an open ambiguity row in decisions.md (spec criterion 7, Q-10).
+
+    Only a question of this change counts, headed `Q-<n> · Ambiguity <row id>` and answered by the
+    maintainer. The admission reads it only when no further review round can run, so a review the
+    verb would refuse is never demanded.
+    """
+    try:
+        text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    heading = re.compile(rf"\bambiguity\s+{re.escape(row_id)}(?![\w-])", re.I)
+    return any(
+        heading.search(record["title"]) and record.get("answer", "").strip()
         for record in check_interview_minimums.maintainer_answers(text)
     )
 
@@ -4274,7 +4357,7 @@ def spec_review(root: Path, change: str) -> None:
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
         recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
-    if not recheck and rounds >= 3 and not (rounds == 3 and fourth_round_authorized(root, change)):
+    if not review_round_open(root, change, rounds, recheck):
         raise Refused(
             f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
             f"plans/changes/{change}/decisions.md holds a question headed `Q-<n> · Fourth spec-review round`, "

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-19
-updated: 2026-11-19
+updated: 2026-11-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -103,4 +103,5 @@ Existing ADRs and decision records remain unchanged because the maintainer settl
 - [DETAIL] The initial centrally configured fallback is `deepseek-v4.1-flash` on OpenCode Go, an already declared DeepSeek model; the configuration can be changed in one value.
 
 - [DETAIL] After three rounds the fingerprint still reports a changed body as stale; admission applies the separate exception, so currency is not misrepresented (Q-10).
+- [DETAIL] The record that authorizes a fourth round is a question of this change in `decisions.md`, headed `Q-<n> · Fourth spec-review round` and answered by the maintainer with an answer that begins `authorized`; the runner's refusal names this form. The same file settles an open ambiguity once no further round can run, with a maintainer-answered question headed `Q-<n> · Ambiguity <row id>`. The exception for a changed spec body after round three admits one final draft (one body version after the reviewed one); a later body change needs a current review again.
 - [DETAIL] After each review, the orchestrator triages intent decisions with the maintainer and decides revisable details with reasons; after round three remaining non-BLOCKER rows become named plan limits. An open ambiguity still refuses implement under criterion 7 (S-15).
