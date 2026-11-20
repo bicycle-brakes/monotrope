@@ -501,3 +501,15 @@ Reviewer session: codex 01a1f966-3933-7df0-bca5-d042e91cbacf — a fresh session
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4911 commits, 12 rules.
 
 Runner restoration, 2026-11-20: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-20: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1119 files, 4917 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `PHASE6_HEADING` | A valid block headed `## Phase 6 — X, 2026-11-20` is treated as outside the count because the heading pattern requires at least two characters for the reviewer. Its eligible findings are omitted without a gap. [Criterion 1] | Codex | open | — |
+| F6-2 | MINOR | SPEC | base | `scripts/findings_reader.py`, `parse_findings` | A finding table under a level-one heading such as `# Findings` is labelled “headingless tables”. The report must list the table under its actual heading; “headingless” applies before any heading. [Criterion 18] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1f98e-46dd-72a3-9809-0839d1239123, 2026-11-20
+Reviewer session: codex 01a1f98e-46dd-72a3-9809-0839d1239123 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
