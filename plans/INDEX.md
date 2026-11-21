@@ -7,6 +7,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/address-notice-once/decisions.md`](changes/address-notice-once/decisions.md) | draft | none | 2026-11-21 | coding-harness-zywb |
 | [`changes/address-notice-once/research.md`](changes/address-notice-once/research.md) | draft | none | 2026-11-21 | coding-harness-zywb |
 | [`changes/adr-0021-consumed-ladder/decisions.md`](changes/adr-0021-consumed-ladder/decisions.md) | draft | none | 2026-11-20 | coding-harness-hwll |
 | [`changes/adr-0021-consumed-ladder/spec.md`](changes/adr-0021-consumed-ladder/spec.md) | accepted | none | 2026-11-20 | coding-harness-hwll |
