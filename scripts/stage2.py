@@ -5025,13 +5025,18 @@ def _supersession_archive_name(archive_base: Path, change: str, digest: str) -> 
     raise Refused(f"no unique archive name under {archive_base} for {change}; clean the superseded archives first.")
 
 
-def _write_supersession_manifest(staging: Path, change: str, superseder: str, keys: list[str]) -> None:
+def _write_supersession_manifest(
+    staging: Path, change: str, superseder: str, keys: list[str], audit_calls: dict | None = None
+) -> None:
     """The staged archive's manifest, written before the first move: the complete key set and the
     superseding worktree key. A retry matches it before it moves or accounts anything, so only the
     superseding worktree completes its own key set (criterion 7)."""
+    manifest = {"change": change, "superseder": superseder, "keys": sorted(keys)}
+    if audit_calls is not None:
+        manifest["audit_calls"] = audit_calls
     replace_record(
         staging / MANIFEST_NAME,
-        json.dumps({"change": change, "superseder": superseder, "keys": sorted(keys)}, sort_keys=True, indent=2) + "\n",
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n",
     )
 
 
@@ -5234,8 +5239,7 @@ def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str
                 staging = archive_base / f"{STAGING_PREFIX}{archive_name}"
             try:
                 if resume is None or not resume["staging"]:
-                    staging.mkdir(parents=True)
-                    _write_supersession_manifest(staging, change, current, keys)
+                    archive_base.mkdir(parents=True, exist_ok=True)
                     listing = _git_output(root, "worktree", "list", "--porcelain")
                     snapshots = {}
                     for line in listing.splitlines():
@@ -5246,10 +5250,12 @@ def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str
                                 path = worktree / "plans" / "changes" / change / "findings.md"
                                 source = path.read_text(encoding="utf-8") if path.exists() else ""
                                 snapshots[key] = [line for line in source.splitlines() if LOOP_AUDIT_LINE.match(line)]
-                    manifest_path = staging / MANIFEST_NAME
-                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                    manifest["audit_calls"] = snapshots
-                    replace_record(manifest_path, json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+                    # Unpublished directories are ignored on retry, even if a killed process
+                    # leaves one behind. Publish the complete manifest before moving records.
+                    with tempfile.TemporaryDirectory(prefix=".preparing-", dir=archive_base) as temporary:
+                        prepared = Path(temporary)
+                        _write_supersession_manifest(prepared, change, current, keys, snapshots)
+                        prepared.rename(staging)
                 for key in keys:
                     source = base / key
                     target = staging / key

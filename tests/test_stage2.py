@@ -30347,7 +30347,6 @@ def test_staging_manifest_failure_is_reported(world: World, monkeypatch: pytest.
     assert "archive could not be completed" in capsys.readouterr().err
     monkeypatch.setattr(stage2, "_write_supersession_manifest", original_manifest)
     assert supersede(world, key) == 0
-    assert "removed empty interrupted staging directory" in capsys.readouterr().out
     assert not (stage2.record_base() / key / "loop.md").exists()
 
 
@@ -30746,3 +30745,68 @@ def test_restart_ignores_unrelated_repository_archives(world: World, unreadable:
     except stage2.Refused as error:
         pytest.fail(f"an unrelated repository archive blocked restart: {error}")
     assert stage2.restart_floor(world.text()) == 1
+
+
+def test_supersede_retries_after_manifest_temporary_file_interruption(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    record = write_foreign_record(other, [1])
+    original = record.read_bytes()
+    replace = stage2.replace_record
+
+    def interrupt(path: Path, text: str) -> None:
+        if path.name == stage2.MANIFEST_NAME:
+            (path.parent / ".manifest.interrupted.tmp").write_text(text, encoding="utf-8")
+            if path.parent.name.startswith(".preparing-"):
+                shutil.copytree(path.parent, archive_base() / ".preparing-abandoned")
+            raise OSError("interrupted before manifest rename")
+        replace(path, text)
+
+    monkeypatch.setattr(stage2, "replace_record", interrupt)
+    assert supersede(world, key) == 1
+    assert record.read_bytes() == original
+    monkeypatch.setattr(stage2, "replace_record", replace)
+    assert supersede(world, key) == 0, "retry must ignore unpublished temporary manifest files"
+    assert not record.exists()
+    assert len(stage2.SUPERSEDED_RESTART_LINE.findall(world.text())) == 1
+
+
+def test_supersede_retries_with_audit_snapshot_after_manifest_interruption(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    findings = other / "plans/changes/demo/findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    call = "Stage-2 call, 2026-11-18: review-loop · reviewer"
+    findings.write_text(call + "\n", encoding="utf-8")
+    write_manifest = stage2._write_supersession_manifest
+
+    def interrupt(*args, **kwargs):
+        write_manifest(*args, **kwargs)
+        raise OSError("interrupted immediately after manifest write")
+
+    monkeypatch.setattr(stage2, "_write_supersession_manifest", interrupt)
+    assert supersede(world, key) == 1
+    monkeypatch.setattr(stage2, "_write_supersession_manifest", write_manifest)
+    assert supersede(world, key) == 0
+    archives = [p for p in archive_base().iterdir() if (p / key / "loop.md").exists()]
+    assert len(archives) == 1
+    manifest = json.loads((archives[0] / stage2.MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert manifest.get("audit_calls", {}).get(key) == [call], "retry must preserve the old audit calls"
+    git_output = stage2._git_output
+
+    def committed_accounting(root: Path, *args: str) -> str:
+        if root == world.root and args == ("show", "HEAD:plans/changes/demo/findings.md"):
+            return world.text()
+        return git_output(root, *args)
+
+    monkeypatch.setattr(stage2, "_git_output", committed_accounting)
+    try:
+        stage2.release(other, "demo")
+    except stage2.Refused as error:
+        pytest.fail(f"the archived audit call should permit release: {error}")
+    assert f"Loop rows: superseded by {stage2.record_key('demo', world.root)}" in findings.read_text(encoding="utf-8")
