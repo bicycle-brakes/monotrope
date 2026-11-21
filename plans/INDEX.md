@@ -647,9 +647,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stop-hook/decisions.md`](changes/stop-hook/decisions.md) | draft | none | 2026-11-03 | coding-harness-788 |
 | [`changes/stop-hook/findings.md`](changes/stop-hook/findings.md) | draft | none | 2026-11-03 | coding-harness-788 |
-| [`changes/stop-hook/plan.md`](changes/stop-hook/plan.md) | draft | none | 2026-11-03 | coding-harness-788 |
+| [`changes/stop-hook/plan.md`](changes/stop-hook/plan.md) | draft | none | 2026-11-21 | coding-harness-788 |
 | [`changes/stop-hook/research.md`](changes/stop-hook/research.md) | draft | none | 2026-11-03 | coding-harness-788 |
-| [`changes/stop-hook/spec.md`](changes/stop-hook/spec.md) | draft | none | 2026-11-03 | coding-harness-788 |
+| [`changes/stop-hook/spec.md`](changes/stop-hook/spec.md) | draft | none | 2026-11-21 | coding-harness-788 |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
