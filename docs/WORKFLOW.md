@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-02
+updated: 2026-11-19
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -230,6 +230,15 @@ its decision statement (a closing parenthetical remark may follow it); the adopt
 stay exempt and unchanged, and evidence the gate cannot read is not measured
 (exit 3) instead of passing.
 
+The interview asks the downside the maintainer accepts with every question and
+records the complete decision statement at once, with the answer and its
+recording day, never an invented downside. `draft` reads the selected change's
+`decisions.md` through the same statement reader before its first model call
+and refuses (no attempt consumed, no fallback, the file untouched) when the
+file cannot be read or an answered record lacks a readable statement. Other
+changes' records stay with the repository-wide gate, and the document job and
+the missing-ADR-answer tolerance are unchanged.
+
 **An ambiguity is not mechanics.** "The plan is the contract" governs departures
 from an *unambiguous* contract. Where the plan allows two readings, nothing is
 chosen: the note is `[DECISION]`, the rest is finished, then stop.
@@ -267,6 +276,83 @@ in any session. It writes no tracker and takes no git action of its own; what
 it leaves behind goes into a pull request that a person reviews and merges. The
 first one is [`prompts/research-recheck.md`](../prompts/research-recheck.md):
 it re-checks one research note on the web and appends a dated addendum to it.
+
+### The outcome test: a fresh session against the current rules
+
+The gates check artefacts; the outcome test checks what a freshly started
+session can still answer about the harness itself. An administrator runs
+[`scripts/outcome_test.py`](../scripts/outcome_test.py) `questions`, hands the
+printed questionnaire to one separately started, memory-free session, and
+records its answers with `record`. Every run carries four attested labels —
+harness, model, startup context and permitted repository access;
+`--fresh-session` is the administrator's attestation, not proof of a context
+reset. The baseline measures the normal working start: a new Claude Code
+session with its usual start context and read access to the repository
+(maintainer, 2026-11-08). The scope a run measured is carried in those labels,
+and comparisons hold only between runs that recorded the same scope.
+
+Before both `questions` and `record`, commit the tool, the question file and
+every measured source, and keep those files clean; uncommitted edits to the
+result history alone are allowed. Run the pre-change measurement before
+starting the instruction or handover-convention edit.
+
+Export the questionnaire to a temporary file, then save the fresh session's
+submission to another temporary file. The submission must be a JSON object
+keyed by question ID: each value is its answer, strings for string/directory
+questions and a JSON number for the numeric question. Do not submit prose,
+a list or the questionnaire itself; missing answers count as incorrect.
+
+```sh
+python3 scripts/outcome_test.py questions > /tmp/outcome-questions.json
+# Hand the questionnaire to the fresh session; save its JSON answer object
+# as /tmp/outcome-answers.json, then record the actual model and session labels:
+python3 scripts/outcome_test.py record \
+  --questionnaire /tmp/outcome-questions.json --answers /tmp/outcome-answers.json \
+  --harness 'Claude Code' --model 'ACTUAL_MODEL_IDENTIFIER' \
+  --context 'Usual Claude Code startup context' --access 'Repository read access' \
+  --fresh-session --purpose baseline
+```
+
+For a pre-change run, replace `--purpose baseline` with
+`--purpose pre-change --target AGENTS.md` or
+`--purpose pre-change --target handover-convention` before editing that source.
+
+The tool runs on demand, never on a schedule: once as the baseline at an
+accepted commit, and before every change to `AGENTS.md` or the handover
+convention (`--purpose pre-change --target AGENTS.md|handover-convention`).
+Expected answers are derived anew from the same commit's sources at recording
+time — never stored, in the questionnaire or in the history. Answers are
+graded exactly: case-sensitive strings, directories up to an optional trailing
+slash, the memory floor as a finite number; no synonyms, no partial credit, no
+model judging another model. The primary repair identifier accepts paired
+outer Markdown emphasis on both the source cell and the submitted answer;
+internal identifier characters still match exactly. The fallback reader requires
+exactly one versioned model identifier in the repair row's explanatory cells:
+a single family word followed by a dotted numeric version, or a technical
+identifier starting with a letter, containing a digit and a hyphen, underscore
+or slash (for example, `Example 1.2` or `vendor/model-1`). The surrounding prose
+and position of the identifier do not matter; missing or multiple matches
+leave the source unread. The instruction-file answer is the replacement
+filename explicitly named by the opening declaration containing "is the only
+instruction file" and "would silently replace it"; the source file's own
+basename is not the answer. `record` exits 0 at eight of eight, and 1 when
+the run was measured with incorrect answers — a low score is evidence, not a
+failed implementation. Exit 3 means **not measured**: an unreadable or
+conflicting source, a stale snapshot, malformed input or an unwritable history
+appends nothing and must never be read as a score. The history,
+`docs/research/outcome-test-results.jsonl`, keeps one dated, commit-bound JSON
+line per run with the four labels, score and eight correct/incorrect verdicts,
+never answer texts. Full submitted answers stay outside the repository in
+`$XDG_STATE_HOME/coding-harness/outcome-test/<run-id>.json` (default:
+`~/.local/state/coding-harness/outcome-test/<run-id>.json`), with private file
+permissions. Both input files (`--questionnaire` and `--answers`) and the
+state directory must be outside the measured repository; paths resolving
+inside it through symlinks are refused. This keeps earlier answers out of the
+next session's repository reading scope. Answers are archived only after a
+successful history append, under the same lock; an archive failure rolls that append back. A refused append may leave
+an empty history file, but retains no new submission, so the same questionnaire
+can be retried with corrected answers. Foreign sessions still start through
+[`scripts/stage2.py`](../scripts/stage2.py); this tool starts none.
 
 ### The five rules that make the difference
 
@@ -406,12 +492,24 @@ What this does not do:
 - Agents act under the maintainer's GitHub account, so nobody can tell from
   GitHub who pressed merge. The merge rule is a rule, not proof.
 - The ask rules in `.claude/settings.json` are a brake against an accidental
-  merge, not a lock: they match a command's text, and another spelling passes
-  them — `curl` against the API, the web page, `gh` run through `sh -c '…'`,
-  by an absolute path or from a script file, a flag of the merge moved before
-  `merge` (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a
-  file (`gh api graphql --input <file>` or `-F query=@<file>`), and an alias
-  set by `gh alias import` or by editing gh's own config file.
+  merge, not a lock. Since the night-stall-guard change (2026-11-09) they match
+  precisely instead of naming `merge` anywhere in the command: the direct
+  `gh pr merge` forms with their repository-flag placements, a REST call with
+  an explicit PUT method on the `repos/<owner>/<repo>/pulls/<number>/merge`
+  endpoint, the inline `mergePullRequest`, `enablePullRequestAutoMerge` and
+  `enqueuePullRequest` GraphQL mutations passed as `-f query=…` or
+  `--raw-field query=…`, the GitHub MCP merge tool, `gh alias set`, and a push
+  to an unprotected `main`. A status read that only names merge fields
+  (`mergedAt`, `mergeable`, `mergeStateStatus`, `isInMergeQueue` — the query
+  shape of the 2026-11-08 incident) does not prompt. The list is still matched
+  against the command's text, and other spellings pass it: `curl` against the
+  API, the web page, `gh` run through `sh -c '…'`, by an absolute path or from
+  a script file, a flag of the merge moved before `merge`
+  (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a file
+  (`gh api graphql --input <file>` or `-F query=@<file>`), a REST merge call
+  without the explicit PUT (`gh api` defaults to GET, and to POST once `-f` is
+  present), and an alias set by `gh alias import` or by editing gh's own
+  config file.
 - Nothing checks that the class is right, that a claimed ADR file exists, or
   that a decision pull request carries its label and block. The review
   before the merge holds them.
@@ -442,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make verify     # local gates; every cheap gate first, admission only for protected work
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -454,15 +552,45 @@ make index      # regenerate plans/INDEX.md
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
 
+Local verification runs in two phases (`scripts/verify_run.py`, the one
+scheduler behind `verify_all.sh` and the Stage-2 checks). The **unprotected**
+gates — every selected `seconds` gate without the explicit shared-state mark —
+execute first, all of them, and every one's diagnostic is collected even past
+a blocking red, so a lint failure never hides behind a queue wait again. Only
+when the cheap phase holds no blocking red does the run take **one admission**
+for the protected work — the `minutes` gates and the `seconds` gates marked
+`needs_admission` — where a local run stops at its first blocking failure and
+names the remaining selected gates as not run. A selection with no protected
+gate, such as the `docs` job, never waits for the slot at all. When admission
+follows a green cheap phase and the tree is unchanged in the meantime, the
+cheap results are reused instead of executed twice; a changed tree reloads
+the gate list, reselects and reruns the complete cheap pass inside the held
+admission, so stale results cannot survive a reclassification. A run with
+protected work measures the tree around its cheap pass: a tree that cannot be
+measured (no named HEAD, an unreadable entry) or that changes while the cheap
+gates run refuses the run with a request to rerun, names what moved and the
+gates not run; unmeasured cheap results are never relied on. A selection
+without protected work, and a cheap pass that ended blocking red, rely on no
+baseline and measure none. Hosted CI and
+`--ci` continue through all selected gates of both phases whatever failed
+before. See the [gate catalog](governance/gate-catalog.md) for costs,
+admission marks and enforcement.
+
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Before its
-gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
+**One admission per user and machine** (bead coding-harness-p6mu). Only
+protected work enters it: before its protected gates, the shared scheduler
+hands the run to `scripts.verify_lock` — protected work
 of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the three-lane trial's
-concurrent full checks cannot happen again. Waiters are admitted in
+— shared across repositories and worktrees, so the protected gates of
+concurrent full checks never run together again, as they did in the three-lane
+trial. The admission does not serialise the rest: the seconds gates and the
+runner's full-mode preparation (formatting, its cheap checks) run in every
+lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+records why that is safe today and what it did not measure; free disk space
+is not checked (bead coding-harness-87b0). Waiters are admitted in
 registration order; while waiting, an entry logs its wait immediately and
 every five minutes, naming the holder's process id, command and start time.
 A nested protected entry — a check descended from a live admission — carries
@@ -484,6 +612,64 @@ pytest proof's execution timeout; the configured limits still bind the
 executing check. Hosted CI is untouched: its gate steps never enter the
 runner's shell path, and nothing disables admission because CI is set.
 
+Verification durations are appended locally to `verify-duration.jsonl` in
+that shared state directory. One invocation is one run identity spanning the
+cheap and the protected phase: every executed gate is recorded, including a
+cheap gate run twice after a changed-tree recheck, and a gate's seconds sum
+its active segments before and after admission — queue and memory waits are
+reported separately, never as execution time, with inherited waits marked as
+reused. A run that finished on the cheap phase alone states explicitly that
+no admission was requested; interrupted runs remain incomplete, and malformed
+rows are diagnosed. Read summaries with `python3 -m scripts.verify_duration
+report`, or inspect one run with `python3 -m scripts.verify_duration report
+--run <run-id>`. Unusable measurement storage warns without changing gate
+execution or verdicts; raw history stays outside Git.
+
+A slip is one completed red local full verification run that answers the
+immediately preceding completed check of the same repository, change, checked
+tree and gate configuration when that check is a green targeted check (bead
+coding-harness-bxxt.7). The count is derived, never stored. The runner's
+targeted check (repair only) records its start and end, each with the checked
+tree, in `verify-targeted.jsonl` beside `verify-duration.jsonl`; the runner's
+admitted full check (`full_verify`) carries its comparison context in
+runner-owned environment variables that the shell's start record captures as
+additive version-1 fields with a version-2 marker, so older duration readers
+still read the history and never count a targeted check as a full duration.
+`python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change
+NAME]` combines both histories and reports two numbers side by side: the slip
+count and the incomplete or not countable runs. Checks are ordered by UTC
+completion, strictly earlier-than; equal completion times establish no order
+and make both runs incomplete. An intervening check of the same identity ends
+the pairing, so each red run counts at most once and only for its immediate
+predecessor. A potentially matching pair with a gap on either side — a missing
+end, conflicting records, a moved tree, an unknown identity, an unpaired
+completion, a full run still running — is counted as incomplete on each
+selected side, never as a slip or a clean non-slip. A full green immediately
+followed by a full red of one identity is reported separately as a flaky-test
+signal (undecided when an uncertain full run may stand between them). Legacy
+duration runs and change-less full runs are reported on an outside-the-count
+line and never make the report partial; legacy runs that name no repository
+appear as unattributed outside runs. A completion without a start is outside
+the count before the first version-2 comparison record and partial after it.
+Missing history is unavailable, never a counted zero: once the duration
+history holds a version-2 record, a missing targeted history is unavailable,
+and a targeted history without a duration history is too. A scope that selects
+no run at all (a misspelled `--change`, another checkout, an empty window)
+reads "0 runs selected, no statement possible" with exit 1. Exit 0 means
+complete evidence, 1 partial or unavailable evidence, 2 an invalid interval or
+refused storage. Reading never appends to either history, and no slip event,
+counter or consumed marker exists; trees are compared by contents and modes,
+never by commit identity, which the checkpoint commit, stamping and audit
+finalization move between the two checks. The comparison tree leaves out the
+change's own `plan.md` and `findings.md`, where the runner's and phase 6's
+bookkeeping lands between the checks; an edit to those two files in between
+goes unseen and can count one slip too many. An edit to another change file,
+such as `spec.md`, `decisions.md` or `research.md`, moves the comparison tree
+between the checks; the pair then no longer matches and a slip can go
+uncounted. The full run records its tree
+only at its start, so a tree that moved during a red full run can also count
+one slip too many (follow-up bead coding-harness-cf9h).
+
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than
@@ -500,6 +686,19 @@ invocations, `make verify`, `scripts/verify_all.sh`) and memory figures
 (macOS `memory_pressure`, `vm_stat`, `hw.memsize`; Linux `MemAvailable`,
 `MemTotal`, `Zswap`). The direct form is `python3 scripts/run_report.py
 [--change NAME]`; the default root is the checkout the script lives in.
+
+The measured rows have one writer, `scripts/time_records.py` (bead
+coding-harness-v6vk): the runner's persistence, the `harness.py time-log`
+command and this reader share the one fixed format — `<start>–<end> UTC,
+<seconds> s — <verb> · attempt <n> · route <r> · model <m> · accepted|rejected
+· measured by the runner`. The retained marker names the shared machine
+writer, not an extra model invocation; a span an interactive session logs
+itself carries `route orchestrator`. The seconds are the explicitly measured
+duration the caller supplies — never a difference computed from the
+timestamps — and a span across midnight carries its end date. The reader
+counts records only through the shared parser. Blank lines, headings and code
+fence markers are skipped; other non-record lines below the heading stay
+unread and visible as `unread lines: N`.
 
 It is a snapshot to read before a verify-bearing step, **not a gate** — it
 never enters `make verify`. It warns, and only warns: when the recorded time
@@ -519,10 +718,10 @@ tracker or network call.
 |---|---|---|
 | 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0020) |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
-| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
-| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
-| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-terra` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
@@ -782,7 +981,7 @@ for another repository is `templates/agents-mergeable-prs.md`.
 
 Since ADR 0007 (2026-09-30) a reviewer from another vendor reads a change
 before it merges — for **framework content only**: this repository's own tree,
-the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
+the class `framework` of `model-endpoints.yaml`. Codex (OpenAI; `gpt-6.1-terra` since 2026-11-15, `gpt-6.1-sol` before)
 drafts the spec, the design and the plan (2, 2b and 3, the `draft` verb) and
 reviews the code (6). **Since ADR 0016 (2026-10-12)** the spec review (2a) runs
 on Opus 5.5 through the `spec-review` verb — a fresh context, and a model other
@@ -805,11 +1004,24 @@ every change of the night run — so GLM has left the reviewer roles.
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
 repaired the findings the orchestrator takes, of the loop (4b) and of phase 6;
-**since the merge of ADR 0017** Codex (`gpt-6.1-sol`) does, with Sonnet 5.5
+**since the merge of ADR 0017** Codex (`gpt-6.1-sol` until 2026-11-15, `gpt-6.1-terra` since) does, with Sonnet 5.5
 after two failed post-run checks, through the runner's `repair` verb — since the
 first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
+**One address record for OpenCode Go** (go-access-point, ADR 0024): every
+runner-controlled Go launch — a review-loop member, a probe, a research seat,
+an interactive session — reads its admitted address from the `adresse` record
+on the `opencode-go` entry of `model-endpoints.yaml` and follows one policy. A
+model that names another path on the recorded host runs on with a printed
+notice; any other destination (a foreign host or subdomain, plain HTTP, a
+non-default port, credentials, query or fragment in the URL) is refused before
+any model request — at selection, at activation, and again immediately before
+every send. The record holds no credentials and no model permissions, each
+base carries its documentation source and its reading date, and its
+maintenance route is an agent edit of the held entry through the orchestrator:
+no separate approval per documented same-host path move, and no catalog
+refresh ever writes the record by itself.
 **No Fable:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
@@ -868,14 +1080,15 @@ admission and cost values live in `model-endpoints.yaml`.
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
 | 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online; the Go seats are open and filled per run with the maintainer's choice on a cost-against-intelligence recommendation, Q-18) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
-| 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
-| 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
-| 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
+| 2 Spec | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
+| 2b Design | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
+| 3 Plan | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
-| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
-| 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
+| 4b Triage | none (a local command) | a local runner command for the orchestrator's already-made decision: it records one row's `Status` in this worktree's loop record and calls no model; a test-only `taken` is refused without `taken — not a test — <reason>`, and `Broke a test` stays the repair's proof mark |
+| Repair after 4b and 6 | **gpt-6.1-terra** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
+| 6 Review | **gpt-6.1-terra** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
 The effort text in ADR 0016 and ADR 0017 awaits its separately agreed
 amendments; the table above carries the live setting.
@@ -883,26 +1096,55 @@ amendments; the table above carries the live setting.
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
-model, runs `make verify`, measures each completed attempt itself — a line
+model, runs the post-run check (the targeted check, or the admitted full
+`make verify` as its fallback; "The draft (phases 2, 2b and 3)" below), measures each completed attempt itself — a line
 below `## Time used`, marked "measured by the runner", written for a rejected
-attempt as well as an accepted one — and makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+attempt as well as an accepted one — and makes the local checkpoint commit.
+The runner's line and every span an interactive session logs itself
+(`python3 scripts/harness.py time-log <change> …`, route `orchestrator`)
+come from one shared writer, `scripts/time_records.py`, whose seconds are the
+explicitly measured duration; an interactive session never writes a runner
+attempt's line and never logs an interval the runner is measuring. An explicit `--stage2-off [REASON]` uses
 §3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
 undid and exits 1; the next step is `implement <change> --stage2-off`.
+An `implement` or `repair` attempt must also have done work: its model call
+changed at least one Git-visible thing beyond the runner's own records — the
+change's `findings.md` and the body of the plan's `## Time used` section, both
+put back by the runner, do not count. The verdict measures surviving model work
+after formatting and derived preparation, discounting the generated index and
+stamp-only changes in any document, whether or not checkpoint preparation restores
+them. The runner's own ledger clearing is discounted with it: when verification
+removes a plan's `not yet written` marker because the named test exists, that
+exact removal — captured per attempt, in both the full and the targeted check —
+is put back in the comparison and cannot qualify the attempt, while every model
+edit beside it (plan prose, a changed ledger reference, a marker the model
+removed itself) stays visible, and clearing evidence that cannot be measured
+reliably rejects the attempt instead of discounting (bead coding-harness-twbl).
+Replacing only an existing `updated:` value does not count as work, even
+when the replacement is not a date. An edit formatting erases is no work.
+Any other addition, edit, deletion, binary or file-mode change counts, code or
+document, planned path or not. Each call is compared with its own pre-call state,
+so an earlier attempt's retained edits never qualify a later idle one. An
+attempt without work is rejected as
+`no work done` through the existing retry path, with the reason in its
+diagnostics; so is an attempt whose work cannot be measured. If every allowed
+attempt is rejected, the run exits 1 without a checkpoint commit
+(bead coding-harness-te7q).
 If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
-Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
+Before the post-run check, the runner runs the worktree's own `.venv/bin/ruff` —
 `check --fix` with safe fixes only, then `format` — on the change's Python
 files under `scripts/` and `tests/`; what that changed stands in a failed
 attempt's diagnostics (after the findings-restore note, when there is one) and in
 the checkpoint commit's message. This format step itself never decides the
 verdict: a ruff that cannot run or leaves findings fails the attempt in the cheap
 checks below.
-After that format step and still before `make verify`, the runner runs an
+After that format step and still before the post-run check, the runner runs an
 implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
 `.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
@@ -920,11 +1162,11 @@ bytes, before the runner stamps documents and renders derived files: a selected
 test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
 line) sees it unprepared, and such a test belongs to `make verify`, not to the
 cheap run (review row L9-1). A command with no target is skipped; a red,
-unstartable or over-bound command fails the attempt before `make verify`
-starts, and its identified command, exit and protected output stand in that
+unstartable or over-bound command fails the attempt before the post-run
+check starts, and its identified command, exit and protected output stand in that
 attempt's diagnostics and the next attempt's prompt. Cheap green replaces
-nothing: full `make verify` and the existing answer checks still decide every
-attempt. An implement or repair attempt's edit of the change's `findings.md`
+nothing: the post-run check that follows (targeted, or the full `make verify`
+on fallback) and the existing answer checks still decide every attempt. An implement or repair attempt's edit of the change's `findings.md`
 is not a failure: the runner restores its own pre-call snapshot before any
 check reads model-written state — through the recovery preflight, never
 through a linked parent — and records the restoration in the attempt's
@@ -938,18 +1180,37 @@ and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
-is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
-models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
-topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
-for topics 9-11, 3 per free model for the online topics) and one fresh Opus
-5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+has `39 + 3N` logical slots for `N` selected free models: three finders, one
+Opus map merge, one Opus public sentence, `33 + 3N` topic slots (24 on the
+repository seats for topics 1-8, 9 on the online seats for topics 9-11, 3 per
+free model for the online topics) and one fresh Opus 5.5 judge. A topic answer
+that ends process-successful but fails its report format (extraction or
+validation) gets at most one correction call from the same frozen seat, in a
+second batch after every first topic call has ended; the correction carries
+the rejected answer and the rejection reason as data, stays inside the seat's
+remaining original topic allowance, the run deadline and the judge reserve,
+and a second rejection ends the seat. With those calls a run is at most
+`72 + 6N` sequential-by-queue invocations (ADR 0020, point 9, amended
+2026-11-10); a run without a rejected report stays at `39 + 3N`. The Go models ride the pinned Pi, at most four per provider at a
 time, required slots before free ones; the Opus calls ride official Claude
 Code without tools. Online contexts expose only public search and page
 retrieval, and the topic sentence is mechanically filtered; no repository
 content reaches them (the offline capture on the real pinned Pi with synthetic
 private canaries, finding F-1, is still open and qualifies that boundary before
-the first live free call). Deadlines are monotonic — the judge keeps a reserved
-15 minutes inside a 150-minute run — with no retry and no debate. A failed
+the first live free call). Deadlines are monotonic — the judge keeps its
+configured allowance reserved (initially 15 minutes) inside the configured
+whole-run allowance (initially 160 minutes) — with no other retry, no
+extension of a time limit and no debate. The
+allowances live in `research-swarm-limits.yaml` at the worktree root:
+`run_minutes` and `role_minutes` with the five roles `finders`, `merge`,
+`sentence`, `topics` and `judge`, all in minutes. Each invocation reads the
+file once at its start. An edit during a run does not change its captured
+allowances, but the frozen-input drift check ends that invocation incomplete
+with exit 1; the next invocation applies the edited configuration. A missing,
+unknown or implausible value
+— every role at or below the run, the judge strictly below it — refuses the
+invocation with exit 2 before any participant starts
+(`scripts/stage2_research_limits.py`). A failed
 participant preserves its partial evidence; an incomplete run exits 1, a
 declaration or leak refusal records the blocked slot, exits 2 and makes no
 further call. Only the runner writes `research.md`: one buffered append at the
@@ -1001,7 +1262,7 @@ placements.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Twelve verbs exist:
+into a shell. Thirteen verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
@@ -1050,6 +1311,23 @@ into a shell. Twelve verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+- `triage` — the orchestrator records one already-made decision on the loop
+  record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
+  '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
+  test` or `taken — guard test` with a single-line reason, finds exactly that
+  row in this worktree's own record under the record lock, and replaces the
+  record atomically. It calls no model, reads no credential and works on a
+  dirty tree; only that row's `Status` cell changes — every other byte, the
+  reviewers' words and the final newline stay as they are. Invalid input, a
+  damaged record, a `fixed` row and a held lock refuse with exit 2; a failed
+  write reports exit 1 and leaves the prior record whole. A plain `taken` on
+  a row whose `Where` cell names only locations below `tests/` is refused with
+  the spelling it must take (`taken — not a test — <reason>`), because an
+  ordinary repair of it could not exist; a mixed or prose-only `Where` stays
+  the orchestrator's judgment. Triage never fills `Broke a test`: the proof
+  mark stays the repair's, so a row marked `taken` is decided but keeps its
+  round not clean until the mark is written; ADR 0023's explicit guard
+  exception is untouched.
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;
@@ -1138,8 +1416,8 @@ retries off, and a fresh home and agent directory per call. Explore and
 implement start Claude Code against Z.ai with `--restricted` and the project's
 settings, hooks and MCP servers skipped; implement also gets
 `Edit` and `Write`, never Bash or another command tool. On a successful
-implementation answer the runner runs exactly
-`make verify`; a failed post-check gets one fresh Flash repair, then one
+implementation answer the runner runs its post-run check (targeted, or the
+admitted full `make verify` on fallback); a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
 not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
@@ -1205,26 +1483,40 @@ repository presents, not what else the disk holds.
 
 ### The draft (phases 2, 2b and 3)
 
-`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write
-`spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
-guards are `implement`'s: the preflight (a `research.md` with its bead, a
-`decisions.md`), the refusal of pre-existing changes outside the change's
-`findings.md`, the declaration and the leak check before each attempt's call,
-the credential scans, and exactly one commit when an attempt passes. A draft's
-Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-terra`, effort
+[`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write `spec.md`, `design.md`
+and `plan.md` in one call (ADR 0016). The
+guards start with `implement`'s preflight: a `research.md` with its bead and
+an endpoint declaration check inside that preflight. Next comes the refusal
+of pre-existing changes outside the change's `findings.md`, then the draft's
+own early statement refusal: before any attempt the runner reads the change's
+`decisions.md` through the question-context gate's
+statement reader and refuses — naming the file, the question and the remedy,
+to complete the interview — an unreadable file or an answered record without
+a readable decision statement; `implement` has no such check. The leak check
+runs before each attempt's call, with credential scans and exactly one
+commit when an attempt passes. A draft's Codex call runs in the CLI's
+`workspace-write` sandbox; what the runner can
 see — what git reports changed — it bounds: every path outside the change
 folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
 If the call moved `HEAD`, the run stops without a rewrite. The draft's gate is
-the verify job's existing document subset,
-`bash scripts/verify_all.sh --job docs`: it runs after the put-back, and a red
-check fails the attempt — with
+its document check: after the put-back the runner runs exactly the locally
+runnable gates of the verify job that the gate registry assigns to the
+document subset (`document_gates` in `scripts/stage2.py`), no pytest and no
+code or kit gate, outside the machine-wide verify admission (bead
+coding-harness-0swp). The check carries none of the admission's ownership,
+token or context variables, so it neither waits for nor claims the lock. Its
+evidence names the gates it ran and says that no tests ran and that it is not
+the full `make verify`. A red check fails the attempt — with
 one exception: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that
 one run, and the gate `adr-answers` then reports this change's own missing ADR
 answer without failing (another change's missing answer, a refused answer file
 and every other gate still do), so the check's exit code decides and the
-runner reads no gate output. `implement` and `repair` keep the full
-`make verify`: only the draft drops to the document subset. Only the
+runner reads no gate output. `implement` and `repair` take the targeted
+check, with the admitted full `make verify` as their fallback; a fresh full
+`make verify` still runs before phase 6. Only the draft drops to the
+document subset. Only the
 maintainer's stated answer may create
 that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
 answer is owed. A new ADR file is one that exists now and that the merge base
@@ -1400,7 +1692,7 @@ replacement (R-8).
 
 **The read boundary is a request today, not a mechanism (R-5, accepted in
 writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
-the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+the pinned Pi has no sandbox, and `read` resolves absolute paths without
 containment, so nothing keeps a member out of a sibling checkout — house rule 6
 (the customer instance out of bounds) has no mechanism on this path. The
 maintainer's answer to Q-3 of the night interview: document it here, and enforce
@@ -1449,11 +1741,32 @@ existing restart is the way past the refusal when its precondition holds.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
-or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. The
+orchestrator also sets each accepted row's `Origin`, the provenance the repair
+brake reads, and never leaves it to a reviewer: `base` for a finding that
+existed before any repair and that no repair caused, or `fix-r<N>` (N a
+positive whole number without a leading zero) for a finding that repair round
+N caused. `review-loop`, `review`, ordinary `release-loop` and `repair` refuse,
+naming the row and its place, while a taken or fixed row in the loop record
+or a phase-6 table carries any other value; the orchestrator corrects the cell
+and runs the verb again. These checks read the loop record and the newest
+phase-6 table. Repair uses one resolver for target selection and the
+target-Origin check: the latest row of each finding ID across tables is current,
+with the active loop record after findings history. Repeated IDs across tables
+are a finding's history; IDs must be unique only within one table: duplicates
+involving a taken row refuse repair; decided duplicates in passive history
+produce a notice. Every selected current
+taken row needs valid Origin before any call or write, including older phase-6
+and released tables. The refusal names each offending resolved row by ID and
+file (`loop.md` or `findings.md`), without back-computing headings or occurrences.
+Ordinary release checks the record before writing the released block; released
+and superseded history that repair does not select needs no backfill.
+`release-loop --restart` and `release-loop --stage-failed` do not check Origin.
+A round whose
 rows are all rejected, or that reports no finding at all, is clean: the loop
 ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
-runs `make verify`, which must be green before the next round starts. **The
+runs the repair's targeted check (the touched and linked test files and gates; the full `make verify` when the repair touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), which must be green before the next round starts; the review verb requires a fresh full `make verify` before phase 6. **The
 evidence rule of §2 holds here:** a finding is taken
 only when a test demonstrates it or the spec supports it. A row left
 undecided holds the next round and the release. Two consecutive rounds whose
@@ -1475,7 +1788,11 @@ runner's line `Record digest: sha256:<hex>` of the record it released; a
 second `release-loop` over a record whose digest equals the last released
 block's appends nothing, removes the record and says so. Each block also
 carries `Record identity: sha256:<hex>`, a hash of the round headings and the
-first seven cells of each record row, excluding Status and Broke a test.
+ID, Severity, Dimension, Where, Finding and Reviewer cells of each record row,
+excluding Origin, Status and Broke a test. For compatibility, reconciliation
+also accepts the earlier identity formula: the round headings and the first
+seven cells of each row, including Origin but excluding Status and Broke a
+test. New and reconciled blocks carry the identity that excludes Origin.
 When identity matches the last released block but digest differs (for example
 after repair or stage retirement), `release-loop` rewrites that block in
 place from the record, including statuses, snapshot, kept words and digest,
@@ -1499,8 +1816,34 @@ rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
 loop record, of every released block and of every phase-6 table — to Codex
-in one guarded call, and refuses while a row stands undecided or an ID is
-doubled. The model answers one **fixed line** per row, `<ID>: fixed —
+in one guarded call, using the latest row of each ID across tables, with the
+active loop record after findings history. Repeated IDs across tables are history.
+It refuses while a row stands undecided or an ID is doubled within one table
+and either duplicate is taken; decided duplicates in passive history produce a
+notice. Before the first call or write it checks every selected row's
+`Origin`, an older block's selected row included: a selected row of any
+block — the loop record, a released block, any phase-6 table — whose
+complete trimmed cell is not `base` or `fix-r<N>` (N a positive whole
+number without a leading zero) refuses the repair, which names every
+offending row by ID and file (`loop.md` or `findings.md`), and the
+orchestrator corrects the cell and starts the repair again. Released and
+superseded rows that no repair selects keep their exemption: history is
+never swept for provenance, and no other verb gains this check.
+
+When the live record shadows a released copy in `findings.md`, repair fixes
+only the live row and prints a notice. The released copy stays unchanged: an
+outstanding status there remains outstanding after a successful repair until
+the next `release-loop` rewrites the released block from the record.
+
+After the model call, verification and answer check, repair checks every
+selected row against its resolved contents and location on disk. If a selected
+row changed since resolution, repair refuses before the checkpoint commit and
+writes no fixed status to either `findings.md` or `loop.md`. The diagnostic
+names the row ID and file and says that no fixed statuses were written. This
+is a late check: the model call has already run, unlike the Origin refusal
+before the first call or write.
+
+The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the
@@ -1517,8 +1860,9 @@ status (`fixed — …`) also fails when its id names no taken row, whatever
 the id's shape. Other prefixes (such as `ADR-0017:` or `UTF-8:`) remain
 report prose when their right side is not a fixed status. A hand
 repair books itself in the row's Status alone: replace the finished row's
-`taken — …` with one of the two fixed statuses and set the loop row's
-`Broke a test` mark from the evidence. A Status that still begins `taken`
+`taken — …` with one of the three fixed statuses and set the loop row's
+`Broke a test` mark from the evidence: `yes`, `no`, or
+`yes — guard test — tests/<path>::<function>` after both guard proof legs pass. A Status that still begins `taken`
 while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
 `; repaired by …`) stops the repair before any call, and the row stands as it
 is. Backtick-quoted markers do not count; if the row is not repaired yet,
@@ -1529,15 +1873,44 @@ temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. The repair prompt names the accepted
 plan's ledger tests as must-runs before handback, and commands Codex to run
 ruff and them itself; a file-only fallback delegates the same cheap checks to
-the runner, which stops at the first red one before `make verify`. An
+the runner, which stops at the first red one before post-run verification. An
 attempt's edit of the change's `findings.md` is restored from the runner's
 pre-call snapshot before any check reads model-written state: the fixed lines
 are validated against the restored file, and the restoration stands in the
 attempt's bookkeeping with its real verdict — a note beside the failure when
 the attempt is rejected, a quoted notice under its audit line when it passes.
-When every post-run check passes —
-`make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
-one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
+Post-run verification runs the repair's targeted check: whole touched and
+linked test files, accepted-ledger and retry selections, read-only ruff checks
+of touched Python files, and applicable local gates. It requires full
+`make verify` on fallback when targeted coverage is unsafe, including shared
+infrastructure, prompts, or a selection of the whole `tests/test_stage2.py`.
+The review verb requires a fresh full `make verify` before phase 6, including
+re-checks; a green targeted repair does not replace that check.
+
+**The lifecycle fields are protected the same way.** After every repair attempt the runner puts
+`status` and `implementation_status` in the change's `spec.md`, optional `design.md` and `plan.md`
+back to the values they had before that attempt's call — before a post-run check, the derived
+preparation or the checkpoint reads the documents — and the attempt's bookkeeping names what was
+restored, or says the fields stayed unchanged. Two limits hold (the change's Boundary): after a
+safety refusal of the recovery preflight nothing is written and no restoration is reported, and
+after a moved HEAD only the working-tree documents are restored — the moved commit keeps the
+model's values and stays for the maintainer. A finding whose remedy requires changing one of
+those two fields is therefore repaired by hand: the orchestrator repairs that finding itself before
+handing the remaining taken rows to the model, and books the hand repair in the row's Status as
+above. An approval or an implementation transition stays the orchestrator's act; a model attempt
+never makes one. A protected document created by an attempt has no orchestrator lifecycle
+baseline: the runner removes it before checks and before a retry can snapshot it, and reports
+that removal explicitly. Existing documents have their fields restored; an absent optional
+design stays absent. Effective lifecycle values are read with the plans registry's
+YAML parser, including merge keys. When either protected value changes, the runner
+restores the whole frontmatter block from trusted snapshot bytes, preserving the
+attempt's body. Other header edits survive only when effective lifecycle values
+stay unchanged. A linked leaf recovers trusted whole-document bytes without reading
+its target; unreadable YAML is restored from the snapshot and rejects the attempt.
+
+When every post-run check passes — the selected verification is green,
+every fixed line checked — the runner writes each row's Status `fixed` in
+its place, makes the one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
 with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
 only after two failed post-run checks; a failed call stops the run without a
@@ -1560,6 +1933,27 @@ re-check (a `review` run after an earlier `## Phase 6` block) starts a fresh
 read-only Codex session, resuming neither the repair nor an earlier thread.
 The sandbox is the CLI's configured `workspace-write`; the tests show the
 configured call, not the CLI's confinement.
+
+**Guard test (ADR 0023).** A repair that lives only in test code has no
+baseline on which its test could be red, so ordinary red first cannot prove it.
+Only the orchestrator authorises the exception, by writing the row's Status
+`taken — guard test — <reason>` with a nonempty unquoted reason. A reason
+that is only quoted or backticked is not authorisation. The repair then answers `<ID>: fixed — guard
+test — tests/<path>::<function>`, and no other row may use that form. The
+named test must reference `STAGE2_PLANT_FAULT` and plant its real fault only
+under it. The runner proves the test twice on the attempt's own code: a
+qualifying red with `STAGE2_PLANT_FAULT=1`, then a clean green with the
+variable absent; the existing outcome, environment, runtime and integrity
+guards of red first apply to both runs. Only after both legs pass does it
+write `fixed — guard test — …` and the mark `yes — guard test — …` in the
+record's Broke-a-test cell. Phase 6 reads every added or changed guard test
+and records the real fault it plants and whether the test catches that fault
+without the switch; a guard whose failure is only conditional, with no real
+fault behind it, is a BLOCKER. The form applies to repairs alone: the first
+implementation and the criterion ledger keep their rules. Planting branches
+stay in the tests so the proof can be repeated, and the blocking gate
+`guard-test-environment` refuses any verification run, local or hosted,
+while the switch is present, whatever its value.
 
 ### When the same mechanism returns
 
@@ -1601,8 +1995,8 @@ When the orchestrator repairs a row itself instead of through `repair`
 each learned on the night of 2026-10-29/30:
 
 - **The loop record learns the repair.** The orchestrator sets the row's
-  status cell to `fixed — tests/<path>::<function>` (or `fixed — not a
-  test — <reason>`) and its `Broke a test` cell from the evidence, after a
+  status cell to `fixed — tests/<path>::<function>` (or `fixed — guard
+  test — tests/<path>::<function>` or `fixed — not a test — <reason>`) and its `Broke a test` cell from the evidence, after a
   backup of `loop.md`. Otherwise the next round refuses with "taken rows are
   not repaired yet".
 - **A header or status edit regenerates the index.** After a hand edit of a
@@ -1623,7 +2017,27 @@ each learned on the night of 2026-10-29/30:
   `check_criterion_ledger.py`, `ci_gates.py --check-ci`). Green, the next
   round starts. One full `make verify` under the lock runs on the final head
   before phase 6 and before the pull request leaves draft; CI stays the full
-  gate. A runner repair keeps the runner's own `make verify`.
+  gate. A runner repair gets the same shape from the runner (bead
+  coding-harness-gxwg): after its format step and cheap checks, `repair` runs
+  the whole touched and linked test files, `ruff` on the touched Python files
+  and the local gates the touched kinds of file feed, outside the lock, and
+  checkpoints on green. Where that coverage cannot be determined safely - a
+  prompt, a shared test or execution configuration, an unclassified input, code
+  with no linked test, an unreadable link inventory - it runs the admitted full
+  `make verify` instead and says why in `findings.md` and the checkpoint
+  message. A targeted green is never worded as full verification: `review`
+  (phase 6) runs a fresh full `make verify` of the current head under the lock
+  before it calls the reviewer, on every invocation, a re-check included, and
+  refuses a dirty tree or a head that moved during the check. `implement`
+  takes the same targeted check on every route (bead coding-harness-0swp),
+  with the same full fallback; a `scripts/stage2.py` edit or a selection of
+  the whole `tests/test_stage2.py` still falls back. One refusal is its own:
+  when the current link inventory proves that new production code (an added
+  Python or shell file) has no reachable test, the attempt fails before any
+  test runs and before a full fallback is admitted, and its diagnostics name
+  the file and ask for its test. A targeted red fails the attempt; the full
+  check never runs to override it. The draft runs its document check only
+  ("The draft (phases 2, 2b and 3)").
 
 ### Night runs
 
@@ -1641,6 +2055,101 @@ day session would ask:
 2. **A further case of the same mechanism at a phase-6 re-check:** record
    the finding, park that pull request and continue with the next queue
    item; the maintainer decides it in the morning.
+
+**The night profile (since the night-stall-guard change, 2026-11-09; bead
+coding-harness-ibde).** An unattended session starts Claude Code through the
+night launcher so a permission question cannot hold the run:
+`python3 ~/.claude/night.py` followed by the arguments a normal `claude` call
+would take. The launcher reads the explicit ask and deny rules of the supported
+settings scopes, turns every sourced ask rule into a deny in a private overlay,
+and runs `claude --settings <overlay> --permission-mode dontAsk` for this
+invocation only; the day settings are never rewritten, and the overlay lives in
+a temporary directory for the child's lifetime. A denied action therefore
+returns control at once instead of waiting for a person: the session continues
+with an authorised alternative, or parks the denied step and records it — it
+never disables the brake to get through. The launch is refused before `claude`
+starts when a present settings file cannot be read or parsed, or when a caller
+argument would replace the profile (`--settings`, `--permission-mode`,
+`--dangerously-skip-permissions`). What the profile does not cover stays as it
+is: external policy and authentication dialogs, a stopped or usage-limited
+session, and — until the maintainer chooses a push service — no phone alert
+and no independent heartbeat exists.
+
+**The 30-minute wake (standing since 2026-11-05/06; bead
+coding-harness-7x3c).** Supervision of an unattended run rests on scheduled
+returns of control, not on session-only timers that die with their session
+and not on idle polling. A **wake** is a scheduled return of control to the
+orchestrating session; elapsed time or a printed message alone does not
+establish delivery. A **lane** is one worktree with the change it serves;
+the run's active lanes — those with authorised work still eligible to run —
+form the watch list. Before a run enters unattended operation, its session
+creates a run-specific state directory under
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/night/<run-id>/` holding
+`lanes.txt`, a `busy/` directory and an append-only `lane-watch.log`, so a
+successor session can resume the run from the files without chat memory.
+Choose `<run-id>` as the UTC start date plus an unused letter, for example
+`2026-11-06-a`; concurrent runs on that date take different letters. Record
+the run id and state-directory path in the run's handover file under
+`docs/journal/handover/<date>-<name>.md`. This is the record for parked
+questions, completed-lane outcomes and the end reason throughout this
+routine, not a change's `handover.md` or the session-notes safety net.
+A successor finds the run id in that handover and reuses its directory,
+never creating a second directory for the resumed run. The state directory
+records the run's wake and keep-awake handles and busy-marker ownership;
+a successor taking over that run uses this record to manage its resources,
+including handles started by the preceding session. A lane entry names the
+lane id, its worktree, the current item and the next authorised action, and is updated whenever the work changes. These files
+are session state: never a replacement tracker and never a committed task
+list.
+
+The same setup schedules the first return 30 minutes ahead and verifies
+delivery through an existing session scheduler wake, or a background tool
+job running `sleep 1800` whose completion the harness delivers to the
+orchestrating session. Check the scheduler's registered target session and
+due time, or the background job's retained handle and enabled completion
+delivery — never `&` or `nohup` inside a command (the standing background-mode rule, AGENTS.md
+2026-11-04). A background process without delivery is not a wake. The
+returned handle and due time are recorded in the run state; if no delivery
+facility is available, the session reports the missing supervision instead
+of declaring the run ready. It also starts keep-awake bounded to the
+intended run period — on macOS, `caffeinate -i -t <remaining-run-seconds>`
+as a separately owned background job — records that handle and expiry, and
+verifies both before unattended work begins. Where no keep-awake command
+exists, the session reports the missing keep-awake, as it does a missing
+delivery facility, instead of declaring the run ready. No scheduler adapter is
+introduced for this. The wake is time-based: it returns even when every
+lane looks busy, and lane idleness alone triggers nothing.
+
+At each wake the session works one fixed order: rearm once for 30 minutes
+and retain the new handle before any lane work; read the lane file; check
+each lane's actual job completion and activity and each busy marker's
+ownership; serve an idle lane's next authorised step during that same wake
+when the step is eligible; park what needs a maintainer decision — its
+question into the run's handover record, the lane off the watch list —
+instead of starting it; take a lane whose authorised work is complete off
+the watch list likewise, its outcome into the handover record; and append
+exactly one UTC summary line to `lane-watch.log` covering every watched
+lane's observed state and action plus the next due time (or
+`run ended: <reason>` at teardown), logging a lane it could not check as
+`unknown` rather than healthy. A **busy marker** at
+`busy/<lane-id>` records actual orchestrator work outside a runner call;
+it names its owner and current activity and is cleared when that work
+finishes. An apparent leftover marker is checked against its owner's
+current activity before anything is dispatched: never launch a duplicate
+on a marker's strength, never treat a marker as permanent proof of work,
+and never kill by broad pattern.
+
+If a usage limit, a stopped session or a missed wake interrupts
+supervision, the resuming session first rearms for 30 minutes and retains
+the handle before any lane work, then refreshes the lane state from the
+files and actual job activity and records the unobserved interval since
+the last actual check as a gap in its first summary line; missed
+wakes are never backfilled as successful checks, and the gap is not
+claimed as service. When the run ends or all remaining work is parked, the
+session cancels the run's own wake and keep-awake handles, clears the
+run's own busy markers using its state-directory ownership record, records
+in the run's handover file why the run ended, and leaves another run's
+handles and markers untouched.
 
 ### Two columns for every stage-2 change
 

@@ -20,8 +20,16 @@
 //   (d) any failure of the handler blocks the call.
 // It confines the file tools, not the shell: an approved or unlisted `bash`
 // command can read and write whatever the maintainer's user can.
+//
+// When the runner assessed the session's initial Go model against the one
+// address record (go-access-point), it wrote the allow-listed checked
+// definition beside this copy (`checked-model.json`). This extension then
+// registers that definition on the provider, so the session starts on the
+// checked base however the user's own agent configuration names the model.
+// It reads no credential file and touches no user-owned configuration; the
+// registration composes with the user's stored login as Pi resolves it.
 
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +39,8 @@ export const PATH_TOOLS = ["read", "grep", "find", "ls", "edit", "write"];
 export const WRITE_TOOLS = ["edit", "write"];
 // Relative to the worktree. The runner's own launch files live under the first.
 export const PROTECTED_DIRS = [".stage2-sessions", ".pi"];
+// The sidecar beside this copy that carries the checked initial model.
+export const MODEL_SIDECAR = "checked-model.json";
 
 // `git`, then any global options (`-C <dir>`, `-c k=v`, `--no-pager`), then a space: the verb follows.
 // An option value may be quoted and hold a space (`-C "my dir"`).
@@ -169,6 +179,28 @@ export function decide(event, env) {
   return { action: "allow" };
 }
 
+// Bind the checked initial model from one sidecar's text. Exported pure over
+// its inputs, so the handler tests run it without Pi: a sidecar that is not a
+// binding throws, and the runner's preparation refuses before any window opens.
+export function registerCheckedModel(pi, sidecar) {
+  const binding = JSON.parse(sidecar);
+  if (
+    !binding ||
+    typeof binding !== "object" ||
+    typeof binding.provider !== "string" ||
+    !binding.provider ||
+    !binding.model ||
+    typeof binding.model !== "object" ||
+    typeof binding.model.id !== "string" ||
+    !binding.model.id
+  ) {
+    throw new Error("the checked-model sidecar is not a binding");
+  }
+  // An explicit per-model definition replaces the provider's resolved list for
+  // this session; Pi composes the user's stored login for it as usual.
+  pi.registerProvider(binding.provider, { models: [binding.model] });
+}
+
 export default function (pi) {
   // Listed by `pi --help` when this file is loaded: how the runner confirms the load.
   pi.registerFlag(FLAG, {
@@ -176,6 +208,16 @@ export default function (pi) {
     type: "boolean",
     default: true,
   });
+  // The checked initial model, when the runner bound one. A sidecar that is
+  // present but unreadable or malformed fails the load: a session must never
+  // start on an unchecked model while pretending it was bound.
+  let sidecar;
+  try {
+    sidecar = readFileSync(new URL(`./${MODEL_SIDECAR}`, import.meta.url), "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (sidecar !== undefined) registerCheckedModel(pi, sidecar);
   pi.on("tool_call", async (event, ctx) => {
     try {
       const verdict = decide(event, {

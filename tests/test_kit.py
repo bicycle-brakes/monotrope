@@ -70,6 +70,16 @@ def test_the_kit_actually_carries_something() -> None:
     )
 
 
+def test_guard_environment_gate_script_travels_with_its_gate() -> None:
+    """An adopter receives the executable named by the carried guard gate."""
+    gates = yaml.safe_load((REPO_ROOT / "decisions/gates.yaml").read_text(encoding="utf-8"))["gates"]
+    gate = next(gate for gate in gates if gate["id"] == "guard-test-environment")
+    script = gate["command"].split()[1]
+    assert probe.rolle("decisions/gates.yaml")[0] == "mechanismus"
+    assert (REPO_ROOT / script).is_file()
+    assert probe.rolle(script)[0] == "mechanismus", "the kit carries the gate without its script"
+
+
 def test_every_rule_carries_a_reason() -> None:
     """The reason stands in the rule, not in the head of the person handing over."""
     ohne = [r["prefix"] for r in probe.regeln() if not r.get("reason", "").strip()]

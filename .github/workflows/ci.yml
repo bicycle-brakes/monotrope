@@ -137,6 +137,10 @@ jobs:
         id: research-handoff
         if: ${{ !cancelled() }}
         run: python3 scripts/check_research_handoff.py
+      - name: Verification never runs with a guard test's planting switch present
+        id: guard-test-environment
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_guard_test_environment.py
       - name: This gate file satisfies its own schema
         id: gate-schema
         if: ${{ !cancelled() }}

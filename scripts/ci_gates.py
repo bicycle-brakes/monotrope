@@ -6,7 +6,10 @@ Dieses Modul ist ihr einziger Leser und leitet daraus alles ab:
 
   --list            menschenlesbare Uebersicht (auch nicht-lokale Gates)
   --format=json     maschinenlesbar
-  --commands        nur die ausfuehrbaren Kommandos eines Jobs
+  --commands        nur die ausfuehrbaren Kommandos eines Jobs; unter Schema 3
+                    ordnet `--placement lokal` sie billig-zuerst (cost:
+                    seconds vor minutes), alles andere bleibt in
+                    Deklarationsordnung (bead coding-harness-bxxt.1)
   --report          Commit-SHAs + Konfigurations-Hash: der Lauf bindet sich
   --check-schema    prueft die Gate-Datei gegen ihr eigenes Schema
   --generate-ci     erzeugt `.github/workflows/ci.yml` aus der Liste
@@ -31,6 +34,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -71,7 +75,12 @@ _INTERPRETER = re.compile(r"3\.(?:0|[1-9][0-9]*)")
 # Aussage, kein Schweigen. SCHEMA_VERSION gehoert zur Gate-Datei: ein
 # Schemawechsel ist sichtbar, kein stiller.
 PLACEMENT: tuple[str, ...] = ("hosted", "writer", "both")
-SCHEMA_VERSION = 2
+# Schema 3 (bead coding-harness-bxxt.1): jeder Gate erklaert seine
+# Kostenklasse — das geschlossene Vokabular, aus dem der lokale Lauf seine
+# billig-zuerst-Ordnung ableitet. SCHEMA_VERSION gehoert zur Gate-Datei: ein
+# Schemawechsel ist sichtbar, kein stiller.
+SCHEMA_VERSION = 3
+COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
 
 # Scripts ohne Aufrufer in der erzeugten ci.yml — mit dem Grund, warum das
 # richtig ist (RB-G3). Jedes Script unter `scripts/` steht entweder als Gate-
@@ -84,9 +93,26 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
         "tests/test_adoption.py runs it"
     ),
+    "archive_closed_changes.py": (
+        "Local command — `make archive` and the post-merge procedure in prompts/07-commit.md run it; "
+        "it moves completed change folders by design, so CI never does "
+        "(tests/test_archive_closed_changes.py runs it)"
+    ),
+    "venv_guard.py": (
+        "Library — imported by every script before its first third-party import (bead coding-harness-s55e); "
+        "tests/test_venv_guard.py runs it"
+    ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
+    ),
+    "outcome_test.py": (
+        "On-demand administrator measurement — a fresh session answers `questions`, the administrator records it with `record` "
+        "(docs/WORKFLOW.md, 'The outcome test'); it runs only read-only git, never on a schedule, so CI never runs it (tests/test_outcome_test.py runs it)"
+    ),
+    "close_merged_beads.py": (
+        "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
+        "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
     ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
@@ -122,6 +148,15 @@ OHNE_AUFRUFER: dict[str, str] = {
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
         "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
     ),
+    "research_census.py": (
+        "Library - the research metadata census (explore-provenance); tests/test_explore_provenance.py "
+        "imports it, and the pytest gate runs it there. It only reads research files, never rewrites them"
+    ),
+    "machine_facts.py": (
+        "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
+        "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "
+        "which no CI checkout can stand in for; tests/test_machine_facts.py runs it against stand-ins"
+    ),
     "run_report.py": (
         "Entry point, not a gate — the local, read-only run report (make report); it snapshots the "
         "maintainer's working tree and live system figures, which no CI checkout can stand in for; "
@@ -145,6 +180,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "stand-in-testable launch path. tests/test_stage2_availability.py exercises the review loop's preparation "
         "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
         "swarm's against stand-ins and a fixture catalog"
+    ),
+    "stage2_free.py": (
+        "Helper imported by scripts/stage2.py and scripts/stage2_swarm.py for the shared free-model "
+        "selection of the review loop and the research swarm; never an entry point of its own. "
+        "tests/test_stage2_free.py runs it, tests/test_pi_contract.py checks both preparations offline"
     ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
@@ -181,6 +221,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
     ),
+    "stage2_research_limits.py": (
+        "Library of scripts/stage2_research_run.py, never an entry point of its own: loads and checks the "
+        "research swarm's time limits from research-swarm-limits.yaml (bead coding-harness-ht1b); "
+        "tests/test_stage2_research_limits.py runs it"
+    ),
     "stage2_research_run.py": (
         "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "
         "phase-1 research run - frozen inputs, finder trio, map merge, public sentence, history, eleven topics "
@@ -197,15 +242,31 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
+    "stage2_go.py": (
+        "Library of scripts/stage2.py, stage2_swarm.py, stage2_availability.py and stage2_session.py, never an "
+        "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
+        "tests/test_stage2_go_access.py runs it against synthetic address records"
+    ),
+    "time_records.py": (
+        "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "
+        "scripts/harness.py time-log and scripts/stage2.py persist through it and the run report reads "
+        "through it; tests/test_time_records.py runs it"
+    ),
     "verify_lock.py": (
         "Helper of the runner, never a gate of its own: the machine-wide verification admission "
-        "(flock queue, free-memory check) that verify_all.sh execs as `-m scripts.verify_lock` and "
-        "scripts.stage2 holds around its timed local checks; tests/test_verify_lock.py runs it "
-        "against isolated state roots (bead coding-harness-p6mu)"
+        "(flock queue, free-memory check) that scripts.verify_run holds in-process around the "
+        "protected gates and scripts.stage2 reaches through the same scheduler; tests/test_verify_lock.py "
+        "runs it against isolated state roots (bead coding-harness-p6mu)"
+    ),
+    "verify_duration.py": (
+        "Helper of the runner, never a gate of its own: the run history the shared scheduler "
+        "scripts.verify_run writes through (one run identity, per-gate active seconds, completion "
+        "context); tests/test_verify_duration.py runs it (bead coding-harness-bxxt.6)"
     ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
-        "answer with it; tests/test_harness_decide_adr.py runs it"
+        "answer with it, or logs one measured time span into a change's plan (time-log); "
+        "tests/test_harness_decide_adr.py and tests/test_harness_time_log.py run it"
     ),
     "merge_guard.py": (
         "Library — the one list of ask rules that stop an agent before it merges; "
@@ -306,8 +367,9 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     fehler: list[str] = []
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
-    if doc.get("schema_version") != SCHEMA_VERSION:
-        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {doc.get('schema_version')!r}")
+    version = doc.get("schema_version")
+    if type(version) is not int or version != SCHEMA_VERSION:
+        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
     fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
     if not isinstance(gate_liste, list) or not gate_liste:
@@ -330,6 +392,10 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: job muss eins von {JOBS} sein, ist {g.get('job')!r}")
         if g.get("enforcement") not in ENFORCEMENT:
             fehler.append(f"{gid}: enforcement muss eins von {ENFORCEMENT} sein")
+        if g.get("cost") not in COST_CLASSES:
+            fehler.append(
+                f"{gid}: cost muss eins von {COST_CLASSES} sein, ist {g.get('cost')!r} (bead coding-harness-bxxt.1)"
+            )
         if not isinstance(g.get("floor"), bool):
             fehler.append(f"{gid}: floor fehlt oder ist kein Boolean")
         if g.get("placement") not in PLACEMENT:
@@ -347,6 +413,8 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
         if "needs_history" in g and not isinstance(g.get("needs_history"), bool):
             fehler.append(f"{gid}: needs_history muss ein Boolean sein")
+        if "needs_admission" in g and not isinstance(g.get("needs_admission"), bool):
+            fehler.append(f"{gid}: needs_admission muss ein Boolean sein")
         if g.get("needs_tracker") and bool(g.get("action")):
             # Seit bead 1jg.3 liest auch der drift-Job den Tracker (plans-registry-strict):
             # ohne committete Kopie braucht jeder Job mit einem Tracker-Leser die Hydratation.
@@ -385,12 +453,19 @@ def in_job(gate: dict[str, Any], job: str) -> bool:
     return gate["job"] == job
 
 
-def gates() -> list[dict[str, Any]]:
-    """Alle Gates der einen Liste, in ihrer Reihenfolge."""
-    fehler = validate_schema()
+def _gatedatei(root: Path | str) -> Path:
+    """Die eine Gate-Datei eines Checkouts — der Wurzel-Parameter, nie der des Importeurs."""
+    return Path(root) / "decisions" / "gates.yaml"
+
+
+def _gates_aus(datei: Path) -> list[dict[str, Any]]:
+    """Alle Gates einer Gate-Datei, in ihrer Reihenfolge, mit den abgeleiteten Feldern."""
+    if not datei.is_file():
+        raise FileNotFoundError(f"Gate-Datei fehlt: {datei}")
+    doc = yaml.safe_load(datei.read_text(encoding="utf-8"))
+    fehler = validate_schema(doc)
     if fehler:
         raise ValueError("Gate-Datei verletzt das Schema: " + "; ".join(fehler))
-    doc = yaml.safe_load(GATE_FILE.read_text(encoding="utf-8"))
     out: list[dict[str, Any]] = []
     for g in doc["gates"]:
         aktion = g.get("action")
@@ -407,8 +482,11 @@ def gates() -> list[dict[str, Any]]:
                 "enforcement": g["enforcement"],
                 "floor": g["floor"],
                 "placement": g["placement"],
+                "cost": g["cost"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "needs_history": bool(g.get("needs_history")),
+                "needs_admission": bool(g.get("needs_admission")),
+                "admission": not declared_cheap(g),
                 "subsets": list(g.get("subsets") or []),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
@@ -416,6 +494,59 @@ def gates() -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def declared_cheap(gate: dict) -> bool:
+    """Only explicitly seconds-cost gates without the exception are cheap."""
+    return gate.get("cost") == "seconds" and gate.get("needs_admission") is not True
+
+
+def gates() -> list[dict[str, Any]]:
+    """Alle Gates der einen Liste, in ihrer Reihenfolge."""
+    return _gates_aus(GATE_FILE)
+
+
+def gates_at(root: Path | str) -> list[dict[str, Any]]:
+    """Alle Gates der einen Liste EINES Checkouts — fuer den Scheduler (bead coding-harness-bxxt.6).
+
+    Der lokale Lauf misst den Checkout, in dem er steht. `gates()` folgt dem
+    Modul-Pfad dieses Moduls; ein Importeur in einem anderen Checkout liesse
+    damit versehentlich seine eigene Liste messen. `gates_at` bindet dieselbe
+    Ableitung an eine Wurzel, damit der Scheduler und seine Pruefen den
+    Checkout benennen, den sie meinen.
+    """
+    return _gates_aus(_gatedatei(root))
+
+
+def selection_at(root: Path | str, job: str, ci: bool = False) -> list[dict[str, Any]]:
+    """Die Gate-Auswahl eines Laufs in einem Checkout — dieselbe Kette wie `--commands --tsv`.
+
+    lokal: `--placement lokal` und die billig-zuerst-Ordnung. ci:
+    `--placement ci` ohne die Action-Entsprechungen (`--skip-equivalents`,
+    die CI faehrt die Actions selbst), in Deklarationsordnung. Der Scheduler
+    und seine Pruefen ziehen dieselben Gates hierher, statt das CLI zu
+    umgehen oder eine zweite Liste zu pflegen.
+    """
+    alle = gates_at(root)
+    umfeld = "ci" if ci else "lokal"
+    auswahl = [
+        g
+        for g in alle
+        if in_job(g, job) and g["local_runnable"] and misst_in(g, umfeld) and not (ci and g["via_local_equivalent"])
+    ]
+    return auswahl if ci else kostenordnung(auswahl)
+
+
+def kostenordnung(alle: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Die stabile Zwei-Klassen-Ordnung des lokalen Laufs (bead coding-harness-bxxt.1).
+
+    Jeder `seconds`-Gate vor jedem `minutes`-Gate, innerhalb einer Klasse die
+    Deklarationsordnung — die Entscheidung Q-1 nennt keine feinere Rangfolge,
+    also bleibt jeder Gleichstand bewahrt. Sie gilt nur fuer
+    `--commands --placement lokal` unter Schema 3; `gates()`, die CI-Ableitung
+    und alle anderen Ausgaben bleiben in Deklarationsordnung.
+    """
+    return sorted(alle, key=lambda g: g["cost"] != "seconds")
 
 
 def interpreters() -> list[str]:
@@ -442,16 +573,20 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
 
     Deterministic and unfiltered: every declared gate, in list order, with the
     fields the catalog promises (id, title, command or action, job,
-    enforcement, floor, placement, reason). A command gate and a hosted action
-    are rendered distinctly, and an action with a local equivalent names it —
-    the reader must see what runs where. `tests/test_gate_catalog.py` holds
-    the committed inventory to this rendering.
+    enforcement, cost, admission, floor, placement, reason — the cost column
+    since schema 3, bead coding-harness-bxxt.1; the admission column since
+    the cheap-before-admission order, bead coding-harness-bxxt.6, naming the
+    gates that wait for the machine's slot). A command gate and a hosted
+    action are rendered distinctly, and an action with a local equivalent
+    names it — the reader must see what runs where.
+    `tests/test_gate_catalog.py` holds the committed inventory to this
+    rendering.
     """
     if alle is None:
         alle = gates()
     zeilen = [
-        "| id | title | command / action | job | enforcement | floor | placement | reason |",
-        "|---|---|---|---|---|---|---|---|",
+        "| id | title | command / action | job | enforcement | cost | admission | floor | placement | reason |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for g in alle:
         if g["action"]:
@@ -460,34 +595,42 @@ def catalog_rows(alle: list[dict[str, Any]] | None = None) -> str:
                 einsatz = f"action `{g['action']}`; locally: `{g['command']}`"
         else:
             einsatz = f"`{g['command']}`"
+        kosten_zelle = f"{_zelle(g['cost'])} | "
+        admission_zelle = "yes" if g["admission"] else "no"
         zeilen.append(
             f"| {_zelle(g['id'])} | {_zelle(g['name'])} | {_zelle(einsatz)} | {_zelle(g['job'])} | "
-            f"{_zelle(g['enforcement'])} | {'yes' if g['floor'] else 'no'} | {_zelle(g['placement'])} | "
-            f"{_zelle(g['reason'])} |"
+            f"{_zelle(g['enforcement'])} | {kosten_zelle}{admission_zelle} | {'yes' if g['floor'] else 'no'} | "
+            f"{_zelle(g['placement'])} | {_zelle(g['reason'])} |"
         )
     return "\n".join(zeilen)
 
 
-def _git(*args: str) -> str | None:
+def _git(*args: str, cwd: Path = REPO_ROOT) -> str | None:
     try:
-        erg = subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        erg = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=10.0)
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
     return erg.stdout.strip() or None
 
 
-def report(job: str) -> dict[str, Any]:
-    """Bindet den Lauf an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
-    konfig = GATE_FILE.read_bytes()
-    alle = gates()
+def report_at(root: Path | str, job: str) -> dict[str, Any]:
+    """Bindet einen Lauf in einem Checkout an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
+    wurzel = Path(root)
+    konfig = _gatedatei(wurzel).read_bytes()
+    alle = gates_at(wurzel)
     return {
         "job": job,
-        "candidate": _git("rev-parse", "HEAD"),
-        "base": _git("merge-base", "origin/main", "HEAD"),
+        "candidate": _git("rev-parse", "HEAD", cwd=wurzel),
+        "base": _git("merge-base", "origin/main", "HEAD", cwd=wurzel),
         "config_sha256": hashlib.sha256(konfig).hexdigest(),
         "gates_total": len(alle),
         "gates_job": sum(1 for g in alle if in_job(g, job)),
     }
+
+
+def report(job: str) -> dict[str, Any]:
+    """Bindet den Lauf an einen Weltzustand: Commit, Basis, Gate-Konfiguration."""
+    return report_at(REPO_ROOT, job)
 
 
 def _schritt(g: dict[str, Any]) -> list[str]:
@@ -806,13 +949,22 @@ def main() -> int:
         return 0
 
     if args.commands:
-        for g in alle:
-            if not in_job(g, args.job) or not g["local_runnable"]:
-                continue
-            if args.placement and not misst_in(g, args.placement):
-                continue
-            if args.skip_equivalents and g["via_local_equivalent"]:
-                continue
+        auswahl = [
+            g
+            for g in alle
+            if in_job(g, args.job)
+            and g["local_runnable"]
+            and (not args.placement or misst_in(g, args.placement))
+            and not (args.skip_equivalents and g["via_local_equivalent"])
+        ]
+        # Nur der lokale Lauf sortiert (bead coding-harness-bxxt.1): seconds
+        # vor minutes, stabil — innerhalb einer Klasse bleibt die
+        # Deklarationsordnung. Die Auswahl wird vorher gefiltert: Sortieren
+        # veraendert nie, WER misst, nur wann. `gates()`, die CI-Ableitung und
+        # jede andere Ausgabe bleiben in Deklarationsordnung.
+        if args.placement == "lokal":
+            auswahl = kostenordnung(auswahl)
+        for g in auswahl:
             if args.tsv:
                 print(f"{g['id']}\t{g['enforcement']}\t{g['command']}")
             else:
@@ -824,7 +976,7 @@ def main() -> int:
     for g in alle:
         marke = "~" if g["via_local_equivalent"] else (" " if g["local_runnable"] else "*")
         takt = " ⏱" if g["job"] == "drift" else ""
-        print(f"{marke}{takt} [{g['id']}] {g['name']}")
+        print(f"{marke}{takt} [{g['id']}] {g['name']} (cost: {g['cost']})")
         if g["local_runnable"]:
             zusatz = "  (lokales Aequivalent der Action)" if g["via_local_equivalent"] else ""
             if g["placement"] == "writer":

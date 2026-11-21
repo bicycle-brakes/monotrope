@@ -6,19 +6,21 @@
 set -uo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
-BD_VERSION=1.3.0
-BD_SHA256=2f92b904ecf35b607e44dc5c39229173af69c54f1183e8d709f1773540cdcf3b  # = tools/beads/checksums/beads_1.3.0_linux_amd64.tar.gz.sha256
+BD_VERSION=1.3.4
+BD_SHA256=175c26904bde3ff9168d2282ff6b56f17b17f60c22fa5acb3dacc9fb3465303a  # = tools/beads/checksums/beads_1.3.4_linux_amd64.tar.gz.sha256
 BD_DEST="$HOME/.local/bin/bd-$BD_VERSION"
 
 # 1. Python 3.11 (lakeswitch-ai requires >=3.11,<3.12) and 3.12 (coding-harness requires >=3.12)
 uv python install 3.11 3.12
 
-# 2. bd, pinned and checksum-verified (fail closed)
-if ! { [ -x "$BD_DEST" ] && "$BD_DEST" version 2>/dev/null | grep -q "$BD_VERSION"; }; then
+# 2. bd, pinned and checksum-verified (fail closed). An existing binary counts
+# only when its first line is exactly "bd version <pin>"; it is not re-hashed.
+BD_EXACT="^bd version ${BD_VERSION//./\\.}([[:space:]]|\$)"
+if ! { [ -x "$BD_DEST" ] && "$BD_DEST" version 2>/dev/null | head -1 | grep -qE "$BD_EXACT"; }; then
   TMP="$(mktemp -d)"
   TARBALL="beads_${BD_VERSION}_linux_amd64.tar.gz"
   curl -fsSL -o "$TMP/$TARBALL" \
-    "https://github.com/steveyegge/beads/releases/download/v${BD_VERSION}/${TARBALL}"
+    "https://github.com/gastownhall/beads/releases/download/v${BD_VERSION}/${TARBALL}"
   if [ "$(sha256sum "$TMP/$TARBALL" | awk '{print $1}')" = "$BD_SHA256" ]; then
     tar -xzf "$TMP/$TARBALL" -C "$TMP"
     mkdir -p "$(dirname "$BD_DEST")"

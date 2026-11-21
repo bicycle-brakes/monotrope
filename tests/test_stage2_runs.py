@@ -10,6 +10,7 @@ that each was planted once.
 
 from __future__ import annotations
 
+import datetime as dt
 import subprocess
 import sys
 from pathlib import Path
@@ -27,17 +28,20 @@ endpunkte:
   - name: openai-codex
     residenz: anbieter-erklaert
     darf_sehen: [framework]
-    modelle: [gpt-6.1-sol]
+    modelle: [gpt-6.1-terra]
   - name: glm-coding-plan
     residenz: anbieter-erklaert
     darf_sehen: [framework]
     modelle: [glm-5.3, glm-5.3-flash]
+    modelle_terms:
+      glm-5.3: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
+      glm-5.3-flash: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
 """
 
 
 def call(verb: str, clean: bool = True) -> str:
     check = "leak check clean over 1 files, 2 commits, 3 rules." if clean else "leak check BLOCK."
-    return f"Stage-2 call, 2026-10-08: {verb} · endpoint openai-codex · model gpt-6.1-sol · {check}"
+    return f"Stage-2 call, 2026-10-08: {verb} · endpoint openai-codex · model gpt-6.1-terra · {check}"
 
 
 def codex_rows(*rows: tuple[str, str, str, str]) -> str:
@@ -227,7 +231,7 @@ def test_calls_come_from_findings_and_research_and_only_clean_lines_count_clean(
         + call("review-loop")
         + "\n\n"
         + call("review", clean=False)
-        + "\n\nStage-2 session, 2026-10-08: attempt 1 · model gpt-6.1-sol · endpoint openai-codex · handover h.md · "
+        + "\n\nStage-2 session, 2026-10-08: attempt 1 · model gpt-6.1-terra · endpoint openai-codex · handover h.md · "
         "leak check clean over 1 files, 2 commits, 3 rules · dispatch accepted.\n"
         + "\nA prose line that mentions Stage-2 call, 2026-10-08: review is not a call.\n"
     )
@@ -293,7 +297,7 @@ def test_criterion_4_counts_only_cleared_routes_and_no_cost_figure_is_printed(tm
     make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}}, endpoints=no_residency)
     code, out, _ = run(tmp_path, "run", capsys=capsys)
     assert code == 0
-    assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-sol)." in out
+    assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
     assert "not cleared: glm-coding-plan glm-5.3 — the endpoint glm-coding-plan states no data residency" in out
     assert (
         "- Criterion 1 (measured stage-2 runs, ADR 0007): 1 runs measured; rows marked Broke a test `yes` (any status): 0."
@@ -418,3 +422,50 @@ def test_a_body_row_is_a_row_whatever_its_first_cell_or_dashes() -> None:
     assert stage2_runs.measure(HEADER + "\n" + id_row + "\n").broke == 1
     dashes = stage2.render_table(["ID", "Broke a test"], [["---", "---"], ["X-1", "yes"]])
     assert stage2_runs.measure(HEADER + "\n" + dashes + "\n").broke == 1
+
+
+def test_criterion_4_drops_the_zai_routes_after_the_subscription_ends(tmp_path: Path, capsys, monkeypatch) -> None:
+    """Fault: the counter clearing a route past its `valid_until` day (phase 6, F6-2; bead coding-harness-dcu3).
+
+    The count is judged against the run's UTC date, so a declaration that cleared yesterday may not today.
+    """
+    ended = ENDPOINTS.replace("2099-01-01", "2026-12-08")
+    assert ended != ENDPOINTS
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}}, endpoints=ended)
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 12, 9))
+    code, out, _ = run(tmp_path, "run", capsys=capsys)
+    assert code == 0
+    assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
+    for model in ("glm-5.3", "glm-5.3-flash"):
+        assert (
+            f"  - not cleared: glm-coding-plan {model} — the Z.ai subscription for {model} expired on 2026-12-08; "
+            "no further call runs on it"
+        ) in out
+    monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 12, 8))
+    code, out, _ = run(tmp_path, "run", capsys=capsys)
+    assert "3 of 3 foreign routes cleared" in out
+
+
+def test_rev_before_the_zai_terms_counts_both_glm_routes_not_cleared(tmp_path: Path, capsys) -> None:
+    """Fault: a Z.ai route without a terms record counted cleared on silence (phase 6, F6-3).
+
+    Intended: a commit before the Z.ai terms record (bead coding-harness-dcu3) declares no subscription
+    end, and a route without one is not cleared, so `--rev` there reports both GLM routes as not cleared.
+    """
+    before = ENDPOINTS.split("    modelle_terms:\n")[0]
+    assert before != ENDPOINTS
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}}, endpoints=before)
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "before the terms record")
+    first = _git(tmp_path, "rev-parse", "--short", "HEAD")
+    (tmp_path / "model-endpoints.yaml").write_text(ENDPOINTS, encoding="utf-8")
+
+    code, out, _ = run(tmp_path, "run", "--rev", first, capsys=capsys)
+    assert code == 0
+    assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
+    for model in ("glm-5.3", "glm-5.3-flash"):
+        assert f"  - not cleared: glm-coding-plan {model} — the model {model} has no dated reading" in out
+
+    code, out, _ = run(tmp_path, "run", capsys=capsys)
+    assert "3 of 3 foreign routes cleared" in out

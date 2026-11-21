@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-13
+updated: 2026-11-03
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-12"}
@@ -109,12 +109,14 @@ model, decides what may change.
    a moved `HEAD` stops the run with no rewrite; every path git reports as
    changed outside the change folder, and the change's `decisions.md`, is put
    back at the baseline, except one new `docs/adr/<NNNN>-<slug>.md` file;
-   then the derived files, `make verify`, and the checks that `spec.md` and
+   then the derived files, the document check `bash scripts/verify_all.sh
+   --job docs`, and the checks that `spec.md` and
    `plan.md` exist and `plan.md` carries its card and `## Time used`. A
    passing attempt makes exactly one commit.
 3. **The one red gate a draft accepts** is `adr-answers` reporting that the
    drafted change has no answer file, and nothing else: the runner sets
-   `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for its `make verify`, the gate
+   `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for its document check
+   (`bash scripts/verify_all.sh --job docs`), the gate
    tolerates exactly that change's missing answer, and the exit code decides;
    no gate output is parsed. `findings.md` says the answer is owed. The orchestrating session records the maintainer's
    stated answer afterwards (`python3 scripts/harness.py decide adr …
@@ -134,7 +136,8 @@ model, decides what may change.
    2a session for a change reviewed after this record; a change whose Codex
    2a session is recorded is still resumed. The phase-6 reviewer first checks
    that each 2a row arrived in the revised spec.
-7. **A draft passes four checks before phase 4** (Q-4): `make verify`, the
+7. **A draft passes four checks before phase 4** (Q-4): the document check
+   `bash scripts/verify_all.sh --job docs`, the
    Opus spec review, the orchestrating session's reading of the whole draft
    before that review, and the plan card shown to the maintainer unchanged.
    The author works the 2a rows in with a second `draft` run, and an
@@ -151,6 +154,11 @@ model, decides what may change.
    changed while the runner commits right after it.
 9. **Where Stage 2 is off**, Opus 5.5 drafts by hand as §3 says; `draft` has
    no Stage-1 route.
+
+> Amended 2026-11-01 (bead coding-harness-77qj, no behavior change): since the
+> draft-gates-only change the draft runner's post-run check is the verify job's
+> document subset, `bash scripts/verify_all.sh --job docs`, not `make verify`;
+> decisions 2, 3 and 7 name it. Implement and repair keep the full `make verify`.
 
 ## Consequences
 

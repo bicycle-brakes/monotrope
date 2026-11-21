@@ -7,7 +7,8 @@
 5.5 at effort `medium` (`claude-sonnet-5-5`) builds and the reason is recorded.
 A leak-check BLOCK stops; it never falls back.
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
-**Gate:** `make verify` green.
+**Gate:** `make verify` green on the final head before phase 6; each runner
+attempt passes the targeted check or, where that is unsafe, the full one.
 
 You follow the plan. You read the spec to know what you are building against.
 Under the Stage-2 runner an implement attempt has
@@ -15,7 +16,13 @@ file tools but no command tool (a Codex repair attempt may run tests and
 `make verify`, never commit): write no entry under `## Time used`, because the
 runner measures each completed attempt itself and writes a line marked
 "measured by the runner" (a rejected attempt gets one too); the runner
-runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
+runs the targeted check after an implement or a repair attempt (the whole
+touched and import-linked test files and the gates the touched kinds of file
+feed; the full `make verify` when the attempt touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), and makes the local checkpoint commit. A
+targeted red fails the attempt; the full check never overrides it. An
+implement attempt that adds production code (a Python or shell file) no test
+reaches is refused before any test runs: add the test that reaches it. One full
+`make verify` runs on the final head before phase 6. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you, and the interactive session reads its own
 clock and logs its own spans, as the appetite rule below says.
 
@@ -24,7 +31,7 @@ clock and logs its own spans, as the appetite rule below says.
 `## Criterion ledger` names. With a command tool, run them and hand back only
 when they are green. On a file-only route (any model that can edit files but
 cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
-`make verify`. It runs ruff, then pytest over the changed or new test functions,
+its verification (the targeted check, or the full `make verify` on fallback). It runs ruff, then pytest over the changed or new test functions,
 the ledger's test ids and, on a retry, the tests the attempt before failed. The
 first red check ends the attempt with exactly that output (bead
 coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is
@@ -48,11 +55,17 @@ only in the code is no longer a deviation on the next reading — it is the plan
 is the sum of the spans of the sessions that worked under this prompt on this
 change. Read `date` when a session starts or work resumes, between steps, before
 each commit and when it ends (at its stop, resumption line or "done:" line);
-never estimate it or recall it. A break inside a session counts, and the record
-says so; the time between two sessions does not. A stop ends the span; work that
-resumes starts a new one, even in the same chat. A session appends `<date>
-<start>–<end>, <span>[, break counted]` under `## Time used` in `plan.md` when a
-span ends — a chat does not survive `/clear`. When a reading shows the time used
+never estimate it or recall it. A break inside a session counts, and the session's
+status message says so; the time between two sessions does not. A stop ends the span; work that
+resumes starts a new one, even in the same chat. When a span ends the session
+records it with `python3 scripts/harness.py time-log <change> --start
+<YYYY-MM-DDTHH:MM:SSZ> --end <YYYY-MM-DDTHH:MM:SSZ> --seconds <n> --verb session
+--attempt <n> --route orchestrator --model <model> --result <accepted|rejected>`
+(the outcome the span actually had: `rejected` when it ended red, at a stop or a cut; the same
+fixed record the runner writes, from the clock readings, never a guess) — a chat
+does not survive `/clear`; a counted break is in the seconds and the session's
+status message names it. A model running under the Stage-2 runner never calls
+it: the runner logs its attempts itself. When a reading shows the time used
 has reached the appetite, stop once, in the labels above and in this order.
 The first stop is a checkpoint, not a question, by day and at night
 (maintainer, 2026-10-30: the limits must not be so hard that the maintainer is
@@ -122,7 +135,7 @@ cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
 rows are decided and recorded.
 
 **Repair.** The orchestrator decides taken or rejected and hands every taken
-row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-sol`),
+row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-terra`),
 then a fresh Codex attempt and Sonnet 5.5 after failed post-run checks,
 repairs them in one guarded call (ADR 0017). Codex may run tests and
 `make verify` in its configured sandbox but never commits; the phase-6
@@ -131,4 +144,11 @@ re-check is a fresh read-only Codex session. The model answers one fixed line pe
 <reason>` for a row taken as `taken — not a test`. A code row needs a test
 that is red first — it fails on the baseline's code — and the runner runs
 that proof itself, then writes each row's Status and ends in one checkpoint
-commit.
+commit. When the fault itself raises an exception, catch that specific
+exception in the regression test body and fail with `assert` or
+`pytest.fail` so the baseline failure states the test's expectation. A row the
+orchestrator took as `taken — guard test — <reason>` is the
+one exception (ADR 0023): its test changes only test code, plants its real
+fault under `STAGE2_PLANT_FAULT`, and is proven red with the switch and green
+without it on the attempt's code; the answer is `<ID>: fixed — guard test —
+tests/<path>::<function>`. The first implementation never uses this form.

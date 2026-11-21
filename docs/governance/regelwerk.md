@@ -3,10 +3,10 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 6.0.0
+version: 7.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-10-30
+updated: 2026-11-18
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -109,7 +109,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-A1** | Ein Agent berichtet nur, was er in dieser Sitzung beobachtet hat; Nicht-Beobachtetes ist `UNKNOWN`, nie `NO`; jede Behauptung trägt `evidence:`; Proxys heißen Proxys; negative Antworten sind nicht symmetrisch; vor einem „liest nichts"-Urteil folgt er den Imports; er nimmt seine eigene Arbeit nie ab (§6) | 2 | `Ramp:agents-evidence-contract` | P L I |
+| **RB-A1** | Ein Agent berichtet nur, was er in dieser Sitzung beobachtet hat; Nicht-Beobachtetes ist `UNKNOWN`, nie `NO`; jede Behauptung trägt `evidence:`; Proxys heißen Proxys; negative Antworten sind nicht symmetrisch; vor einem „liest nichts"-Urteil folgt er den Imports; er nimmt seine eigene Arbeit nie ab (§6) | 4 | `tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim` | P L I |
 | **RB-A2** | Read-only-Agents führen kein `Bash`, `Write` oder `Edit`; wer eine Shell hat, deklariert ihren Umfang; `permissions.deny` enthält mindestens Prod-Deploy, `bundle destroy`, Force-Push und `rm -rf` | 2 | `Ramp:agents-tool-scopes` | P L I |
 | **RB-A3** | Eine selbst erklärte Verifikation ist keine: ein Verdikt gilt erst, wenn ein zweiter unabhängiger Leser oder ein Script es aus den Findings nachgerechnet hat | 2 | `Ramp:skill-outputs-transfer` | P L I |
 | **RB-A4** | Ein schreibender Agent deklariert, wohin er schreiben darf — nie in den Entscheidungs-Baum, nie in seinen eigenen Abnahmebericht —, führt einen Abschnitt „was ein Mensch prüft" und liefert ein Ergebnis, in dem `UNKNOWN` vorkommen darf | 2 | `Ramp:agent-writes-allowlist` | P L I |
@@ -193,6 +193,21 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 7.0.0 — 2026-11-18
+
+**RB-A1** moves from level 2 to 4. The clause comparison already ran in
+`tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim`, over every
+agent definition; the valve, by contrast, named a file that never existed. The
+test was there; the assignment was missing.
+
+MAJOR, because the promise of enforcement changes: a run holds the rule from
+now on, not a second look.
+
+- **Geändert:** RB-A1 — level 2 → 4; enforcer `Ramp:agents-evidence-contract` replaced by `tests/test_regelwerk.py::test_rb_a1_clause_is_present_verbatim`; the valve `agents-evidence-contract` is closed, not silently removed. No id changed, none removed
+- **Tests:** no new test — the existing clause comparison becomes the named enforcer; `tests/test_ramp_valves.py` unchanged
+- **Agents/Hooks/Templates:** the nine Markdown definitions already carry the clause byte-identically, and the test holds them. When the Codex definitions under `.codex/agents/*.toml` land, the enforcer must grow a TOML branch: they embed the clause in `developer_instructions`, and the current paragraph parser reads Markdown only. That extension belongs to the change that commits them, so section 6 does not claim more than the test measures
+- **lakeswitch-ai:** nothing; the clause travels with the kit transfer
 
 ### 6.0.0 — 2026-10-30
 
