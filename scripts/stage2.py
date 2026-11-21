@@ -10225,7 +10225,6 @@ def run_attempts(
                 scope_record += [
                     protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
                 ]
-            scope_in_time = not problems
             exposed = verified_exposed
             if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
@@ -10234,6 +10233,20 @@ def run_attempts(
             if exposed:
                 if not problems:
                     put_findings_back(original=Refused(credential_message(exposed)))
+                    listing = protect_diagnostics(
+                        "\n".join(
+                            [*(f"- {SCOPE_LABEL}: {line}" for line in scope_lines), f"- {credential_message(exposed)}"]
+                        ),
+                        key,
+                    )
+                    append(
+                        ctx.findings,
+                        quote_block(
+                            attempt_block(attempt, route, listing, protect_files(files, key)),
+                            key,
+                            whole=[line for line in listing.splitlines() if line.startswith(f"- {SCOPE_LABEL}: ")],
+                        ),
+                    )
                 if not verified_exposed:
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
@@ -10264,9 +10277,8 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
-                    # Scope goes in the time line when no diagnostics block was written, including
-                    # a refusal discovered by the final credential scan; otherwise it is in that block.
-                    [protect_diagnostics(line, key) for line in scope_lines] if scope_in_time else (),
+                    # Failed attempts keep their scope in the diagnostics block, not the time line.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems else (),
                 ),
                 baseline_time,
                 inputs_before,

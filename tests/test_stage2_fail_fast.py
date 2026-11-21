@@ -1409,7 +1409,8 @@ def test_late_credential_refusal_keeps_missing_ledger_record(world: World, monke
     monkeypatch.setattr(stage2, "remove_changed_credential", scan)
     world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}])
     assert world.run("implement") == 2
-    assert "tests/test_later.py::test_later" in world.plan.read_text() + world.text()
+    assert "tests/test_later.py::test_later" not in runner_entries(world.plan)[-1]
+    assert "tests/test_later.py::test_later" in world.text()
 
 
 @pytest.mark.parametrize("verb", ["implement", "repair"])
