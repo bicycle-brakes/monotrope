@@ -1,0 +1,14 @@
+schema_version: 1
+change: research-free-paid
+question: adr
+answer: 'no'
+reason: The change repairs the free-model selection within the existing rules of ADR
+  0021 and ADR 0020 (a paid model is never selected free) and makes no new architectural
+  decision.
+shown:
+  proposed: 'no'
+  proposal_reason: This consolidates existing free-model and destination restrictions
+    without changing provider admission, data boundaries or the research and review
+    protocols.
+answered_by: framework-architect
+answered_at: 2026-11-06

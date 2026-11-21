@@ -17,6 +17,7 @@
 rules:
   - {prefix: "scripts/kit/", verdict: carry}
   - {prefix: "scripts/_verdict.py", verdict: carry}
+  - {prefix: "scripts/venv_guard.py", verdict: carry}
   - {prefix: "scripts/gate_record.py", verdict: carry}
   - {prefix: "scripts/check_decision_continuity.py", verdict: carry}
   - {prefix: "scripts/check_bead_export.py", verdict: carry}

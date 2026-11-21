@@ -83,6 +83,13 @@ because the tracker writes to a database this repository does not carry:
   `make close-merged ARGS=--write`. It closes what a `Closes-Bead` trailer on
   the integration branch declares and what is still open — both are checked,
   not claimed. Without `--write` the command only reports.
+- **Archive after closure:** once `make close-merged ARGS=--write` has run,
+  the session responsible for cleanup runs `make archive` in its own
+  up-to-date cleanup worktree, inspects the manifest it prints, and runs
+  `make archive ARGS=--write`. It moves only folders whose bead is closed and
+  regenerates `plans/INDEX.md`; the result goes through `make verify` and an
+  ordinary reviewed pull request, never a direct push and never the
+  maintainer's merge.
 - **At session start:** the repository's SessionStart hook
   (`tools/claude-code/hooks/beads-start.sh`) runs the same reconciliation
   before `tools/bd prime`, so a closure the merge step missed is caught by the

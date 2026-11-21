@@ -555,6 +555,31 @@ def test_a_declared_paid_model_with_the_free_suffix_is_not_selected_free(world: 
     assert "acme-v1-free" in probed, "the remaining free candidate was never probed"
 
 
+def test_review_report_names_paid_free_drop(world: World, capsys) -> None:
+    """Criterion 7 of research-free-paid: the review report names the dropped id and its paid-admission reason.
+
+    Planted fault: the report omits the id, calls it free, or says its terms were unread as if that granted
+    free admission.
+    """
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["modelle"] = [*entry["modelle"], "beam-free"]
+    path.write_text(yaml.safe_dump(data))
+    world.script(
+        pi_catalog="provider model context input output\n"
+        "opencode-go beam-free 128000 0 0\n"
+        "opencode-go acme-v1-free 128000 0 0\n",
+        pi=[{"stdout": "OK"}] * 5,
+    )
+    assert world.run("prepare-loop") == 0
+    output = capsys.readouterr().out
+    assert "Skipped: beam-free: a paid model; the free class does not admit it" in output
+    assert "Free swarm: acme-v1-free" in output, "the report calls the paid id free or loses the remaining member"
+    assert "beam-free: not admitted; data terms have not been read" not in output
+
+
 def test_availability_report_escapes_control_characters_in_skipped_ids(world: World, capsys) -> None:
     """F6-6: keep rejected catalog evidence raw, but never print its terminal controls."""
     enable(world)

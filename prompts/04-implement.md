@@ -7,7 +7,8 @@
 5.5 at effort `medium` (`claude-sonnet-5-5`) builds and the reason is recorded.
 A leak-check BLOCK stops; it never falls back.
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
-**Gate:** `make verify` green.
+**Gate:** `make verify` green on the final head before phase 6; each runner
+attempt passes the targeted check or, where that is unsafe, the full one.
 
 You follow the plan. You read the spec to know what you are building against.
 Under the Stage-2 runner an implement attempt has
@@ -15,20 +16,26 @@ file tools but no command tool (a Codex repair attempt may run tests and
 `make verify`, never commit): write no entry under `## Time used`, because the
 runner measures each completed attempt itself and writes a line marked
 "measured by the runner" (a rejected attempt gets one too); the runner
-runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
+runs the targeted check after an implement or a repair attempt (the whole
+touched and import-linked test files and the gates the touched kinds of file
+feed; the full `make verify` when the attempt touches shared infrastructure, would run `tests/test_stage2.py` whole, or meets another fallback of the runner's targeted selection (`targeted_selection` in `scripts/stage2.py`: for example a `conftest.py`, production code without a linked test, an unreadable link inventory)), and makes the local checkpoint commit. A
+targeted red fails the attempt; the full check never overrides it. An
+implement attempt that adds production code (a Python or shell file) no test
+reaches is refused before any test runs: add the test that reaches it. One full
+`make verify` runs on the final head before phase 6. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you, and the interactive session reads its own
 clock and logs its own spans, as the appetite rule below says.
 
 **Run the cheap checks before you hand back.** These are ruff (`ruff check` and
-`ruff format --check` on the changed Python files) and the tests the plan's
-`## Criterion ledger` names. With a command tool, run them and hand back only
-when they are green. On a file-only route (any model that can edit files but
-cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
-`make verify`. It runs ruff, then pytest over the changed or new test functions,
-the ledger's test ids and, on a retry, the tests the attempt before failed. The
-first red check ends the attempt with exactly that output (bead
-coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is
-put back before the checks. That edit is not part of your work, and on its own it never fails the attempt.
+`ruff format --check` on changed Python files) and selected tests. Implement owes
+every ledger test. Repair owes its findings' proofs and written ledger entries;
+missing unwritten entries are named but not owed. With a command tool, run the
+standing ledger tests and leave the applicable checks green. On a file-only route,
+the runner runs ruff, then pytest over changed or new test functions, standing
+ledger tests and, on a retry, previously failed tests. Missing ledger IDs never
+reach pytest. The first red check ends the attempt (bead coding-harness-5tyh).
+`findings.md` is the runner's: an edit you make there is put back before the checks.
+That edit is not part of your work, and on its own it never fails the attempt.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**
@@ -128,7 +135,7 @@ cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
 rows are decided and recorded.
 
 **Repair.** The orchestrator decides taken or rejected and hands every taken
-row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-sol`),
+row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-terra`),
 then a fresh Codex attempt and Sonnet 5.5 after failed post-run checks,
 repairs them in one guarded call (ADR 0017). Codex may run tests and
 `make verify` in its configured sandbox but never commits; the phase-6

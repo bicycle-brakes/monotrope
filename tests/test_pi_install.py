@@ -26,7 +26,9 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import atomic_test_log
 import pytest
+from atomic_test_log import read_records
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = "@earendil-works/pi-coding-agent"
@@ -35,6 +37,9 @@ NODE_OK = "26.9.9"  # a same-major patch of the declared 26.9.0: stays eligible
 NODE_WRONG = "27.4.1"  # another major: refused before Pi starts
 INTEGRITY = "sha512-abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQR=="
 GUIDANCE = "bash tools/pi/install.sh"
+
+# The stand-ins embed the shared log protocol at their render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 
 def write_exec(path: Path, text: str) -> None:
@@ -97,9 +102,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
+
 argv = sys.argv[1:]
-with Path(os.environ["FAKE_NPM_LOG"]).open("a") as handle:
-    handle.write(json.dumps({"argv": argv, "cwd": os.getcwd()}) + "\\n")
+append_record(Path(os.environ["FAKE_NPM_LOG"]), {"argv": argv, "cwd": os.getcwd()})
 
 
 def refuse(reason):
@@ -155,17 +163,14 @@ import os
 import sys
 from pathlib import Path
 
-with Path(os.environ["FAKE_PI_LOG"]).open("a") as handle:
-    handle.write(
-        json.dumps(
-            {
-                "cwd": os.getcwd(),
-                "argv": sys.argv[1:],
-                "caller_mark": os.environ.get("CALLER_MARK"),
-            }
-        )
-        + "\\n"
-    )
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
+
+append_record(
+    Path(os.environ["FAKE_PI_LOG"]),
+    {"cwd": os.getcwd(), "argv": sys.argv[1:], "caller_mark": os.environ.get("CALLER_MARK")},
+)
 sys.stdout.write("local-pi ran\\n")
 """
 
@@ -180,8 +185,11 @@ import os
 import sys
 from pathlib import Path
 
-with Path(os.environ["PATH_PI_LOG"]).open("a") as handle:
-    handle.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\\n")
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
+
+append_record(Path(os.environ["PATH_PI_LOG"]), {"argv": sys.argv[1:], "cwd": os.getcwd()})
 sys.stderr.write("the global pi was started\\n")
 raise SystemExit(7)
 """
@@ -241,7 +249,9 @@ class Pin:
         if bin_entry is not None:
             package["bin"] = {"pi": bin_entry}
         self.installed_json.write_text(json.dumps(package), encoding="utf-8")
-        write_exec(directory / "dist" / "cli.py", LOCAL_CLI.replace("@PYTHON@", sys.executable))
+        rendered = LOCAL_CLI.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        write_exec(directory / "dist" / "cli.py", rendered)
 
     def fixture_package(self, pin: str = PIN) -> None:
         """The package the synthetic npm installs: it carries a lifecycle-script sentinel."""
@@ -259,7 +269,9 @@ class Pin:
             ),
             encoding="utf-8",
         )
-        write_exec(source / "dist" / "cli.py", LOCAL_CLI.replace("@PYTHON@", sys.executable))
+        rendered = LOCAL_CLI.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        write_exec(source / "dist" / "cli.py", rendered)
 
     def env(self, node: str = NODE_OK, path: list[Path] | None = None) -> dict:
         entries = path if path is not None else [self.bin, Path("/usr/bin"), Path("/bin")]
@@ -300,16 +312,13 @@ class Pin:
         return self._run("pi", *args, cwd=cwd if cwd is not None else self.root, env=env)
 
     def local_runs(self) -> list[dict]:
-        log = self.root / "local-pi.jsonl"
-        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return read_records(self.root / "local-pi.jsonl")
 
     def path_runs(self) -> list[dict]:
-        log = self.root / "path-pi.jsonl"
-        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return read_records(self.root / "path-pi.jsonl")
 
     def npm_calls(self) -> list[dict]:
-        log = self.root / "npm-calls.jsonl"
-        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return read_records(self.root / "npm-calls.jsonl")
 
     def installed_names(self) -> set[str]:
         base = self.root / "node_modules"
@@ -337,9 +346,13 @@ def pin(tmp_path: Path) -> Pin:
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
     for name, template in (("node", SYNTHETIC_NODE), ("npm", SYNTHETIC_NPM)):
-        write_exec(bin_dir / name, template.replace("@PYTHON@", sys.executable))
+        rendered = template.replace("@PYTHON@", sys.executable)
+        rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+        write_exec(bin_dir / name, rendered)
     # The hostile PATH pi: the wrapper must never reach it.
-    write_exec(bin_dir / "pi", PATH_PI.replace("@PYTHON@", sys.executable))
+    rendered = PATH_PI.replace("@PYTHON@", sys.executable)
+    rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+    write_exec(bin_dir / "pi", rendered)
     write_exec(root / "install.sh", (REPO_ROOT / "tools" / "pi" / "install.sh").read_text(encoding="utf-8"))
     write_exec(root / "pi", (REPO_ROOT / "tools" / "pi" / "pi").read_text(encoding="utf-8"))
     built = Pin(root=root, bin=bin_dir, fixtures=fixtures)
