@@ -6599,14 +6599,6 @@ def _ledger_entries(plan: bytes) -> list[tuple[str, bool]]:
     return entries
 
 
-def _ledger_test_refs(plan: bytes) -> list[str]:
-    """The accepted plan's criterion-ledger test references, as `tests/x.py::test_y` ids, deduplicated.
-
-    Both test forms count; a plan that cannot be decoded or read raises.
-    """
-    return sorted(dict.fromkeys(ref for ref, _written in _ledger_entries(plan)))
-
-
 def _test_functions(source: str, filename: str) -> dict[str, str]:
     """The file's top-level `test_*` functions by name, each as its AST dump; parsed, never imported."""
     tree = ast.parse(source, filename=filename)
@@ -6780,7 +6772,7 @@ def selected_tests(
             or not _id_stands(t.split("::", 1)[1], names[posix])
         )
     except (Refused, OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
-        return None, str(error), {}, []
+        return None, str(error), missing, ledger_faults
     return kept, None, missing, ledger_faults
 
 
@@ -6822,25 +6814,26 @@ def cheap_checks(
         except OSError as error:
             return [protect_diagnostics(f"the accepted plan could not be read for the cheap tests: {error}", key)]
     tests, fault, missing, ledger_faults = selected_tests(root, env, accepted_plan, previous)
-    if fault is not None:
-        lines = protect_diagnostics(f"the cheap tests could not be selected: {fault}", key).splitlines()
-        return ["\n".join(_shrink(lines, TAIL_LINES))]
-    if ledger_faults:
-        lines = protect_diagnostics(
-            "the cheap tests cannot be checked; a ledger test file cannot be read or parsed:\n"
-            + "\n".join(ledger_faults),
-            key,
-        ).splitlines()
-        return ["\n".join(_shrink(lines, TAIL_LINES))]
-    # Written takes precedence for duplicates, so a written entry a repair owes stays owed beside an
-    # unwritten duplicate of the same id (spec, criterion 7).
+    # Classify missing references before returning any selection or file fault, so the
+    # attempt record retains the debt discovered alongside that fault.
     owed = {ref: state for ref, state in missing.items() if verb != "repair" or state == "written"}
-    if evidence is not None:
-        evidence.extend(
-            f"missing ledger test, named but not owed ({state}): `{ref}`"
-            for ref, state in sorted(missing.items())
-            if ref not in owed
-        )
+    unowed = [
+        f"missing ledger test, named but not owed ({state}): `{ref}`"
+        for ref, state in sorted(missing.items())
+        if ref not in owed
+    ]
+    if evidence is not None and unowed:
+        evidence.extend(_shrink(unowed, TAIL_LINES))
+    if fault is not None or ledger_faults:
+        lines = []
+        if fault is not None:
+            lines.append(f"the cheap tests could not be selected: {fault}")
+        if ledger_faults:
+            lines.extend(
+                ["the cheap tests cannot be checked; a ledger test file cannot be read or parsed:", *ledger_faults]
+            )
+        lines.extend(f"missing ledger test owed ({state}): `{ref}`" for ref, state in sorted(owed.items()))
+        return ["\n".join(_shrink(protect_diagnostics("\n".join(lines), key).splitlines(), TAIL_LINES))]
     problems: list[str] = []
     if tests:
         identity = "`" + " ".join(PYTEST) + "`"
@@ -6888,10 +6881,10 @@ def must_run_refs(root: Path, plan: bytes) -> str:
         return "none - the plan's criterion ledger names no test; write every test the plan asks for"
     lines = []
     if standing:
-        lines.append("Standing ledger tests, the pytest targets - run them and leave them green:")
+        lines.append("Standing ledger tests, the runner will run these pytest targets:")
         lines.extend(f"- {ref}" for ref in sorted(standing))
     if missing:
-        lines.append("Missing ledger tests - owed: write them before running them:")
+        lines.append("Missing ledger tests - owed: write them for the runner to check:")
         lines.extend(f"- {ref}" for ref in sorted(missing))
     if faults:
         lines.append("Ledger tests the runner cannot inspect, their files unreadable or unparseable - owed:")
@@ -6930,7 +6923,7 @@ def repair_must_run_refs(root: Path, plan: bytes) -> str:
         lines.extend(f"- {ref}" for ref in unowned)
     if faults:
         lines.append(
-            "Ledger tests the runner cannot inspect, their files unreadable or unparseable - owed as written entries, judged by the checks:"
+            "Ledger tests the runner cannot inspect, their files unreadable or unparseable - the cheap check fails on these faults:"
         )
         lines.extend(f"- {fault}" for fault in faults)
     return "\n".join(lines)
@@ -6939,7 +6932,7 @@ def repair_must_run_refs(root: Path, plan: bytes) -> str:
 MUST_RUN_DELEGATED = (
     "You cannot run commands, so the runner runs this attempt's must-run checks itself, before post-run "
     "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
-    "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
+    "the selected tests - the new or changed test functions, the standing accepted plan ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
     "ledger test fails the attempt before post-run verification. The runner then runs the post-run "
@@ -6958,8 +6951,7 @@ MUST_RUN_COMMANDS = (
     "ledger id is never passed to pytest. The runner runs the same cheap "
     "checks after the call, then the post-run targeted check for implement and repair - the whole "
     "touched and linked test files, ruff and the existing local gates, outside the verify admission. "
-    "Implement refuses new production code without a reachable test before any test runs: add its "
-    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "When the targeted coverage cannot be established safely, the same route takes the admitted "
     "full `make verify`; a targeted red never falls back to override it, and a fresh full "
     "`make verify` runs before phase 6. Findings.md is the runner's audit file: an edit "
     "of it is restored before the checks, so never put a verdict there. A repair owes the proof of "
@@ -6978,8 +6970,7 @@ MUST_RUN_DELEGATED_REPAIR = (
     "Ledger entries still marked `not yet written` whose test is missing are named but not owed. "
     "The runner then runs the post-run targeted check for implement and repair - the whole touched "
     "and linked test files, ruff and the existing local gates, outside the verify admission. "
-    "Implement refuses new production code without a reachable test before any test runs: add its "
-    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "When the targeted coverage cannot be established safely, the same route takes the admitted "
     "full `make verify`; a targeted red never falls back to override it, and a fresh full "
     "`make verify` runs before phase 6. Execute nothing yourself - delegation to the runner is the "
     "contract, and no extra tool is yours."

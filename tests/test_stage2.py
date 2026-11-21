@@ -10862,7 +10862,10 @@ def test_must_run_instructions_distinguish_repair_and_implement_verification(blo
     assert "before full verification" not in text
     assert "checks and full `make verify` after the call" not in text
     assert "targeted check for implement and repair" in text
-    assert "add its test" in text
+    if block == "MUST_RUN_DELEGATED":
+        assert "add its test" in text
+    else:
+        assert "Implement refuses new production code" not in text
     assert "takes the admitted full `make verify`" in text
     assert "a targeted red never falls back" in text
     assert "before phase 6" in text

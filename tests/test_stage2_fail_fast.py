@@ -541,7 +541,7 @@ def test_the_runners_scan_record_is_not_an_attempt_edit(world: World, monkeypatc
     assert NOTICE not in committed, "the runner's own record was credited to the attempt as an edit"
 
 
-def test_a_ledger_test_missing_from_a_new_file_is_still_selected(world: World) -> None:
+def test_missing_ledger_test_in_new_file_is_excluded(world: World) -> None:
     """Row L3-1. Planted fault: a new test file selected whole hid the ledger test it lacks.
 
     Since bead coding-harness-bxxt.9 the whole file is still covered, but the ledger entry the
@@ -850,6 +850,7 @@ def test_standing_targets_run_when_ledger_ids_are_missing(world: World) -> None:
 
 def test_only_missing_ledger_ids_skip_pytest(world: World) -> None:
     """Ledger 4. Planted fault: pytest started although no selected target stands."""
+    venv_pytest(world)
     world.plan.write_text(
         plan_with_ledger(["- 1: not yet written tests/test_later.py::test_later — parked for a later change"]),
         encoding="utf-8",
@@ -1206,10 +1207,12 @@ def test_implement_prompt_separates_standing_and_missing_ledger_tests(world: Wor
     ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
     prompt = stage2.implementation_prompt(ctx, "baseline-sha", [])
     assert (
-        "Standing ledger tests, the pytest targets - run them and leave them green:\n- tests/test_standing.py::test_standing"
+        "Standing ledger tests, the runner will run these pytest targets:\n- tests/test_standing.py::test_standing"
         in prompt
     )
-    assert "Missing ledger tests - owed: write them before running them:\n- tests/test_later.py::test_later" in prompt
+    assert (
+        "Missing ledger tests - owed: write them for the runner to check:\n- tests/test_later.py::test_later" in prompt
+    )
 
 
 def test_owed_ledger_diagnostic_is_protected_and_bounded(world: World, monkeypatch) -> None:
@@ -1221,3 +1224,157 @@ def test_owed_ledger_diagnostic_is_protected_and_bounded(world: World, monkeypat
     assert "secretvalue" not in problems[0]
     assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
     assert "left out" in problems[0]
+
+
+def test_repair_uninspectable_prompt_does_not_invent_obligation(world: World) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_bad.py").write_text("def test_bad(:\n", encoding="utf-8")
+    plan = plan_with_ledger(["- 1: not yet written tests/test_bad.py::test_bad — pending"])
+    text = stage2.repair_must_run_refs(world.root, plan.encode())
+    assert "cannot inspect" in text and "test_bad.py" in text
+    assert "owed as written entries" not in text
+    assert "cheap check fails" in text
+
+
+def test_retired_ledger_reference_helper_is_removed() -> None:
+    assert not hasattr(stage2, "_ledger_test_refs"), "retired selection helper still exists"
+
+
+def test_implement_prompt_delegates_ledger_checks(world: World) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    pass\n", encoding="utf-8")
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — standing",
+                "- 2: not yet written tests/test_missing.py::test_missing — missing",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.implementation_prompt(ctx, "baseline", [])
+    assert "You cannot run commands" in prompt
+    assert "runner will run these pytest targets" in prompt
+    assert "write them for the runner to check" in prompt
+    assert "standing accepted plan ledger tests" in prompt
+    assert "run them and leave them green" not in prompt
+
+
+def test_repair_prompts_do_not_claim_implement_file_guard(world: World) -> None:
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    for endpoint in (stage2.CODEX, stage2.GLM_FLASH):
+        prompt = stage2.repair_prompt(ctx, "baseline", [], [], endpoint=endpoint)
+        assert "Implement refuses new production code" not in prompt
+
+
+def test_workflow_repair_describes_standing_pytest_targets() -> None:
+    text = (Path(stage2.__file__).resolve().parent.parent / "docs/WORKFLOW.md").read_text(encoding="utf-8")
+    section = text.split("**Red first:**", 1)[1].split("Post-run verification", 1)[0]
+    assert "standing ledger tests as pytest targets" in section
+    assert "missing unwritten" in section and "not owed" in section
+    assert "ruff and them itself" not in section
+
+
+@pytest.mark.parametrize("selection_fault", [False, True])
+def test_ledger_fault_preserves_classified_missing_ids(world: World, monkeypatch, selection_fault: bool) -> None:
+    monkeypatch.setattr(stage2, "format_targets", lambda *_: [])
+    missing = {"tests/test_missing.py::test_missing": "written", "tests/test_later.py::test_later": "not yet written"}
+    monkeypatch.setattr(
+        stage2,
+        "selected_tests",
+        lambda *_: (
+            None if selection_fault else [],
+            "selection failed" if selection_fault else None,
+            missing,
+            ["tests/test_bad.py cannot be read or parsed"],
+        ),
+    )
+    evidence: list[str] = []
+    problems = stage2.cheap_checks(world.root, {}, world.plan, None, b"plan", verb="repair", evidence=evidence)
+    assert problems and "test_missing.py::test_missing" in "\n".join(problems)
+    assert "test_later.py::test_later" in "\n".join(evidence)
+    assert "selection failed" in problems[0] if selection_fault else "test_bad.py" in problems[0]
+
+
+def test_unowed_ledger_evidence_is_bounded(world: World, monkeypatch) -> None:
+    monkeypatch.setattr(stage2, "format_targets", lambda *_: [])
+    missing = {f"tests/test_{i}.py::test_{i}": "not yet written" for i in range(200)}
+    monkeypatch.setattr(stage2, "selected_tests", lambda *_: ([], None, missing, []))
+    evidence: list[str] = []
+    assert stage2.cheap_checks(world.root, {}, world.plan, None, b"plan", verb="repair", evidence=evidence) == []
+    assert len(evidence) <= stage2.TAIL_LINES
+    assert any("left out" in line for line in evidence)
+
+
+def test_ledger_classification_recognizes_async_test(world: World) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_async.py").write_text("async def test_async():\n    pass\n", encoding="utf-8")
+    standing, missing, faults = stage2.ledger_standings(
+        world.root,
+        plan_with_ledger(
+            [
+                "- 1: tests/test_async.py::test_async — async test",
+            ]
+        ).encode(),
+    )
+    assert "tests/test_async.py::test_async" in standing
+    assert not missing and not faults
+
+
+def test_lint_failure_precedes_missing_ledger_classification(world: World, monkeypatch) -> None:
+    monkeypatch.setattr(stage2, "format_targets", lambda *_: ["scripts/example.py"])
+    monkeypatch.setattr(stage2, "_cheap_ruff", lambda *_: "ruff found an error")
+
+    def forbidden(*_):
+        pytest.fail("ledger selection ran after red lint")
+
+    monkeypatch.setattr(stage2, "selected_tests", forbidden)
+    evidence: list[str] = []
+    problems = stage2.cheap_checks(world.root, {}, world.plan, None, b"plan", evidence=evidence)
+    assert problems == ["ruff found an error"] and not evidence
+
+
+def test_claimed_unwritten_missing_ledger_proof_is_rejected_later(world: World) -> None:
+    seed_tests(world)
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: not yet written tests/test_later.py::test_later — pending",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    commit_tree(world, "ledger with missing unwritten proof")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [repair_step(stdout="L1-1: fixed — tests/test_later.py::test_later"), repair_step()],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("codex")[1]["argv"][-1]
+    assert "tests/test_later.py::test_later defines no function" in prompt
+
+
+def test_unparseable_ledger_file_keeps_other_missing_ids(world: World) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_bad.py").write_text("def test_bad(:\n", encoding="utf-8")
+    plan = plan_with_ledger(
+        [
+            "- 1: tests/test_bad.py::test_bad — broken",
+            "- 2: tests/test_gone.py::test_gone — written",
+            "- 3: not yet written tests/test_later.py::test_later — pending",
+        ]
+    ).encode()
+    commit_tree(world, "broken ledger input")
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    evidence: list[str] = []
+    problems = stage2.cheap_checks(world.root, env, world.plan, None, plan, verb="repair", evidence=evidence)
+    assert "test_bad.py" in "\n".join(problems)
+    assert "test_gone.py::test_gone" in "\n".join(problems)
+    assert "test_later.py::test_later" in "\n".join(evidence)

@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-20
+updated: 2026-11-21
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1898,8 +1898,9 @@ reword its reason so it names no fix instead of marking it fixed.
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. The repair prompt names the accepted
-plan's ledger tests as must-runs before handback, and commands Codex to run
-ruff and them itself; a file-only fallback delegates the same cheap checks to
+plan's standing ledger tests as pytest targets before handback, and commands Codex to run
+ruff and those standing tests itself; missing written entries remain owed, while missing unwritten
+entries are named but not owed; a file-only fallback delegates the same cheap checks to
 the runner, which stops at the first red one before post-run verification. An
 attempt's edit of the change's `findings.md` is restored from the runner's
 pre-call snapshot before any check reads model-written state: the fixed lines
