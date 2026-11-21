@@ -35,18 +35,28 @@ decisions: `decisions.md`.
   random-order run passed; the cause and a local reproduction remain unknown
   (`decisions.md`, first measurement; `research.md`, What is unclear).
 
+## Terms
+
+**Scenario:** a case’s declared model, fault override, scripted steps and expected
+outcomes; shared helper implementation is not part of the scenario.
+
 ## Acceptance criteria
 
-1. When reproduction is attempted, at least 20 runs of the complete swarm test
-   file use parallel workers across at least three recorded collection orders.
-   *Refuted by:* fewer runs or orders, a partial file, or a serial run.
-2. When reproduction is attempted, the exact CI command `python3 -m pytest tests/ -q -n auto` runs at least five times in default order.
-   *Refuted by:* fewer than five runs, a changed command or a changed order.
+1. When reproduction is attempted, exactly 20 non-overlapping runs of the complete swarm test
+   file use `-n auto` across the default collection order, its reverse and one
+   seeded shuffle, recorded with the seed.
+   *Refuted by:* a different run count, overlapping runs, a missing order or seed,
+   a partial file, or a worker setting other than `-n auto`.
+2. When reproduction is attempted, the exact CI command `python3 -m pytest tests/ -q -n auto` runs exactly five times in default order, without overlapping other protocol runs,
+   with reporting-only additions that include a JUnit XML report.
+   *Refuted by:* a different run count, changed command flags or order, an
+   overlap, a scheduling change, or a missing JUnit XML report.
 3. While each reproduction run executes, one CPU-busy process per CPU core runs alongside it.
    *Refuted by:* fewer busy processes or a run with a gap in that load.
 4. When an attempt ends, dated evidence in `findings.md` records revision, OS,
    Python version, commands, load, orders, resolved worker counts, run counts,
-   and counts of failures among the six cases of the target test.
+   and counts of failures among the six cases of the target test, plus each load
+   process’s start and end times and its liveness at each run’s end.
    *Refuted by:* any missing field or a failure count including another test.
 5. When a target case fails, the evidence includes its swarm stderr, its worker
    and the ordered test IDs that worker ran before it.
@@ -54,9 +64,11 @@ decisions: `decisions.md`.
 6. When another test fails under load, the evidence lists its test ID separately.
    *Refuted by:* an unlisted non-target failure or its inclusion in the target failure count.
 7. If a cause is found, a regression forces the interleaving that produced a
-   target failure under load and matches its captured stderr.
-   *Refuted by:* a cause inferred from reading alone, or a forced failure that
-   does not match the captured failure.
+   target failure under load and matches its captured failure: the same exception
+   type, failing assertion line and runner stderr lines after normalising temporary
+   paths, run IDs and timestamps.
+   *Refuted by:* a cause inferred from reading alone, or a difference in any
+   of those fields after normalisation.
 8. If a cause is found, its forced regression fails before the fix and passes after it.
    *Refuted by:* a passing pre-fix run or a failing post-fix run.
 9. When the test runs after a fix, its entire existing test function and the
@@ -65,7 +77,8 @@ decisions: `decisions.md`.
    added skip or expected-failure marker, or failed case.
 10. If shared test helpers change, the evidence explains how the demonstrated cause requires each change.
     *Refuted by:* a helper change without a cause-based explanation.
-11. When a fix is made, the same load protocol runs again with the same settings and counts with no target-case failure.
+11. When a fix is made, the same load protocol runs again with the same settings, including reporting,
+    orders and counts, with no target-case failure.
     *Refuted by:* a missing or different run, or any target-case failure after the fix.
 12. If no cause is found within the available implementation appetite, the attempt stops without a speculative fix and records what was tried and measured under `Stopped without a cause` in `findings.md`.
     *Refuted by:* an unproven fix or a stop without the stated evidence.
@@ -104,9 +117,13 @@ decisions: `decisions.md`.
 None open.
 
 - [DETAIL] The phase-4 appetite is two hours including repairs; the session may
-  extend it once to four hours under the workflow, then stops. This bounds the
-  investigation while applying the common appetite rule.
-- [DETAIL] The load protocol uses at least 20 file runs, three orders, five CI
+  extend it once to four hours under the workflow, then stops. Wall time spent
+  running the load protocol counts; this keeps the investigation bounded.
+- [DETAIL] The load protocol uses exactly 20 file runs, three orders, five CI
   command runs and one busy process per core to make its conditions measurable.
+  Higher load is an additional exploratory run, not a protocol reproduction.
+- [DETAIL] A temporary collection hook supplies the three orders without a new
+  dependency; a temporary reporting plugin captures worker histories alongside
+  JUnit XML because the XML alone is not assumed to establish execution order.
 - [DETAIL] The research is a single-explorer report, not a completed research
   swarm, so its suggested neighbours are not a swarm handoff.

@@ -32,26 +32,31 @@ ADR. There is no `templates/plan.md` in this checkout. The cause is unknown;
 
 ## Files and steps
 
-1. Coordinate the shared verify slot with the orchestrator. In the pinned
-   environment run the exact CI command below at least five times in default
-   order. Separately collect all IDs in `tests/test_stage2_swarm.py`, shuffle
-   the complete list with at least three recorded Python random seeds, and run
-   at least 20 repetitions with `python3 -m pytest -q -n auto` and those IDs.
-   For every run supervise one busy process per logical CPU for its duration;
-   stop and reap the load processes even on failure. Capture complete pytest
-   output, swarm stderr and temporary files on failure. Use a temporary pytest
-   reporting plugin, loaded through the environment without modifying the CI
-   command or test order, to log each worker's ordered test IDs and resolved
-   worker count; retain the failing worker's preceding IDs for serial replay
-   with `-p no:xdist`. Record the exact plugin and load commands and verify the
-   capture works before counting runs.
+1. Coordinate the shared verify slot with the orchestrator. Run exactly five
+   non-overlapping executions of the CI command below in default order. Separately
+   run the complete `tests/test_stage2_swarm.py` exactly 20 times with `-n auto`:
+   seven in default order, seven reversed and six with a recorded shuffle seed.
+   Use a temporary collection hook for those orders without adding a dependency.
+   Supervise one CPU-busy process per logical core throughout every run, record
+   each process's start and end times and liveness at each run's end, monitor
+   for early exit, and reap all load processes even on failure. Record run start
+   and end times, complete pytest output, swarm stderr and temporary files on
+   failure. Supply reporting-only options through the environment so the CI
+   command's flags remain unchanged: write JUnit XML for every CI run and use a
+   temporary pytest reporting plugin to capture actual ordered test IDs per
+   worker and the resolved worker count. Verify capture before counting runs;
+   retain the failing worker's preceding IDs for replay with `-p no:xdist`.
+   Extra load is exploratory and does not count as this protocol. Wall time of
+   all runs counts against the phase-4 appetite.
 2. `plans/changes/free-storage-keys-flake/findings.md`: record dated revision,
    OS, Python, commands, seeds and full collection orders, worker counts, load,
-   runs, target-case failure counts and each failing target's stderr and worker
-   history; list other failing test IDs separately. Count only the six cases of
+   runs, load-process lifetimes and end-of-run liveness, target-case failure
+   counts and each failing target's stderr and worker history; list other failing
+   test IDs separately. Count only the six cases of
    `test_free_model_storage_keys_preserve_best_effort_completion` as target
    failures. A cause is found only if a load failure and the forced interleaving
-   match, including stderr; code-reading alone is not reproduction.
+   match in exception type, assertion line and runner stderr after normalising
+   temporary paths, run IDs and timestamps; code-reading alone is not reproduction.
 3. `tests/test_stage2_swarm.py`: add
    `test_free_storage_key_flake_forced_interleaving` to force the demonstrated
    interleaving by synchronization, show it red before the fix and green after.
@@ -64,7 +69,8 @@ ADR. There is no `templates/plan.md` in this checkout. The cause is unknown;
    held path is needed, stop and return evidence and proposed path to the
    orchestrator; any held-path edit is an orchestrator bootstrap edit after an
    accepted attempt. Do not add retries, extend any timeout or deadline, or
-   weaken a protected policy. Rerun the identical load protocol after the fix.
+   weaken a protected policy. Rerun the identical load protocol, including
+   reporting, orders and counts, after the fix.
 5. `plans/changes/free-storage-keys-flake/plan.md`: replace the pending ledger
    entry when its regression exists and record phase-4 time. If no cause is
    found within the available appetite, record `Stopped without a cause` in
@@ -75,13 +81,13 @@ ADR. There is no `templates/plan.md` in this checkout. The cause is unknown;
 
 ## Criterion ledger
 
-- 1: not a test — inspect file-run commands, collection, seeds and run counts; fewer than 20 runs or three orders refutes it.
-- 2: not a test — inspect the five default-order CI command records; a missing or changed run refutes it.
-- 3: not a test — inspect the load process records for each run; a gap or fewer processes than cores refutes it.
+- 1: not a test — inspect file-run commands, collection, seeds and run counts; a different run count, overlap or missing named order refutes it.
+- 2: not a test — inspect the five default-order CI command and XML records; a changed count, flags, order or missing XML refutes it.
+- 3: not a test — inspect the load-process lifetime and liveness records for each run; a gap or fewer processes than cores refutes it.
 - 4: not a test — inspect the dated findings record and target-only counts; any missing field refutes it.
 - 5: not a test — inspect each target failure's stderr and worker history; a missing item refutes it.
 - 6: not a test — compare non-target failures in the output with findings; an omitted ID refutes it.
-- 7: not yet written tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving — the forced failure does not match the observed load failure and stderr.
+- 7: not yet written tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving — the exception type, assertion line or normalized runner stderr differs from the observed load failure.
 - 8: not yet written tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving — it passes before the fix or fails afterward.
 - 9: tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion — a case fails; compare the function and scenarios with the baseline for changes.
 - 10: not a test — compare helper changes and their cause-based explanations in findings; an unexplained change refutes it.
@@ -113,3 +119,4 @@ leak-check policy, model declarations or verification gates. The runner manages
 
 2026-11-21 17:40:37–17:43:19 UTC, 162 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 17:47:02–17:49:20 UTC, 139 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 17:53:41–17:55:43 UTC, 123 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
