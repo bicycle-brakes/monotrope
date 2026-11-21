@@ -6057,11 +6057,11 @@ def _frame_lines(output: str) -> list[str]:
     return found
 
 
-def _shrink(body: list[str], limit: int) -> list[str]:
+def _shrink(body: list[str], limit: int, *, subject: str = " of this gate") -> list[str]:
     """A section of at most `limit` lines, marker included: its start frame, the marker, its last lines."""
     if len(body) <= limit:
         return body
-    return [body[0], f"[… {len(body) - limit + 1} lines of this gate left out …]", *body[-(limit - 2) :]]
+    return [body[0], f"[… {len(body) - limit + 1} lines{subject} left out …]", *body[-(limit - 2) :]]
 
 
 def red_sections(output: str) -> str | None:
@@ -6575,17 +6575,19 @@ def failed_test_ids(problems: list[str]) -> list[str]:
     return list(found)
 
 
-def _ledger_test_refs(plan: bytes) -> list[str]:
-    """The accepted plan's criterion-ledger test references, as `tests/x.py::test_y` ids.
+def _ledger_entries(plan: bytes) -> list[tuple[str, bool]]:
+    """The accepted plan's criterion-ledger test references, as (`tests/x.py::test_y`, written) pairs.
 
     Both test forms count - a written entry and one still marked `not yet written`; a `not a test`
     row names no test, and lines inside a fence are examples, never references. The bytes are the
-    accepted plan's snapshot, so a rejected attempt's own plan edits never change this list (spec,
-    criterion 7). A plan that cannot be decoded or read raises.
+    accepted plan's snapshot, so a rejected attempt's own plan edits never change this list. A plan
+    that cannot be decoded or read raises; a line in none of the recognized entry forms is no entry
+    - the criterion-ledger gate names it, and the cheap selection neither selects nor reports it
+    (spec, criterion 17).
     """
     lines = check_criterion_ledger._lines(plan.decode("utf-8"))
     fenced = check_criterion_ledger._fenced(lines)
-    refs: list[str] = []
+    entries: list[tuple[str, bool]] = []
     for section in check_criterion_ledger.ledger_sections(lines):
         for number, line in section:
             if fenced[number - 1]:
@@ -6593,8 +6595,8 @@ def _ledger_test_refs(plan: bytes) -> list[str]:
             entry = check_criterion_ledger.parse_entry(line, number)
             if entry is None or entry.kind == "not a test" or not entry.path:
                 continue
-            refs.append(f"{entry.path}::{entry.function}")
-    return sorted(dict.fromkeys(refs))
+            entries.append((f"{entry.path}::{entry.function}", entry.kind == "test"))
+    return entries
 
 
 def _test_functions(source: str, filename: str) -> dict[str, str]:
@@ -6636,6 +6638,68 @@ def _id_stands(rest: str, names: set[str]) -> bool:
     return parts[0] in names
 
 
+def _standing_names(root: Path, posix: str) -> set[str]:
+    """A test file's standing top-level names, with an unreadable or unparseable file named as the input.
+
+    The parse never imports the file: a read or parse fault is a fault that names its input, never
+    a missing test and never a green run (spec, criterion 9).
+    """
+    try:
+        return _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
+    except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
+        raise Refused(f"`{posix}` cannot be read or parsed ({error})") from error
+
+
+def ledger_standings(root: Path, plan: bytes) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """The accepted plan's ledger tests classified against the tree, before pytest is ever started.
+
+    Returns the standing and the missing ids, each `tests/x.py::test_y` mapped to the entry's state
+    (`written` or `not yet written`, written taking precedence when duplicate entries name one id),
+    and one fault line per ledger test file that exists but cannot be read or parsed - named as the
+    input, so the cheap check can fail on the fault instead of guessing (spec, criterion 9). A file
+    that does not exist makes its ids missing, never a fault (spec, criterion 15). An existing file
+    is judged by the same parsed-name check the selection uses, so a top-level `async def` stands
+    and a name defined only inside a string is missing. A plan that cannot be decoded or read
+    raises to the caller.
+    """
+    wanted: dict[str, str] = {}
+    for ref, written in _ledger_entries(plan):
+        state = "written" if written else "not yet written"
+        if wanted.get(ref) != "written":
+            wanted[ref] = state
+    standing: dict[str, str] = {}
+    missing: dict[str, str] = {}
+    faults: list[str] = []
+    names: dict[str, set[str]] = {}
+    absent: set[str] = set()
+    unjudgable: set[str] = set()
+    for ref, state in wanted.items():
+        posix, _, rest = ref.partition("::")
+        if posix in unjudgable:
+            continue
+        if posix not in absent and posix not in names:
+            try:
+                exists = (root / posix).is_file()
+            except OSError as error:
+                unjudgable.add(posix)
+                faults.append(f"`{posix}` cannot be read or parsed ({error})")
+                continue
+            if exists:
+                try:
+                    names[posix] = _standing_names(root, posix)
+                except Refused as error:
+                    unjudgable.add(posix)
+                    faults.append(str(error))
+                    continue
+            else:
+                absent.add(posix)
+        if posix not in absent and _id_stands(rest, names[posix]):
+            standing[ref] = state
+        else:
+            missing[ref] = state
+    return standing, missing, faults
+
+
 def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
     """In one changed test file, the ids of the test functions that are new or differ from HEAD.
 
@@ -6654,28 +6718,40 @@ def _changed_test_ids(root: Path, env: dict[str, str], posix: str) -> list[str]:
 
 def selected_tests(
     root: Path, env: dict[str, str], plan: bytes, previous: Sequence[str] = ()
-) -> tuple[list[str] | None, str | None]:
+) -> tuple[list[str] | None, str | None, dict[str, str], list[str]]:
     """The cheap pytest run's explicit targets, deduplicated and sorted, or why they cannot stand.
 
     Sources (spec, "Selected tests", amended by decisions.md Q-3): in each surviving changed
     `tests/**/test_*.py` file, the test functions that are new or differ from HEAD (a new file
-    whole); the accepted plan's ledger test references in both forms, as function ids; and, on a
-    retry, the ids `previous` names - the tests pytest reported as failed in the attempt before -
-    whose test file and top-level test or class still stand. A test named by the ledger but not yet written stays a target:
-    pytest then fails the attempt with the missing id named, which is the attempt's own gap.
-    Importers of changed `scripts/` modules are not selected. `None` targets with a reason - a
-    selection failure is a diagnostic, never an empty green set (spec, criterion 3).
+    whole); the accepted plan's standing ledger test references, as function ids; and, on a retry,
+    the ids `previous` names - the tests pytest reported as failed in the attempt before - whose
+    test file and top-level test or class still stand. A ledger test whose file or function does
+    not stand is classified missing and never reaches pytest: the runner names it itself, and
+    standing targets run beside it (spec, criteria 1 and 3). Importers of changed `scripts/`
+    modules are not selected. `None` targets with a reason - a selection failure is a diagnostic,
+    never an empty green set. The third and fourth results are the ledger tests classified missing
+    (`tests/x.py::test_y` to `written` or `not yet written`) and one line per existing ledger test
+    file that cannot be read or parsed - a fault of its own, never a missing id (spec, criterion 9).
     """
+    missing: dict[str, str] = {}
+    ledger_faults: list[str] = []
     try:
         changed = changed_paths(root, env=env, skip_undecodable=True)
     except (Refused, OSError) as error:
-        return None, str(error)
+        return None, str(error), missing, ledger_faults
     targets: set[str] = set()
     try:
         for posix in sorted(relative.as_posix() for relative in changed):
             if _is_test_module(posix) and (root / posix).is_file():
-                targets.update(_changed_test_ids(root, env, posix))
-        targets.update(_ledger_test_refs(plan))
+                try:
+                    targets.update(_changed_test_ids(root, env, posix))
+                except (OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
+                    raise Refused(f"`{posix}` cannot be read or parsed ({error})") from error
+        try:
+            standing_ledger, missing, ledger_faults = ledger_standings(root, plan)
+        except (OSError, UnicodeDecodeError, SyntaxError, ValueError) as error:
+            raise Refused(f"the accepted plan cannot be read for its ledger tests ({error})") from error
+        targets.update(standing_ledger)
         standing: dict[str, set[str]] = {}
         for ident in previous:
             posix, _, rest = ident.partition("::")
@@ -6684,25 +6760,21 @@ def selected_tests(
             # A failed test the attempt removed or renamed no longer stands: pytest would refuse
             # the run on its id alone (review row L1-12).
             if posix not in standing:
-                standing[posix] = _top_level_names((root / posix).read_text(encoding="utf-8"), posix)
+                standing[posix] = _standing_names(root, posix)
             if not rest or _id_stands(rest, standing[posix]):
                 # The function, not its parameter: a retry may rename a parameter, and pytest
                 # refuses the whole run on an id it no longer collects (review row F6-2).
                 targets.add(ident.split("[", 1)[0])
-        # A whole file covers its ids, but only those whose function stands in it: a ledger test
-        # the new file lacks stays a target, so pytest names it missing (review row L3-1).
+        # A whole changed file covers the standing ids it holds: a ledger id the file also names is
+        # dropped as a duplicate, and one the file lacks is classified missing instead of staying a
+        # target (review row L3-1, carried by the classification now).
         whole = {target for target in targets if "::" not in target}
-        names = {posix: _top_level_names((root / posix).read_text(encoding="utf-8"), posix) for posix in whole}
-        kept = sorted(
-            t
-            for t in targets
-            if "::" not in t
-            or (posix := t.split("::", 1)[0]) not in whole
-            or not _id_stands(t.split("::", 1)[1], names[posix])
-        )
+        for posix in whole:
+            _standing_names(root, posix)  # A whole file must still be readable and parseable.
+        kept = sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole)
     except (Refused, OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
-        return None, str(error)
-    return kept, None
+        return None, str(error), missing, ledger_faults
+    return kept, None, missing, ledger_faults
 
 
 def cheap_checks(
@@ -6712,15 +6784,21 @@ def cheap_checks(
     key: str | None,
     accepted_plan: bytes | None,
     previous: Sequence[str] = (),
+    verb: str = "implement",
+    evidence: list[str] | None = None,
 ) -> list[str]:
-    """An attempt's own cheap checks: ruff lint, ruff format check, pytest over the selected tests.
+    """An attempt's own cheap checks: ruff lint, ruff format check, the ledger classification, pytest.
 
-    `previous` is the test ids the attempt before reported as failed, on a retry. Empty when all
-    applicable commands are green. A command with no target is skipped (spec,
-    criterion 4); a red, an unstartable or an over-bound command returns that one bounded,
-    protected diagnostic and the attempt ends before derived preparation and `make verify` (spec,
-    criteria 1, 2 and 10). The ledger references come from `accepted_plan` - the accepted plan's
-    snapshot; without one the working plan stands in, as a direct `verify_attempt` call does.
+    `previous` is the test ids the attempt before reported as failed, on a retry. `verb` names the
+    attempt type: an implement attempt owes every ledger test, a repair one only the written
+    entries, so a missing unwritten-only reference alone fails no repair's cheap check (spec,
+    criteria 5-7). `evidence` collects one line per missing ledger test the attempt does not owe -
+    named in the attempt's record whatever the verdict, never passed to pytest (spec, criterion 2).
+    Empty when all applicable commands are green. A command with no target is skipped (spec,
+    criterion 4); a red, an unstartable or an over-bound command returns its bounded, protected
+    diagnostic and the attempt ends before derived preparation and `make verify` (spec, criteria 1,
+    2 and 10). The ledger references come from `accepted_plan` - the accepted plan's snapshot;
+    without one the working plan stands in, as a direct `verify_attempt` call does.
     """
     try:
         targets = format_targets(root, env)
@@ -6736,57 +6814,131 @@ def cheap_checks(
             accepted_plan = plan.read_bytes()
         except OSError as error:
             return [protect_diagnostics(f"the accepted plan could not be read for the cheap tests: {error}", key)]
-    tests, fault = selected_tests(root, env, accepted_plan, previous)
-    if fault is not None:
-        lines = protect_diagnostics(f"the cheap tests could not be selected: {fault}", key).splitlines()
-        return ["\n".join(_shrink(lines, TAIL_LINES))]
-    if not tests:
-        return []
-    identity = "`" + " ".join(PYTEST) + "`"
-    if not (root / PYTEST[0]).is_file():
-        return [protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key)]
+    tests, fault, missing, ledger_faults = selected_tests(root, env, accepted_plan, previous)
+    # Classify missing references before returning any selection or file fault, so the
+    # attempt record retains the debt discovered alongside that fault.
+    owed = {ref: state for ref, state in missing.items() if verb != "repair" or state == "written"}
+    unowed = [
+        f"missing ledger test, named but not owed ({state}): `{ref}`"
+        for ref, state in sorted(missing.items())
+        if ref not in owed
+    ]
+    if evidence is not None and unowed:
+        evidence.extend(_shrink(unowed, TAIL_LINES, subject=""))
+    if fault is not None or ledger_faults:
+        lines = []
+        if fault is not None:
+            lines.append(f"the cheap tests could not be selected: {fault}")
+        if ledger_faults:
+            lines.extend(
+                ["the cheap tests cannot be checked; a ledger test file cannot be read or parsed:", *ledger_faults]
+            )
+        fault_lines = protect_diagnostics("\n".join(lines), key).splitlines()
+        missing_lines = protect_diagnostics(
+            "\n".join(f"missing ledger test owed ({state}): `{ref}`" for ref, state in sorted(owed.items())), key
+        ).splitlines()
+        return [
+            "\n".join(_shrink(fault_lines, TAIL_LINES, subject="") + _shrink(missing_lines, TAIL_LINES, subject=""))
+        ]
+    problems: list[str] = []
+    if tests:
+        identity = "`" + " ".join(PYTEST) + "`"
+        if not (root / PYTEST[0]).is_file():
+            problems.append(protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key))
+        else:
+            try:
+                done = launch(
+                    [*PYTEST, *tests],
+                    root,
+                    env,
+                    key,
+                    timeout=TOOL_SECONDS,
+                    limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+                )
+            except StepTimedOut as error:
+                # Name what ran, bounded: a timeout has no output of its own (review row L1-10).
+                shown_tests = ", ".join(tests[:TAIL_LINES]) + (
+                    f" and {len(tests) - TAIL_LINES} more" if len(tests) > TAIL_LINES else ""
+                )
+                problems.append(
+                    protect_diagnostics(f"{identity} did not finish: {error}\nselected tests: {shown_tests}", key)
+                )
+            except CallFailed as error:
+                problems.append(protect_diagnostics(f"{identity} could not be run: {error}", key))
+            else:
+                if done.returncode:
+                    problems.append(f"{identity} exited {done.returncode}\n{_cheap_evidence(done, key)}")
+    if owed:
+        shown_owed = "\n".join(f"`{ref}` ({state})" for ref, state in sorted(owed.items()))
+        lines = protect_diagnostics(
+            "the criterion ledger names tests that do not stand, and this attempt owes them: " + shown_owed, key
+        ).splitlines()
+        problems.append("\n".join(_shrink(lines, TAIL_LINES, subject="")))
+    return problems
+
+
+def must_run_refs(root: Path, plan: bytes) -> str:
+    """Classify implement's ledger targets; every missing test remains owed."""
     try:
-        done = launch(
-            [*PYTEST, *tests],
-            root,
-            env,
-            key,
-            timeout=TOOL_SECONDS,
-            limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
-        )
-    except StepTimedOut as error:
-        # Name what ran, bounded: a timeout has no output of its own (review row L1-10).
-        shown = ", ".join(tests[:TAIL_LINES]) + (
-            f" and {len(tests) - TAIL_LINES} more" if len(tests) > TAIL_LINES else ""
-        )
-        return [protect_diagnostics(f"{identity} did not finish: {error}\nselected tests: {shown}", key)]
-    except CallFailed as error:
-        return [protect_diagnostics(f"{identity} could not be run: {error}", key)]
-    if done.returncode:
-        return [f"{identity} exited {done.returncode}\n{_cheap_evidence(done, key)}"]
-    return []
-
-
-def must_run_refs(plan: bytes) -> str:
-    """The accepted plan's ledger test references as the prompts' must-run list, or why there is none.
-
-    A reference still marked `not yet written` is listed as it stands - the instruction says to
-    write it, never that it exists (spec, criterion 7). A ledger that cannot be read names the
-    section to follow instead of a list, so the prompt build never fails on it.
-    """
-    try:
-        refs = _ledger_test_refs(plan)
+        standing, missing, faults = ledger_standings(root, plan)
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
         return "the plan's criterion ledger could not be read for test names; follow its `## Criterion ledger` section itself"
-    if not refs:
+    if not standing and not missing and not faults:
         return "none - the plan's criterion ledger names no test; write every test the plan asks for"
-    return "\n".join(f"- {ref}" for ref in refs)
+    lines = []
+    if standing:
+        lines.append("Standing ledger tests, the runner will run these pytest targets:")
+        lines.extend(f"- {ref}" for ref in sorted(standing))
+    if missing:
+        lines.append("Missing ledger tests - owed: write them for the runner to check:")
+        lines.extend(f"- {ref}" for ref in sorted(missing))
+    if faults:
+        lines.append("Ledger tests the runner cannot inspect, their files unreadable or unparseable - owed:")
+        lines.extend(f"- {fault}" for fault in faults)
+    return "\n".join(lines)
+
+
+def repair_must_run_refs(root: Path, plan: bytes) -> str:
+    """The repair prompt's ledger list: what the repair owes, and the unwritten debt named beside it.
+
+    A written entry is owed whether its test stands or not - a missing one is named as owed, so the
+    model writes it instead of counting on a green run (spec, criterion 7). Standing entries head
+    the pytest list, and that list is all pytest ever gets: a missing id is never passed to pytest
+    (spec, criterion 14). An unwritten entry whose test is missing is named but not owed (spec,
+    criterion 13). A ledger test file that cannot be read or parsed is named as uninspectable,
+    never as standing, and the prompt still builds (spec, criterion 16); a plan that cannot be read
+    names the section to follow instead of a list.
+    """
+    try:
+        standing, missing, faults = ledger_standings(root, plan)
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+        return "the plan's criterion ledger could not be read for test names; follow its `## Criterion ledger` section itself"
+    if not standing and not missing and not faults:
+        return "none - the plan's criterion ledger names no test"
+    lines = []
+    if standing:
+        lines.append("Standing ledger tests, the pytest targets - run them and leave them green:")
+        lines.extend(f"- {ref}" for ref in sorted(standing))
+    owed_missing = sorted(ref for ref, state in missing.items() if state == "written")
+    if owed_missing:
+        lines.append("Written ledger entries whose test is missing - owed: write them:")
+        lines.extend(f"- {ref}" for ref in owed_missing)
+    unowned = sorted(ref for ref, state in missing.items() if state != "written")
+    if unowned:
+        lines.append("Missing unwritten ledger tests - named but not owed, never passed to pytest:")
+        lines.extend(f"- {ref}" for ref in unowned)
+    if faults:
+        lines.append(
+            "Ledger tests the runner cannot inspect, their files unreadable or unparseable - the cheap check fails on these faults:"
+        )
+        lines.extend(f"- {fault}" for fault in faults)
+    return "\n".join(lines)
 
 
 MUST_RUN_DELEGATED = (
     "You cannot run commands, so the runner runs this attempt's must-run checks itself, before post-run "
     "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
-    "the selected tests - the new or changed test functions, the accepted plan's ledger tests and, on a "
+    "the selected tests - the new or changed test functions, the standing accepted plan ledger tests and, on a "
     "retry, the tests the attempt before failed. "
     "Write every test the ledger names, including the rows still marked `not yet written`: a missing "
     "ledger test fails the attempt before post-run verification. The runner then runs the post-run "
@@ -6801,14 +6953,33 @@ MUST_RUN_COMMANDS = (
     "Before you hand back, run the must-run checks yourself and leave them green: "
     "`.venv/bin/ruff check --force-exclude --no-cache` and `.venv/bin/ruff format --check "
     "--force-exclude --no-cache` over the Python files you changed, and "
-    "`.venv/bin/python3 -m pytest -q -n auto` over the ledger tests below. The runner runs the same cheap "
+    "`.venv/bin/python3 -m pytest -q -n auto` over the standing ledger tests below - a missing "
+    "ledger id is never passed to pytest. The runner runs the same cheap "
     "checks after the call, then the post-run targeted check for implement and repair - the whole "
     "touched and linked test files, ruff and the existing local gates, outside the verify admission. "
-    "Implement refuses new production code without a reachable test before any test runs: add its "
-    "test. When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "When the targeted coverage cannot be established safely, the same route takes the admitted "
     "full `make verify`; a targeted red never falls back to override it, and a fresh full "
     "`make verify` runs before phase 6. Findings.md is the runner's audit file: an edit "
-    "of it is restored before the checks, so never put a verdict there."
+    "of it is restored before the checks, so never put a verdict there. A repair owes the proof of "
+    "every finding it addresses - a test red first, named in its fixed line - and every written "
+    "entry of the plan's criterion ledger, standing or missing: write it. Ledger entries still "
+    "marked `not yet written` whose test is missing are named below but not owed."
+)
+MUST_RUN_DELEGATED_REPAIR = (
+    "You cannot run commands, so the runner runs this attempt's must-run checks itself, before post-run "
+    "verification: ruff lint and format checks over the changed Python files, then pytest over exactly "
+    "the selected tests - the new or changed test functions, the standing tests of the accepted plan's "
+    "criterion ledger and, on a retry, the tests the attempt before failed. A missing ledger id is "
+    "never passed to pytest. "
+    "A repair owes the proof of every finding it addresses - a test red first, named in its fixed "
+    "line - and every written entry of the plan's criterion ledger, standing or missing: write it. "
+    "Ledger entries still marked `not yet written` whose test is missing are named but not owed. "
+    "The runner then runs the post-run targeted check for implement and repair - the whole touched "
+    "and linked test files, ruff and the existing local gates, outside the verify admission. "
+    "When the targeted coverage cannot be established safely, the same route takes the admitted "
+    "full `make verify`; a targeted red never falls back to override it, and a fresh full "
+    "`make verify` runs before phase 6. Execute nothing yourself - delegation to the runner is the "
+    "contract, and no extra tool is yours."
 )
 
 
@@ -7312,6 +7483,8 @@ def _targeted_body(
     scope: list[str] | None,
     new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
+    verb: str = "implement",
+    evidence: list[str] | None = None,
 ) -> list[str]:
     """The targeted mode's post-run checks: the shared preparation, then the targeted or full check.
 
@@ -7322,7 +7495,9 @@ def _targeted_body(
     the `new_file_guard`: new production code without a reachable test refuses the attempt before any
     test runs or a fallback is admitted (bead coding-harness-0swp). The clearing capture covers the
     fallback too: the clearing happened in the shared preparation, before the selection chose the
-    admitted full check.
+    admitted full check. `verb` and `evidence` carry the attempt type and the missing-ledger record
+    into the cheap checks, so both the targeted and the admitted-full path classify the ledger the
+    same way (spec, criteria 1-7).
     """
     # Nothing a targeted run starts carries or claims the verify admission.
     env = {name: value for name, value in env.items() if name not in (verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV)}
@@ -7348,7 +7523,7 @@ def _targeted_body(
                 "add a test that reaches this file before the attempt can run"
             ]
     try:
-        cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures)
+        cheap = cheap_checks(root, env, plan, key, accepted_plan, previous_failures, verb=verb, evidence=evidence)
     except (OSError, RuntimeError, ValueError) as error:
         return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
     if cheap:
@@ -7411,6 +7586,8 @@ def verify_attempt(
     scope: list[str] | None = None,
     new_file_guard: bool = False,
     clearing: ClearingEvidence | None = None,
+    verb: str = "implement",
+    evidence: list[str] | None = None,
 ) -> list[str]:
     """Format, run the cheap checks, clear derivable ledger markers, stamp documents, render, `make verify`.
 
@@ -7434,8 +7611,10 @@ def verify_attempt(
     `make verify` instead, and a targeted red, launch failure or timeout fails the attempt - it never
     falls back to the full check to override it. `new_file_guard` adds the implement-only refusal of
     new production code without a reachable test. `scope` receives the runner-owned evidence line
-    that names the mode, the selected checks and the result; `evidence` receives the selected
-    coverage for the targeted-scope record. Draft keeps its own document-only path (`verify_draft`).
+    that names the mode, the selected checks and the result. Draft keeps its own document-only path
+    (`verify_draft`). `verb` names the attempt type for the ledger classification - implement owes
+    every ledger test, repair only the written entries - and `evidence` collects the missing ledger
+    tests the attempt does not owe, one line each, for the attempt's record (spec, criteria 2, 5-7).
     """
     env = runner_env(
         foreign_env(
@@ -7483,6 +7662,8 @@ def verify_attempt(
             scope,
             clearing=clearing,
             new_file_guard=new_file_guard,
+            verb=verb,
+            evidence=evidence,
         )
         try:
             time_log(plan)
@@ -7508,7 +7689,16 @@ def verify_attempt(
         # (bead coding-harness-5tyh). Cheap green continues into the clearing below.
         try:
             # The verify environment (state root, memory floor) without an admission: none is held yet.
-            cheap = cheap_checks(root, verify_lock.inherit_env(env), plan, key, accepted_plan, previous_failures)
+            cheap = cheap_checks(
+                root,
+                verify_lock.inherit_env(env),
+                plan,
+                key,
+                accepted_plan,
+                previous_failures,
+                verb=verb,
+                evidence=evidence,
+            )
         except (OSError, RuntimeError, ValueError) as error:
             # Named as the cheap checks' own failure, never as the ledger's (review row L7-2).
             return [protect_diagnostics(f"{CHEAP_LABEL}: the cheap checks could not run: {error}", key)]
@@ -9098,7 +9288,7 @@ def implementation_prompt(
         "## Must-run checks before handback\n\n"
         + MUST_RUN_DELEGATED
         + "\n\nLedger tests:\n"
-        + must_run_refs(plan.encode("utf-8")),
+        + must_run_refs(ctx.root, plan.encode("utf-8")),
         f"Implementation baseline: {baseline}",
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
@@ -9873,6 +10063,10 @@ def run_attempts(
             cannot_start: CallFailed | None = None
             formatted: list[str] = []
             scope_lines: list[str] = []
+            # The missing ledger tests the attempt does not owe - implement owes all, repair only the
+            # written entries. They are named in the attempt's record whatever the verdict, and are
+            # never pytest targets (bead coding-harness-bxxt.9, spec criteria 2-7).
+            ledger_evidence: list[str] = []
             try:
                 if verify_mode == "full":
                     problems = verify_attempt(
@@ -9884,6 +10078,8 @@ def run_attempts(
                         inputs[ctx.plan],
                         previous_failures,
                         clearing=clearing,
+                        verb=verb,
+                        evidence=ledger_evidence,
                     )
                 else:
                     problems = verify_attempt(
@@ -9899,6 +10095,8 @@ def run_attempts(
                         scope=scope_lines,
                         new_file_guard=new_file_guard,
                         clearing=clearing,
+                        verb=verb,
+                        evidence=ledger_evidence,
                     )
             except Refused as error:
                 put_findings_back(original=error)
@@ -9952,6 +10150,10 @@ def run_attempts(
                 ]
             else:
                 work_problems = []
+            if ledger_evidence:
+                # Accepted: the measured time line names them. Failed: the scope lines stand beside
+                # the failure reasons in the one diagnostics block (spec, criterion 2).
+                scope_lines.extend(ledger_evidence)
             # An attempt without work is rejected whatever verification said; the reason leads the list,
             # so the answer check below never runs and no repair row is marked fixed (bead coding-harness-te7q).
             # A structurally broken protected document rejects the attempt even when every check
@@ -10042,6 +10244,20 @@ def run_attempts(
             if exposed:
                 if not problems:
                     put_findings_back(original=Refused(credential_message(exposed)))
+                    listing = protect_diagnostics(
+                        "\n".join(
+                            [*(f"- {SCOPE_LABEL}: {line}" for line in scope_lines), f"- {credential_message(exposed)}"]
+                        ),
+                        key,
+                    )
+                    append(
+                        ctx.findings,
+                        quote_block(
+                            attempt_block(attempt, route, listing, protect_files(files, key)),
+                            key,
+                            whole=[line for line in listing.splitlines() if line.startswith(f"- {SCOPE_LABEL}: ")],
+                        ),
+                    )
                 if not verified_exposed:
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
@@ -10072,9 +10288,8 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
-                    # A passing attempt's verification scope stands in its time line, after the
-                    # verdict word; a failed attempt's stays in its one diagnostics block.
-                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
+                    # Failed attempts keep their scope in the diagnostics block, not the time line.
+                    [protect_diagnostics(line, key) for line in scope_lines] if not problems else (),
                 ),
                 baseline_time,
                 inputs_before,
@@ -10711,12 +10926,14 @@ def repair_prompt(
     extra = [
         REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
         # A command-capable Codex runs the must-runs itself; the file-tools route delegates the same
-        # checks to the runner. The references come from the accepted plan's cached snapshot, so a
-        # retry rereads nothing the attempt may have edited (spec, criterion 7).
+        # checks to the runner. The repair owes its findings' proofs and the written ledger entries;
+        # missing unwritten tests are named without being owed, and no missing id reaches its pytest
+        # list. The references come from the accepted plan's cached snapshot, so a retry rereads
+        # nothing the attempt may have edited (spec, criteria 13, 14 and 16).
         "## Must-run checks before handback\n\n"
-        + (MUST_RUN_COMMANDS if endpoint == CODEX else MUST_RUN_DELEGATED)
+        + (MUST_RUN_COMMANDS if endpoint == CODEX else MUST_RUN_DELEGATED_REPAIR)
         + "\n\nLedger tests:\n"
-        + must_run_refs(plan.encode("utf-8")),
+        + repair_must_run_refs(ctx.root, plan.encode("utf-8")),
         f"Repair baseline: {baseline}",
         f"## Taken rows\n\n{rows}",
         f"## Accepted spec\n\n{spec}",

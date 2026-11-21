@@ -27,15 +27,15 @@ and commits this prompt assigns to you, and the interactive session reads its ow
 clock and logs its own spans, as the appetite rule below says.
 
 **Run the cheap checks before you hand back.** These are ruff (`ruff check` and
-`ruff format --check` on the changed Python files) and the tests the plan's
-`## Criterion ledger` names. With a command tool, run them and hand back only
-when they are green. On a file-only route (any model that can edit files but
-cannot run commands, on implement or repair), you cannot run them: the runner runs them right after your attempt and before
-its verification (the targeted check, or the full `make verify` on fallback). It runs ruff, then pytest over the changed or new test functions,
-the ledger's test ids and, on a retry, the tests the attempt before failed. The
-first red check ends the attempt with exactly that output (bead
-coding-harness-5tyh). `findings.md` is the runner's: an edit you make there is
-put back before the checks. That edit is not part of your work, and on its own it never fails the attempt.
+`ruff format --check` on changed Python files) and selected tests. Implement owes
+every ledger test. Repair owes its findings' proofs and written ledger entries;
+missing unwritten entries are named but not owed. With a command tool, run the
+standing ledger tests and leave the applicable checks green. On a file-only route,
+the runner runs ruff, then pytest over changed or new test functions, standing
+ledger tests and, on a retry, previously failed tests. Missing ledger IDs never
+reach pytest. The first red check ends the attempt (bead coding-harness-5tyh).
+`findings.md` is the runner's: an edit you make there is put back before the checks.
+That edit is not part of your work, and on its own it never fails the attempt.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**

@@ -624,6 +624,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/journal-citation-gate/plan.md`](changes/journal-citation-gate/plan.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/research.md`](changes/journal-citation-gate/research.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/spec.md`](changes/journal-citation-gate/spec.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/ledger-ids-before-pytest/decisions.md`](changes/ledger-ids-before-pytest/decisions.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/findings.md`](changes/ledger-ids-before-pytest/findings.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/plan.md`](changes/ledger-ids-before-pytest/plan.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/research.md`](changes/ledger-ids-before-pytest/research.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/spec.md`](changes/ledger-ids-before-pytest/spec.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
