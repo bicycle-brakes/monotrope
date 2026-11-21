@@ -8565,6 +8565,12 @@ def test_stale_legacy_blocks_still_count_as_rounds(
     world.write_findings(*[opus_review_block(world, day=day, fingerprint=None) for _ in range(rounds)])
     for step in range(edits):
         commit_at(world, monkeypatch, cutoff - dt.timedelta(days=4 - step))
+    # The fixture's initial commit uses the real clock; place that initial body before
+    # the simulated review so only the explicit edits above follow the review.
+    versions = stage2.spec_body_versions(world.root, "demo")
+    initial_stamp = int(dt.datetime.combine(dt.date.fromisoformat(day), dt.time(), tzinfo=dt.UTC).timestamp())
+    versions[0] = (initial_stamp, versions[0][1])
+    monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: versions)
     admission = stage2.review_admission(world.root, "demo")
     assert admission.rounds == rounds
     if admitted:
@@ -29653,3 +29659,55 @@ def test_spec_review_config_refuses_unadmitted_fallback_endpoint(world: World) -
         assert stage2.OPENCODE in str(error)
     else:
         pytest.fail("an unadmitted fallback endpoint must be refused when configuration is read")
+
+
+def test_fallback_replacing_recheck_respects_round_cap(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.write_findings(
+        opus_review_block(world), opus_review_block(world), fallback_review_block(world, TEST_LADDER[0])
+    )
+    world.script(claude=[{"exit": 1}, {"exit": 1}], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    blocks, _ = stage2.qualifying_reviews(world.text())
+    assert blocks[-1].is_fallback and blocks[-1].is_recheck
+    assert stage2.review_rounds(blocks) == 3
+    assert world.run("spec-review") == 2
+
+
+@pytest.mark.parametrize("unreadable", ["findings", "spec"])
+def test_spec_review_refuses_files_unreadable_after_preflight(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], unreadable: str
+) -> None:
+    if unreadable == "spec":
+        world.write_findings()
+    original = stage2.preflight
+
+    def preflight_then_break(*args, **kwargs):
+        ctx = original(*args, **kwargs)
+        if unreadable == "findings":
+            ctx.findings.write_bytes(b"\xff")
+        else:
+            (ctx.folder / "spec.md").unlink()
+        return ctx
+
+    monkeypatch.setattr(stage2, "preflight", preflight_then_break)
+    try:
+        result = world.run("spec-review")
+    except (OSError, UnicodeDecodeError) as error:
+        pytest.fail(f"unreadable {unreadable} must be refused: {error}")
+    assert result == 2
+    assert f"{unreadable}.md cannot be read" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = stage2.LEGACY_SPEC_REVIEW_DAY - dt.timedelta(days=10)
+    world.write_findings(*[opus_review_block(world, day=day.isoformat(), fingerprint=None)] * 3)
+    block = stage2.qualifying_reviews(world.text())[0][-1]
+    stamps = [
+        int(dt.datetime.combine(day + dt.timedelta(days=n), dt.time(), tzinfo=dt.UTC).timestamp()) for n in (1, 2)
+    ]
+    monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
+    assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
+    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 2

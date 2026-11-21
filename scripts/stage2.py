@@ -3821,6 +3821,7 @@ class SpecReviewBlock:
             return model == OPUS[1]
         if self.heading.startswith("## Phase 2a — fallback "):
             named = self.heading[len("## Phase 2a — fallback ") :].rsplit(",", 1)[0].strip()
+            named = named.removesuffix(f" ({RECHECK_MARKER})")
             return named == model
         return False
 
@@ -3983,7 +3984,7 @@ def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, dis
 
     A fingerprinted block is located by its digest among the committed bodies; an undigested
     legacy block counts the versions committed on a UTC day after its heading day (same-day edits
-    cannot be told apart; the first version existed when the review was written). An uncommitted body difference counts as one more version.
+    cannot be told apart). An uncommitted body difference counts as one more version.
     A spec with no committed version has two bodies only, the reviewed one and the one on disk: a
     fingerprinted block then counts one edit when they differ and none when they agree (review row L4-1).
     """
@@ -4004,7 +4005,7 @@ def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, dis
         written = dt.date.fromisoformat(block.heading_day or "")
     except ValueError:
         return None
-    later = sum(1 for stamp, _ in versions[1:] if dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written)
+    later = sum(1 for stamp, _ in versions if dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written)
     return later + dirty
 
 
@@ -4156,7 +4157,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
     rounds = review_rounds(kept)
     stale = review_staleness(root, change, newest, current)
     recheck = stale is None and newest.is_fallback
-    can_run = review_round_open(root, change, rounds, recheck)
+    can_run = review_round_open(root, change, rounds, recheck and not newest.is_recheck)
     ambiguity = open_ambiguity_row(newest)
     if ambiguity is not None and (can_run or not ambiguity_settled(root, change, ambiguity)):
         if can_run:
@@ -4385,7 +4386,10 @@ def spec_review(root: Path, change: str) -> None:
     """
     ctx = preflight(root, change, OPUS)
     config = spec_review_call_config(root)
-    findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    try:
+        findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"plans/changes/{change}/findings.md cannot be read ({error}).") from error
     kept, _left_out = qualifying_reviews(findings_text)
     rounds = review_rounds(kept)
     recheck = False
@@ -4395,7 +4399,9 @@ def spec_review(root: Path, change: str) -> None:
             current = spec_body_fingerprint(ctx.folder / "spec.md")
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
-        recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
+        recheck = (
+            review_staleness(root, change, newest, current) is None and newest.is_fallback and not newest.is_recheck
+        )
     if not review_round_open(root, change, rounds, recheck):
         raise Refused(
             f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
@@ -4405,7 +4411,10 @@ def spec_review(root: Path, change: str) -> None:
             "the fourth; otherwise the change is re-sliced."
         )
     spec = ctx.folder / "spec.md"
-    body = spec_body_bytes(spec)
+    try:
+        body = spec_body_bytes(spec)
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
     prompt = spec_review_prompt(root, change, body)
     fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
     limit = f"the spec review's limit of {config['timeout_seconds'] // 60:g} minutes"
@@ -4436,7 +4445,8 @@ def spec_review(root: Path, change: str) -> None:
         except CallFailed as retry_error:
             body, rows, answer, fallback_endpoint, fallback_result = run_fallback_review(ctx, config, retry_error)
             fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
-            heading = f"## Phase 2a — fallback {config['fallback_model']}, {today()}"
+            marker = f" ({RECHECK_MARKER})" if recheck else ""
+            heading = f"## Phase 2a — fallback {config['fallback_model']}{marker}, {today()}"
             write_review_block(
                 ctx,
                 fallback_endpoint,
