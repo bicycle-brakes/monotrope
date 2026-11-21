@@ -58,19 +58,19 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_verify_lock.py::test_two_slots_admit_two_and_queue_third — a third overlaps or an eligible second cannot reserve within two polls.
-- 2: not yet written tests/test_verify_lock.py::test_slot_setting_and_capacity_reduction — configured capacity is ignored or mixed settings ignore a holder or head waiter, or a one-slot request enters before draining.
-- 3: not yet written tests/test_verify_lock.py::test_invalid_slot_setting_refuses — padded or otherwise invalid input starts independent work, lacks a diagnostic, or blocks valid inherited reuse.
-- 4: not yet written tests/test_verify_lock.py::test_two_slot_fifo_and_dead_waiter — a live updated or legacy waiter is overtaken or the eligible head cannot reserve free capacity within two polls.
-- 5: not yet written tests/test_verify_lock.py::test_nested_slot_and_legacy_ownership — an invalid marker bypasses admission or a valid descendant waits or takes peer context.
-- 6: not yet written tests/test_verify_lock.py::test_second_in_process_admission_refused_during_acquisition — concurrent requests both enter or the second hangs.
-- 7: not yet written tests/test_verify_lock.py::test_slot_release_preserves_peer_and_inherited_child — a peer is disturbed, a survivor loses its reservation, or the eligible waiter cannot reserve within two polls after the last descriptor closes.
-- 7: not yet written tests/test_verify_lock.py::test_killed_one_slot_holder_keeps_capacity_until_child_exits — a two-slot waiter joins the inherited child of a killed one-slot supervisor.
-- 8: not yet written tests/test_verify_lock.py::test_memory_floor_applies_to_both_slots — either slot bypasses or changes the floor policy.
-- 9: not yet written tests/test_verify_lock.py::test_wait_log_names_both_holders_without_tokens — a holder is omitted or a token is printed.
-- 10: not yet written tests/test_verify_lock.py::test_legacy_exclusive_lock_excludes_both_slots — old and new protected work overlap or an earlier legacy waiter is overtaken.
-- 11: not yet written tests/test_verify_before_admission.py::test_two_slot_scheduler_preserves_wait_context_and_descriptors — wait spends the timeout or the scheduler loses a descriptor or verdict.
-- 11: not yet written tests/test_verify_duration.py::test_two_slot_context_does_not_mix_holder_waits — one run records its peer's context.
+- 1: tests/test_verify_lock.py::test_two_slots_admit_two_and_queue_third — a third overlaps or an eligible second cannot reserve within two polls.
+- 2: tests/test_verify_lock.py::test_slot_setting_and_capacity_reduction — configured capacity is ignored or mixed settings ignore a holder or head waiter, or a one-slot request enters before draining.
+- 3: tests/test_verify_lock.py::test_invalid_slot_setting_refuses — padded or otherwise invalid input starts independent work, lacks a diagnostic, or blocks valid inherited reuse.
+- 4: tests/test_verify_lock.py::test_two_slot_fifo_and_dead_waiter — a live updated or legacy waiter is overtaken or the eligible head cannot reserve free capacity within two polls.
+- 5: tests/test_verify_lock.py::test_nested_slot_and_legacy_ownership — an invalid marker bypasses admission or a valid descendant waits or takes peer context.
+- 6: tests/test_verify_lock.py::test_second_in_process_admission_refused_during_acquisition — concurrent requests both enter or the second hangs.
+- 7: tests/test_verify_lock.py::test_slot_release_preserves_peer_and_inherited_child — a peer is disturbed, a survivor loses its reservation, or the eligible waiter cannot reserve within two polls after the last descriptor closes.
+- 7: tests/test_verify_lock.py::test_killed_one_slot_holder_keeps_capacity_until_child_exits — a two-slot waiter joins the inherited child of a killed one-slot supervisor.
+- 8: tests/test_verify_lock.py::test_memory_floor_applies_to_both_slots — either slot bypasses or changes the floor policy.
+- 9: tests/test_verify_lock.py::test_wait_log_names_both_holders_without_tokens — a holder is omitted or a token is printed.
+- 10: tests/test_verify_lock.py::test_legacy_exclusive_lock_excludes_both_slots — old and new protected work overlap or an earlier legacy waiter is overtaken.
+- 11: tests/test_verify_before_admission.py::test_two_slot_scheduler_preserves_wait_context_and_descriptors — wait spends the timeout or the scheduler loses a descriptor or verdict.
+- 11: tests/test_verify_duration.py::test_two_slot_context_does_not_mix_holder_waits — one run records its peer's context.
 - 12: not a test — the phase-6 review checks `measurements.md` against criterion 12, including worktrees, warm-ups, complete admission observation, five-second memory samples, exits, attribution, end-to-end 1.6x and final `scripts/` revision.
 
 ## Runner route — 2026-11-21
@@ -85,3 +85,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-21 15:00:13–16:04:26 UTC, 3853 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
 2026-11-21 16:04:34–16:33:10 UTC, 1715 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
 2026-11-21 16:33:19–16:34:02 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-21 17:47:46–18:07:05 UTC, 1159 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure · measured by the runner

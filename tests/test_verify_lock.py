@@ -1327,6 +1327,9 @@ def fake_slot_holder(state: Path, slot: int, *, pid: int | None = None, hold: bo
     root = state / "coding-harness"
     root.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(root / verify_lock.SLOT_LOCK_NAMES[slot - 1], os.O_RDWR | os.O_CREAT, 0o600)
+    compatibility = os.open(root / verify_lock.LOCK_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    if hold:
+        fcntl.flock(compatibility, fcntl.LOCK_SH)
     record = root / verify_lock.SLOT_HOLDER_NAMES[slot - 1]
     record.write_text(
         json.dumps(
@@ -1351,6 +1354,7 @@ def fake_slot_holder(state: Path, slot: int, *, pid: int | None = None, hold: bo
             with contextlib.suppress(OSError):
                 fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)
+        os.close(compatibility)
 
 
 def test_two_slots_admit_two_and_queue_third(tmp_path: Path) -> None:
@@ -1378,7 +1382,7 @@ def test_two_slots_admit_two_and_queue_third(tmp_path: Path) -> None:
     assert third[0] >= min(first_end, second_end) - 0.05, (
         f"a third admission ran while both slots were still held: {spans} then {third}"
     )
-    assert third[0] < max(first_end, second_end) + 2.0, (
+    assert third[0] <= min(first_end, second_end) + 0.5, (
         f"the eligible head waiter could not reserve the freed slot promptly: {spans} then {third}"
     )
 
@@ -1515,6 +1519,9 @@ def test_two_slot_fifo_and_dead_waiter(tmp_path: Path) -> None:
             assert _wait_until(lambda: len(_records(state)) >= 1), "the first waiter never registered"
             second = _supervised(state, ORDER_BODY, {**body, "PROBE_NAME": "second", "PROBE_SLEEP": "0.1"})
             assert _wait_until(lambda: len(_records(state)) >= 2), "the second waiter never registered"
+        released = time.monotonic()
+        assert _wait_until(lambda: len(_records(state)) == 1, 0.5), "head did not reserve within two polls"
+        assert time.monotonic() - released <= 0.5
         # one slot freed: the head waiter takes it, and the later waiter can only
         # follow once the head's protected work is done — the head was never overtaken
         assert first.wait(timeout=60) == 0 and second.wait(timeout=60) == 0
@@ -1532,11 +1539,7 @@ def test_two_slot_fifo_and_dead_waiter(tmp_path: Path) -> None:
         survivor = _supervised(state, ORDER_BODY, {"PROBE_LOG": str(dead_log), "PROBE_NAME": "survivor"})
         # the survivor's record is new; the dead waiter's may already be pruned
         assert _wait_until(lambda: set(_records(state)) - before), "the survivor never registered"
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and not (
-        dead_log.exists() and dead_log.read_text(encoding="utf-8").split() == ["survivor"]
-    ):
-        time.sleep(0.05)
+    assert _wait_until(lambda: not _records(state), 0.5), "live head did not reserve within two polls"
     survivor.wait(timeout=60)
     assert dead_log.exists() and dead_log.read_text(encoding="utf-8").split() == ["survivor"], (
         f"a dead waiter blocked the queue: {sorted(_records(state))} and log {dead_log.read_text(encoding='utf-8') if dead_log.exists() else 'missing'}"
@@ -1682,24 +1685,15 @@ def test_slot_release_preserves_peer_and_inherited_child(tmp_path: Path) -> None
     )
     assert _wait_until(peer_started.is_file), "the peer never started its protected work"
     assert _wait_until(short_started.is_file), "the short holder never started beside its peer"
-    assert short.wait(timeout=60) == 0 and short_out.is_file(), "the short holder never finished its work"
-    # the peer still holds its slot: its published record names it while it runs
-    peer_record = verify_lock._read_record(_slot_record(state, 2)) or verify_lock._read_record(_slot_record(state, 1))
-    assert peer_record is not None and peer_record.get("pid") == peer.pid, (
-        "the short holder's release removed its running peer's published record"
-    )
-    assert peer.wait(timeout=60) == 0, "the peer was disturbed by its neighbour's release"
-    peer_span = _interval(peer_out)
-    assert peer_span[1] > 0, "the peer's protected work left no recorded interval"
-
-    # the slot freed by the finished pair is reservable promptly by the next entry
     next_out = tmp_path / "next.json"
     next_entry = _supervised(state, RECORD_BODY, {"PROBE_OUT": str(next_out), "PROBE_SLEEP": "0.1"})
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline and not next_out.exists():
-        time.sleep(0.05)
-    next_entry.wait(timeout=60)
-    assert next_out.is_file(), "a freed slot was not reservable by the next eligible waiter"
+    assert _wait_until(lambda: len(_records(state)) == 1), "the next entry did not queue"
+    assert short.wait(timeout=60) == 0 and short_out.is_file(), "the short holder never finished its work"
+    peer_records = [verify_lock._read_record(_slot_record(state, slot)) for slot in (1, 2)]
+    assert any(record is not None and record.get("pid") == peer.pid for record in peer_records), "peer record lost"
+    assert next_entry.wait(timeout=60) == 0
+    assert _interval(next_out)[0] <= _interval(short_out)[1] + 0.5, "freed slot reopened after two polls"
+    assert peer.wait(timeout=60) == 0, "the peer was disturbed by its neighbour's release"
 
 
 def test_killed_one_slot_holder_keeps_capacity_until_child_exits(tmp_path: Path) -> None:
@@ -1801,14 +1795,14 @@ def test_wait_log_names_both_holders_without_tokens(
     monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: None)
 
     slot_pid = 424242
-    legacy_pid = 515151
+    second_pid = 515151
     seen: list[str] = []
 
     def drain() -> list[str]:
         seen.extend(capsys.readouterr().err.splitlines())
         return seen
 
-    with fake_slot_holder(state, 1, pid=slot_pid), fake_holder(state, pid=legacy_pid):
+    with fake_slot_holder(state, 1, pid=slot_pid), fake_slot_holder(state, 2, pid=second_pid):
         admitted = threading.Event()
 
         def waiter() -> None:
@@ -1824,9 +1818,9 @@ def test_wait_log_names_both_holders_without_tokens(
             str(slot_pid),
             "fake slot 1",
             "2026-11-21T00:00:00",
-            "exclusive holder (older checkout):",
-            str(legacy_pid),
-            "fake holder",
+            "slot 2:",
+            str(second_pid),
+            "fake slot 2",
         ):
             assert expected in first, f"the wait log is missing {expected!r}: {first}"
         assert TEST_TOKEN not in first, "the wait log exposed an ownership token"
@@ -1890,3 +1884,35 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
     assert log.read_text(encoding="utf-8").split() == ["old-waiter", "updated-waiter"], (
         f"an updated waiter overtook an earlier live old waiter: {log.read_text(encoding='utf-8').split()}"
     )
+
+
+def test_exclusive_stale_record_cannot_reuse_legacy_holder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, TEST_TOKEN)
+    with fake_holder(state, pid=123456, token="other"):
+        path = state / "coding-harness" / verify_lock.EXCLUSIVE_HOLDER_NAME
+        path.write_text(json.dumps({"pid": os.getpid(), "token": TEST_TOKEN}), encoding="utf-8")
+        assert verify_lock.nested_holder_pid() is None, "a stale exclusive marker reused a different legacy holder"
+
+
+def test_prune_preserves_replaced_holder_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    opened = verify_lock._prepare_state()
+    admission = verify_lock._Admission(opened, ["test"], 2)
+    path = opened.root / verify_lock.SLOT_HOLDER_NAMES[0]
+    path.write_text(json.dumps({"pid": 111, "token": "old"}), encoding="utf-8")
+
+    def replace_record(_path: Path) -> bool:
+        path.write_text(json.dumps({"pid": 222, "token": "new"}), encoding="utf-8")
+        return False
+
+    monkeypatch.setattr(verify_lock, "_lock_held", replace_record)
+    try:
+        admission._prune_stale_holders_locked()
+        assert path.exists(), "pruning deleted a replacement holder"
+        assert json.loads(path.read_text())["pid"] == 222
+    finally:
+        admission.release()

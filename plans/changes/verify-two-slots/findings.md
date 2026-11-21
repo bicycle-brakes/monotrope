@@ -973,3 +973,7 @@ Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claud
 > 1 failed, 15 passed in 68.92s (0:01:08)
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-two-slots/stage2/attempts/verify-two-slots/attempt-3-20261121T171854828448Z-01f0fa3a.md
 > ```
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 5239 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/verify-two-slots/plan.md, plans/changes/verify-two-slots/spec.md — unchanged

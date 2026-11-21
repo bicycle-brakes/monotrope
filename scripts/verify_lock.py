@@ -450,14 +450,13 @@ def _nested_record() -> tuple[int, dict] | None:
         record = reader()
         if record is None or not _names(record, pid, token):
             continue
+        if reader is compatibility[1] and _lock_held(root / SLOT_LOCK_NAMES[0]) is not True:
+            continue
         if _lock_held_exclusively(root / LOCK_NAME) is not True:
             # Free, or only shared by setting-`2` holders: no exclusive
             # admission owns the compatibility lock, so this record is stale.
             continue
-        # Read the record again after the probe: a release unpublishes before
-        # it unlocks and a new admission publishes after it locks, so an
-        # unchanged record here means the lock seen held is still the
-        # marker's (review rows L1-1, L1-12).
+        # Re-read after probing to reject a replaced ownership record.
         again = reader()
         if again is not None and _names(again, pid, token):
             return pid, record
@@ -730,9 +729,8 @@ class _Admission:
         holder's survivor keeps its slot and the shared compatibility mark, a
         setting-`1` holder's survivor keeps the exclusive compatibility lock.
         """
-        if self.reserved_slot is not None:
-            return (self.state.lock_fd, self.state.slot_fds[self.reserved_slot - 1])
-        return (self.state.lock_fd,)
+        slot = self.reserved_slot or 1
+        return (self.state.lock_fd, self.state.slot_fds[slot - 1])
 
     def enter(self) -> None:
         """Queue for a slot, publish ownership, then hold the memory gate."""
@@ -765,20 +763,19 @@ class _Admission:
         # process (review row F6-1).
         owned = list(self._published_paths)
         self._published_paths = []
-        os.close(self.state.lock_fd)
-        for fd in self.state.slot_fds:
-            os.close(fd)
-        if owned or self.record_name is not None:
-            with _registry_lock(self.state):
-                for path in owned:
-                    self._unlink_record_if_free(path)
-                if self.record_name is not None:
-                    with contextlib.suppress(OSError):
-                        (self.state.root / QUEUE_DIR / self.record_name).unlink()
-                    if self.record_fd is not None:
-                        os.close(self.record_fd)
-                    self.record_name = None
-                    self.record_fd = None
+        with _registry_lock(self.state):
+            os.close(self.state.lock_fd)
+            for fd in self.state.slot_fds:
+                os.close(fd)
+            for path in owned:
+                self._unlink_record_if_free(path)
+            if self.record_name is not None:
+                with contextlib.suppress(OSError):
+                    (self.state.root / QUEUE_DIR / self.record_name).unlink()
+                if self.record_fd is not None:
+                    os.close(self.record_fd)
+                self.record_name = None
+                self.record_fd = None
         os.close(self.state.registry_fd)
 
     def _unlink_record_if_free(self, path: Path) -> None:
@@ -794,7 +791,7 @@ class _Admission:
         if path.name in SLOT_HOLDER_NAMES:
             lock = self.state.root / SLOT_LOCK_NAMES[SLOT_HOLDER_NAMES.index(path.name)]
         else:
-            lock = self.state.root / LOCK_NAME
+            lock = self.state.root / SLOT_LOCK_NAMES[0]
         try:
             fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except OSError:
@@ -888,12 +885,15 @@ class _Admission:
             if name in SLOT_HOLDER_NAMES:
                 lock = self.state.root / SLOT_LOCK_NAMES[SLOT_HOLDER_NAMES.index(name)]
                 free = _lock_held(lock) is False
+            elif name == EXCLUSIVE_HOLDER_NAME:
+                free = _lock_held(self.state.root / SLOT_LOCK_NAMES[0]) is False
             else:
-                lock = self.state.root / LOCK_NAME
-                free = _lock_held_exclusively(lock) is False
+                free = _lock_held_exclusively(self.state.root / LOCK_NAME) is False
             if free:
-                with contextlib.suppress(OSError):
-                    path.unlink()
+                again = _read_record(path)
+                if again is not None and _names(again, record.get("pid"), record.get("token")):
+                    with contextlib.suppress(OSError):
+                        path.unlink()
 
     def _effective_capacity_locked(self) -> int:
         """The capacity free under the occupied holders' settings, while holding the registry lock.
@@ -955,6 +955,11 @@ class _Admission:
             try:
                 fcntl.flock(self.state.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
+                return None
+            try:
+                fcntl.flock(self.state.slot_fds[0], fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                fcntl.flock(self.state.lock_fd, fcntl.LOCK_UN)
                 return None
             self._leave_queue_locked()
             return ("exclusive", None)
