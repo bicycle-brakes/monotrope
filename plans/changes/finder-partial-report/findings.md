@@ -738,7 +738,7 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-5 | MAJOR | SPEC | base | scripts/stage2_research_map.py:292 | A finder entry containing the JSON number `1e999` is decoded as infinity without invoking `parse_constant`. If another entry survives, validation drops the overflowing entry and continues to merge; the published filtered record contains `Infinity` instead of the original number. The run must reject non-finite values before merge and preserve original dropped entries in its records. [Criteria 7 and 12] | Codex | open | — |
+| R6-5 | MAJOR | SPEC | base | scripts/stage2_research_map.py:292 | A finder entry containing the JSON number `1e999` is decoded as infinity without invoking `parse_constant`. If another entry survives, validation drops the overflowing entry and continues to merge; the published filtered record contains `Infinity` instead of the original number. The run must reject non-finite values before merge and preserve original dropped entries in its records. [Criteria 7 and 12] | Codex | taken — maintainer 2026-11-21: reject overflowing JSON numbers (e.g. 1e999 decoding to Infinity) in the same decoder hook as non-finite constants before merge, preserving original dropped entries | — |
 
 Phase 6 verdict: codex 01a1fbfa-8f53-7080-8deb-38107f4026a3, 2026-11-21
 Reviewer session: codex 01a1fbfa-8f53-7080-8deb-38107f4026a3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
