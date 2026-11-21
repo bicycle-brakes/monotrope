@@ -607,6 +607,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
+| [`changes/gates-never-import-runner/decisions.md`](changes/gates-never-import-runner/decisions.md) | draft | none | 2026-11-21 | coding-harness-7ayv |
 | [`changes/gates-never-import-runner/research.md`](changes/gates-never-import-runner/research.md) | draft | none | 2026-11-21 | coding-harness-7ayv |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
