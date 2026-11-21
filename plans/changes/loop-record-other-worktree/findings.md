@@ -977,3 +977,16 @@ Reviewer session: codex 01a1fa92-a5c5-7262-b4d8-2bc82677d229 — a fresh session
 Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 4972 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 4989 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R6-1 | MAJOR | SPEC | base | scripts/stage2.py:5293 | If an earlier supersession archived round 10 in another worktree, a worktree whose findings do not contain that restart can supersede an active record ending at round 3 and write “after round 3”. Its next run starts at round 4, reusing an assigned number. The calculation omits the earlier archive. [Criteria 2 and 4] | Codex | open | — |
+| R6-2 | MAJOR | SPEC | base | scripts/stage2.py:4612 | If a superseded worktree’s findings contain one released round and the archive contains round 7, a plain restart correctly writes “after round 7”, but the next review-loop numbers its first round 2. `rounds_run` ignores the plain restart floor, so the run can reuse a number and its stop checks can ignore fresh rounds. [Criterion 17] | Codex | open | — |
+| R6-3 | MAJOR | SPEC | base | scripts/stage2.py:4990 | If another repository using the same state directory has an archive for a change with the same name, a plain restart reads that unrelated archive. Its round numbers can raise this repository’s restart floor, and an unreadable archive can block the restart entirely. Archives from other repositories must not affect this change. [Criterion 9 and protected areas] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fb8a-fca9-7433-ba26-17a3b2b5f67a, 2026-11-21
+Reviewer session: codex 01a1fb8a-fca9-7433-ba26-17a3b2b5f67a — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
