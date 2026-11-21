@@ -738,8 +738,10 @@ research_swarm:
 # `pause_seconds` and retries Opus once; a second failure runs the fallback
 # model through the runner's Pi on `fallback_endpoint`, after the leak check.
 # The fallback must be a model the endpoint's `modelle` admits with a current
-# terms reading. Switching it is one value: an existing fallback block keeps
-# the model it records, so a switch never voids a written review.
+# terms reading. Switching the fallback model is one value: an existing
+# fallback block keeps the model it records, so a switch never voids a written
+# review. `fallback_endpoint` itself admits only `opencode-go` today; the runner
+# refuses any other endpoint.
 spec_review:
   call_limit_minutes: 30
   pause_seconds: 30
