@@ -30,13 +30,13 @@ Independent protected checks can use two shared verification slots by default, w
 
 ## Terms
 
-- **Slot:** one independent admission, including its memory wait and protected descendants' lifetime.
+- **Slot:** one independent admission, including its memory wait and the lifetime of ownership held by inherited lock descriptors.
 - **FIFO:** live waiters reserve available capacity in registration order; separate memory waits may change work-start order.
 
 ## Acceptance criteria
 
 1. When independent checks use the default setting, at most two protected admissions share the machine across repositories and worktrees, and both available slots can be reserved.
-   *Refuted by:* a third admission runs, or the second cannot reserve an otherwise free slot.
+   *Refuted by:* a third admission runs, or the eligible head waiter cannot reserve an otherwise free slot within two queue poll intervals (0.5 seconds at the default interval).
    *Basis:* `decisions.md#Q-1`.
 
 2. When an independent entry requests capacity `1` or `2` through `HARNESS_VERIFY_SLOTS` (default `2`), effective capacity is the minimum of the settings of all live updated holders and the head live waiter; an older waiter counts as `1` and requires exclusive access.
@@ -50,7 +50,7 @@ Independent protected checks can use two shared verification slots by default, w
    *Basis:* `decisions.md#Q-1`.
 
 4. While independent live checks wait, the earliest registered live waiter, including an older checkout waiting exclusively, has first claim on capacity free under criterion 2.
-   *Refuted by:* a later waiter overtakes a live earlier waiter, a dead waiter blocks progress, or a free slot under the effective capacity remains unused.
+   *Refuted by:* a later waiter overtakes a live earlier waiter, a dead waiter blocks progress, or the eligible head waiter cannot reserve a free slot under the effective capacity within two queue poll intervals (0.5 seconds at the default interval).
    *Basis:* `decisions.md#Q-1` and `research.md`, “The admission”.
 
 5. When a valid descendant enters protected work, it reuses its own ancestor's admission and measured context without reserving another slot.
@@ -61,8 +61,8 @@ Independent protected checks can use two shared verification slots by default, w
    *Refuted by:* concurrent threads overwrite the process's admission, or the second request waits or succeeds; a valid inherited descendant remains governed by criterion 5.
    *Basis:* `decisions.md#Q-1`.
 
-7. When a holder exits, fails or is cancelled, its slot stays reserved until its protected descendants release their inherited ownership, without disturbing another holder.
-   *Refuted by:* a replacement overlaps a surviving protected child, one release removes a peer's record, or after the final inherited descriptor closes, a free slot is not reservable by the next eligible live waiter within two queue poll intervals (0.5 seconds at the 0.25-second default), with no other holder or older waiter blocking it.
+7. When a holder exits, fails or is cancelled, its slot and configured capacity remain in force until the last inherited ownership descriptor closes, without disturbing another holder.
+   *Refuted by:* a replacement overlaps a child still holding the descriptor, a surviving child of a killed one-slot supervisor shares the machine with a two-slot waiter, one release removes a peer's record, or after the final inherited descriptor closes, a free slot is not reservable by the next eligible live waiter within two queue poll intervals (0.5 seconds at the 0.25-second default), with no other holder or older waiter blocking it.
    *Basis:* `decisions.md#Q-1` and `research.md`, “The admission”.
 
 8. When an admission reserves either slot, the existing per-admission memory floor and refusal behavior apply before protected work starts.
@@ -82,22 +82,24 @@ Independent protected checks can use two shared verification slots by default, w
     *Basis:* `decisions.md#Q-1` and `research.md`, “The scheduler and its callers”.
 
 12. Before completion, a recorded trial compares one serial `make verify` with two simultaneous `make verify` invocations, starting each trial with both slots free and using the unchanged default worker calculation; each simultaneous invocation's launch-to-exit wall time is at most 1.6 times the serial invocation's launch-to-exit wall time, and all three exit zero.
-    *Refuted by:* a nonzero exit, either ratio above 1.6, or missing recorded revision, date, configuration, verdicts, individual end-to-end wall times, execution seconds, admission and memory wait seconds, or ratios.
+    *Refuted by:* a nonzero exit, either ratio above 1.6, or missing recorded revision, date, configuration, verdicts, individual end-to-end wall times, execution seconds, combined admission wait seconds (queue plus memory), or ratios.
     *Basis:* `decisions.md#Q-1`; the 2026-11-17 handover records that the 1.6 threshold applies to two slots.
 
-    Run under normal active workstation or harness load: other non-verify lanes may work, but no third verify may overlap or contend for the slots. Record background processes or lanes, start and end 1-, 5- and 15-minute load averages, and starting and minimum available memory percentage; missing readings or a third verify invalidate the trial. If a parallel test fails, rerun that test serially on the same revision: a serial pass classifies the observed failure as parallelism-caused and the trial fails; a serial failure is a content failure that must be fixed before repeating the complete trial green. A single pair demonstrates zero observed failures, not a statistical absence of flakes. If the trial cannot run or fails, stop and report.
+    Use two separate worktrees at the trial revision: run and discard one warm-up per worktree, then the serial run, then the simultaneous pair; record the order and warm-up run identifiers. Run under normal active workstation or harness load; other lanes may work. No other protected admission, including a targeted check, may overlap the serial run, and no third protected admission may overlap or contend with the pair. Record every protected admission seen in each run; an extra admission or incomplete observation invalidates the trial.
+
+    Record background processes or lanes, start and end 1-, 5- and 15-minute load averages, and starting and minimum available memory percentage. An external sampler reads available memory every five seconds throughout each run; a gap over 15 seconds or a missing required reading invalidates the trial. If a parallel test fails, rerun that test serially on the same revision to classify it: a serial pass indicates a parallelism-caused failure and a serial failure a content failure. A single pair demonstrates zero observed failures, not a statistical absence of flakes. If any trial fails or cannot run, including a non-test gate failure or timeout, stop and report; a content failure is fixed before any later complete trial.
 
     The trial revision must match the final `scripts/` tree: `git diff <trial-commit>..HEAD -- scripts/` is empty. Record and verify any later documentation-only, test-only or plans changes; repeat the complete trial after any later `scripts/` change, subject to the four-hour stop.
 
 ## Non-goals
 
-- Changing pytest worker sizing, general central configuration, explicit admission handles, RAM-minimum telemetry, or tuning three or four slots; these belong to follow-up work (respectively beads `coding-harness-bxxt.11`, `coding-harness-twvx`, and `coding-harness-42em` for explicit handles).
+- Changing pytest worker sizing, general central configuration, explicit admission handles, product RAM-minimum telemetry or separate queue and memory wait instrumentation, or tuning three or four slots; worker sizing, central configuration and explicit handles belong to follow-up beads `coding-harness-bxxt.11`, `coding-harness-twvx` and `coding-harness-42em` respectively.
 - Changing which checks require admission, hosted CI policy, memory-floor thresholds or a priority queue.
 - A throughput guarantee or a claim that the two-slot trial proves other slot/worker combinations.
 
 ## Boundary
 
-One process has at most one independent admission, including while acquiring it. A valid inherited descendant reuses its ancestor rather than taking another. Explicit multiple admission handles are deferred to bead `coding-harness-42em` (explicit admission handles). An older checkout invoked inside a new holder cannot validate the new marker and may wait for its own ancestor; normal runner and full-check paths use the same checkout. The reverse direction is supported by criterion 5.
+One process has at most one independent admission, including while acquiring it. A valid inherited descendant reuses its ancestor rather than taking another. Only descendants holding the inherited descriptors retain ownership: after an intermediate process is killed hard, a protected descendant in another process group that did not inherit them may outlive the slot and overlap a replacement. Explicit multiple admission handles are deferred to bead `coding-harness-42em` (explicit admission handles). An older checkout invoked inside a new holder cannot validate the new marker and may wait for its own ancestor; normal runner and full-check paths use the same checkout. The reverse direction is supported by criterion 5.
 
 ## Protected areas
 
@@ -118,5 +120,7 @@ No maintainer decision is open.
 - [DETAIL] Preserve the old lock as a compatibility lock shared by new holders and exclusive for old holders; FIFO includes older waiters in the shared queue. This preserves the old machine-wide bound during rollout without changing old checkouts.
 - [DETAIL] Measure launch-to-exit time under the stated active load and require all exits green; the trial exposes waits and cannot prove long-run flake rates. Recheck the final `scripts/` tree because a later runtime repair invalidates the result.
 - [DETAIL] Two queue polls bound release after the last descriptor closes; it makes recovery testable without changing the existing poll interval.
+- [DETAIL] Keep a reserved holder's configured capacity until its last descriptor closes; this preserves exclusivity after a supervisor dies. Descendants without descriptors are outside this ownership boundary.
+- [DETAIL] Warm each of two worktrees before a serial run and then a concurrent pair, exclude other protected admissions, and sample memory externally every five seconds; these fix trial conditions without new product telemetry. Use the existing combined wait figure. Stop on every trial failure and report its classification; this respects the four-hour stop.
 - [DETAIL] Keep the protected gate manifest unchanged and record its stale single-slot comment for a separate decision pull request; its owner controls that text.
 - [DETAIL] Four hours for implementation, repairs and the trial is the stop, carried from the earlier bounded slice's spec at `b5c2105b`; report unfinished work at the limit.
