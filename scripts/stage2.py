@@ -1017,9 +1017,9 @@ def defer_launch_signals():
             signal.raise_signal(signum)
 
 
-def _lock_fds(owned: int | None) -> tuple[int, ...]:
+def _lock_fds(owned: tuple[int, ...] | None) -> tuple[int, ...]:
     """The descriptors a local check's children inherit to keep the admission's ownership alive."""
-    return () if owned is None else (owned,)
+    return () if owned is None else tuple(owned)
 
 
 def launch(
@@ -6293,12 +6293,12 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     callback starts each gate (`_gate_argv`) with the shared `VERIFY_SECONDS` allowance as the bound:
     the budget counts from before the first gate and the scheduler extends it by the measured
     admission wait, so a queue or memory wait consumes none of it (bead coding-harness-bxxt.6). A
-    protected gate's environment carries the admission marker, and the held lock descriptor travels
+    protected gate's environment carries the admission marker, and the held lock descriptors travel
     with it through `lock_slot`. Admission refusals and selection errors return a red
     result with the captured diagnostics; a stopped gate raises to the caller's handlers.
     """
     budget: dict[str, float] = {"deadline": clock_now().monotonic + VERIFY_SECONDS}
-    slot: dict[str, int | None] = {"fd": None}
+    slot: dict[str, tuple[int, ...] | None] = {"fds": ()}
     limit = f"the runner's step limit after {VERIFY_SECONDS // 60} minutes"
 
     # The interpreter every gate runs under, chosen by the scheduler's one rule (the shell entry
@@ -6308,8 +6308,8 @@ def _scheduled_verify(root: Path, env: dict[str, str], job: str) -> tuple[str, s
     pinned, explicit = verify_run.choose_interpreter(root, env)
 
     def run_gate(_gate: dict[str, object], command: str, gate_env: dict[str, str]) -> verify_run.GateProcess:
-        descriptor = slot.get("fd")
-        pass_fds = (descriptor,) if gate_env.get(verify_lock.LOCK_ENV) and descriptor is not None else ()
+        descriptors = slot.get("fds") or ()
+        pass_fds = tuple(descriptors) if gate_env.get(verify_lock.LOCK_ENV) and descriptors else ()
         path = gate_env_path(root, gate_env)
         if explicit and "/" in pinned:
             interpreter_dir = str(Path(pinned).parent)

@@ -580,23 +580,40 @@ CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Only
-protected work enters it: before its protected gates, the shared scheduler
-hands the run to `scripts.verify_lock` — protected work
-of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the protected gates of
-concurrent full checks never run together again, as they did in the three-lane
-trial. The admission does not serialise the rest: the seconds gates and the
-runner's full-mode preparation (formatting, its cheap checks) run in every
-lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+**One admission per user and machine, two slots by default** (beads
+coding-harness-p6mu, coding-harness-u1ha). Only protected work enters it:
+before its protected gates, the shared scheduler hands the run to
+`scripts.verify_lock` — protected work of one user on one machine shares
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+across repositories and worktrees, so independent protected checks reserve
+one of two machine-wide admission slots instead of serialising. At most two
+protected admissions are live machine-wide; each is independent, with its own
+memory wait and its own ownership lifetime. `HARNESS_VERIFY_SLOTS` selects
+`1` or `2` per entry (default `2`, exact strings only — any other value
+refuses the entry before protected work, naming the setting), is forwarded to
+local child processes, and stays outside the foreign-model environment
+allow-list. Effective capacity is the minimum of the settings of all live
+holders and the head live waiter: a `1` entry admits alone, after every other
+holder has drained. The admission does not serialise the rest: the seconds
+gates and the runner's full-mode preparation (formatting, its cheap checks)
+run in every lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
 records why that is safe today and what it did not measure; free disk space
-is not checked (bead coding-harness-87b0). Waiters are admitted in
-registration order; while waiting, an entry logs its wait immediately and
-every five minutes, naming the holder's process id, command and start time.
-A nested protected entry — a check descended from a live admission — carries
+is not checked (bead coding-harness-87b0). Until 2026-11-21 the admission
+held one exclusive machine-wide lock and serialised protected checks, as the
+three-lane trial had shown necessary at the time; that lock remains the
+compatibility path — an older checkout still takes it exclusively, updated
+holders share it, and an older checkout's live queue entry keeps its place at
+the head of the shared queue. Waiters are admitted in registration order; a
+dead waiter never blocks the queue. While waiting, an entry logs its wait
+immediately and every five minutes, naming each occupied slot and its
+holder's process id, command and start time — or explicitly that a holder is
+unavailable — without exposing ownership tokens. A nested protected entry — a
+check descended from a live admission — carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
 instead of deadlocking on it; a stale or unrelated marker uses ordinary
-admission. After the lock, admission reads the system's free memory (macOS
+admission, and one process holds at most one independent admission — a second
+request while holding or acquiring one is refused promptly. After the lock,
+each admission reads the system's free memory (macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
 `MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
 the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
@@ -606,11 +623,13 @@ the last reading; a reading that cannot be taken is logged and the entry
 proceeds. Unusable state — a substituted or unwritable lock, holder or queue
 file — refuses the entry before any protected work instead of running
 unlocked. Ownership ends only when the protected work and its children stop,
-including on failure, cancellation and signals, so a dead entry never blocks
-the next one. The queue and memory waits consume no runner step limit and no
-pytest proof's execution timeout; the configured limits still bind the
-executing check. Hosted CI is untouched: its gate steps never enter the
-runner's shell path, and nothing disables admission because CI is set.
+including on failure, cancellation and signals; a holder's configured
+capacity stays reserved until its last inherited lock descriptor closes, so a
+dead supervisor's children keep the machine's capacity honest. The queue and
+memory waits consume no runner step limit and no pytest proof's execution
+timeout; the configured limits still bind the executing check. Hosted CI is
+untouched: its gate steps never enter the runner's shell path, and nothing
+disables admission because CI is set.
 
 Verification durations are appended locally to `verify-duration.jsonl` in
 that shared state directory. One invocation is one run identity spanning the

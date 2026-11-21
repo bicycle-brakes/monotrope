@@ -32,11 +32,13 @@ Run it and paste its output between the markers whenever the gate list
 changes. `cost` is the gate's declared cost class, `seconds` or
 `minutes`: a local run executes unmarked `seconds` gates first — every one of
 them, collecting all their diagnostics even past a blocking red — and, if
-none failed blocking-red and protected work remains, takes the machine's
-admission once for that work. There it stops at the first red blocking gate,
+none failed blocking-red and protected work remains, takes one of the
+machine's two admission slots for that work (since 2026-11-21, `HARNESS_VERIFY_SLOTS`,
+default `2`; before, one admission serialised all protected checks). There it
+stops at the first red blocking gate,
 naming the gates it did not run; the hosted CI
 runs every gate whatever failed before. `admission` names the gates that
-wait for that machine slot: a `minutes` gate always does, and a `seconds`
+wait for a machine slot: a `minutes` gate always does, and a `seconds`
 gate only when the list marks it explicitly (`needs_admission: true`) — a
 selection containing only unmarked `seconds` gates, such as the current
 docs subset, never waits at all.

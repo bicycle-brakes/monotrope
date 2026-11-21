@@ -63,3 +63,273 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1149 files, 5089 commits, 12 rules.
 
 Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1149 files, 5109 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1149 files, 5112 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +38 -19
+> - `docs/governance/gate-catalog.md` +5 -3
+> - `docs/how-it-works.md` +6 -4
+> - `docs/orchestration.md` +3 -2
+> - `plans/changes/verify-two-slots/measurements.md` +62 -0
+> - `scripts/stage2.py` +6 -6
+> - `scripts/verify_lock.py` +495 -139
+> - `scripts/verify_run.py` +14 -14
+> - `tests/test_stage2.py` +2 -2
+> - `tests/test_verify_before_admission.py` +137 -3
+> - `tests/test_verify_duration.py` +66 -0
+> - `tests/test_verify_lock.py` +623 -38
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/verify_lock.py`, `tests/test_verify_lock.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>     
+>         monkeypatch.setattr(verify_run, "gate_process", spying_gate_process)
+>     
+>         holder_one = holder_two = None
+>         try:
+>             # Both slots occupied before any scheduler starts, so both runs must queue.
+>             holder_one = _start_slot_holder(checkout, "one")
+>             holder_two = _start_slot_holder(checkout, "two")
+>     
+>             budget_a = {"deadline": 100.0}
+>             budget_b = {"deadline": 200.0}
+>             with scheduler_run(root_a, budget=budget_a) as outcome_a:
+>                 _wait_queue_count(1)
+> >               with scheduler_run(root_b, budget=budget_b) as outcome_b:
+>
+> tests/test_verify_before_admission.py:694: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:158: in __exit__
+>     self.gen.throw(value)
+> tests/test_verify_before_admission.py:287: in scheduler_run
+>     raise outcome["error"]  # type: ignore[misc]
+> tests/test_verify_before_admission.py:268: in body
+>     result = verify_run.run_verification(
+> scripts/verify_run.py:921: in run_verification
+>     with verify_lock.hold_admission(admission_command or ["verify-run", job]) as lock_fds:
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+>     return next(self.gen)
+> scripts/verify_lock.py:1094: in hold_admission
+>     with _independent_admission_guard():
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+>     return next(self.gen)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     @contextlib.contextmanager
+>     def _independent_admission_guard() -> Iterator[None]:
+>         """Refuse a second independent admission in one process, held or still acquiring.
+>     
+>         One process owns at most one independent admission, including while it is
+>         still acquiring it: a concurrent entry would overwrite the process's
+>         published ownership and its admission state, so the second request is
+>         refused promptly with a diagnostic. A nested entry never reaches this
+>         guard — it reuses its ancestor's admission.
+>         """
+>         global _ACQUIRING
+>         with _ACTIVE_LOCK:
+>             if _ACTIVE is not None or _ACQUIRING:
+> >               raise VerifyLockRefused(
+>                     "this process already holds or is acquiring an independent admission; a second one is refused"
+>                 )
+> E               verify_lock.VerifyLockRefused: this process already holds or is acquiring an independent admission; a second one is refused
+>
+> scripts/verify_lock.py:611: VerifyLockRefused
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] waiting for admission: slot 1: holder pid 20102 (holder, started 2026-11-21T17:03:24); slot 2: holder pid 20111 (holder, started 2026-11-21T17:03:24)
+> [verify-lock] admitted after 60s
+> [verify-lock] available memory 69% at or above the 0% floor; starting
+> =============================== warnings summary ===============================
+> tests/test_verify_lock.py::test_second_in_process_admission_refused_during_acquisition
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-two-slots/.venv/lib/python3.12/site-packages/_pytest/threadexception.py:82: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-1 (<lambda>)
+>   
+>   Traceback (most recent call last):
+>     File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1075, in _bootstrap_inner
+>       self.run()
+>     File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1012, in run
+>       self._target(*self._args, **self._kwargs)
+>     File "/Users/mikypiky/coding-harness/.claude/worktrees/verify-two-slots/tests/test_verify_lock.py", line 1606, in <lambda>
+>       first = threading.Thread(target=lambda: list(verify_lock.hold_admission(["first", "entry"])))
+>                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   TypeError: '_GeneratorContextManager' object is not iterable
+>   
+>     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_second_in_process_admission_refused_during_acquisition
+> FAILED tests/test_verify_lock.py::test_two_slot_fifo_and_dead_waiter - Assert...
+> FAILED tests/test_verify_lock.py::test_slot_release_preserves_peer_and_inherited_child
+> FAILED tests/test_verify_lock.py::test_slot_setting_and_capacity_reduction - ...
+> FAILED tests/test_verify_before_admission.py::test_two_slot_scheduler_preserves_wait_context_and_descriptors
+> 5 failed, 24 passed, 1 warning in 76.52s (0:01:16)
+> ```
+
+Stage-2 call, 2026-11-21: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1150 files, 5169 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_verify_before_admission.py` +121 -44
+> - `tests/test_verify_lock.py` +41 -21
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 "PROBE_OUT": str(one_holder_out),
+>                 "PROBE_STARTED": str(holder_started),
+>                 "PROBE_SLEEP": "1.0",
+>                 verify_lock.SLOTS_ENV: "1",
+>             },
+>         )
+>         assert _wait_until(holder_started.is_file), "the setting-1 holder never started its protected work"
+>         follower_out = tmp_path / "two-follower.json"
+>         follower = _supervised(state, RECORD_BODY, {"PROBE_OUT": str(follower_out), "PROBE_SLEEP": "0.1"})
+>         assert not _wait_until(follower_out.is_file, 0.6), (
+>             "a setting-2 follower reserved capacity beside a setting-1 holder"
+>         )
+>         assert holder.wait(timeout=60) == 0 and follower.wait(timeout=60) == 0
+>         holder_span, follower_span = _interval(one_holder_out), _interval(follower_out)
+>         assert follower_span[0] >= holder_span[1] - 0.05, (
+>             f"a setting-1 holder shared capacity: {holder_span} then {follower_span}"
+>         )
+>     
+>         # a setting-1 head waiter on a free machine: it reserves at once, and a
+>         # later setting-2 entry can only follow once the exclusive hold drains
+>         log = tmp_path / "order.log"
+>         names = {"PROBE_LOG": str(log), "PROBE_SLEEP": "0.3"}
+>         first = _supervised(state, ORDER_BODY, {**names, "PROBE_NAME": "one", verify_lock.SLOTS_ENV: "1"})
+> >       assert _wait_until(lambda: len(_records(state)) >= 1), "the setting-1 waiter never registered"
+> E       AssertionError: the setting-1 waiter never registered
+> E       assert False
+> E        +  where False = _wait_until(<function test_slot_setting_and_capacity_reduction.<locals>.<lambda> at 0x11776bec0>)
+>
+> tests/test_verify_lock.py:1422: AssertionError
+> ______________________ test_two_slot_fifo_and_dead_waiter ______________________
+> [gw9] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-two-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3036/popen-gw9/test_two_slot_fifo_and_dead_wa0')
+>
+>     def test_two_slot_fifo_and_dead_waiter(tmp_path: Path) -> None:
+>         """Criterion 4. Live waiters reserve in registration order; a dead waiter blocks nobody.
+>     
+>         Fault this pins: a later waiter overtaking a live earlier one, a dead
+>         waiter blocking progress, or the eligible head unable to reserve the one
+>         free slot within two queue polls after it frees up. One slot stays
+>         occupied while the two waiters queue, so the head waiter takes the free
+>         slot and the later waiter can only follow after the head's protected work
+>         ends — the write order is the reservation order, never a race between two
+>         nearly simultaneous starts.
+>         """
+>         state = tmp_path / "state"
+>         log = tmp_path / "fifo.log"
+>         body = {"PROBE_LOG": str(log)}
+>     
+>         with fake_slot_holder(state, 1):
+>             # both slots occupied while the two waiters register: neither may reserve yet
+>             with fake_slot_holder(state, 2):
+>                 first = _supervised(state, ORDER_BODY, {**body, "PROBE_NAME": "first", "PROBE_SLEEP": "0.7"})
+>                 assert _wait_until(lambda: len(_records(state)) >= 1), "the first waiter never registered"
+>                 second = _supervised(state, ORDER_BODY, {**body, "PROBE_NAME": "second", "PROBE_SLEEP": "0.1"})
+>                 assert _wait_until(lambda: len(_records(state)) >= 2), "the second waiter never registered"
+>             # one slot freed: the head waiter takes it, and the later waiter can only
+>             # follow once the head's protected work is done — the head was never overtaken
+>             assert first.wait(timeout=60) == 0 and second.wait(timeout=60) == 0
+>         order = log.read_text(encoding="utf-8").split()
+>         assert order == ["first", "second"], f"admission left registration order: {order}"
+>     
+>         # a dead waiter's record is pruned and the next live head proceeds at once
+>         dead_log = tmp_path / "dead.log"
+>         with fake_holder(state):
+>             doomed = _supervised(state, ORDER_BODY, {"PROBE_LOG": str(dead_log), "PROBE_NAME": "doomed"})
+>             assert _wait_until(lambda: len(_records(state)) >= 1), "the doomed waiter never registered"
+>             os.kill(doomed.pid, signal.SIGKILL)
+>             doomed.wait(timeout=10)
+>             survivor = _supervised(state, ORDER_BODY, {"PROBE_LOG": str(dead_log), "PROBE_NAME": "survivor"})
+> >           assert _wait_until(lambda: len(_records(state)) >= 2), "the survivor never registered"
+> E           AssertionError: the survivor never registered
+> E           assert False
+> E            +  where False = _wait_until(<function test_two_slot_fifo_and_dead_waiter.<locals>.<lambda> at 0x115723e20>)
+>
+> tests/test_verify_lock.py:1527: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_slot_setting_and_capacity_reduction - ...
+> FAILED tests/test_verify_lock.py::test_two_slot_fifo_and_dead_waiter - Assert...
+> 2 failed, 27 passed in 17.85s
+> ```
+
+Stage-2 call, 2026-11-21: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1150 files, 5176 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_verify_lock.py` +10 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ..........................F..                                            [100%]
+> =================================== FAILURES ===================================
+> ___________________ test_slot_setting_and_capacity_reduction ___________________
+> [gw9] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/verify-two-slots/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3037/popen-gw9/test_slot_setting_and_capacity0')
+>
+>     def test_slot_setting_and_capacity_reduction(tmp_path: Path) -> None:
+>         """Criterion 2. A setting-`1` entry never shares capacity, as holder or as head waiter.
+>     
+>         Fault this pins: a `1` holder sharing the machine with another admission,
+>         a head `1` waiter entering before all holders drain, or a mixed setting
+>         ignoring a holder's or the head waiter's setting.
+>         """
+>         state = tmp_path / "state"
+>     
+>         # a setting-1 holder: a setting-2 follower must drain instead of taking the second slot
+>         one_holder_out = tmp_path / "one-holder.json"
+>         holder_started = tmp_path / "holder-started.json"
+>         holder = _supervised(
+>             state,
+>             RECORD_BODY,
+>             {
+>                 "PROBE_OUT": str(one_holder_out),
+>                 "PROBE_STARTED": str(holder_started),
+>                 "PROBE_SLEEP": "1.0",
+>                 verify_lock.SLOTS_ENV: "1",
+>             },
+>         )
+>         assert _wait_until(holder_started.is_file), "the setting-1 holder never started its protected work"
+>         follower_out = tmp_path / "two-follower.json"
+>         follower = _supervised(state, RECORD_BODY, {"PROBE_OUT": str(follower_out), "PROBE_SLEEP": "0.1"})
+>         assert not _wait_until(follower_out.is_file, 0.6), (
+>             "a setting-2 follower reserved capacity beside a setting-1 holder"
+>         )
+>         assert holder.wait(timeout=60) == 0 and follower.wait(timeout=60) == 0
+>         holder_span, follower_span = _interval(one_holder_out), _interval(follower_out)
+>         assert follower_span[0] >= holder_span[1] - 0.05, (
+>             f"a setting-1 holder shared capacity: {holder_span} then {follower_span}"
+>         )
+>     
+>         # a setting-1 head waiter queues behind a live holder; a later setting-2
+>         # entry cannot overtake it, and follows only once the exclusive hold drains
+>         log = tmp_path / "order.log"
+>         names = {"PROBE_LOG": str(log), "PROBE_SLEEP": "0.3"}
+>         with fake_slot_holder(state, 1):
+>             first = _supervised(state, ORDER_BODY, {**names, "PROBE_NAME": "one", verify_lock.SLOTS_ENV: "1"})
+> >           assert _wait_until(lambda: len(_records(state)) >= 1), "the setting-1 waiter never registered"
+> E           AssertionError: the setting-1 waiter never registered
+> E           assert False
+> E            +  where False = _wait_until(<function test_slot_setting_and_capacity_reduction.<locals>.<lambda> at 0x11500d620>)
+>
+> tests/test_verify_lock.py:1423: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_verify_lock.py::test_slot_setting_and_capacity_reduction - ...
+> 1 failed, 28 passed in 17.74s
+> ```

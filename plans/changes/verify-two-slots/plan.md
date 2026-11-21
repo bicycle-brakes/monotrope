@@ -73,8 +73,15 @@ make verify
 - 11: not yet written tests/test_verify_duration.py::test_two_slot_context_does_not_mix_holder_waits — one run records its peer's context.
 - 12: not a test — the phase-6 review checks `measurements.md` against criterion 12, including worktrees, warm-ups, complete admission observation, five-second memory samples, exits, attribution, end-to-end 1.6x and final `scripts/` revision.
 
+## Runner route — 2026-11-21
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 
 2026-11-21 11:04:34–11:08:05 UTC, 211 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 11:23:31–11:25:47 UTC, 136 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 11:46:11–11:49:04 UTC, 173 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 15:00:13–16:04:26 UTC, 3853 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-21 16:04:34–16:33:10 UTC, 1715 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-21 16:33:19–16:34:02 UTC, 44 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
