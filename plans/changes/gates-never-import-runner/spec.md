@@ -32,25 +32,28 @@ On 2026-11-21 the research found no `scripts/check_*.py` importing `stage2`, but
 
 ## Acceptance criteria
 
-1. When the existing pytest gate runs, it checks every current `scripts/check_*.py` for imports of the runner.
+1. When the existing pytest gate runs, it selects `scripts/check_*.py` afresh and checks every selected script for imports of the runner.
    *Refuted by:* A newly added matching script containing `import stage2` leaves the pytest gate green.
 
 2. When a checked script contains `import stage2`, `import scripts.stage2`, `from stage2 import …`, `from scripts import stage2`, or `from scripts.stage2 import …`, the check fails.
-   *Refuted by:* Any one of those import forms, including an aliased or nested import, is accepted.
+   *Refuted by:* Any one of those import forms, including an alias, a name later in a multi-name statement, or an import inside a function, `if`, `try`, or `with` body, is accepted.
 
-3. When a checked script calls `importlib.import_module` with the literal `stage2` or `scripts.stage2`, the check fails.
-   *Refuted by:* Either literal call is accepted.
+3. When a checked script calls `importlib.import_module` with the literal `stage2` or `scripts.stage2`, the check fails, including calls through an imported alias of the module or function.
+   *Refuted by:* A literal call through `importlib.import_module`, `il.import_module` after `import importlib as il`, or `load` after `from importlib import import_module as load` is accepted.
 
-4. When the checker is given a temporary matching script that imports `stage2`, its negative control demonstrates that the checker rejects it.
-   *Refuted by:* The negative control passes while the checker accepts that script.
+4. When the checker used for the real selection is given a temporary matching script that imports `stage2`, its negative control demonstrates that the checker rejects it.
+   *Refuted by:* The negative control passes while that same checker accepts the temporary script.
 
 5. When a checked script imports unrelated modules, including the `stage2_*` family, the check accepts those imports.
-   *Refuted by:* A fixture containing only such imports is rejected.
+   *Refuted by:* A fixture containing only unrelated imports, or any of the five forms in criterion 2 or the literal dynamic forms in criterion 3 using `stage2_availability` or `stage2_runs` instead of `stage2`, is rejected.
+
+6. When the real selection of `scripts/check_*.py` is empty, the pytest gate fails.
+   *Refuted by:* An empty selection passes without checking any script.
 
 ## Non-goals
 
 - Changing the runner, the `stage2_*` family, or `scripts/research_census.py`; the census is a known neighbour outside the named subject set.
-- Restricting imports in `tests/`, indirect dependencies, computed module names, or dynamic import APIs beyond the literal `importlib.import_module` calls stated above. The check is a static source boundary, not a proof of runtime isolation.
+- Restricting imports in `tests/`, indirect dependencies, computed module names, dynamic import APIs beyond the literal `importlib.import_module` calls stated above, or aliases made by assignment or passed between scopes. The check is a static source boundary, not a proof of runtime isolation.
 - Adding a new gate-list entry, governance rule row or valve.
 
 ## Protected areas
@@ -67,4 +70,4 @@ The gate list and its generated views remain untouched: the existing pytest gate
 
 ## Open decisions
 
-None open. [DETAIL] The one-hour phase-4 appetite is a stop suited to this bounded test-only change; the recorded import spellings and scope follow `decisions.md`.
+None open. [DETAIL] The one-hour phase-4 appetite is a stop suited to this bounded test-only change. The review's resolved details select fresh discovery, a path-list checker shared with the temporary negative control, nested import statements and imported aliases of `importlib`, with family-module examples for every form; these close the identified escape and vacuous-check cases without expanding the named subject set (`findings.md`, F-1–F-5).
