@@ -12,6 +12,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/adr-repair-check/decisions.md`](changes/adr-repair-check/decisions.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/adr-repair-check/research.md`](changes/adr-repair-check/research.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/adr-repair-check/spec.md`](changes/adr-repair-check/spec.md) | draft | none | 2026-11-08 | coding-harness-firy |
+| [`changes/advisory-gate-valve/research.md`](changes/advisory-gate-valve/research.md) | draft | none | 2026-11-21 | coding-harness-73gi.4 |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
 | [`changes/archive/2026-09-21-reproducible-bead-export/decisions.md`](changes/archive/2026-09-21-reproducible-bead-export/decisions.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/findings.md`](changes/archive/2026-09-21-reproducible-bead-export/findings.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
