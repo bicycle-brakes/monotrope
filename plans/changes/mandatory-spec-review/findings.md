@@ -1177,3 +1177,16 @@ Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5104 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5105 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-7 | MAJOR | SPEC | base | `scripts/stage2.py`, `body_edits_after_review` | After three reviews of body A, committed bodies A → B → A → C are counted as only one change because the reader uses the last matching A. Implement therefore admits C without a current review, although it is a later body version. [Criterion 19] | Codex | open | — |
+| F-8 | MAJOR | SPEC | base | `scripts/stage2.py`, `body_edits_after_review` | When the reviewed fingerprint is absent from history because the spec has never been committed, the reader treats a different body on disk as one permitted edit and admits implement after three rounds. The boundary requires the spec to be committed and reviewed again when the fingerprint cannot be found in committed history. The added test `test_final_draft_with_uncommitted_only_spec` demonstrates this case. [Boundary] | Codex | open | — |
+| F-9 | MAJOR | MAINT | base | `docs/WORKFLOW.md`, local verification | The change replaces the verification instructions with the claim that local verification stops at the first blocking failure. When an unprotected, inexpensive gate fails, `scripts/verify_run.py` actually continues through the other unprotected gates before stopping. The documentation therefore gives operators the wrong expectation about which diagnostics a red run collects. | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fe61-fc15-7b21-98d8-010f8c340c54, 2026-11-21
+Reviewer session: codex 01a1fe61-fc15-7b21-98d8-010f8c340c54 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
