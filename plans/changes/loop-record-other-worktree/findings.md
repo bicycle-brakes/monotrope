@@ -994,3 +994,15 @@ Reviewer session: codex 01a1fb8a-fca9-7433-ba26-17a3b2b5f67a — a fresh session
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 4991 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5016 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| N6-1 | MAJOR | SPEC | base | scripts/stage2.py:4506, scripts/stage2.py:5065 | If the process is killed after creating the temporary manifest file but before renaming it, the staging directory contains that temporary file and no manifest. A retry refuses because the directory is nonempty, even though every selected record is still readable and unchanged. The same request must be able to complete after an interruption. [Criterion 7] | Codex | open | — |
+| N6-2 | MAJOR | MAINT | base | scripts/stage2.py:5236, scripts/stage2.py:4765 | If supersession stops after writing its initial manifest but before adding the audit-call snapshots, the retry skips snapshot collection and completes the archive. After the accounting line is committed, release in the superseded worktree cannot recognize its existing pending calls as accounted for: the manifest has no snapshot, so release reports a lost record instead of recording which worktree superseded it. | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fc18-4532-7871-a6cc-c510fd252812, 2026-11-21
+Reviewer session: codex 01a1fc18-4532-7871-a6cc-c510fd252812 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
