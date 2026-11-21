@@ -1763,3 +1763,257 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-21: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4987 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4989 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/plans_registry.py` +10 -0
+> - `scripts/stage2.py` +51 -6
+> - `tests/test_runner_stamps_provenance.py` +68 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 572 lines of this gate left out …]
+>     
+>         def start():
+>             with contextlib.suppress(stage2.NotStarted):
+>                 stage2.launch(["/bin/sleep", "30"], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=60)
+>     
+>         def verb(*_args):
+>             if worker:
+>                 thread = threading.Thread(target=start)
+>                 threads.append(thread)
+>                 thread.start()
+>                 thread.join(timeout=10)
+>             else:
+>                 start()
+>     
+>         monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)
+>         monkeypatch.setattr(stage2, "explore", verb)
+>         try:
+>             if signum == "SIGINT":
+>                 with pytest.raises(KeyboardInterrupt):
+>                     world.run("explore")
+>             else:
+>                 assert world.run("explore") == 143
+>             assert children
+>             deadline = time.monotonic() + 5  # watchdog only: bounds a wedged reap, never a verdict
+>             while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
+>                 time.sleep(0.01)
+> >           assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
+> E           AssertionError: a child survived cancellation during Popen
+> E           assert not True
+> E            +  where True = any(<generator object test_a_signal_during_process_creation_leaves_no_child.<locals>.<genexpr> at 0x10d9c3c60>)
+>
+> tests/test_stage2.py:26945: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> interrupted: the run stopped; 0 running program group(s) killed.
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=16809) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/runner-stamps-provenance/tests/test_stage2.py:24208: DeprecationWarning: This process (pid=16821) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_failed_runs_derived_writes_do_not_block_the_next_run
+> FAILED tests/test_stage2.py::test_triage_is_local_and_does_not_write_proof_or_repository_state
+> FAILED tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group[KeyboardInterrupt]
+> FAILED tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group[Terminated]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[False-SIGTERM]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[False-SIGINT]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[True-SIGTERM]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[True-SIGINT]
+> 8 failed, 6640 passed, 17 skipped, 5 warnings in 843.12s (0:14:03)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 51991 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-1-20261121T002210008795Z-b1fdb594.md
+> ````
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1150 files, 4991 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 # Readiness, not a race: the descendant is running before the interruption is injected.
+>                 for _ in range(1500):  # watchdog only: bounds a wedged start, never a verdict
+>                     if heartbeat.exists() and pidfile.exists():
+>                         break
+>                     time.sleep(0.02)
+>                 assert heartbeat.exists() and pidfile.exists(), "the launched group never started its descendant"
+>                 raise interruption()
+>             return original(process, *args, **kwargs)
+>     
+>         def verb(*_args):
+>             # The descendant's natural lifetime (30 s of heartbeats) and the leader's sleep far
+>             # outlast the watchdog below, so a pass can never come from natural completion.
+>             child = (
+>                 "import os, time; from pathlib import Path; "
+>                 f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
+>                 f"[(Path({str(heartbeat)!r}).write_text(str(time.time_ns())), time.sleep(0.02)) for _ in range(1500)]"
+>             )
+>             parent = f"import subprocess, time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(30)"
+>             stage2.launch([sys.executable, "-c", parent], tmp_path, dict(os.environ), timeout=10)
+>     
+>         monkeypatch.setattr(subprocess.Popen, "communicate", interrupt)
+>         monkeypatch.setattr(stage2, "explore", verb)
+>         try:
+>             if interruption is KeyboardInterrupt:
+>                 with pytest.raises(KeyboardInterrupt):
+>                     world.run("explore")
+>             else:
+> >               assert world.run("explore") == 143
+>
+> tests/test_stage2.py:26580: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2.py:422: in run
+>     return stage2.main([*argv, *options, "--root", str(self.root)])
+> scripts/stage2.py:12579: in main
+>     return _run(args)
+> scripts/stage2.py:12676: in _run
+>     before = _worktree_tree(root)
+> scripts/stage2.py:5768: in _worktree_tree
+>     tracked = _git_bytes(root, "ls-files", "-s", "-z")
+> scripts/stage2.py:5177: in _git_bytes
+>     done = run_git(root, *args, env=env, stdin=stdin)
+> scripts/stage2.py:4968: in run_git
+>     done = subprocess.run(
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:550: in run
+>     stdout, stderr = process.communicate(input, timeout=timeout)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> process = <Popen: returncode: 0 args: ['/opt/homebrew/bin/git', '-C', '/private/var/fo...>
+> args = (None,), kwargs = {'timeout': 120}, _ = 1499
+> @py_assert1 = ["False\n{False = exists\n{exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2831/popen-gw3/test_an_interrupt_on_the_main_0/heartbeat').exists\n}()\n}"]
+> @py_assert3 = <bound method Path.exists of PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2831/popen-gw3/test_an_interrupt_on_the_main_0/heartbeat')>
+> @py_assert5 = False, @py_assert0 = False
+> @py_format7 = "False\n{False = exists\n{exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2831/popen-gw3/test_an_interrupt_on_the_main_0/heartbeat').exists\n}()\n}"
+> @py_format14 = "(False\n{False = exists\n{exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2831/popen-gw3/test_an_interrupt_on_the_main_0/heartbeat').exists\n}()\n})"
+>
+>     def interrupt(process, *args, **kwargs):
+>         if not processes:
+>             processes.append(process)
+>             # Readiness, not a race: the descendant is running before the interruption is injected.
+>             for _ in range(1500):  # watchdog only: bounds a wedged start, never a verdict
+>                 if heartbeat.exists() and pidfile.exists():
+>                     break
+>                 time.sleep(0.02)
+> >           assert heartbeat.exists() and pidfile.exists(), "the launched group never started its descendant"
+> E           AssertionError: the launched group never started its descendant
+> E           assert (False)
+> E            +  where False = exists()
+> E            +    where exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2831/popen-gw3/test_an_interrupt_on_the_main_0/heartbeat').exists
+>
+> tests/test_stage2.py:26558: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_triage_is_local_and_does_not_write_proof_or_repository_state
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[False-SIGTERM]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[True-SIGINT]
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[False-SIGINT]
+> FAILED tests/test_stage2.py::test_a_failed_runs_derived_writes_do_not_block_the_next_run
+> FAILED tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child[True-SIGTERM]
+> FAILED tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group[KeyboardInterrupt]
+> FAILED tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group[Terminated]
+> 8 failed, 27 passed in 42.66s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-2-20261121T002210008795Z-b1fdb594.md
+> ```
+
+Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1150 files, 4993 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +27 -8
+> - `tests/test_stage2.py` +5 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/runner-stamps-provenance/plan.md, plans/changes/runner-stamps-provenance/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:26552:12: PTH119 `os.path.basename()` should be replaced by `Path.name`
+>       |
+> 26550 |     def interrupt(process, *args, **kwargs):
+> 26551 |         # The dispatch boundary's own git measurements run first; the interruption targets the launched group.
+> 26552 |         if os.path.basename(str(process.args[0])) == "git":
+>       |            ^^^^^^^^^^^^^^^^ PTH119
+> 26553 |             return original(process, *args, **kwargs)
+> 26554 |         if not processes:
+>       |
+>
+> tests/test_stage2.py:26919:12: PTH119 `os.path.basename()` should be replaced by `Path.name`
+>       |
+> 26917 |     def fork_exec(*args, **kwargs):
+> 26918 |         pid = real_fork_exec(*args, **kwargs)
+> 26919 |         if os.path.basename(str(args[0][0])) == "git":
+>       |            ^^^^^^^^^^^^^^^^ PTH119
+> 26920 |             return pid  # the dispatch boundary's own git measurements are not the launched program
+> 26921 |         children.append(pid)
+>       |
+>
+> Found 2 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261121T002210008795Z-b1fdb594.md
+> ```

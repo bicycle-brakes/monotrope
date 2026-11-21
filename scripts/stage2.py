@@ -1333,12 +1333,22 @@ RESEARCH_OPENING_END = re.compile(r"(?m)^(?:#{2,}[ \t]|Stage-2 call,|<!--\s*/?re
 
 def _header_field_spans(block: str, key: str) -> list[tuple[int, int]]:
     """Use YAML's decoded key and source marks, preserving unrelated header bytes."""
+
+    def content_end(value: yaml.Node) -> int:
+        if isinstance(value, yaml.MappingNode) and not value.flow_style and value.value:
+            return max(content_end(node) for pair in value.value for node in pair)
+        if isinstance(value, yaml.SequenceNode) and not value.flow_style and value.value:
+            return max(content_end(node) for node in value.value)
+        return value.end_mark.index
+
     node = yaml.compose(block)
     spans = []
     for key_node, value in node.value:
         if key_node.value == key:
             start = block.rfind("\n", 0, key_node.start_mark.index) + 1
-            end = value.end_mark.index
+            # YAML's block end mark can extend across unindented comments belonging
+            # to the surrounding mapping. Those bytes are not part of the field.
+            end = content_end(value)
             # A block mapping's end mark includes its final line ending; keep that separator.
             while end > start and block[end - 1] in "\r\n":
                 end -= 1
@@ -5744,19 +5754,29 @@ def credential_message(exposed: list[Path]) -> str:
     return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
 
 
-def worktree_tree(root: Path) -> str:
+def scratch_object_env(root: Path, scratch: Path) -> dict[str, str]:
+    """An environment whose new git objects land in `scratch`, the repository's own store read-only.
+
+    The dispatch boundary measures the tree before and after a verb; its blobs and trees stay in
+    a scratch directory, so the measurement leaves the repository's object store as it was.
+    """
+    real = _git_output(root, "rev-parse", "--path-format=absolute", "--git-path", "objects").strip()
+    return {**os.environ, "GIT_OBJECT_DIRECTORY": str(scratch), "GIT_ALTERNATE_OBJECT_DIRECTORIES": real}
+
+
+def _worktree_tree(root: Path, objects_env: dict[str, str] | None = None) -> str:
     """The tree id of the worktree as git counts it, written through a temporary index.
 
     Seed a fresh index with the real index's path, mode and object entries, including newly
     force-added ignored files, never inheriting flags that could hide changes. Then add current
     contents without forcing ignored, untracked children of a replaced path into the tree.
     The real index is only read; it, the stash and the refs are never
-    changed (spec, criterion 10).
+    changed (spec, criterion 10). `objects_env` redirects the new objects to a scratch store.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         temporary_index = Path(tmp) / "index"
         tracked = _git_bytes(root, "ls-files", "-s", "-z")
-        env = {**os.environ, "GIT_INDEX_FILE": str(temporary_index)}
+        env = {**(objects_env if objects_env is not None else os.environ), "GIT_INDEX_FILE": str(temporary_index)}
         _git_output(root, "read-tree", "--empty", env=env)
         if tracked:
             _git_bytes(
@@ -5769,6 +5789,11 @@ def worktree_tree(root: Path) -> str:
             )
         _git_output(root, "add", "-A", env=env)
         return _git_output(root, "write-tree", env=env).strip()
+
+
+def worktree_tree(root: Path) -> str:
+    """Measure an attempt's worktree for attribution."""
+    return _worktree_tree(root)
 
 
 def attempt_files(root: Path, before: str, after: str) -> list[str]:
@@ -9984,6 +10009,7 @@ def stamp_retained_artifacts(
     day: str,
     ledger: dict[str, list[dict]] | None = None,
     before_write: Callable[[list[Path]], None] | None = None,
+    notices: list[str] | None = None,
 ) -> list[str]:
     """Stamp every retained artifact this attempt changed, before its post-run checks.
 
@@ -10008,7 +10034,8 @@ def stamp_retained_artifacts(
         targets.append(relative)
     if before_write is not None:
         before_write([root / relative for relative in targets])
-    notices: list[str] = []
+    if notices is None:
+        notices = []
     for relative in targets:
         notice = stamp_artifact(root, relative, producer=producer, model=model, day=day, ledger=ledger)
         if notice:
@@ -10016,9 +10043,9 @@ def stamp_retained_artifacts(
     return notices
 
 
-def changed_relative_paths(root: Path, before: str, after: str) -> list[str]:
+def changed_relative_paths(root: Path, before: str, after: str, env: dict[str, str] | None = None) -> list[str]:
     """The paths between two trees, decoded the way the attempt's attribution needs them."""
-    raw = _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, after)
+    raw = _git_bytes(root, "diff-tree", "-r", "-z", "--name-only", "--no-renames", before, after, env=env)
     return [os.fsdecode(path) for path in filter(None, raw.split(b"\0"))]
 
 
@@ -10782,7 +10809,7 @@ def run_attempts(
                     # before its first write, as every recovery write does: a parent replaced by a
                     # link since the call refuses unwritten. The run's ledger carries the records
                     # earlier attempts stamped, so every measured contribution stays (criterion 7, L3-2).
-                    stamp_notices = stamp_retained_artifacts(
+                    stamp_retained_artifacts(
                         root,
                         candidates,
                         producer=producer_for(endpoint),
@@ -10790,6 +10817,7 @@ def run_attempts(
                         day=today(),
                         ledger=contributions,
                         before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
+                        notices=stamp_notices,
                     )
                 # Every file the run retained is judged, not only this attempt's own changes
                 # (criterion 4, L3-4). Only a verb that stamps may reset an approval; elsewhere a
@@ -11605,7 +11633,7 @@ def draft(root: Path, change: str) -> None:
             ]
             # The stamp writes into the change folder, so its whole batch stands checked before its
             # first write, as in repair: a parent replaced by a link since the call refuses (L2-5).
-            stamp_notices = stamp_retained_artifacts(
+            stamp_retained_artifacts(
                 root,
                 stamped_now,
                 producer=producer_for(endpoint),
@@ -11613,6 +11641,7 @@ def draft(root: Path, change: str) -> None:
                 day=today(),
                 ledger=contributions,
                 before_write=lambda paths: preflight_recovery(root, paths, aliases=aliases),
+                notices=stamp_notices,
             )
             stamp_problems = touched_header_problems(
                 root,
@@ -12645,14 +12674,50 @@ def _dispatch(args: argparse.Namespace) -> None:
 
 
 def _run(args: argparse.Namespace) -> int:
+    """The verb `main` parsed; its tree measurements keep their objects in a scratch directory."""
+    with tempfile.TemporaryDirectory(prefix="stage2-objects-") as scratch:
+        return _run_checked(args, Path(scratch))
+
+
+def _run_checked(args: argparse.Namespace, scratch: Path) -> int:
     """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
     # The audit file as it stands before the verb, for the one post-run check point every verb
     # passes (Q-17, loop row L3-5): the change's findings.md, written by every verb that audits,
     # is judged after the verb returns or stops clean - new verbs included, none with a call of its own.
-    initial = findings_snapshot(Path(args.root), args.change)
+    root = Path(args.root)
+    initial = findings_snapshot(root, args.change)
     written = list(initial) if initial is not None else None
     token = _findings_written_header.set(written)
     try:
+        objects_env = scratch_object_env(root, scratch)
+        before = _worktree_tree(root, objects_env)
+        baseline = _git_output(root, "rev-parse", "HEAD").strip()
+
+        def check_retained() -> None:
+            after = _worktree_tree(root, objects_env)
+            for relative in changed_relative_paths(root, before, after, objects_env):
+                if initial is not None and root / relative == initial[0]:
+                    continue  # the audit writer has its own checked baseline
+                try:
+                    current = (root / relative).read_bytes()
+                except OSError:
+                    continue
+                if not has_frontmatter(current):
+                    continue
+                entry = _git_bytes(root, "ls-tree", "-z", baseline, "--", relative)
+                head = _git_bytes(root, "show", f"{baseline}:{relative}") if entry else None
+                if head is not None and current == head:
+                    continue  # restored to the committed bytes: nothing retained to judge
+                stamped = args.verb in {"draft", "repair", "explore"}
+                problems = header_problems(relative, head, current, runner_reset=stamped, reject_added=not stamped)
+                # Field level on every file, active research included: this boundary judges what the
+                # verb changed; an untouched committed fault stays with the migration, and the verbs'
+                # own checks keep holding research to the census contract (criterion 14).
+                if head is not None:
+                    problems, _ = _partition_header_problems(relative, head, current, problems, runner_reset=stamped)
+                if problems:
+                    raise Refused("; ".join(problems))
+
         try:
             try:
                 _dispatch(args)
@@ -12660,8 +12725,10 @@ def _run(args: argparse.Namespace) -> int:
                 _findings_written_header.reset(token)
         except CleanStop:
             check_written_findings(Path(args.root), written)
+            check_retained()
             raise
         check_written_findings(Path(args.root), written)
+        check_retained()
     except CleanStop as error:
         # A finished loop is not a refusal: its own exit code, and no `refused:` on stderr.
         print(f"the loop is finished: {error}", file=sys.stderr)

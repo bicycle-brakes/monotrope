@@ -1790,3 +1790,71 @@ def test_plans_registry_blocks_legacy_active_producers_only(tmp_path, monkeypatc
     assert any("plans/changes/demo/spec.md: produced_by is held more than once" in msg for msg in dup_blocks), (
         dup_blocks
     )
+
+
+def test_partial_stamp_failure_records_earlier_reset(repo, monkeypatch):
+    def writes_two(*_args, **_kwargs):
+        _write(
+            repo, SPEC_PATH, SPEC_SEED.replace("The problem and the acceptance criteria stand here.", "Changed body.")
+        )
+        _write(repo, "plans/changes/demo/z-broken.md", BROKEN_NOTE)
+        return "repaired", "thread"
+
+    monkeypatch.setattr(stage2, "run_codex", writes_two)
+    ctx = _ctx(repo)
+    with pytest.raises(stage2.CallFailed):
+        stage2.run_attempts(
+            ctx,
+            "repair",
+            [(stage2.CODEX, None, "codex", None)],
+            _build_prompt(ctx),
+            _git(repo, "rev-parse", "HEAD"),
+            None,
+            None,
+            commit_message="test repair",
+            closing="stopped",
+            tools={},
+            verify_mode="targeted",
+            protect_lifecycle=True,
+        )
+    findings = (repo / "plans/changes/demo/findings.md").read_text()
+    assert "Approval reset — plans/changes/demo/spec.md: the committed approval by Michael Peichl" in findings
+
+
+def test_reset_preserves_comment_after_block_review(repo):
+    block = (
+        "review:\n  status: approved\n  approved_by: Michael Peichl\n  approved_at: 2026-11-12\n# Keep this comment\n"
+    )
+    seed = SPEC_SEED.replace(f"review: {APPROVED_REVIEW}\n", block)
+    _write(repo, SPEC_PATH, seed)
+    _git(repo, "add", SPEC_PATH)
+    _git(repo, "commit", "-qm", "block review")
+    _write(repo, SPEC_PATH, seed.replace("The problem and the acceptance criteria stand here.", "Changed body."))
+    stage2.stamp_artifact(repo, SPEC_PATH, producer="codex", model="gpt-6.1-terra", day=stage2.today())
+    assert "# Keep this comment\n" in (repo / SPEC_PATH).read_text()
+
+
+def test_future_dispatch_rejects_changed_retained_header(repo, monkeypatch, capsys):
+    def future(root, *_args):
+        _write(root, SPEC_PATH, SPEC_SEED.replace("name: codex", "name: invented"))
+
+    monkeypatch.setitem(stage2.VERBS, "future-verb", future)
+    assert stage2.main(["future-verb", "demo", "--root", str(repo)]) == 2
+    assert SPEC_PATH in capsys.readouterr().err
+
+
+def test_registry_checks_underscore_active_producers(tmp_path, monkeypatch):
+    import plans_registry
+    from _verdict import Level
+
+    plans = tmp_path / "plans"
+    active = plans / "changes" / "demo"
+    active.mkdir(parents=True)
+    (active / "_notes.md").write_text(
+        '---\nproduced_by: {kind: llm-session, name: invalid, version: "2026-11-20"}\n---\n'
+    )
+    monkeypatch.setattr(plans_registry, "REPO", tmp_path)
+    monkeypatch.setattr(plans_registry, "PLANS", plans)
+    monkeypatch.setattr(plans_registry, "INDEX", plans / "INDEX.md")
+    blocks = [f.message for f in plans_registry.check().at(Level.BLOCK)]
+    assert any("_notes.md: produced_by.name:" in message for message in blocks), blocks

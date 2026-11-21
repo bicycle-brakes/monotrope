@@ -277,6 +277,16 @@ def _bestand_ramp(offen: set[str]) -> Ramp:
 def check() -> Verdict:
     verdict = Verdict()
     found = artefacts()
+    # Explanatory underscore files are excluded from the index, but their producer
+    # headers still belong to the active-change contract.
+    changes = PLANS / "changes"
+    if changes.exists():
+        for path in sorted(changes.rglob("_*.md")):
+            parts = path.relative_to(changes).parts
+            if len(parts) < 2 or parts[0] == "archive":
+                continue
+            for problem in producer_header_problems(path.read_text(encoding="utf-8")):
+                verdict.block(f"{path.relative_to(REPO)}: {problem}")
     try:
         export_path = _bead_export_path()
     except (FileNotFoundError, RuntimeError) as exc:

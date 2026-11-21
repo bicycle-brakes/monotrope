@@ -26548,6 +26548,9 @@ def test_an_interrupt_on_the_main_thread_kills_the_launched_group(
     original = subprocess.Popen.communicate
 
     def interrupt(process, *args, **kwargs):
+        # The dispatch boundary's own git measurements run first; the interruption targets the launched group.
+        if Path(str(process.args[0])).name == "git":
+            return original(process, *args, **kwargs)
         if not processes:
             processes.append(process)
             # Readiness, not a race: the descendant is running before the interruption is injected.
@@ -26913,6 +26916,8 @@ def test_a_signal_during_process_creation_leaves_no_child(
 
     def fork_exec(*args, **kwargs):
         pid = real_fork_exec(*args, **kwargs)
+        if Path(str(args[0][0])).name == "git":
+            return pid  # the dispatch boundary's own git measurements are not the launched program
         children.append(pid)
         os.kill(os.getpid(), getattr(signal, signum))
         return pid
