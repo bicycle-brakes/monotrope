@@ -28,6 +28,10 @@ Starts unless you say stop.
 
 ## Build sequence and files
 
+The plan is not ready to execute: first resolve the measurement gap in
+`spec.md` and incorporate findings S3 and S4 into the spec. Show the final
+card only after that redraft.
+
 1. Change `tests/test_pi_contract.py`: add separate reasoning-enabled synthetic
    rows for Messages and Responses without changing the existing plain-text or
    Google contracts. Use the pinned Pi and its actual request building and
@@ -84,3 +88,4 @@ Google case, Codex settings, provider declarations or production policy.
 ## Time used
 
 2026-11-21 18:02:47–18:05:22 UTC, 155 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 22:26:20–22:29:15 UTC, 175 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
