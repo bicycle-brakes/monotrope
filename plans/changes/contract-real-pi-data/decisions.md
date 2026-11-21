@@ -36,6 +36,6 @@ reason: The bead fixes the mechanism, the two cases and the remedy; the maintain
 
 - **Scope: an inventory first.** The spec lists every test that builds a stand-in for a Pi file format or hook payload (catalog JSON, `models.json`, the `before_agent_start` prompt, session records), with file and test name; each gets one twin that reads the pinned installation's real file or a real rendering produced by the pinned Pi. Reason: the bead's "every test", made checkable.
 - **The two known cases are the first twins:** the neutral-path extension against a prompt the pinned Pi actually renders, and the session lookup against the shipped `opencode-go.json` with its `chat:` keys. Reason: the two recorded findings.
-- **Pi not installed:** the twin is skipped with the reason "pinned Pi not installed (tools/pi/install.sh)"; CI's verify job installs the pinned Pi, so the twins run there. Reason: the bead.
+- **Pi not installed:** the twin fails with the install hint, as ADR 0019 item 4 requires (corrected after spec-review SR-1; the bead said skip, the accepted ADR wins). CI installs the pinned Pi.
 - **No live network call, no paid model:** a real rendering means running the pinned Pi's own code offline (or reading its shipped files), never an API call. Reason: contract tests stay hermetic.
 - **ADR 0019 and `tools/pi/install.sh` stay unchanged.** Reason: the remedy is tests, not a decision change.
