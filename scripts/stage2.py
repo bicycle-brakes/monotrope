@@ -1217,8 +1217,8 @@ def parse_rows(answer: str, *, notes: list[str] | None = None, ambiguity: bool =
     pipe escaped; when a caller passes `notes`, that widening is named once per row, because an unescaped
     `|` before the finding moves the columns instead (R-25 of the review-swarm review). A decorative line of
     empty cells is no row and no text: it is dropped. Anything else that is a table line but no row stays
-    in the text, as it came. With `ambiguity`, a row whose Severity cell carries the `[AMBIGUITY]` mark is
-    folded the same way (the spec-review reader).
+    in the text, as it came. With `ambiguity`, over-wide rows are rejected instead of folded
+    (the spec-review reader).
     """
     rows: list[list[str]] = []
     rest: list[str] = []
@@ -1231,7 +1231,7 @@ def parse_rows(answer: str, *, notes: list[str] | None = None, ambiguity: bool =
             continue
         elif len(cells) == 6:
             rows.append(cells)
-        elif len(cells) > 6 and (cells[1].upper() in SEVERITIES or ambiguity and review_severity(cells[1])):
+        elif len(cells) > 6 and not ambiguity and cells[1].upper() in SEVERITIES:
             rows.append([*cells[:5], " \\| ".join(cells[5:])])
             if notes is not None:
                 notes.append(cells[0])
@@ -3805,6 +3805,7 @@ class SpecReviewBlock:
     fingerprint: str | None
     table_readable: bool
     clean: bool
+    bad_row: str | None = None
 
     @property
     def heading_day(self) -> str | None:
@@ -3841,39 +3842,33 @@ class SpecReviewBlock:
         return self.table_readable and (bool(self.rows) or self.clean)
 
 
-def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], bool]:
-    """The rows of a stored findings table and whether every table line reads (spec terms).
-
-    The runner's own table has nine cells; a row whose finding carries an unescaped `|` has
-    more. A six-cell line reads as a row without a recorded status (a hand-pasted row). The
-    ambiguity mark may sit where the severity stands (spec terms). Anything else that is a
-    table line - a three-cell line, a row without a severity - makes the whole table
-    unreadable: one unparseable line spoils the block.
-    """
+def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], str | None]:
+    """Read review rows without joining cells; one malformed table line spoils the block."""
     rows: list[dict[str, str]] = []
+    width: int | None = None
     for line in body_text.splitlines():
         cells = split_row(line)
         if cells is None:
             continue
-        if _furniture(cells) or not any(cell.strip() for cell in cells):
+        if _furniture(cells):
+            if cells[0].lower() == "id" or [c.lower() for c in cells[1:6]] == [c.lower() for c in ROW_COLUMNS[1:6]]:
+                width = len(cells)
+            elif width is not None and len(cells) != width:
+                return [], line.strip()[:80]
             continue
-        if len(cells) < 2:
-            return [], False
-        severity = review_severity(cells[1])
-        if len(cells) >= 9 and severity:
-            rows.append(
-                {
-                    "id": cells[0],
-                    "severity": cells[1],
-                    "finding": " \\| ".join(cells[5:-3]),
-                    "status": cells[-2],
-                }
-            )
-        elif len(cells) == 6 and severity:
-            rows.append({"id": cells[0], "severity": cells[1], "finding": cells[5], "status": "open"})
-        else:
-            return [], False
-    return rows, True
+        if width is not None and len(cells) != width or len(cells) not in (6, 9):
+            return [], line.strip()[:80]
+        if not review_severity(cells[1]):
+            return [], line.strip()[:80]
+        rows.append(
+            {
+                "id": cells[0],
+                "severity": cells[1],
+                "finding": cells[5],
+                "status": cells[7] if len(cells) == 9 else "open",
+            }
+        )
+    return rows, None
 
 
 def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
@@ -3898,7 +3893,7 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
                 break
             body.append(following)
         body_text = "\n".join(body).strip()
-        rows, table_readable = _stored_rows(body_text)
+        rows, bad_row = _stored_rows(body_text)
         found = FINGERPRINT_LINE.search(body_text)
         clean = (
             not rows
@@ -3912,8 +3907,9 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
                 rows=rows,
                 rest=body_text,
                 fingerprint=found.group(1) if found else None,
-                table_readable=table_readable,
+                table_readable=bad_row is None,
                 clean=clean,
+                bad_row=bad_row,
             )
         )
     return blocks
@@ -4054,7 +4050,10 @@ def qualifying_reviews(text: str) -> tuple[list[SpecReviewBlock], str]:
             left_out.append(f"{named} has no matching runner call line directly above its heading")
             continue
         if not block.readable_answer:
-            left_out.append(f"{named} is no readable review (rows or the exact `No finding.` answer)")
+            left_out.append(
+                f"{named} is no readable review (rows or the exact `No finding.` answer)"
+                + (f"; unreadable row: {block.bad_row}" if block.bad_row else "")
+            )
             continue
         if block.fingerprint is None:
             if day is None:
@@ -4241,10 +4240,14 @@ def readable_review(answer: str) -> list[list[str]]:
 
     Readable: six-cell rows, or the exact answer `No finding.` Prose, a refusal, a failed
     call, or one table line the reader cannot take as a row is not. The same reader (the
-    `review_severity` test and the folding of an over-wide row, the mark included) judges the
+    `review_severity` test and strict cell count) judges the
     answer here and the stored block later, so an answer that is written is an answer that reads
     back: a row whose Severity is anything else, or a table line that is no row, fails the call.
     """
+    for line in answer.splitlines():
+        cells = split_row(line)
+        if cells is not None and len(cells) != 6:
+            raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {line.strip()[:80]}")
     rows, rest = parse_rows(answer, ambiguity=True)
     loose = [line for line in rest.splitlines() if split_row(line) is not None]
     if loose:

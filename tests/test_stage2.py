@@ -8954,15 +8954,19 @@ def test_the_spec_review_prompt_states_the_severity_its_reader_takes(world: Worl
     assert "free text" not in prompt
 
 
-def test_an_overwide_ambiguity_row_reads_and_reads_back_open() -> None:
-    """L2-3, L2-7: an `[AMBIGUITY]` row with an extra unescaped pipe folds like any row and stays an open row."""
-    answer = rows(1) + "\n| A1 | [AMBIGUITY] scope | SPEC | criterion 2 | spec.md:2 | one | two |"
-    parsed = stage2.readable_review(answer)
-    assert [row[0] for row in parsed] == ["X1", "A1"]
-    stored = stage2.answer_block(parsed, answer, "Opus")
-    block = stage2.spec_review_blocks(f"## Phase 2a — Opus 5.5, {FIXED_REVIEW_DAY}\n\n{stored}\n")[0]
-    assert block.table_readable and [row["id"] for row in block.rows] == ["X1", "A1"]
-    assert stage2.open_ambiguity_rows(block) == ["A1"]
+def test_f5_overwide_review_row_refuses_implement(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """F-5: an unescaped pipe in the location cannot hide an open ambiguity."""
+    block = opus_review_block(world)
+    row = "| F-5 | BLOCKER | SPEC | criteria 6 and 7 | scripts/stage2.py | parse_rows | [AMBIGUITY] scope | Opus 5.5 | open | — |"
+    block += "\n" + row
+    world.write_findings(block)
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    assert "F-5" in error and "readable review" in error
+    assert world.calls() == []
+    with pytest.raises(stage2.CallFailed, match="F-5"):
+        stage2.readable_review("| F-5 | BLOCKER | SPEC | criteria | location | extra | [AMBIGUITY] scope |")
 
 
 def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
