@@ -18,8 +18,8 @@ tags: [plan, ci, merge-queue]
 # Plan — ci-no-push-run
 
 ```text
-For you:     The full hosted check no longer repeats after a queued merge; the merge candidate still gets checked.
-Done when:   Tests prove the retained event coverage and first-parent interview check, the generated workflow matches, and make verify is green.
+For you:     The full hosted check no longer repeats after a queued merge; repositories without a declared queue keep their push check.
+Done when:   Tests prove both queue settings and the first-parent interview check, the generated workflow matches, and make verify is green.
 Appetite:    2 hours for phase 4, including repairs; stop at the limit.
 Not now:     Changing the live ruleset, queue configuration, gate set, or adding a post-merge run.
 Pre-mortem:  suppose it failed: most likely because a merge-group candidate is compared with the wrong parent.
@@ -28,10 +28,13 @@ Starts unless you say stop.
 
 ## Steps
 
-1. Implementer: `scripts/ci_gates.py` removes the push trigger and unused
-   `MAIN_BRANCH`, and removes push from the gate and summary event conditions;
-   preserve the pull-request and merge-group jobs, checkout, summary semantics,
-   drift events and pull-request cancellation grouping.
+1. Implementer: `scripts/ci_gates.py` reads the optional `ci.merge_queue`
+   boolean from the gate file through its validated reader: `true` removes the
+   push trigger and push from both verification conditions; absent or `false`
+   preserves the existing push-to-main workflow. Reject malformed `ci` blocks
+   and non-boolean values in both schema validation and generation. Retain
+   `MAIN_BRANCH` for the push-enabled variant. Preserve other triggers, jobs,
+   checkout, summary semantics and pull-request cancellation grouping.
 2. Implementer: `scripts/check_interview_minimums.py` recognises
    `GITHUB_EVENT_NAME == merge_group` for the first-parent hosted base and
    retains the hosted push-to-main signal when both `GITHUB_EVENT_NAME` is
@@ -39,9 +42,14 @@ Starts unless you say stop.
    local main and all other base/error paths. Update its base-rule docstrings
    for detached hosted candidates.
 3. Implementer: `tests/test_ci.py` updates the existing event, trigger,
-   summary, drift, path-filter and concurrency checks for the new event set;
-   check both generated and committed definitions, and preserve merge-group
-   candidate and failure mutants. `tests/test_check_interview_minimums.py`
+   summary, drift, path-filter and concurrency checks for both event sets; use
+   temporary gate files with `true`, `false` and
+   absent declarations, check generated YAML and the committed queue-enabled
+   definition, and preserve merge-group candidate and failure mutants. Test
+   malformed configuration and non-boolean values against schema validation
+   and generation, including quoted booleans, null and lists. During the attempt,
+   compare the committed workflow to its current declaration; after the held
+   edits, assert its queue-enabled form. `tests/test_check_interview_minimums.py`
    tests a detached merge-group candidate whose first-parent diff differs
    from its merge-base diff, plus ordinary branch, main, push-to-main and
    detached contexts. Its `run_gate` helper clears inherited `GITHUB_REF` and
@@ -52,10 +60,11 @@ Starts unless you say stop.
    merge-group first-parent base, and states the accepted queue-off risk;
    the existing ruleset gate accepts strict freshness as an alternative and
    cannot be claimed to always detect a disabled queue.
-5. Orchestrator, after the accepted implementation attempt: update only the
-   header comment in held `decisions/gates.yaml` to name pull-request and
-   merge-group verification and schedule/dispatch drift, removing the
-   cancellation statement that assumes a push run. Regenerate held
+5. Orchestrator, after the accepted implementation attempt: update the
+   held `decisions/gates.yaml` with `ci: {merge_queue: true}` and document the
+   optional boolean and its absent/false default; update its `job:` header
+   comment to name pull-request and merge-group verification and
+   schedule/dispatch drift, removing the statement that assumes a push run. Regenerate held
    `.github/workflows/ci.yml` from the generator, never by hand:
 
    ```bash
@@ -72,8 +81,8 @@ Starts unless you say stop.
 ## Not touched
 
 The live ruleset, `tests/test_repo_settings.py`, gate definitions, queue
-configuration, merge instructions, kit manifest, interpreter versions and
-manual-dispatch scope stay as they are. No design or ADR is due for this
+configuration, merge instructions, `docs/governance/gate-catalog.md`, kit
+manifest, interpreter versions and manual-dispatch scope stay as they are. No design or ADR is due for this
 bounded change.
 
 ## Verification
@@ -82,13 +91,14 @@ Run the fixture suite with the merge-group environment, then the full check
 after the held-path edits:
 
 ```bash
+.venv/bin/python3 -m pytest tests/test_ci.py
 GITHUB_EVENT_NAME=merge_group .venv/bin/python3 -m pytest tests/test_check_interview_minimums.py
 make verify
 ```
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_push_does_not_start_the_workflow — a push trigger remains in generated or committed YAML
+- 1: not yet written tests/test_ci.py::test_push_does_not_start_the_workflow — a push trigger remains when the queue is declared, in generated or committed YAML
 - 2: tests/test_ci.py::test_merge_groups_run_the_gates_on_their_candidate — a merge-group trigger, gate job or candidate checkout is lost
 - 2: not yet written tests/test_ci.py::test_pull_requests_run_the_gates_on_their_candidate — the pull-request trigger, gate job or candidate checkout is lost
 - 3: tests/test_ci.py::test_merge_groups_require_a_successful_summary — a merge-group summary is absent or accepts a non-success result
@@ -103,10 +113,14 @@ make verify
 - 7: not yet written tests/test_check_interview_minimums.py::test_main_ref_alone_does_not_select_first_parent — a detached checkout is treated as main-line solely because of GITHUB_REF
 - 8: not a test — phase-6 review checks both descriptions name all retained events and do not assume a push run
 - 9: not a test — phase-6 review checks the first-parent description and current generator, workflow and gate docstrings
-- 10: not yet written tests/test_ci.py::test_verify_jobs_exclude_push — either generated or committed verification job admits push
+- 10: not yet written tests/test_ci.py::test_verify_jobs_exclude_push — either generated or committed queue-enabled verification job admits push
 - 11: not yet written tests/test_check_interview_minimums.py::test_fixtures_ignore_inherited_merge_group_event — a branch or detached fixture inherits the merge-group base
+
+- 12: not yet written tests/test_ci.py::test_push_is_retained_without_a_declared_queue — false or absent declaration loses the main push trigger or either verification job excludes push
+- 13: not yet written tests/test_ci.py::test_invalid_queue_declaration_is_rejected — invalid CI configuration passes schema validation or generation
 
 ## Time used
 
 2026-11-21 16:31:06–16:33:36 UTC, 150 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 16:53:24–16:55:47 UTC, 143 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 17:02:37–17:05:10 UTC, 153 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

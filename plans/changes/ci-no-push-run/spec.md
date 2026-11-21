@@ -44,9 +44,11 @@ the main-line landfall.
 
 ## Acceptance criteria
 
-1. When a commit is pushed, the generated hosted workflow has no push trigger.
-   *Refuted by:* a push trigger remains, including a filtered or empty one.
-   *Basis:* decisions.md#Q-1.
+1. When a repository declares that `main` moves through a merge queue, its
+   generated hosted workflow has no push trigger.
+   *Refuted by:* any push trigger remains in the generated workflow, or in this
+   repository's committed workflow after its declaration is set.
+   *Basis:* decisions.md#Q-1; findings.md F-7.
 
 2. When a pull request or a merge group requests checks, the hosted workflow
    runs the existing full verification on that event's candidate.
@@ -89,9 +91,9 @@ the main-line landfall.
    hosted push rule.
    *Basis:* decisions.md#Q-1; research, "What exists today".
 
-8. When the change is complete, `docs/WORKFLOW.md` and the gate catalog
-   comment describe verification on pull requests and merge groups and drift
-   on schedule and manual dispatch.
+8. When the change is complete, `docs/WORKFLOW.md` and the `job:` header
+   comment in `decisions/gates.yaml` describe verification on pull requests and
+   merge groups and drift on schedule and manual dispatch.
    *Refuted by:* either description omits one of those retained events or
    claims or assumes that this workflow still runs on push.
    *Basis:* decisions.md#Q-1.
@@ -105,9 +107,9 @@ the main-line landfall.
    that every detached checkout uses the merge base.
    *Basis:* decisions.md#Q-1; research, "What exists today".
 
-10. When the verification jobs' event conditions are generated, neither
-    condition includes a push event.
-    *Refuted by:* the gate job or the `verify` summary still admits push.
+10. When verification jobs are generated for a repository declaring a merge
+    queue, neither event condition includes a push event.
+    *Refuted by:* its gate job or `verify` summary still admits push.
     *Basis:* decisions.md#Q-1.
 
 11. When interview-check fixture tests run inside a merge-group workflow,
@@ -118,22 +120,37 @@ the main-line landfall.
     enclosing run's event.
     *Basis:* decisions.md#Q-1; research, "What exists today".
 
+12. When a repository does not declare that `main` moves through a merge
+    queue, its generated workflow retains full verification on pushes to `main`.
+    *Refuted by:* an absent or false declaration removes the `main` push
+    trigger or either verification job excludes push.
+    *Basis:* decisions.md#Q-1; findings.md F-7.
+
+13. When the optional CI configuration is malformed or its queue declaration
+    has a value other than a boolean, generation and schema validation reject it.
+    *Refuted by:* a malformed CI mapping, quoted boolean, null, list or other
+    non-boolean value selects a workflow instead of reporting an error.
+    *Basis:* findings.md F-7.
+
 ## Non-goals
 
 - Changing the gate set, interpreter matrix, live GitHub ruleset, merge
   procedure, or the merge queue's configuration.
 - Adding a hosted post-merge run or full verification to manual dispatch.
-- Guaranteeing coverage when the merge queue is disabled. The maintainer
-  accepted that no hosted run then tests `main` after a merge. The existing
-  ruleset check also accepts strict up-to-date checks as an alternative, so
+- Automatically discovering or changing a repository’s merge-queue setting.
+  A repository that declares a queue must update its declaration if that
+  assumption ceases to hold. The maintainer accepted that no hosted run tests
+  `main` after a merge if this repository’s queue is disabled without that
+  update. The existing ruleset check also accepts strict up-to-date checks as an alternative, so
   it does not invariably report a disabled queue.
 - Measuring external consumers of post-merge commit statuses; the research
   did not measure them.
 
 ## Protected areas
 
-The live GitHub ruleset and merge procedure remain unchanged; the decision
-pull request changes the gate catalog's comment, not its gate definitions.
+The live GitHub ruleset, merge procedure, gate definitions and
+`docs/governance/gate-catalog.md` remain unchanged; the decision pull request
+changes the declaration and the `job:` header comment in `decisions/gates.yaml`.
 
 ## Definition of Done
 
@@ -151,9 +168,12 @@ None open.
 
 - [DETAIL] The phase-4 appetite is two hours including repairs; it is a stop
   for this bounded change, not a delivery estimate.
+- [DETAIL] The optional `ci.merge_queue` boolean in `decisions/gates.yaml` is
+  `true` in this repository; absent or `false` retains the push run. The safe
+  default preserves existing kit consumers, while invalid values fail closed.
 - [DETAIL] Retain the hosted push-to-main signal alongside the merge-group
-  signal because the gate travels in the kit to repositories that may retain
-  a push trigger. A main ref without a push event is not that signal.
+  signal because kit repositories without a queue retain a push trigger. A
+  main ref without a push event is not that signal.
 - [DETAIL] Isolate fixture subprocesses from inherited event variables and
   explicitly set them in event-specific tests, so the real candidate is
   measured without changing the fixture repositories' intended context.
