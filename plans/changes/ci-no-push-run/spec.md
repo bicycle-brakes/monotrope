@@ -80,21 +80,43 @@ the main-line landfall.
 
 7. When the interview minimums check runs outside a merge-group event, it
    retains the existing local main, named-branch and detached-checkout base
-   rules, except that a `GITHUB_REF` pointing to `main` alone no longer
-   identifies a hosted main-line run.
+   rules, including first-parent measurement for a hosted push to `main`.
    *Refuted by:* local `main` does not use the first parent, a named branch
-   does not use the merge base, or a detached checkout at `origin/main`
-   silently passes instead of reporting not measured without a merge-group
-   event.
+   does not use the merge base, a detached checkout at `origin/main` without
+   a main-line event does not report not measured, or a detached hosted push
+   with `GITHUB_EVENT_NAME=push` and `GITHUB_REF=refs/heads/main` does not
+   use the first parent; a main ref without a push event must not select the
+   hosted push rule.
    *Basis:* decisions.md#Q-1; research, "What exists today".
 
-8. When the change is complete, the current workflow description and gate
-   catalog comment describe the retained events and the merge-group
-   first-parent measurement.
-   *Refuted by:* `docs/WORKFLOW.md` or the `decisions/gates.yaml` header
-   still claims that a push starts verification, or the workflow describes
-   the former hosted push as the first-parent run.
+8. When the change is complete, `docs/WORKFLOW.md` and the gate catalog
+   comment describe verification on pull requests and merge groups and drift
+   on schedule and manual dispatch.
+   *Refuted by:* either description omits one of those retained events or
+   claims or assumes that this workflow still runs on push.
    *Basis:* decisions.md#Q-1.
+
+9. When the change is complete, the current workflow and interview-check
+   descriptions identify the merge-group first-parent measurement and do not
+   misdescribe detached merge-group candidates as using the merge base.
+   *Refuted by:* `docs/WORKFLOW.md` omits the merge-group first-parent rule,
+   or the gate's docstrings, generator comments or generated workflow
+   describe the dropped push run as a current run of this workflow or imply
+   that every detached checkout uses the merge base.
+   *Basis:* decisions.md#Q-1; research, "What exists today".
+
+10. When the verification jobs' event conditions are generated, neither
+    condition includes a push event.
+    *Refuted by:* the gate job or the `verify` summary still admits push.
+    *Basis:* decisions.md#Q-1.
+
+11. When interview-check fixture tests run inside a merge-group workflow,
+    inherited GitHub event variables do not change the fixture's intended
+    comparison base.
+    *Refuted by:* a fixture expecting a branch merge base or an unmeasured
+    detached tip instead uses the first parent because it inherited the
+    enclosing run's event.
+    *Basis:* decisions.md#Q-1; research, "What exists today".
 
 ## Non-goals
 
@@ -125,5 +147,13 @@ pull request changes the gate catalog's comment, not its gate definitions.
 
 ## Open decisions
 
-None open. [DETAIL] The phase-4 appetite is two hours including repairs; it
-is a stop for this bounded change, not a delivery estimate.
+None open.
+
+- [DETAIL] The phase-4 appetite is two hours including repairs; it is a stop
+  for this bounded change, not a delivery estimate.
+- [DETAIL] Retain the hosted push-to-main signal alongside the merge-group
+  signal because the gate travels in the kit to repositories that may retain
+  a push trigger. A main ref without a push event is not that signal.
+- [DETAIL] Isolate fixture subprocesses from inherited event variables and
+  explicitly set them in event-specific tests, so the real candidate is
+  measured without changing the fixture repositories' intended context.

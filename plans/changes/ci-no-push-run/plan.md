@@ -33,29 +33,36 @@ Starts unless you say stop.
    preserve the pull-request and merge-group jobs, checkout, summary semantics,
    drift events and pull-request cancellation grouping.
 2. Implementer: `scripts/check_interview_minimums.py` recognises
-   `GITHUB_EVENT_NAME == merge_group` for the first-parent hosted base instead
-   of using `GITHUB_REF`; retain local main and all other base/error paths.
+   `GITHUB_EVENT_NAME == merge_group` for the first-parent hosted base and
+   retains the hosted push-to-main signal when both `GITHUB_EVENT_NAME` is
+   `push` and `GITHUB_REF` is `refs/heads/main`, for kit consumers; retain
+   local main and all other base/error paths. Update its base-rule docstrings
+   for detached hosted candidates.
 3. Implementer: `tests/test_ci.py` updates the existing event, trigger,
    summary, drift, path-filter and concurrency checks for the new event set;
    check both generated and committed definitions, and preserve merge-group
    candidate and failure mutants. `tests/test_check_interview_minimums.py`
    tests a detached merge-group candidate whose first-parent diff differs
-   from its merge-base diff, plus ordinary branch, main and detached contexts;
-   clear inherited GitHub event variables in fixtures.
+   from its merge-base diff, plus ordinary branch, main, push-to-main and
+   detached contexts. Its `run_gate` helper clears inherited `GITHUB_REF` and
+   `GITHUB_EVENT_NAME` before applying explicit test overrides; a regression
+   sets the enclosing event to `merge_group` and checks branch and detached
+   fixture outcomes. Update the existing hosted push test to set both values.
 4. Implementer: `docs/WORKFLOW.md` §3 describes the retained CI events and
    merge-group first-parent base, and states the accepted queue-off risk;
    the existing ruleset gate accepts strict freshness as an alternative and
    cannot be claimed to always detect a disabled queue.
 5. Orchestrator, after the accepted implementation attempt: update only the
    header comment in held `decisions/gates.yaml` to name pull-request and
-   merge-group verification and schedule/dispatch drift. Regenerate held
+   merge-group verification and schedule/dispatch drift, removing the
+   cancellation statement that assumes a push run. Regenerate held
    `.github/workflows/ci.yml` from the generator, never by hand:
 
    ```bash
    .venv/bin/python3 scripts/ci_gates.py --generate-ci > .github/workflows/ci.yml
    ```
 
-6. Runner or orchestrator: regenerate `plans/INDEX.md` through
+6. Orchestrator: regenerate `plans/INDEX.md` through
    `.venv/bin/python3 scripts/plans_registry.py --index` if artifact headers
    changed; keep `plans/changes/ci-no-push-run/spec.md` and this plan aligned
    with the finished implementation. The orchestrator makes a decision pull
@@ -71,9 +78,11 @@ bounded change.
 
 ## Verification
 
-After the held-path edits, run:
+Run the fixture suite with the merge-group environment, then the full check
+after the held-path edits:
 
 ```bash
+GITHUB_EVENT_NAME=merge_group .venv/bin/python3 -m pytest tests/test_check_interview_minimums.py
 make verify
 ```
 
@@ -90,9 +99,14 @@ make verify
 - 7: tests/test_check_interview_minimums.py::test_main_checkout_uses_first_parent — local main uses another base
 - 7: tests/test_check_interview_minimums.py::test_worktree_branch_uses_merge_base — a named branch uses another base
 - 7: tests/test_check_interview_minimums.py::test_detached_at_tip_without_main_line_env_is_not_measured — detached main silently passes
+- 7: tests/test_check_interview_minimums.py::test_hosted_main_line_run_uses_first_parent — a hosted push to main does not use the first parent
 - 7: not yet written tests/test_check_interview_minimums.py::test_main_ref_alone_does_not_select_first_parent — a detached checkout is treated as main-line solely because of GITHUB_REF
-- 8: not a test — phase-6 review compares both current descriptions with the event set and first-parent rule
+- 8: not a test — phase-6 review checks both descriptions name all retained events and do not assume a push run
+- 9: not a test — phase-6 review checks the first-parent description and current generator, workflow and gate docstrings
+- 10: not yet written tests/test_ci.py::test_verify_jobs_exclude_push — either generated or committed verification job admits push
+- 11: not yet written tests/test_check_interview_minimums.py::test_fixtures_ignore_inherited_merge_group_event — a branch or detached fixture inherits the merge-group base
 
 ## Time used
 
 2026-11-21 16:31:06–16:33:36 UTC, 150 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 16:53:24–16:55:47 UTC, 143 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
