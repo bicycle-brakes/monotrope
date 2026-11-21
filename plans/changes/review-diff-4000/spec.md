@@ -46,6 +46,8 @@ Every round of the review loop shares a 4,000-line prompt diff bound as interim 
    *Refuted by:* Either document omits its required statement, gives a wrong bound or threshold, treats the free total threshold as a strict 2,000-line prompt cap, or says a free per-file or total-threshold cut is not a cut round or can count as clean.
 8. When a free-stage selected diff exceeds 2,000 lines but fits within the shared bound and includes a free per-file or total-threshold cut, the availability probe carries that selected diff in full.
    *Refuted by:* A probe truncates either a per-file-cut overshoot or a total-threshold-cut diff at 2,000 lines, or otherwise omits part of that selected diff.
+9. When the workflow describes the Flash swarm and ladder rounds, it states that they receive the full change diff subject to the shared 4,000-line bound.
+   *Refuted by:* The workflow omits either stage or implies that its selected diff is the same implementation-only diff as the free stage.
 
 ## Non-goals
 
@@ -71,5 +73,7 @@ Every round of the review loop shares a 4,000-line prompt diff bound as interim 
 [DETAIL] A two-hour phase-4 stop covers the parameter, regression checks and documentation; it is freely revisable.
 
 [DETAIL] Each living document states the bounds it describes accurately; the workflow need not add the free stage's own numeric thresholds because they are not currently stated there (S-6). Free total-threshold cuts, when described, are recorded as cut rounds like per-file cuts (S-7). The probe covers free-cut overshoots as well as uncut overshoots because both travel through the same shared bound (S-8).
+
+[DETAIL] The workflow describes the full change diff for both the Flash swarm and ladder rounds, because they share the bound rather than the free stage's selected diff (S-9).
 
 None open.
