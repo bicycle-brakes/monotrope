@@ -6678,7 +6678,13 @@ def ledger_standings(root: Path, plan: bytes) -> tuple[dict[str, str], dict[str,
         if posix in unjudgable:
             continue
         if posix not in absent and posix not in names:
-            if (root / posix).is_file():
+            try:
+                exists = (root / posix).is_file()
+            except OSError as error:
+                unjudgable.add(posix)
+                faults.append(f"`{posix}` cannot be read or parsed ({error})")
+                continue
+            if exists:
                 try:
                     names[posix] = _standing_names(root, posix)
                 except Refused as error:
@@ -6827,8 +6833,13 @@ def cheap_checks(
             lines.extend(
                 ["the cheap tests cannot be checked; a ledger test file cannot be read or parsed:", *ledger_faults]
             )
-        lines.extend(f"missing ledger test owed ({state}): `{ref}`" for ref, state in sorted(owed.items()))
-        return ["\n".join(_shrink(protect_diagnostics("\n".join(lines), key).splitlines(), TAIL_LINES, subject=""))]
+        fault_lines = protect_diagnostics("\n".join(lines), key).splitlines()
+        missing_lines = protect_diagnostics(
+            "\n".join(f"missing ledger test owed ({state}): `{ref}`" for ref, state in sorted(owed.items())), key
+        ).splitlines()
+        return [
+            "\n".join(_shrink(fault_lines, TAIL_LINES, subject="") + _shrink(missing_lines, TAIL_LINES, subject=""))
+        ]
     problems: list[str] = []
     if tests:
         identity = "`" + " ".join(PYTEST) + "`"

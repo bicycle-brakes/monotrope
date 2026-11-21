@@ -1425,3 +1425,36 @@ def test_missing_ledger_truncation_names_diagnostic_lines(world: World, verb: st
     record = "\n".join([*problems, *evidence])
     assert "lines of this gate left out" not in record
     assert "lines left out" in record
+
+
+def test_ledger_parse_fault_survives_many_missing_tests(world: World, monkeypatch) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_broken.py").write_text("def test_bad(:\n", encoding="utf-8")
+    commit_tree(world, "an unparseable test file")
+    plan = plan_with_ledger(
+        ["- 1: tests/test_broken.py::test_bad — broken"]
+        + [f"- {i + 2}: tests/test_absent.py::test_missing_{i} — written" for i in range(100)]
+    ).encode()
+    monkeypatch.setattr(stage2, "format_targets", lambda *_: [])
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    problems = stage2.cheap_checks(world.root, env, world.plan, None, plan)
+    diagnostic = "\n".join(problems)
+    assert "tests/test_broken.py" in diagnostic and "cannot be read or parsed" in diagnostic
+    assert "left out" in diagnostic
+
+
+def test_repair_prompt_names_file_when_stat_is_denied(world: World, monkeypatch) -> None:
+    target = world.root / "tests" / "test_denied.py"
+    original_is_file = Path.is_file
+
+    def denied(path: Path) -> bool:
+        if path == target:
+            raise PermissionError("parent directory is not searchable")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", denied)
+    plan = plan_with_ledger(["- 1: tests/test_denied.py::test_denied — written"]).encode()
+    prompt = stage2.repair_must_run_refs(world.root, plan)
+    assert "tests/test_denied.py" in prompt and "cannot be read or parsed" in prompt
+    assert "plan's criterion ledger could not be read" not in prompt
