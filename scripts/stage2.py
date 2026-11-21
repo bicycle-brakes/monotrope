@@ -332,14 +332,25 @@ PHASE6_ANSWER_FORMAT = (
     )
     + f"\n{PHASE6_GUARD_EVIDENCE}"
 )
+
+
 # The spec review's answer instruction states the one severity set its reader takes (loop rows
 # L2-1 and L2-6 of mandatory-spec-review): a word of the reviewer's own would fail the call.
-SPEC_REVIEW_ANSWER_FORMAT = ANSWER_FORMAT.replace(
-    "The severity cell is free text (BLOCKER, MAJOR or MINOR is the convention); the orchestrator\n"
-    "decides what is taken, so a word of your own is not a fault.\n",
-    "The severity cell is exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`;\n"
-    "any other severity makes the whole answer unreadable.\n",
-)
+def spec_review_answer_format(answer_format: str) -> str:
+    severity = (
+        "The severity cell is free text (BLOCKER, MAJOR or MINOR is the convention); the orchestrator\n"
+        "decides what is taken, so a word of your own is not a fault.\n"
+    )
+    if answer_format.count(severity) != 1:
+        raise ValueError("shared severity instruction must appear exactly once")
+    return answer_format.replace(
+        severity,
+        "The severity cell is exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`;\n"
+        "any other severity makes the whole answer unreadable.\n",
+    )
+
+
+SPEC_REVIEW_ANSWER_FORMAT = spec_review_answer_format(ANSWER_FORMAT)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
 # evidence; phase 6 explicitly refuses malformed evidence even beside findings.
 GUARD_EVIDENCE_LINE = re.compile(
@@ -3769,6 +3780,8 @@ def spec_review_call_config(root: Path) -> dict:
     if endpoint is not None:
         if not isinstance(endpoint, str) or not endpoint.strip():
             raise Refused("spec_review's `fallback_endpoint` must name an endpoint.")
+        if endpoint.strip() != OPENCODE:
+            raise Refused(f"spec_review's `fallback_endpoint` must be {OPENCODE}.")
         settings["fallback_endpoint"] = endpoint.strip()
     model = block.get("fallback_model")
     if model is not None:
@@ -4278,9 +4291,9 @@ def ambiguity_settled(root: Path, change: str, row_id: str) -> bool:
         text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return False
-    heading = re.compile(rf"\bambiguity\s+{re.escape(row_id)}(?![\w-])", re.I)
+    heading = re.compile(rf"Ambiguity {re.escape(row_id)}")
     return any(
-        heading.search(record["title"]) and record.get("answer", "").strip()
+        heading.fullmatch(record["title"]) and record.get("answer", "").strip()
         for record in check_interview_minimums.maintainer_answers(text)
     )
 

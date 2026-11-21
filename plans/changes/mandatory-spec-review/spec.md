@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-19
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -35,7 +35,7 @@ A spec review precedes the plan card for bounded, feature and architectural chan
 
 **Workflow texts:** `AGENTS.md` phase table, `docs/WORKFLOW.md`, `prompts/02-spec.md` and `prompts/02a-spec-review.md`, wherever they describe phase 2a or the draft chain.
 
-**Open ambiguity:** in the newest qualifying block, a row whose Severity or Finding cell begins `[AMBIGUITY]` and whose Status begins `open`; an answer alone does not close the row.
+**Open ambiguity:** in the newest qualifying block, a row whose Severity or Finding cell begins `[AMBIGUITY]` and whose Status begins `open`; the row remains open until its Status changes. When no further review round can run, a maintainer answer to a question headed `Q-<n> · Ambiguity <row id>` settles it for admission even if its Status remains open; this admission exception does not change the row (Q-5 records the original row rule).
 
 ## Acceptance criteria
 
@@ -51,8 +51,8 @@ A spec review precedes the plan card for bounded, feature and architectural chan
    *Refuted by:* The new precondition refuses an unreviewed spike.
 6. When implement is called for a bounded, feature or architectural change without a readable qualifying review, or with only stale qualifying review evidence before three spec-review rounds have run, it refuses before starting a model.
    *Refuted by:* A missing, unreadable, unaudited or Codex review admits a model, or stale evidence admits a model before three rounds.
-7. When implement is called with review evidence whose newest qualifying block has an open ambiguity, it refuses before starting a model and names the row.
-   *Refuted by:* The model starts or the refusal omits the row.
+7. When implement is called with review evidence whose newest qualifying block has an open ambiguity, it refuses before starting a model and names the row, unless no further review round can run and a maintainer-answered question headed `Q-<n> · Ambiguity <row id>` settles that row.
+   *Refuted by:* The model starts with an unsettled open ambiguity, the refusal omits the row, or a properly answered question fails to settle it when no further round can run.
 8. When implement is called with a current readable qualifying review and no open ambiguity in its newest current block, the new precondition permits the existing checks.
    *Refuted by:* The new precondition refuses the call.
 9. When implement is called with --stage2-off, the same class and review preconditions apply.
@@ -75,8 +75,8 @@ A spec review precedes the plan card for bounded, feature and architectural chan
    *Refuted by:* A re-check consumes another round or its BLOCKER bypasses the maintainer; a current fallback is omitted, or a change whose newest current review is Opus remains listed.
 18. When a later implement call targets a previously implemented change, the same precondition applies.
    *Refuted by:* Earlier implementation exempts the later call.
-19. When three spec-review rounds have run and the spec body changes after the newest qualifying review, implement accepts that review evidence without a new review, subject to the remaining preconditions.
-   *Refuted by:* The changed body alone causes refusal after three rounds, or a changed body passes before three rounds.
+19. When three spec-review rounds have run, implement accepts one final spec body version after the newest qualifying review without a new review, subject to the remaining preconditions; a later body version needs a current review.
+   *Refuted by:* The first changed body alone causes refusal after three rounds, a later body version passes without a current review, or a changed body passes before three rounds.
 
 ## Non-goals
 
@@ -104,4 +104,4 @@ Existing ADRs and decision records remain unchanged because the maintainer settl
 
 - [DETAIL] After three rounds the fingerprint still reports a changed body as stale; admission applies the separate exception, so currency is not misrepresented (Q-10).
 - [DETAIL] The record that authorizes a fourth round is a question of this change in `decisions.md`, headed `Q-<n> · Fourth spec-review round` and answered by the maintainer with an answer that begins `authorized`; the runner's refusal names this form. The same file settles an open ambiguity once no further round can run, with a maintainer-answered question headed `Q-<n> · Ambiguity <row id>`. The exception for a changed spec body after round three admits one final draft (one body version after the reviewed one); a later body change needs a current review again.
-- [DETAIL] After each review, the orchestrator triages intent decisions with the maintainer and decides revisable details with reasons; after round three remaining non-BLOCKER rows become named plan limits. An open ambiguity still refuses implement under criterion 7 (S-15).
+- [DETAIL] After each review, the orchestrator triages intent decisions with the maintainer and decides revisable details with reasons; after round three remaining non-BLOCKER rows become named plan limits. An unsettled open ambiguity refuses implement under criterion 7; the recorded-answer exception applies only when no further review round can run (S-15).

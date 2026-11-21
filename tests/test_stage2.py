@@ -29627,3 +29627,29 @@ def test_implement_missing_class_remedy_names_valid_headers(world: World, capsys
     error = capsys.readouterr().err
     assert "research.md" in error and "spec.md" in error
     assert "--class" not in error
+
+
+def test_ambiguity_settlement_requires_exact_question_title(world: World) -> None:
+    decisions = world.root / "plans/changes/demo/decisions.md"
+    decisions.write_text(fourth_round_record("Q-30", "declined", title="Why the Ambiguity R1 wording was chosen"))
+    assert not stage2.ambiguity_settled(world.root, "demo", "R1")
+    decisions.write_text(fourth_round_record("Q-30", "settled", title="Ambiguity R1"))
+    assert stage2.ambiguity_settled(world.root, "demo", "R1")
+
+
+def test_spec_review_severity_splice_refuses_changed_shared_instruction() -> None:
+    builder = getattr(stage2, "spec_review_answer_format", None)
+    assert callable(builder), "the severity splice must validate its shared instruction"
+    with pytest.raises(ValueError, match="severity"):
+        builder(stage2.ANSWER_FORMAT.replace("The severity cell is free text", "Severity is free text"))
+    assert builder(stage2.ANSWER_FORMAT) == stage2.SPEC_REVIEW_ANSWER_FORMAT
+
+
+def test_spec_review_config_refuses_unadmitted_fallback_endpoint(world: World) -> None:
+    (world.root / "model-endpoints.yaml").write_text("spec_review:\n  fallback_endpoint: typo\n")
+    try:
+        stage2.spec_review_call_config(world.root)
+    except stage2.Refused as error:
+        assert stage2.OPENCODE in str(error)
+    else:
+        pytest.fail("an unadmitted fallback endpoint must be refused when configuration is read")
