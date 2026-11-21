@@ -21,78 +21,92 @@ neighbours: []
 
 # Spec — free-storage-keys-flake
 
-Find and fix the cause of the intermittent free-model storage-key test failure
-without weakening its coverage (bead coding-harness-068l — reproduce and fix
-the free storage keys flake). Research: `research.md`; decisions: `decisions.md`.
+Find and fix the demonstrated cause of the intermittent free-model storage-key
+test failure without weakening its coverage (bead coding-harness-068l —
+reproduce and fix the free storage keys flake). Research: `research.md`;
+decisions: `decisions.md`.
 
 ## Problem
 
-- In the merge queue on 2026-11-08, the case with a long model name and no
-  scripted failure exited 1 instead of 0; a different pull request passed the
-  suite on the same base shortly afterwards (`decisions.md`, first measurement,
-  base `8f740e13`).
+- On 2026-11-08, the merge queue reported exit 1 for the case with a long model
+  name and no scripted failure; another pull request passed on the same base
+  shortly afterward (`decisions.md`, base `8f740e13`).
 - On 2026-11-21 at `ee349b78`, 25 serial repetitions of all six cases and one
-  random-order run passed; neither the cause nor a successful reproduction was
-  established (`decisions.md`, first measurement; `research.md`, What is unclear).
+  random-order run passed; the cause and a local reproduction remain unknown
+  (`decisions.md`, first measurement; `research.md`, What is unclear).
 
 ## Acceptance criteria
 
-1. When reproduction is attempted, repeated runs of the full swarm test file
-   use parallel workers, varied recorded test order and concurrent CPU load.
-   *Refuted by:* a run omits the load, parallel workers, full file or recorded order.
-
-2. When a reproduction attempt ends, its dated evidence records the revision,
-   command, load and order, run count, failure count and failing swarm stderr.
-   *Refuted by:* a missing count or setting, or a failure without captured stderr.
-
-3. If a cause is found, a regression forces the observed nondeterministic
-   interleaving and fails before the fix but passes after it.
-   *Refuted by:* the regression passes against the unfixed revision, fails
-   against the fix, or does not exercise the observed cause.
-
-4. When the free-model storage-key test runs after a fix, its existing six
-   cases retain their names and behavioural assertions.
-   *Refuted by:* a removed or renamed case, weakened assertion, new skip or
-   expected-failure marker, or a failed existing case.
-
-5. If no cause is found within the implementation appetite, the attempt stops
-   without a speculative fix and records what was tried and measured in a
-   `Stopped without a cause` section of `findings.md`.
-   *Refuted by:* an unproven fix or a stop without that evidence.
+1. When reproduction is attempted, at least 20 runs of the complete swarm test
+   file use parallel workers across at least three recorded collection orders.
+   *Refuted by:* fewer runs or orders, a partial file, or a serial run.
+2. When reproduction is attempted, the exact CI command `python3 -m pytest tests/ -q -n auto` runs at least five times in default order.
+   *Refuted by:* fewer than five runs, a changed command or a changed order.
+3. While each reproduction run executes, one CPU-busy process per CPU core runs alongside it.
+   *Refuted by:* fewer busy processes or a run with a gap in that load.
+4. When an attempt ends, dated evidence in `findings.md` records revision, OS,
+   Python version, commands, load, orders, resolved worker counts, run counts,
+   and counts of failures among the six cases of the target test.
+   *Refuted by:* any missing field or a failure count including another test.
+5. When a target case fails, the evidence includes its swarm stderr, its worker
+   and the ordered test IDs that worker ran before it.
+   *Refuted by:* a target failure without stderr or a replayable worker history.
+6. When another test fails under load, the evidence lists its test ID separately.
+   *Refuted by:* an unlisted non-target failure or its inclusion in the target failure count.
+7. If a cause is found, a regression forces the interleaving that produced a
+   target failure under load and matches its captured stderr.
+   *Refuted by:* a cause inferred from reading alone, or a forced failure that
+   does not match the captured failure.
+8. If a cause is found, its forced regression fails before the fix and passes after it.
+   *Refuted by:* a passing pre-fix run or a failing post-fix run.
+9. When the test runs after a fix, its entire existing test function and the
+   scenario exercised by each of its six cases remain unchanged.
+   *Refuted by:* a changed setup or assertion, renamed case, changed scenario,
+   added skip or expected-failure marker, or failed case.
+10. If shared test helpers change, the evidence explains how the demonstrated cause requires each change.
+    *Refuted by:* a helper change without a cause-based explanation.
+11. When a fix is made, the same load protocol runs again with the same settings and counts with no target-case failure.
+    *Refuted by:* a missing or different run, or any target-case failure after the fix.
+12. If no cause is found within the available implementation appetite, the attempt stops without a speculative fix and records what was tried and measured under `Stopped without a cause` in `findings.md`.
+    *Refuted by:* an unproven fix or a stop without the stated evidence.
+13. If a demonstrated fix exceeds the available appetite or would touch a protected area or non-goal, the attempt stops and records the cause and proposed remedy in `findings.md` for the orchestrator.
+    *Refuted by:* implementing that remedy or stopping without the cause and proposal.
 
 ## Non-goals
 
-- Retrying failures, extending timeouts, skipping tests or masking the failure.
-- Changing admission, storage-key contracts or swarm behaviour unrelated to
-  the demonstrated cause; broader suite or fixture optimisation is separate.
+- Any retry or longer timeout or deadline as a remedy, in tests or production;
+  remove a demonstrated race instead.
+- Changing admission, storage-key contracts or unrelated swarm behaviour;
+  broader suite or fixture optimisation is separate.
 - Renaming the existing test or changing its archived criterion-ledger rows.
 
 ## Protected areas
 
-- `plans/changes/archive/2026-11-06-research-swarm/plan.md`: the existing
-  test name and its ledger rows stay intact.
+- `plans/changes/archive/2026-11-06-research-swarm/plan.md`: its existing test
+  name and ledger rows stay intact.
 - Admission and leak-check policy, model declarations and verification gates:
   the failure does not establish a reason to weaken them.
 
 ## Definition of Done
 
-- A reproduced cause and red-before/green-after regression are documented;
-  the existing six cases and `make verify` pass after the fix.
-- The pull request includes the reproduction evidence, revision and commands;
-  protected areas and non-goals are checked against its file list.
-- The pull request closes bead coding-harness-068l — reproduce and fix the
-  free storage keys flake — and its last commit carries
-  `Closes-Bead: coding-harness-068l`.
-- If the appetite expires without a cause, report a stop instead of claiming
-  this definition of done or closing the bead.
+- The cause is reproduced under load; the matching forced regression is red
+  before the fix and green after it; the full load protocol then has no target
+  failure, the six cases pass and `make verify` is green.
+- The pull request includes the evidence and commands in `findings.md` and
+  checks protected areas and non-goals against its file list.
+- The pull request closes bead coding-harness-068l — reproduce and fix the free
+  storage keys flake — with `Closes-Bead: coding-harness-068l` on its last commit.
+- A stop is reported to the orchestrator without claiming completion or closing
+  the bead, including when a fix cannot fit the available appetite or boundaries.
 
 ## Open decisions
 
 None open.
 
-- [DETAIL] Set a two-hour phase-4 appetite including repairs: this bounds an
-  investigation whose cause is not yet known. Stop rather than infer a fix.
-- [DETAIL] Use at least three different recorded orders for load attempts:
-  this gives a repeatable minimum without claiming to prove absence of a flake.
-- [DETAIL] No research-swarm handoff is present; the suggested neighbours in
-  the single-explorer report are not a completed swarm's confirmed paths.
+- [DETAIL] The phase-4 appetite is two hours including repairs; the session may
+  extend it once to four hours under the workflow, then stops. This bounds the
+  investigation while applying the common appetite rule.
+- [DETAIL] The load protocol uses at least 20 file runs, three orders, five CI
+  command runs and one busy process per core to make its conditions measurable.
+- [DETAIL] The research is a single-explorer report, not a completed research
+  swarm, so its suggested neighbours are not a swarm handoff.
