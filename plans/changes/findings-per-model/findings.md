@@ -558,3 +558,15 @@ Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 4993 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5009 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_per_model.py`, `branch_of` | The prescribed main report, `make findings-per-model REV=origin/main`, writes to `revisions/<commit>.jsonl` instead of `main.jsonl`: `branch_of` recognizes only local branches. A consumer reading the specified main file therefore sees stale data or no report. [Criterion 14] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `MODEL_NAME` and `attribute_rows` | A released loop row naming the model `Vendor/model-free` is counted as unattributed, with no gap. The runner permits uppercase letters and `/` in model IDs, but the reader rejects both, so an eligible named model loses its credit. [Criterion 3] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fbe9-fd92-76a3-82ac-995996b17240, 2026-11-21
+Reviewer session: codex 01a1fbe9-fd92-76a3-82ac-995996b17240 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
