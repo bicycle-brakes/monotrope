@@ -421,3 +421,88 @@ Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1149 files, 5020 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/ledger-ids-before-pytest/plan.md, plans/changes/ledger-ids-before-pytest/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1149 files, 5022 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1149 files, 5023 commits, 12 rules.
+
+Loop attempt: 2026-11-21 — no round was written; the review-loop calls above consumed no stage; audit calls: 2
+
+qwen3.7-plus was asked again with the format reminder: the first answer was malformed
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
+
+From qwen3.7-plus:
+
+qwen3.7-plus's first answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> After thorough analysis of the diff, I have examined:
+> 
+> 1. The new `ledger_standings` function and its classification logic
+> 2. The changes to `selected_tests`, `cheap_checks`, and their callers
+> 3. The new prompt constants (`MUST_RUN_DELEGATED_REPAIR`) and updated text
+> 4. The new `must_run_refs` and `repair_must_run_refs` functions
+> 5. The test coverage for all 17 spec criteria
+> 6. Edge cases (duplicate entries, malformed entries, async tests, unparseable files, absent files)
+> 
+> I traced through the logic for implement vs repair obligations, the owed/unowed classification, the fault handling, the evidence recording in both accepted and failed attempt records, and the prompt structure for both CODEX and file-only routes.
+> 
+> The change correctly implements the spec criteria:
+> - Missing ledger tests are classified before pytest (criteria 1-4)
+> - Implement owes all ledger tests; repair owes only written entries (criteria 5-7)
+> - Standing test failures are not hidden by missing tests (criterion 8)
+> - Unreadable/unparseable files are faults, not missing (criterion 9)
+> - The existing answer check still rejects undefined claimed tests (criterion 10)
+> - Finding-proof requirements are preserved (criterion 11)
+> - Prompt text correctly distinguishes implement and repair obligations (criteria 12-14)
+> - Absent files are missing, not faults (criterion 15)
+> - Uninspectable files don't prevent prompt construction (criterion 16)
+> - Malformed entries are left to the criterion-ledger gate (criterion 17)
+> 
+> All test callers of `selected_tests` were updated for the new 4-tuple return. All callers of `cheap_checks`, `verify_attempt`, and `_targeted_body` were updated for the new `verb` and `evidence` parameters. The old `_ledger_test_refs` helper was correctly retired.
+> 
+> No finding.
+
+From qwen3.7-plus:
+
+qwen3.7-plus's second answer, which was not in the required format:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> After thorough analysis of the diff, I can now provide my review findings.
+> 
+> The change implements bead coding-harness-bxxt.9: classifying criterion-ledger test references before pytest runs, distinguishing implement vs repair obligations, and handling unreadable/unparseable files as faults rather than missing tests.
+> 
+> Key observations from my review:
+> 
+> **Implementation correctness:**
+> - `ledger_standings` correctly classifies refs as standing/missing/fault
+> - Written entries take precedence over unwritten for duplicates
+> - Absent files → missing; unreadable files → fault (matches spec criterion 9 & 15)
+> - `cheap_checks` correctly computes owed vs unowed based on verb
+> - Missing IDs never reach pytest targets
+> - Evidence collection works for both accepted and failed attempts
+> 
+> **API changes:**
+> - `selected_tests` now returns 4-tuple (breaking change, but all callers updated)
+> - `must_run_refs` and `repair_must_run_refs` now take `root` parameter
+> - `cheap_checks`, `verify_attempt`, `_targeted_body` take `verb` and `evidence` params
+> 
+> **Prompt text:**
+> - Correctly separates standing vs missing tests
+> - Implement prompt requires all ledger tests
+> - Repair prompt distinguishes written (owed) vs unwritten (named but not owed)
+> - File-only repair route has its own `MUST_RUN_DELEGATED_REPAIR` constant
+> 
+> **Test coverage:**
+> - All 17 spec criteria have corresponding tests
+> - Tests cover edge cases: async defs, unreadable files, malformed entries, duplicates
+> - Review loop test failures were in test assertions, not implementation
+> 
+> **Performance consideration:**
+> - `ledger_standings` is called multiple times (in `selected_tests`, `must_run_refs`, `repair_must_run_refs`), parsing files each time
+> - Minor performance issue but not a correctness problem
+> 
+> No finding.
