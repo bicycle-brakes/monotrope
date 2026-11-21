@@ -82,6 +82,10 @@ On 2026-11-18 research found that a record is keyed by the resolved worktree pat
 - Recover or abandon an interrupted supersession whose key set changes or whose remaining record becomes unreadable; the follow-up is coding-harness-0aht (abandon or roll back an interrupted supersession).
 - Discover records of worktrees no longer listed by git or of other repositories.
 
+## Boundary
+
+An interrupted multi-step supersession is outside this change. If a supersession stops between its steps — an archive finalised before its accounting line is written, or a `loop.md` moved into staging that then becomes unreadable — a later request is not guaranteed to refuse without changing records (phase-6 re-check rows P6-1 and P6-2, 2026-11-21). These are the third and fourth findings of one crash-window mechanism after N6-1 and N6-2; closing it needs one journal of the supersession steps that a retry replays or refuses on, which is bead coding-harness-bw73.3.
+
 ## Protected areas
 
 Other changes' records and worktrees, and the research state associated with either key, remain untouched.
