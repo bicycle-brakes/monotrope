@@ -1201,9 +1201,134 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-10 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` and `body_edits_after_review`; `tests/test_stage2.py`, `opus_review_block` | A genuine legacy review has no `Spec review commit` line, because the old runner did not write one. Even when its date is current and the spec body has no uncommitted change, implement refuses it before the legacy date check. The legacy test fixture adds a commit line that genuine old blocks lack, so it does not cover this case. [Criteria 8 and 12] | Codex | taken — criteria 8 and 12, maintainer option B 2026-11-21: a qualifying block without a Spec review commit line is a legacy block; it goes to the legacy date rule (no commit counting) instead of the stamp refusal; the legacy fixture loses its commit line so the test covers a genuine old block | — |
-| F-11 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` | After a fingerprinted review of body A, if the spec is committed as body B and then restored to exactly A, the runner counts two edits and refuses implement even though the current body matches the review fingerprint. A current readable review without an open ambiguity must pass the review precondition. [Criteria 8 and 11] | Codex | taken — criteria 8 and 11, maintainer option B 2026-11-21: when the current spec body equals the body the stamped review read, it counts as zero edits whatever commits lie between; counting applies only when the body differs; regression test for A to B to A | — |
-| F-12 | BLOCKER | SPEC | base | `scripts/stage2.py`, `split_row` and `readable_review` | If a reviewer returns one valid row followed by a row beginning with `\|` but missing its closing `\|`, the runner treats the second line as prose and accepts the review. An `[AMBIGUITY]` at the start of that row’s finding is then quoted outside the table and cannot hold implement. One unparseable table line must make the whole review unreadable. [Criteria 6 and 7] | Codex | taken — criteria 6 and 7, maintainer option B 2026-11-21: any answer line that starts with a pipe character but is not a complete table row (missing closing pipe or wrong cell count) makes the whole review block unreadable; regression test with the unterminated ambiguity row | — |
+| F-10 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` and `body_edits_after_review`; `tests/test_stage2.py`, `opus_review_block` | A genuine legacy review has no `Spec review commit` line, because the old runner did not write one. Even when its date is current and the spec body has no uncommitted change, implement refuses it before the legacy date check. The legacy test fixture adds a commit line that genuine old blocks lack, so it does not cover this case. [Criteria 8 and 12] | Codex | fixed — tests/test_stage2.py::test_legacy_review_currency_by_day | — |
+| F-11 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` | After a fingerprinted review of body A, if the spec is committed as body B and then restored to exactly A, the runner counts two edits and refuses implement even though the current body matches the review fingerprint. A current readable review without an open ambiguity must pass the review precondition. [Criteria 8 and 11] | Codex | fixed — tests/test_stage2.py::test_review_restored_body_is_current | — |
+| F-12 | BLOCKER | SPEC | base | `scripts/stage2.py`, `split_row` and `readable_review` | If a reviewer returns one valid row followed by a row beginning with `\|` but missing its closing `\|`, the runner treats the second line as prose and accepts the review. An `[AMBIGUITY]` at the start of that row’s finding is then quoted outside the table and cannot hold implement. One unparseable table line must make the whole review unreadable. [Criteria 6 and 7] | Codex | fixed — tests/test_stage2.py::test_unterminated_review_row_refuses_admission_and_answer | — |
 
 Phase 6 verdict: codex 01a1fe85-07a3-7510-9c72-41aef2f23bd9, 2026-11-21
 Reviewer session: codex 01a1fe85-07a3-7510-9c72-41aef2f23bd9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5272 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +8 -6
+> - `tests/test_stage2.py` +28 -1
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 138 lines of this gate left out …]
+>     def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+>         day = stage2.LEGACY_SPEC_REVIEW_DAY - dt.timedelta(days=10)
+>         world.write_findings(*[opus_review_block(world, day=day.isoformat(), fingerprint=None)] * 3)
+>         block = stage2.qualifying_reviews(world.text())[0][-1]
+>         stamps = [
+>             int(dt.datetime.combine(day + dt.timedelta(days=n), dt.time(), tzinfo=dt.UTC).timestamp()) for n in (1, 2)
+>         ]
+>         monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
+>         assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
+> >       assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 1
+> E       AssertionError: assert None == 1
+> E        +  where None = <function body_edits_after_review at 0x108b563e0>(PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/pytest-1/popen-gw2/test_legacy_body_versions_coun0/repo'), 'demo', SpecReviewBlock(heading='## Phase 2a — Opus 5.5, 2026-11-09', audit='Stage-2 call, 2026-11-19: spec-review · endpoint ...B1 unique body | Opus 5.5 | open | — |', fingerprint=None, commit=None, table_readable=True, clean=False, bad_row=None), b'two')
+> E        +    where <function body_edits_after_review at 0x108b563e0> = stage2.body_edits_after_review
+> E        +    and   PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/pytest-1/popen-gw2/test_legacy_body_versions_coun0/repo') = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').root
+>
+> tests/test_stage2.py:30974: AssertionError
+> ________________ test_review_commit_counts_return_to_prior_body ________________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_review_commit_counts_return_to_prior_body(world: World) -> None:
+>         spec = world.root / "plans/changes/demo/spec.md"
+>         original = spec.read_text(encoding="utf-8")
+>         blocks = [opus_review_block(world) for _ in range(3)]
+>         world.write_findings(*blocks)
+>         for suffix in ("\nB\n", "", "\nC\n"):
+>             spec.write_text(original + suffix, encoding="utf-8")
+>             git(world.root, "add", "--", str(spec.relative_to(world.root)))
+>             git(world.root, "commit", "--quiet", "-m", "change spec body")
+>             if not suffix:
+> >               assert stage2.review_admission(world.root, "demo").review_problem is not None
+> E               AssertionError: assert None is not None
+> E                +  where None = ReviewAdmission(klass='bounded', class_problem=None, review_problem=None, left_out='', rounds=3, recheck=False).review_problem
+> E                +    where ReviewAdmission(klass='bounded', class_problem=None, review_problem=None, left_out='', rounds=3, recheck=False) = <function review_admission at 0x108b56660>(PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/pytest-1/popen-gw2/test_review_commit_counts_retu0/repo'), 'demo')
+> E                +      where <function review_admission at 0x108b56660> = stage2.review_admission
+> E                +      and   PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/pytest-1/popen-gw2/test_review_commit_counts_retu0/repo') = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-hv6bockz/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').root
+>
+> tests/test_stage2.py:31026: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=98274) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/tests/test_stage2.py:25392: DeprecationWarning: This process (pid=98271) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_stale_legacy_blocks_still_count_as_rounds[three-rounds-one-final-draft]
+> FAILED tests/test_stage2.py::test_legacy_body_versions_count_from_review_day
+> FAILED tests/test_stage2.py::test_review_commit_counts_return_to_prior_body
+> 3 failed, 6672 passed, 17 skipped, 5 warnings in 666.43s (0:11:06)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 51789 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-1-20261121T222626256039Z-cf42c9dc.md
+> ````
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1153 files, 5285 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged

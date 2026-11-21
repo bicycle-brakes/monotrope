@@ -3851,6 +3851,8 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], str | None]:
     for line in body_text.splitlines():
         cells = split_row(line)
         if cells is None:
+            if line.strip().startswith("|"):
+                return [], line.strip()[:80]
             continue
         if _furniture(cells):
             if cells[0].lower() == "id" or [c.lower() for c in cells[1:6]] == [c.lower() for c in ROW_COLUMNS[1:6]]:
@@ -3995,6 +3997,8 @@ def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, dis
         body = spec_body_of(_git_bytes(root, "show", f"{block.commit}:{path}"))
         if block.fingerprint and "sha256:" + hashlib.sha256(body).hexdigest() != block.fingerprint:
             return None
+        if block.fingerprint and body == disk:
+            return 0
         commits = _git_output(root, "rev-list", "--reverse", f"{block.commit}..HEAD", "--", path).splitlines()
         edits = 0
         for commit in commits:
@@ -4159,8 +4163,9 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
         )
     newest = kept[-1]
     rounds = review_rounds(kept)
-    edits = body_edits_after_review(root, change, newest, disk)
-    if edits is None:
+    stale = review_staleness(root, change, newest, current)
+    edits = body_edits_after_review(root, change, newest, disk) if newest.fingerprint else None
+    if newest.fingerprint is not None and edits is None:
         return ReviewAdmission(
             klass=klass,
             left_out=left_out,
@@ -4168,9 +4173,6 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
             review_problem="the spec review is stale: its reviewed fingerprint or commit is in no commit in this history; "
             "commit the spec, then rerun spec-review.",
         )
-    stale = review_staleness(root, change, newest, current)
-    if edits > 1 and stale is None:
-        stale = "the spec body changed more than once since the reviewed commit"
     recheck = stale is None and newest.is_fallback
     can_run = review_round_open(root, change, rounds, recheck)
     ambiguity = next(
@@ -4254,7 +4256,7 @@ def readable_review(answer: str) -> list[list[str]]:
     """
     for line in answer.splitlines():
         cells = split_row(line)
-        if cells is not None and len(cells) != 6:
+        if line.strip().startswith("|") and (cells is None or len(cells) != 6):
             raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {line.strip()[:80]}")
     rows, rest = parse_rows(answer, ambiguity=True)
     loose = [line for line in rest.splitlines() if split_row(line) is not None]

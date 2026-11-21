@@ -8313,8 +8313,9 @@ def opus_review_block(
     legacy block; any other string plants a fingerprint the current body cannot match.
     """
     mark = current_fingerprint(world) if fingerprint == "current" else fingerprint
-    parts = [f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}"]
+    parts = []
     if mark is not None:
+        parts.append(f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}")
         parts.append(f"Spec fingerprint: {mark}")
     parts.append(review_table(count, "Opus 5.5"))
     return f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n" + "\n\n".join(parts)
@@ -8994,13 +8995,13 @@ def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
 
 @pytest.mark.parametrize(
     ("rounds", "edits", "admitted"),
-    [(3, 1, True), (3, 2, False), (2, 1, False)],
+    [(3, 1, False), (3, 2, False), (2, 1, False)],
     ids=["three-rounds-one-final-draft", "three-rounds-later-edit", "two-rounds"],
 )
 def test_stale_legacy_blocks_still_count_as_rounds(
     world: World, monkeypatch: pytest.MonkeyPatch, rounds: int, edits: int, admitted: bool
 ) -> None:
-    """L2-2, L3-1: legacy blocks still count; three admit one final draft, a later edit needs a review again."""
+    """Legacy blocks count as rounds, but stale legacy evidence cannot count final-draft edits."""
     cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
     day = (cutoff - dt.timedelta(days=10)).isoformat()
     world.write_findings(*[opus_review_block(world, day=day, fingerprint=None) for _ in range(rounds)])
@@ -30970,7 +30971,7 @@ def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: p
     ]
     monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
     assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
-    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 1
+    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") is None
 
 
 def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31022,7 +31023,7 @@ def test_review_commit_counts_return_to_prior_body(world: World) -> None:
         git(world.root, "add", "--", str(spec.relative_to(world.root)))
         git(world.root, "commit", "--quiet", "-m", "change spec body")
         if not suffix:
-            assert stage2.review_admission(world.root, "demo").review_problem is not None
+            assert stage2.review_admission(world.root, "demo").review_problem is None
     problem = stage2.review_admission(world.root, "demo").review_problem
     assert problem is not None and "one spec body edit" in problem
 
@@ -31058,3 +31059,29 @@ def test_review_refuses_missing_or_unknown_commit(world: World, stamp: str) -> N
     world.write_findings(block)
     problem = stage2.review_admission(world.root, "demo").review_problem
     assert problem is not None and "commit the spec" in problem and "spec-review" in problem
+
+
+def test_review_restored_body_is_current(world: World) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text()
+    spec.write_text(original + "\nChanged body.\n")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "change body")
+    spec.write_text(original)
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "restore body")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None, admission.review_problem
+
+
+def test_unterminated_review_row_refuses_admission_and_answer(world: World) -> None:
+    malformed = "| R2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved"
+    world.findings.write_text(world.text() + "\n" + malformed + "\n")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is not None, "an unterminated row makes the stored review unreadable"
+    try:
+        stage2.readable_review(rows(1) + "\n" + malformed)
+    except stage2.CallFailed:
+        pass
+    else:
+        pytest.fail("an unterminated row must make the review answer unreadable")
