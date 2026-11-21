@@ -608,7 +608,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/free-storage-keys-flake/decisions.md`](changes/free-storage-keys-flake/decisions.md) | draft | none | 2026-11-21 | coding-harness-068l |
+| [`changes/free-storage-keys-flake/findings.md`](changes/free-storage-keys-flake/findings.md) | draft | none | 2026-11-21 | coding-harness-068l |
+| [`changes/free-storage-keys-flake/plan.md`](changes/free-storage-keys-flake/plan.md) | draft | none | 2026-11-21 | coding-harness-068l |
 | [`changes/free-storage-keys-flake/research.md`](changes/free-storage-keys-flake/research.md) | draft | none | 2026-11-21 | coding-harness-068l |
+| [`changes/free-storage-keys-flake/spec.md`](changes/free-storage-keys-flake/spec.md) | draft | none | 2026-11-21 | coding-harness-068l |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
