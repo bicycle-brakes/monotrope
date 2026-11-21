@@ -655,6 +655,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/venv-guard/plan.md`](changes/venv-guard/plan.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/research.md`](changes/venv-guard/research.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/spec.md`](changes/venv-guard/spec.md) | draft | none | 2026-11-17 | coding-harness-s55e |
+| [`changes/verify-admission-order/research.md`](changes/verify-admission-order/research.md) | draft | none | 2026-11-21 | coding-harness-ofmz |
 | [`changes/verify-cheap-before-admission/decisions.md`](changes/verify-cheap-before-admission/decisions.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/findings.md`](changes/verify-cheap-before-admission/findings.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/plan.md`](changes/verify-cheap-before-admission/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
