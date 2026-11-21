@@ -506,3 +506,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > - Minor performance issue but not a correctness problem
 > 
 > No finding.
+
+Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1149 files, 5026 commits, 12 rules.

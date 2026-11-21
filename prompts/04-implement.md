@@ -35,6 +35,7 @@ the runner runs ruff, then pytest over changed or new test functions, standing
 ledger tests and, on a retry, previously failed tests. Missing ledger IDs never
 reach pytest. The first red check ends the attempt (bead coding-harness-5tyh).
 `findings.md` is the runner's: an edit you make there is put back before the checks.
+That edit is not part of your work, and on its own it never fails the attempt.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**
