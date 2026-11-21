@@ -180,6 +180,8 @@ def interpret_locator_schema(value):
         or set(required) != set(properties)
     ):
         raise ResearchMapError("the locator schema must require every category")
+    if set(properties) != set(CATEGORIES):
+        raise ResearchMapError("the locator schema categories must match the merge categories")
     categories = {name: _category_schema(name, item) for name, item in properties.items()}
     return {"categories": categories}
 
@@ -251,8 +253,9 @@ def _entry_faults(entry, branches):
         return ["the entry must be a JSON object"]
     closest = None
     aimed = [branch for branch in branches if set(entry) & set(branch["fields"])]
-    candidates = aimed if len(aimed) == 1 else (branches[:1] if not entry else branches)
-    for branch in candidates:
+    preferred = branches[0] if not entry else aimed[0] if len(aimed) == 1 else None
+    preferred_faults = None
+    for branch in branches:
         foreign = sorted(set(entry) - set(branch["fields"]))
         faults = [f"the field '{name}' is not part of the entry form" for name in foreign]
         faults += [f"the required field '{name}' is missing" for name in sorted(branch["required"] - set(entry))]
@@ -266,9 +269,11 @@ def _entry_faults(entry, branches):
                 faults.append(f"the field '{name}' does not match the schema pattern")
         if not faults:
             return []
+        if branch is preferred:
+            preferred_faults = faults
         if closest is None or len(faults) < len(closest):
             closest = faults
-    return closest if closest is not None else ["the entry matches no entry form of the schema"]
+    return preferred_faults or closest or ["the entry matches no entry form of the schema"]
 
 
 def filter_locator_report(report, schema):

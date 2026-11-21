@@ -4891,3 +4891,30 @@ def test_finder_all_entries_dropped_stops(sworld: SwarmWorld) -> None:
     assert sworld.run() == 1
     assert not sworld.calls("merge")
     assert next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")["outcome"] == "invalid-report"
+
+
+def test_old_claude_blocks_pi_finder_when_claude_is_reused(sworld: SwarmWorld) -> None:
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    path = store_dir(sworld) / first["run_id"] / "finders-0-1.result.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["stdout"] = "invalid finder report"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    (sworld.bin / "calls.jsonl").unlink()
+    sworld.complete(claude_version="2.1.327")
+    assert sworld.run() == 1
+    assert sworld.calls("finder") == [], "old Claude must block even a Pi-only finder launch"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "installed: 2.1.327" in text and "2.1.328" in text
+
+
+def test_incompatible_schema_categories_stop_before_finders(sworld: SwarmWorld) -> None:
+    path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
+    value = json.loads(schema_text())
+    value["properties"]["design"] = value["properties"].pop("code")
+    value["required"][value["required"].index("code")] = "design"
+    path.write_text(json.dumps(value), encoding="utf-8")
+    assert sworld.run() == 1
+    assert not sworld.calls("finder")
+    assert stage2_research_run.LOCATOR_SCHEMA in sworld.research.read_text(encoding="utf-8")

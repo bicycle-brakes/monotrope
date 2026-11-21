@@ -1158,7 +1158,7 @@ class Run:
                 "launched_in": record.get("launched_in") or self.source.run_id,
             }
         launch_ids = {item["slot_id"] for item in reuse.to_launch}
-        if stage == "finders" and any(e["slot_id"] in launch_ids and e["program"] == "claude-code" for e in entries):
+        if stage == "finders" and launch_ids:
             self.check_claude_finder_version()
         slots = [
             Slot(

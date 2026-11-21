@@ -664,9 +664,70 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-2 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1158 | When a Claude finder result is reused but a Pi finder must run, an installed Claude Code below the declared minimum does not stop the Pi call: the version check runs only if a Claude finder is being launched. The criterion requires the check before any finder call. [Criterion 26] | Codex | taken — criterion 26: the version check guards every new finder call (Claude or Pi) and is skipped only when no finder call runs; consistent with R6-1 (provisional agent decision, night run 2026-11-20-a) | — |
-| R6-3 | MAJOR | SPEC | base | scripts/stage2_research_map.py:155 | If the schema’s `code` category is renamed to `design` in both `properties` and `required`, schema loading and finder validation accept it. Finder calls can then run, but the merge still requires `code` and rejects their reports. The declared category compatibility check is absent from the runtime path. [Criteria 12 and 22; Open decisions] | Codex | taken — criteria 12 and 22: the declared category compatibility check must run on the runtime schema path (provisional agent decision, night run 2026-11-20-a) | — |
-| R6-4 | MAJOR | SPEC | base | scripts/stage2_research_map.py:257 | If the schema changes the `not_read` form’s `required` list to empty, an empty object matches that form. The validator checks only the first form for an empty object, drops the valid entry, and publishes missing-field errors instead. [Criteria 3 and 5] | Codex | taken — criteria 3 and 5: an empty object is matched against every declared form, not only the first (provisional agent decision, night run 2026-11-20-a) | — |
+| R6-2 | MAJOR | SPEC | base | scripts/stage2_research_run.py:1158 | When a Claude finder result is reused but a Pi finder must run, an installed Claude Code below the declared minimum does not stop the Pi call: the version check runs only if a Claude finder is being launched. The criterion requires the check before any finder call. [Criterion 26] | Codex | fixed — tests/test_stage2_swarm.py::test_old_claude_blocks_pi_finder_when_claude_is_reused | — |
+| R6-3 | MAJOR | SPEC | base | scripts/stage2_research_map.py:155 | If the schema’s `code` category is renamed to `design` in both `properties` and `required`, schema loading and finder validation accept it. Finder calls can then run, but the merge still requires `code` and rejects their reports. The declared category compatibility check is absent from the runtime path. [Criteria 12 and 22; Open decisions] | Codex | fixed — tests/test_stage2_swarm.py::test_incompatible_schema_categories_stop_before_finders | — |
+| R6-4 | MAJOR | SPEC | base | scripts/stage2_research_map.py:257 | If the schema changes the `not_read` form’s `required` list to empty, an empty object matches that form. The validator checks only the first form for an empty object, drops the valid entry, and publishes missing-field errors instead. [Criteria 3 and 5] | Codex | fixed — tests/test_stage2_research_map.py::test_empty_entry_matches_any_declared_form | — |
 
 Phase 6 verdict: codex 01a1fb5f-cd31-7532-9e33-4cb2c3ac8898, 2026-11-21
 Reviewer session: codex 01a1fb5f-cd31-7532-9e33-4cb2c3ac8898 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4986 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_map.py` +8 -3
+> - `scripts/stage2_research_run.py` +1 -1
+> - `tests/test_stage2_research_map.py` +18 -0
+> - `tests/test_stage2_swarm.py` +16 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_atomic_test_log.py`, `tests/test_pi_contract.py`, `tests/test_research_capture.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_research_map.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [  6%]
+> ........................................................................ [ 13%]
+> ........................................................................ [ 19%]
+> ........................................................................ [ 26%]
+> ........................................................................ [ 33%]
+> ........................................................................ [ 39%]
+> ........................................................................ [ 46%]
+> ..............................................................F......... [ 53%]
+> ........................................................................ [ 59%]
+> ........................................................................ [ 66%]
+> ........................................................................ [ 73%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 99%]
+> ..                                                                       [100%]
+> =================================== FAILURES ===================================
+> _____________________ test_finder_faults_follow_entry_form _____________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/finder-partial-report/.venv/bin/python3
+>
+>     def test_finder_faults_follow_entry_form() -> None:
+>         # L3-4: a dropped entry's errors come from the form its keys aim at, not the closest other form.
+>         report = {key: [{"not_read": "not available"}] for key in ("code", "rules", "tests", "neighbours")}
+>         report["code"].extend([{"path": 42}, {}])
+>         _, rows = module().filter_locator_report(report, schema())
+>         assert "the field 'path' must be a string" in rows[0]["errors"]
+>         assert "the required field 'reference' is missing" in rows[0]["errors"]
+>         assert all("not_read" not in error for error in rows[0]["errors"])
+> >       assert "the required field 'path' is missing" in rows[1]["errors"]
+> E       assert "the required field 'path' is missing" in ["the required field 'not_read' is missing"]
+>
+> tests/test_stage2_research_map.py:483: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_map.py::test_finder_faults_follow_entry_form
+> 1 failed, 1081 passed in 446.87s (0:07:26)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/finder-partial-report/stage2/attempts/finder-partial-report/attempt-1-20261120T235331430210Z-ea82dafa.md
+> ```
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1150 files, 4986 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged

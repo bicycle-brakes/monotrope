@@ -481,3 +481,21 @@ def test_finder_faults_follow_entry_form() -> None:
     assert "the required field 'reference' is missing" in rows[0]["errors"]
     assert all("not_read" not in error for error in rows[0]["errors"])
     assert "the required field 'path' is missing" in rows[1]["errors"]
+
+
+def test_schema_rejects_categories_incompatible_with_merge():
+    def rename_category(value):
+        value["properties"]["design"] = value["properties"].pop("code")
+        value["required"][value["required"].index("code")] = "design"
+
+    with pytest.raises(module().ResearchMapError, match="categor"):
+        altered(rename_category)
+
+
+def test_empty_entry_matches_any_declared_form():
+    def allow_empty_unread(value):
+        value["properties"]["code"]["items"]["anyOf"][1]["required"] = []
+
+    retained, rows = module().filter_locator_report(sample(code=[{}]), altered(allow_empty_unread))
+    assert retained["code"] == [{}]
+    assert rows == []
