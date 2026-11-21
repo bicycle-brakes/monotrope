@@ -562,6 +562,13 @@ def test_duplicate_reason_does_not_add_targets():
     assert not result.gaps, "a reason ID must not create a missing-target gap"
 
 
+def test_canonical_duplicate_reason_marker_does_not_add_targets():
+    status = "rejected — duplicate of L1-1: not the same as L1-3"
+    assert fr.duplicate_targets(status) == ["L1-1"]
+    result = read(doc(RELEASE, lrow("L1-1", "hy3", "fixed"), lrow("L1-3", "hy3", status)))
+    assert not result.gaps, "a marker in the reason must not create a cycle"
+
+
 def test_statuses_require_whole_leading_words():
     for status in ("fixedy", "rejectedly", "openly", "takenish", "in specialty"):
         assert not fr.known_status(status), f"malformed status accepted: {status}"

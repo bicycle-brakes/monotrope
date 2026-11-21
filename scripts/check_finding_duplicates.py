@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from difflib import SequenceMatcher
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -85,6 +86,7 @@ def changed_files(root: Path, base: str, head: str | None = None) -> list[tuple[
         raise CannotMeasure(f"check-duplicates: cannot measure — the diff failed: {done.stderr.decode().strip()} (3)")
     tokens = done.stdout.decode().split("\0")
     pairs: list[tuple[str | None, str]] = []
+    deleted: list[str] = []
     index = 0
     while index < len(tokens):
         status = tokens[index]
@@ -101,6 +103,8 @@ def changed_files(root: Path, base: str, head: str | None = None) -> list[tuple[
             if status.startswith("A"):
                 old = None
             elif status.startswith("D"):
+                if old.endswith("/findings.md"):
+                    deleted.append(old)
                 continue
         if new.endswith("/findings.md"):
             pairs.append((old, new))
@@ -112,10 +116,32 @@ def changed_files(root: Path, base: str, head: str | None = None) -> list[tuple[
                 f"{untracked.stderr.decode().strip()} (3)"
             )
         seen = {new for _, new in pairs}
-        for path in sorted(p for p in untracked.stdout.decode().split("\0") if p):
-            if path.endswith("/findings.md") and path not in seen:
-                pairs.append((None, path))
-                seen.add(path)
+        paths = sorted(p for p in untracked.stdout.decode().split("\0") if p.endswith("/findings.md") and p not in seen)
+        # Git cannot detect renames to untracked files. Pair sufficiently similar
+        # deleted and untracked files one-to-one before comparing their rows.
+        candidates: list[tuple[float, str, str]] = []
+        for old in deleted:
+            before = git(root, "show", f"{base}:{old}")
+            if before.returncode != 0:
+                raise CannotMeasure(f"check-duplicates: cannot measure — {old} is not in {base[:12]} (3)")
+            for new in paths:
+                try:
+                    after = (root / new).read_bytes()
+                except OSError as exc:
+                    raise CannotMeasure(f"check-duplicates: cannot measure — cannot read {new}: {exc} (3)") from None
+                score = SequenceMatcher(
+                    None, before.stdout.splitlines(keepends=True), after.splitlines(keepends=True), autojunk=False
+                ).ratio()
+                if score >= 0.5:
+                    candidates.append((score, old, new))
+        used_old: set[str] = set()
+        used_new: set[str] = set()
+        for _, old, new in sorted(candidates, key=lambda item: (-item[0], item[1], item[2])):
+            if old not in used_old and new not in used_new:
+                pairs.append((old, new))
+                used_old.add(old)
+                used_new.add(new)
+        pairs.extend((None, path) for path in paths if path not in used_new)
     return pairs
 
 

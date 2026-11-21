@@ -101,6 +101,18 @@ def test_new_duplicate_form_gate_keeps_moved_rows(tmp_path):
     assert any("L1-99" in line for line in gate.measure(root, base, later))
 
 
+def test_unstaged_move_preserves_history_but_checks_new_rows(tmp_path):
+    history = table(("L1-1", "fixed"), ("L1-2", "rejected — Same as L1-1"))
+    root, base = base_repo(tmp_path, {PATH: HEADER + history})
+    moved = root / "plans/changes/archive/c1/findings.md"
+    moved.parent.mkdir(parents=True)
+    (root / PATH).rename(moved)
+    assert gate.measure(root, base) == [], "an unstaged move must preserve historical rows"
+    moved.write_text(HEADER + history + table(("L1-3", "same as L1-1")), encoding="utf-8")
+    found = gate.measure(root, base)
+    assert len(found) == 1 and "L1-3" in found[0], "new rows in a moved file must still be checked"
+
+
 def test_new_duplicate_form_gate_exit_codes(tmp_path, capsys):
     root, base = base_repo(tmp_path, {PATH: HEADER + table(("L1-1", "fixed"))})
     good = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", "rejected — duplicate of L1-1"))})

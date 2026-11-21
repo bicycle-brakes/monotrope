@@ -416,6 +416,12 @@ def known_status(status: str) -> bool:
 
 def duplicate_targets(status: str) -> list[str]:
     """The row ids a duplicate marker names, deduplicated, in deterministic order."""
+    canonical = re.match(
+        rf"^rejected — duplicate of ({FINDING_ID.pattern}(?: and {FINDING_ID.pattern})*)(?:: |$)",
+        status,
+    )
+    if canonical:
+        return sorted(set(FINDING_ID.findall(canonical.group(1))))
     targets: set[str] = set()
     pattern = re.compile(
         rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*)(?![A-Za-z0-9._-])",
