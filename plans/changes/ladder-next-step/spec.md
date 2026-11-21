@@ -28,7 +28,7 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
 
 ## Terms
 
-**Consumed ladder:** the saved run has no unconsumed eligible stage, has at least one completed round since its last restart, and its last completed round was not clean. A taken finding is repaired when its status is `fixed` with the evidence mark required by the existing row rules.
+**Consumed ladder:** the saved run has no unconsumed eligible stage, has at least one completed round since its last restart, and its last completed round cannot end the loop as a clean round. An unconsumed paid rung whose terms have expired counts as consumed for this next-step rule. An unconsumed Flash stage counts as consumed for this rule only when none of its members remains admissible or replaceable; if at least one member remains admissible or replaceable, it remains eligible (`decisions.md` Q-4). A cut-diff round cannot end the loop as a clean round even when it has no accepted findings (`decisions.md` Q-5). A taken finding is repaired when its status is `fixed` with the evidence mark required by the existing row rules.
 
 ## Acceptance criteria
 
@@ -44,16 +44,22 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
    *Refuted by:* a next line bypassing an undecided row, an unmarked fixed row, invalid origin or record, clean stop or repair brake.
 6. When the declaration names paid models but the consumed snapshot has no paid stage, any exclusion reasons found from the current declaration are reported on standard error.
    *Refuted by:* omitting a currently applicable reason, placing it on standard output, or claiming a stale snapshot-time reason after the declaration changes.
-7. When no round has completed in the current run, exhausting its stages stops and reports to the maintainer without naming a next step.
-   *Refuted by:* a zero-round outage returning either `next:` instruction or proceeding to phase 6.
-8. When the doctrine describes a consumed ladder, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, and the exhausted-ladder rule in `AGENTS.md` describe repair for open taken rows and review once repaired.
-   *Refuted by:* any of these texts requiring a maintainer decision solely because a completed run's ladder is consumed, or omitting either next step.
+7. When no round has completed in the current run, exhausting its stages exits 2 and reports to the maintainer without naming a next step.
+   *Refuted by:* a zero-round outage exiting with a code other than 2, returning either `next:` instruction, or proceeding to phase 6.
+8. When the doctrine describes a consumed ladder, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, and `AGENTS.md` describe repair for open taken rows and review once repaired.
+   *Refuted by:* any of these texts requiring a maintainer decision solely because a completed run's ladder is consumed, omitting either next step, or claiming that the loop always ends with a clean round, including in their phase tables and `review-loop` descriptions.
 9. When `docs/WORKFLOW.md` describes the exit status of `review-loop`, it states that exit 0 can also mean a next step was named without writing a round.
    *Refuted by:* a statement that exit 0 always means a round was written.
 10. When `prompts/06-review.md` describes the loop, it states that phase 6 can follow a consumed ladder after its last repair.
     *Refuted by:* saying the loop always runs until a clean round or omitting the consumed-ladder path.
 11. When phase 6 follows a consumed ladder, the documented existing sequence requires a fresh full `make verify` and the independent reviewer's read of the whole diff before release.
     *Refuted by:* documentation permitting release without either the full verification or the independent whole-diff review, including when the loop diff was cut.
+12. When every remaining unconsumed stage is ineligible because its paid terms have expired, a completed run satisfies the stage-exhaustion part of the next-step rule.
+    *Refuted by:* refusing solely because an expired rung remains in the snapshot, instead of applying the applicable next-step or prior stop, or treating a run with an admissible unconsumed rung as exhausted.
+13. While an unconsumed Flash stage has an admissible or replaceable member, the next-step rule does not treat that stage as consumed.
+    *Refuted by:* a `next:` instruction when even one member is admissible or replaceable; or failure to apply the next-step rule when none is and no other eligible stage remains.
+14. When a consumed ladder's last round had a cut diff and no accepted findings, the next-step rule names review if the other applicable stops permit it.
+    *Refuted by:* a clean stop or refusal instead of `next: review <change>` for a cut round with no rows or only rejected rows.
 
 ## Non-goals
 
