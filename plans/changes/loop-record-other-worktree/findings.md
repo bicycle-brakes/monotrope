@@ -1010,3 +1010,15 @@ Reviewer session: codex 01a1fc18-4532-7871-a6cc-c510fd252812 — a fresh session
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5109 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/loop-record-other-worktree/plan.md, plans/changes/loop-record-other-worktree/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5196 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:5089 | If supersession stops after finalizing archive A but before writing its accounting line, and another worktree subsequently has an active record B, a request naming only B ignores unfinished archive A. It archives B and writes a new restart line, leaving A unaccounted for. The incomplete request must refuse without changing records or findings. [Criterion 5] | Codex | open | — |
+| P6-2 | MAJOR | SPEC | base | scripts/stage2.py:5207 | If a supersession is interrupted after moving one `loop.md` into staging and that staged record becomes unreadable, retry skips its readability check. It can move the remaining active record and finalize the archive before discovering the unreadable file. An unreadable requested record must cause refusal without changing record state. [Criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1ff14-d987-7d53-9a4b-d0d65468c28a, 2026-11-21
+Reviewer session: codex 01a1ff14-d987-7d53-9a4b-d0d65468c28a — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
