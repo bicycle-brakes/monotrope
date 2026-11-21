@@ -30546,11 +30546,13 @@ def test_restart_no_round_reports_foreign_record_on_second_scan(world: World, mo
 
 
 def test_malformed_archive_refusal_explains_recovery(world: World) -> None:
-    archive = world.state / "coding-harness" / stage2.ARCHIVE_DIR_NAME / "demo@broken"
+    archive = (
+        world.state / "coding-harness" / stage2.ARCHIVE_DIR_NAME / f"{stage2.record_key('demo', world.root)}@broken"
+    )
     archive.mkdir(parents=True)
     (archive / stage2.MANIFEST_NAME).write_text("invalid", encoding="utf-8")
     with pytest.raises(stage2.Refused) as caught:
-        stage2.archived_round_floor("demo")
+        stage2.archived_round_floor("demo", world.root)
     assert str(archive) in str(caught.value) and "restore" in str(caught.value).lower()
 
 
@@ -30693,3 +30695,54 @@ def test_repository_supersession_lock_blocks_release_and_supersession(world: Wor
     assert record.read_bytes() == before
     assert not world.findings.exists()
     assert supersede(world, key) == 0
+
+
+def test_supersession_counts_prior_archive_from_another_worktree(world: World) -> None:
+    first = other_worktree(world)
+    third = other_worktree(world, "repo-c")
+    first_key = stage2.record_key("demo", first)
+    write_foreign_record(first, [10])
+    assert supersede(world, first_key) == 0
+    third_key = stage2.record_key("demo", third)
+    write_foreign_record(third, [3])
+    # The first supersession's findings have not been carried into this worktree.
+    findings = first / "plans/changes/demo/findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text("# Findings\n", encoding="utf-8")
+    stage2.supersede_loop(first, "demo", [third_key], "continue")
+    assert stage2.restart_floor(findings.read_text(encoding="utf-8")) == 10
+
+
+def test_plain_restart_floor_controls_next_review_round(world: World) -> None:
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [7])
+    assert supersede(world, key) == 0
+    findings = other / "plans/changes/demo/findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text(stage2.RELEASE_HEADING + " 2026-11-17\nRounds run: 1\n", encoding="utf-8")
+    stage2.restart_loop(other, "demo", "continue")
+    text = findings.read_text(encoding="utf-8")
+    assert stage2.rounds_run(None, text) == 7, "plain restart floor must determine the next round"
+
+
+@pytest.mark.parametrize("unreadable", [False, True])
+def test_restart_ignores_unrelated_repository_archives(world: World, unreadable: bool) -> None:
+    # Neither a high round nor an unreadable archive in another repository may affect restart.
+    foreign = world.root.parent / "unrelated-repo"
+    foreign.mkdir()
+    git(foreign, "init")
+    key = stage2.record_key("demo", foreign)
+    archive = archive_base() / f"{key}@2026-11-20T00-00-00Z"
+    archive.mkdir(parents=True)
+    manifest = "not json" if unreadable else json.dumps({"change": "demo", "superseder": key, "keys": [key]})
+    (archive / stage2.MANIFEST_NAME).write_text(manifest, encoding="utf-8")
+    if not unreadable:
+        (archive / key).mkdir()
+        (archive / key / "loop.md").write_text("## Round 99 — reviewer, 2026-11-20\n", encoding="utf-8")
+    world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 1")
+    try:
+        stage2.restart_loop(world.root, "demo", "continue")
+    except stage2.Refused as error:
+        pytest.fail(f"an unrelated repository archive blocked restart: {error}")
+    assert stage2.restart_floor(world.text()) == 1

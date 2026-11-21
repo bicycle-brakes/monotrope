@@ -4609,15 +4609,10 @@ def quote_reviewer(text: str) -> str:
     return "\n".join(line if line.startswith("> ") else "> " + line for line in text.splitlines())
 
 
-def rounds_run(record: str | None, findings_text: str) -> int:
-    """A round is counted by its block in the record, by every count left behind by a release, and by
-    the supersession restarts' superseded rounds - the archive never releases them, and the rounds
-    after a supersession continue its numbering (bead coding-harness-e82i, criteria 4 and 17). A
-    superseded line's round is the highest ever assigned when it was written, so the count rises to
-    it instead of adding it: rounds a release before that line already accounts are never counted
-    twice. A plain restart's line carries no `superseded record` clause and is counted nowhere: its
-    rounds stand in the released blocks already."""
-    in_record = len(ROUND_HEADING.findall(record)) if record else 0
+def highest_assigned_round(
+    record: str | None, findings_text: str, *, root: Path | None = None, change: str | None = None
+) -> int:
+    """Highest assigned number from releases, restart floors, records and repository archives."""
     total = 0
     own = False
     for line in findings_text.splitlines():
@@ -4627,9 +4622,20 @@ def rounds_run(record: str | None, findings_text: str) -> int:
             own = False
         elif own and (match := ROUNDS_LINE.fullmatch(line)):
             total += int(match.group(1))
-        elif match := SUPERSEDED_RESTART_LINE.match(line):
+        elif match := RESTART_LINE.match(line):
             total = max(total, int(match.group(2)))
-    return in_record + total
+    if record:
+        headings = [int(match.group().split()[2]) for match in ROUND_HEADING.finditer(record)]
+        total = max(total + len(headings), max(headings, default=0))
+    total = max(total, max(history_rounds(record, findings_text), default=0))
+    if root is not None and change is not None:
+        total = max(total, archived_round_floor(change, root))
+    return total
+
+
+def rounds_run(record: str | None, findings_text: str) -> int:
+    """Highest round in this worktree's current and released history."""
+    return highest_assigned_round(record, findings_text)
 
 
 def kept_lines(record: str) -> str:
@@ -4965,12 +4971,7 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
         )
     findings_path = folder_of(root, change) / "findings.md"
     text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
-    last = max(
-        max(history_rounds(None, text), default=0),
-        rounds_run(None, text),
-        restart_floor(text),
-        archived_round_floor(change),
-    )
+    last = highest_assigned_round(None, text, root=root, change=change)
     if not last:
         refusal = lost_record_refusal(change, root, text)
         if refusal:
@@ -4987,14 +4988,15 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
     print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
 
 
-def archived_round_floor(change: str) -> int:
+def archived_round_floor(change: str, root: Path) -> int:
     """Highest round assigned in finalized archives for this change."""
     base = record_base().parent / ARCHIVE_DIR_NAME
     highest = 0
     if not base.is_dir():
         return highest
+    owners = record_keys_of_worktrees(change, root)
     for archive in base.iterdir():
-        if not archive.name.startswith(f"{change}@") or not archive.is_dir():
+        if not archive.is_dir() or not any(archive.name.startswith(f"{owner}@") for owner in owners):
             continue
         try:
             manifest = json.loads((archive / MANIFEST_NAME).read_text(encoding="utf-8"))
@@ -5291,10 +5293,8 @@ def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str
             for key, record in records.items()
         }
         highest = max(
+            highest_assigned_round(None, text, root=root, change=change),
             max((max(numbers) for numbers in rounds.values() if numbers), default=0),
-            max(history_rounds(None, text), default=0),
-            rounds_run(None, text),
-            restart_floor(text),
         )
         line = _supersede_accounting_line(keys, rounds, archive_dir.name, highest, pending, reason)
         matched = any(
@@ -11639,7 +11639,7 @@ def _review_round(
     receipt_taken: bool,
 ) -> None:
     """One round of `review_loop` on its chosen stage: prompts, calls, the written round."""
-    round_number = rounds_run(record, findings_text) + 1
+    round_number = highest_assigned_round(record, findings_text, root=root, change=change) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
     cut_note: str | None = None
