@@ -3840,6 +3840,8 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], bool]:
             continue
         if _furniture(cells) or not any(cell.strip() for cell in cells):
             continue
+        if len(cells) < 2:
+            return [], False
         severity = review_severity(cells[1])
         if len(cells) >= 9 and severity:
             rows.append(
@@ -4149,7 +4151,8 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
         else:
             remedy = (
                 "no further review round can run, so the maintainer settles the row in decisions.md with a "
-                f"question headed `Q-<n> · Ambiguity {ambiguity}` and an answer, or the change is re-sliced."
+                f"question headed `Q-<n> · Ambiguity {ambiguity}`, a non-empty `asked` and `answer`, "
+                "`status: answered` and `answered_by: maintainer`, or the change is re-sliced."
             )
         return ReviewAdmission(
             klass=klass,
@@ -4159,6 +4162,25 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
                 f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; {remedy}"
             ),
         )
+    if rounds >= 3:
+        blocker = next(
+            (
+                row["id"]
+                for row in newest.rows
+                if row["severity"].strip().upper() == "BLOCKER" and row["status"].lower().startswith("open")
+            ),
+            None,
+        )
+        if blocker:
+            return ReviewAdmission(
+                klass=klass,
+                left_out=left_out,
+                rounds=rounds,
+                review_problem=(
+                    f"the newest qualifying spec review of {change} has open BLOCKER row {blocker} "
+                    "after three rounds; the maintainer authorizes a fourth round or re-slices the change."
+                ),
+            )
     if stale is not None:
         edits = body_edits_after_review(root, change, newest, disk) if rounds >= 3 else None
         if edits is None or edits > 1:
@@ -4365,7 +4387,8 @@ def spec_review(root: Path, change: str) -> None:
         raise Refused(
             f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
             f"plans/changes/{change}/decisions.md holds a question headed `Q-<n> · Fourth spec-review round`, "
-            "answered by the maintainer with an answer that begins `authorized`, and no round runs after "
+            "with non-empty `asked` and `answer`, `status: answered` and `answered_by: maintainer`; "
+            "the answer begins `authorized`, and no round runs after "
             "the fourth; otherwise the change is re-sliced."
         )
     spec = ctx.folder / "spec.md"
@@ -9621,8 +9644,8 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
     if found:
         return next(iter(found.values()))
     raise Refused(
-        f"no class is stated for {change}: pass --class <{'|'.join(CLASSES)}> or state `class:` in "
-        "research.md's header - a change must say which before phase 1 routes."
+        f"no class is stated for {change}: state `class:` in the header of research.md or spec.md "
+        "- a change must declare its class before routing."
     )
 
 

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-19
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -102,3 +102,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-20 08:17:47–08:52:57 UTC, 2111 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-20 until 11:30 UTC — plan step 3 · orchestrator hand step (Opus subagent), maintainer decision 2026-11-20: `spec_review` block in `model-endpoints.yaml`; AGENTS.md, docs/WORKFLOW.md, README.md, prompts/02-spec.md, prompts/02a-spec-review.md and the handover skill aligned; criterion 1–3 tests tightened and three new anchored tests, all six red first by hand against the old texts; loop rows L2-8, L2-11, L2-12, L3-2..L3-6, L3-10 marked fixed; first full `make verify` red on three older doctrine tests (round wording, five draft steps), repaired; second full `make verify` green (6391 passed, 17 skipped; 1330 s execution) · the two verify runs measured with `date -u` (10:27:18–10:51:42 and 11:07:53–11:30:05 UTC); the edits before them not timed
 2026-11-20 14:25–14:54 UTC — repair · round 4 · orchestrator hand finishing (Opus subagent) after the runner refused attempt 1 (codex) for changing `prompts/02a-spec-review.md`: L4-1 (single-edit admission for a spec with no committed version) and L4-2 (the inventory reports a change it cannot measure and goes on) in `scripts/stage2.py`, each test red first by hand against HEAD's `scripts/stage2.py`, restored byte-identical; L4-3 prompt sentence (plan step 3, maintainer 2026-11-20); targeted tests green (138 passed); full `make verify` green (6393 passed, 17 skipped; 888 s execution, 649 s admission wait) · measured with `date -u` and the commit times
+2026-11-21 01:44:52–03:16:30 UTC, 5497 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

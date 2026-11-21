@@ -29573,3 +29573,57 @@ def test_draft_keep_accepts_only_established_adr_absence(
     keep, new_adrs = stage2.draft_keep(tmp_path, ctx, "baseline")
     assert (adr in keep) is is_new
     assert new_adrs == ([adr.as_posix()] if is_new else [])
+
+
+def test_single_cell_review_line_refuses_without_traceback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.write_findings(opus_review_block(world) + "\n| note |\n")
+    try:
+        admission = stage2.review_admission(world.root, "demo")
+    except IndexError:
+        pytest.fail("a one-cell table line must make the review unreadable, not raise IndexError")
+    assert admission.review_problem and "no qualifying spec review" in admission.review_problem
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "demo" in capsys.readouterr().out
+
+
+def test_open_third_round_blocker_refuses_implement_and_inventory(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed_review_rounds(world, 2)
+    block = opus_review_block(world).replace("| MAJOR |", "| BLOCKER |")
+    assert "| BLOCKER |" in block
+    world.findings.write_text(world.text() + "\n\n" + block + "\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "third review has an open blocker")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem and "BLOCKER" in admission.review_problem
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "BLOCKER" in capsys.readouterr().err
+    assert world.calls() == []
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "demo" in capsys.readouterr().out
+
+
+def test_review_refusals_explain_required_decision_fields(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    seed_review_rounds(world, 2)
+    world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem or ""
+    for field in ("status: answered", "answered_by: maintainer", "asked", "answer"):
+        assert field in problem
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    for field in ("status: answered", "answered_by: maintainer", "asked", "answer"):
+        assert field in error
+
+
+def test_implement_missing_class_remedy_names_valid_headers(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", ""), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "remove class declaration")
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    assert "research.md" in error and "spec.md" in error
+    assert "--class" not in error
