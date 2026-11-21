@@ -629,7 +629,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/review-diff-4000/decisions.md`](changes/review-diff-4000/decisions.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/findings.md`](changes/review-diff-4000/findings.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/plan.md`](changes/review-diff-4000/plan.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-diff-4000/research.md`](changes/review-diff-4000/research.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/spec.md`](changes/review-diff-4000/spec.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
