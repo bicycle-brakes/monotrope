@@ -623,6 +623,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/repair-scope-guard/decisions.md`](changes/repair-scope-guard/decisions.md) | draft | none | 2026-11-21 | coding-harness-t83 |
 | [`changes/repair-scope-guard/research.md`](changes/repair-scope-guard/research.md) | draft | none | 2026-11-02 | coding-harness-t83 |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
