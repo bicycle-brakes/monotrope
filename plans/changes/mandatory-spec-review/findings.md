@@ -1157,3 +1157,15 @@ Runner restoration, 2026-11-21: repair · attempt 3 · route stage-1 — lifecyc
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5099 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5100 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-5 | BLOCKER | SPEC | base | `scripts/stage2.py`, `parse_rows` und `readable_review` | Eine Review-Zeile mit einem nicht maskierten `\|` in der Ortsangabe und `[AMBIGUITY]` am Anfang des eigentlichen Findings wird falsch zusammengefügt: Der Marker steht danach mitten im Finding. Das Review gilt als lesbar und implement darf trotz der offenen Mehrdeutigkeit starten. Eine nicht lesbare Tabellenzeile muss den gesamten Review-Block disqualifizieren. [Kriterien 6 und 7] | Codex | open | — |
+| F-6 | MAJOR | SPEC | base | `scripts/stage2.py`, `spec_review` und `run_fallback_review` | Wird die zunächst commitete `spec.md` nach zwei fehlgeschlagenen Opus-Aufrufen uncommittet geändert, liest der Fallback die geänderte Fassung neu und schreibt bei unverändertem Aufrufende einen gültigen Review-Block dafür. Damit beginnt ein Review über eine nicht commitete Spezifikation; die Commit-Prüfung vom Beginn des ursprünglichen Aufrufs schützt den Fallback nicht. [Boundary] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fe31-5ab3-7301-8895-c96453ce9837, 2026-11-21
+Reviewer session: codex 01a1fe31-5ab3-7301-8895-c96453ce9837 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
