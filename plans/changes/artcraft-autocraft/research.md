@@ -8,6 +8,8 @@ updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-68kr
+class: feature
+neighbours: []
 owner: Data Architect
 provenance: human-written
 tags: [research]
