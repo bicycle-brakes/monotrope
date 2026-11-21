@@ -7558,6 +7558,9 @@ RUNNER_HELD = (
     ".beads/",
     "AGENTS.md",
     "README.md",
+    # Handovers and the journal are the orchestrator's record, never an attempt's (bead
+    # coding-harness-t83: a Codex repair wrote its own handover on 2026-10-15).
+    "docs/journal/",
 )
 
 
