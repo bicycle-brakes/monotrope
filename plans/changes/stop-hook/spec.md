@@ -33,9 +33,10 @@ A session with uncommitted Python changes gets a short, non-writing check at tur
 
 - **Changed Python path:** a `.py` path modified, added, deleted, renamed, staged or untracked relative to `HEAD`, including an index-only change. A rename includes both old and new paths.
 - **Covering tests:** changed `tests/test_*.py` files run themselves. Other changed paths select test modules under `tests/` which mention the file path or filename, or import its module stem, including `import stem`, `import package.stem` and `from package.stem import ...`; match the last component on word boundaries. A deleted changed test is not passed to pytest as a file, but other tests referring to its path may be selected.
-- **Probe:** read-only `ruff check` and `ruff format --check` on existing changed Python paths, then pytest on the nonempty covering set. Deleted paths are skipped by ruff but still select covering tests. Pytest exit 5 (nothing collected) is green.
+- **Probe:** read-only `ruff check` and `ruff format --check` on existing changed Python paths, then pytest with `-x` and per-test output on the nonempty covering set. A reported failed test is an observed red even before pytest exits. Deleted paths are skipped by ruff but still select covering tests. Pytest exit 5 (nothing collected) is green.
 - **Block:** exit 2 with the reason on stderr. **Visible warning:** exit 0 with a JSON `systemMessage`.
-- **Budget:** 60 seconds for the entire probe, overridable by a positive `HARNESS_STOP_HOOK_BUDGET` in seconds for testing.
+- **Budget:** 60 seconds for the entire probe, overridable by a positive finite `HARNESS_STOP_HOOK_BUDGET` in seconds for testing. The override is read only when a probe is needed; an invalid value warns once per invocation.
+- **Checkout:** the Git top level containing the Stop input `cwd`; if `cwd` is missing or outside a checkout, use `CLAUDE_PROJECT_DIR`.
 
 ## Acceptance criteria
 
@@ -59,37 +60,45 @@ A session with uncommitted Python changes gets a short, non-writing check at tur
    *Refuted by:* pytest starting with no selected test path.
 10. When pytest collects no tests and returns exit 5, the hook treats that result as green.
     *Refuted by:* exit 5 blocking a turn.
-11. When the probe reaches its budget without a red result, the hook stops its probe processes and ends the turn with a visible warning that green was not confirmed.
-    *Refuted by:* a timeout blocking, omitting the JSON warning, claiming green, or leaving a probe process running.
-12. If the budget override is not a positive number, the hook warns once and uses the 60-second default.
-    *Refuted by:* an invalid value taking effect, blocking, or passing without the warning.
+11. When the probe reaches its budget without a red result, the hook stops the probe process group and ends the turn with a visible warning that green was not confirmed.
+    *Refuted by:* a timeout blocking, omitting the JSON warning, claiming green, or leaving a member of the probe process group running.
+12. If a needed probe has an invalid budget override, the hook uses the 60-second default and warns once during that invocation, on stderr if the probe blocks and otherwise in the visible warning.
+    *Refuted by:* an invalid value taking effect, a missing warning, an invalid override itself causing a block, or a red probe passing.
 13. If Python, ruff or pytest cannot start, the hook blocks once with exit 2 and names `make venv && bash tools/pi/install.sh` on stderr as the fix.
     *Refuted by:* any missing dependency silently passing, a different exit, or an absent fix.
 14. When a Stop call has `stop_hook_active` true after a block, the hook passes with a visible warning instead of blocking again.
     *Refuted by:* a repeated block, a repeated probe, or an invisible warning.
-15. When the stage-2 runner starts a Claude Code session, that session skips the stop hook.
-    *Refuted by:* a runner-started session invoking the probe or blocking, or an ordinary session skipping it merely because the runner exists.
+15. When the stage-2 runner starts a Claude Code work session or a research-swarm role, that session skips the stop hook.
+    *Refuted by:* either launch site omitting the marker, a marked session probing or blocking, or an ordinary session skipping merely because the runner exists.
 16. When the hook is delivered, the workflow notice lists it as supplied and identifies a dated commit that actually contains the hook, while retaining the validator in the absent list.
     *Refuted by:* the hook listed as absent, a missing or incorrect delivery commit or date, or the validator removed from the absent list.
 17. When the hook is delivered, the workflow's comfort paragraph states the Python-change trigger, ruff and covering tests, 60-second budget, red block and timeout warning.
     *Refuted by:* any of those facts missing or contradicted in the paragraph.
 18. When the hook is delivered, the `README.md` not-built list no longer names a stop hook.
     *Refuted by:* the stop-hook promise still appearing in that list.
+19. When pytest reports a failing test before the budget expires, the hook blocks on that failure even if pytest is then stopped at the budget.
+    *Refuted by:* a test reporting failure before a later stall yields a timeout pass, or the block omits the changed path or failing test.
+20. When the Stop input `cwd` is inside a checkout, the hook inspects that checkout rather than the project directory.
+    *Refuted by:* a changed Python path in a nested worktree being missed because only the project checkout was inspected.
+21. When the Stop input `cwd` is missing or outside a checkout, the hook inspects `CLAUDE_PROJECT_DIR`.
+    *Refuted by:* a changed Python path in that fallback checkout being missed.
+22. When the hook is delivered, the phase table, verdicts paragraph and map in `docs/WORKFLOW.md`, the phase table in `AGENTS.md`, the gate line in `prompts/05-verify.md`, and the stop-hook row in `docs/testing.md` describe its limited probe and do not promise that every red tree blocks.
+    *Refuted by:* any of these sites still claiming that all red trees block or describing the hook as the phase-5 enforcement gate.
 
 ## Non-goals
 
 - Making the hook an enforcement gate, running full `make verify` inside it, or acquiring its machine admission lock; CI remains enforcement.
 - Wiring other hook events, changing SessionStart or permissions, or changing user-level `tools/claude-code/` tooling.
 - Kit travel, provenance classification changes, caching, metrics, or new reporting. The kit's separate decision on `.claude/` remains outstanding.
-- Changing `docs/testing.md` or `prompts/05-verify.md`; their current descriptions remain applicable.
+- Changing the meaning or enforcement of phase 5 beyond correcting descriptions of the hook.
 
 ## Protected areas
 
-`decisions/gates.yaml`, `scripts/verify_all.sh`, `scripts/ci_gates.py`, `Makefile`, `.github/`, `provenance.yaml`, `scripts/kit/manifest.yaml`, `tools/claude-code/`, `prompts/`, `templates/`, `AGENTS.md`, `model-endpoints.yaml`, and the tracker remain untouched. Only the Stop entry changes in `.claude/settings.json`.
+`decisions/gates.yaml`, `scripts/verify_all.sh`, `scripts/ci_gates.py`, `Makefile`, `.github/`, `provenance.yaml`, `scripts/kit/manifest.yaml`, `tools/claude-code/`, prompts other than `prompts/05-verify.md`, `templates/`, `model-endpoints.yaml`, and the tracker remain untouched. Only the Stop entry changes in `.claude/settings.json`.
 
 ## Definition of Done
 
-- `make verify` green at the implementation commit; the hook and settings, runner session marker, tests, workflow notice and comfort paragraph, README and plan index move in the same pull request; no ADR.
+- `make verify` green at the implementation commit; the hook and settings, runner session markers, tests, workflow notice and descriptions, `AGENTS.md`, `prompts/05-verify.md`, `docs/testing.md`, README and plan index move in the same pull request; no ADR.
 - A live Claude Code session observation in `findings.md`, with date and commit, shows a green pass, a red block naming the files, and a visible timeout warning.
 - Protected areas and non-goals remain untouched; the pull request closes `coding-harness-788` and the last commit carries `Closes-Bead: coding-harness-788`.
 
@@ -100,4 +109,7 @@ None open. The phase-2a answers in `findings.md` settle their respective cases.
 - [DETAIL] Use the worktree's `.venv/bin/python3` if usable, otherwise `python3` on `PATH`, with `python -m ruff` and `python -m pytest`; one environment exposes missing dependencies consistently.
 - [DETAIL] Read Stop input JSON for `stop_hook_active` and use a runner-owned environment marker for runner sessions; this distinguishes the two exceptions without suppressing ordinary sessions.
 - [DETAIL] Kill the probe process group at timeout; the test override makes this observable without waiting a minute. Format checks do not write because the maintainer chose reporting only.
+- **Boundary:** Descendants that a test starts in a separate session can survive the group cleanup; tracking and terminating them is outside this change.
+- [DETAIL] Per-test pytest output exposes a failure before a timeout, and `-x` avoids continuing after a failure; this carries the maintainer’s existing red-result decision into pytest.
+- [DETAIL] Correct the phase-5 description in `prompts/05-verify.md` and the hook row in `docs/testing.md` along with the other doctrine sites; their present red-tree claims conflict with the decided limited probe.
 - [DETAIL] `neighbours: []` records the legacy non-swarm exploration; the four research neighbours are reading, not swarm claims. Bounded changes have no design phase or ADR draft.
