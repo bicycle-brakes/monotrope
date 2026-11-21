@@ -1,0 +1,219 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Finder locator report",
+  "description": "The one answer of a finder seat: exactly the four locator lists, no other field (bead coding-harness-yd8w).",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Functions, modules and files the change touches or could reuse. Never empty: write the unread marker when there is nothing else.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "description": "A locator: one exact place in the repository.",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The repository-relative path."
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The exact, case-sensitive symbol or section: a Python symbol is a definition or a module-level assignment (dotted for nested definitions); a Markdown reference is the text of one ATX heading, or `criterion <n>`; a YAML or JSON reference is a dotted key path. Line numbers, bare paths and prose are not references."
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "One sentence why this place matters."
+              }
+            },
+            "required": [
+              "path",
+              "reference",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "An explicit unread marker, only when nothing was found or a place could not be read. \"Not found\" and \"not read\" are different statements; write them as two.",
+            "properties": {
+              "not_read": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "What was not read or found, and why."
+              }
+            },
+            "required": [
+              "not_read"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Rules, ADRs and human-owned paths that apply. Never empty: write the unread marker when there is nothing else.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "description": "A locator: one exact place in the repository.",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The repository-relative path."
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The exact, case-sensitive symbol or section: a Python symbol is a definition or a module-level assignment (dotted for nested definitions); a Markdown reference is the text of one ATX heading, or `criterion <n>`; a YAML or JSON reference is a dotted key path. Line numbers, bare paths and prose are not references."
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "One sentence why this place matters."
+              }
+            },
+            "required": [
+              "path",
+              "reference",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "An explicit unread marker, only when nothing was found or a place could not be read. \"Not found\" and \"not read\" are different statements; write them as two.",
+            "properties": {
+              "not_read": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "What was not read or found, and why."
+              }
+            },
+            "required": [
+              "not_read"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Tests and gates that cover or would be affected by the change. Never empty: write the unread marker when there is nothing else.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "description": "A locator: one exact place in the repository.",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The repository-relative path."
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The exact, case-sensitive symbol or section: a Python symbol is a definition or a module-level assignment (dotted for nested definitions); a Markdown reference is the text of one ATX heading, or `criterion <n>`; a YAML or JSON reference is a dotted key path. Line numbers, bare paths and prose are not references."
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "One sentence why this place matters."
+              }
+            },
+            "required": [
+              "path",
+              "reference",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "An explicit unread marker, only when nothing was found or a place could not be read. \"Not found\" and \"not read\" are different statements; write them as two.",
+            "properties": {
+              "not_read": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "What was not read or found, and why."
+              }
+            },
+            "required": [
+              "not_read"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "neighbours": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Specifications, designs, plans or decisions of other changes that sit next to this one. Never empty: write the unread marker when there is nothing else.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "description": "A locator: one exact place in the repository.",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The repository-relative path."
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "The exact, case-sensitive symbol or section: a Python symbol is a definition or a module-level assignment (dotted for nested definitions); a Markdown reference is the text of one ATX heading, or `criterion <n>`; a YAML or JSON reference is a dotted key path. Line numbers, bare paths and prose are not references."
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "One sentence why this place matters."
+              }
+            },
+            "required": [
+              "path",
+              "reference",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "description": "An explicit unread marker, only when nothing was found or a place could not be read. \"Not found\" and \"not read\" are different statements; write them as two.",
+            "properties": {
+              "not_read": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "What was not read or found, and why."
+              }
+            },
+            "required": [
+              "not_read"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "code",
+    "rules",
+    "tests",
+    "neighbours"
+  ],
+  "additionalProperties": false
+}
