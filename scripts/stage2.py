@@ -4341,6 +4341,19 @@ def write_review_block(
     append(ctx.findings, "\n\n".join(parts))
 
 
+def require_committed_review_spec(root: Path, change: str) -> None:
+    """Refuse a review whenever its spec differs from the committed version."""
+    spec_path = f"plans/changes/{change}/spec.md"
+    tracked_at_head = _git_bytes(root, "ls-tree", "--name-only", "HEAD", "--", spec_path)
+    staged = _git_bytes(root, "diff", "--cached", "--name-only", "HEAD", "--", spec_path)
+    try:
+        disk = (root / spec_path).read_bytes()
+    except OSError as error:
+        raise Refused(f"{spec_path} cannot be read ({error}).") from error
+    if not tracked_at_head or staged or disk != _git_bytes(root, "show", f"HEAD:{spec_path}"):
+        raise Refused(f"{spec_path} differs from HEAD; commit the spec, then rerun spec-review.")
+
+
 def run_fallback_review(
     ctx: Context, config: dict, opus_failure: CallFailed
 ) -> tuple[bytes, list[list[str]], str, tuple[str, str, str | None], object]:
@@ -4370,6 +4383,7 @@ def run_fallback_review(
     require_pi()
     discovery = discover_free(ctx.root, allow_empty=True)
     ctx.models_store = discovery.get("models_store")
+    require_committed_review_spec(ctx.root, ctx.change)
     try:
         answer = run_reviewer(
             ctx,
@@ -4403,15 +4417,7 @@ def spec_review(root: Path, change: str) -> None:
     when decisions.md records the maintainer's authorization.
     """
     ctx = preflight(root, change, OPUS)
-    spec_path = f"plans/changes/{change}/spec.md"
-    tracked_at_head = _git_bytes(root, "ls-tree", "--name-only", "HEAD", "--", spec_path)
-    staged = _git_bytes(root, "diff", "--cached", "--name-only", "HEAD", "--", spec_path)
-    try:
-        disk = (root / spec_path).read_bytes()
-    except OSError as error:
-        raise Refused(f"{spec_path} cannot be read ({error}).") from error
-    if not tracked_at_head or staged or disk != _git_bytes(root, "show", f"HEAD:{spec_path}"):
-        raise Refused(f"{spec_path} differs from HEAD; commit the spec, then rerun spec-review.")
+    require_committed_review_spec(root, change)
     config = spec_review_call_config(root)
     try:
         findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
@@ -4447,6 +4453,7 @@ def spec_review(root: Path, change: str) -> None:
     failure: CallFailed | None = None
     rows: list[list[str]] = []
     answer = ""
+    require_committed_review_spec(root, change)
     try:
         answer = run_work_model(
             ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit
@@ -4461,6 +4468,7 @@ def spec_review(root: Path, change: str) -> None:
         )
         pause(int(config["pause_seconds"]))
         result = checked_prompt(ctx, OPUS, prompt)
+        require_committed_review_spec(root, change)
         try:
             answer = run_work_model(
                 ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit

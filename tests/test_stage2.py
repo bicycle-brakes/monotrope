@@ -9064,6 +9064,26 @@ def test_the_inventory_lists_a_change_in_every_failing_group(world: World, capsy
     assert "\n- both (" in review_group
 
 
+def test_fallback_refuses_spec_changed_after_opus_failures(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F-6: fallback must not review a spec changed after the initial commit check."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    spec = world.root / "plans/changes/demo/spec.md"
+    changed = spec.read_text(encoding="utf-8") + "\nUncommitted change.\n"
+    world.script(
+        claude=[{"exit": 1}, {"exit": 1, "plant": {"plans/changes/demo/spec.md": changed}}],
+        pi=[rows(1)],
+    )
+    before = world.text()
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    assert "plans/changes/demo/spec.md" in error and "commit the spec, then rerun" in error
+    assert world.reviews("pi") == []
+    assert world.text() == before
+
+
 def test_fallback_spec_review_honours_leak_check(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
