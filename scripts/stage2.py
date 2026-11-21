@@ -6057,11 +6057,11 @@ def _frame_lines(output: str) -> list[str]:
     return found
 
 
-def _shrink(body: list[str], limit: int) -> list[str]:
+def _shrink(body: list[str], limit: int, *, subject: str = " of this gate") -> list[str]:
     """A section of at most `limit` lines, marker included: its start frame, the marker, its last lines."""
     if len(body) <= limit:
         return body
-    return [body[0], f"[… {len(body) - limit + 1} lines of this gate left out …]", *body[-(limit - 2) :]]
+    return [body[0], f"[… {len(body) - limit + 1} lines{subject} left out …]", *body[-(limit - 2) :]]
 
 
 def red_sections(output: str) -> str | None:
@@ -6763,14 +6763,9 @@ def selected_tests(
         # dropped as a duplicate, and one the file lacks is classified missing instead of staying a
         # target (review row L3-1, carried by the classification now).
         whole = {target for target in targets if "::" not in target}
-        names = {posix: _standing_names(root, posix) for posix in whole}
-        kept = sorted(
-            t
-            for t in targets
-            if "::" not in t
-            or (posix := t.split("::", 1)[0]) not in whole
-            or not _id_stands(t.split("::", 1)[1], names[posix])
-        )
+        for posix in whole:
+            _standing_names(root, posix)  # A whole file must still be readable and parseable.
+        kept = sorted(t for t in targets if "::" not in t or t.split("::", 1)[0] not in whole)
     except (Refused, OSError, SyntaxError, UnicodeDecodeError, ValueError) as error:
         return None, str(error), missing, ledger_faults
     return kept, None, missing, ledger_faults
@@ -6823,7 +6818,7 @@ def cheap_checks(
         if ref not in owed
     ]
     if evidence is not None and unowed:
-        evidence.extend(_shrink(unowed, TAIL_LINES))
+        evidence.extend(_shrink(unowed, TAIL_LINES, subject=""))
     if fault is not None or ledger_faults:
         lines = []
         if fault is not None:
@@ -6833,7 +6828,7 @@ def cheap_checks(
                 ["the cheap tests cannot be checked; a ledger test file cannot be read or parsed:", *ledger_faults]
             )
         lines.extend(f"missing ledger test owed ({state}): `{ref}`" for ref, state in sorted(owed.items()))
-        return ["\n".join(_shrink(protect_diagnostics("\n".join(lines), key).splitlines(), TAIL_LINES))]
+        return ["\n".join(_shrink(protect_diagnostics("\n".join(lines), key).splitlines(), TAIL_LINES, subject=""))]
     problems: list[str] = []
     if tests:
         identity = "`" + " ".join(PYTEST) + "`"
@@ -6867,7 +6862,7 @@ def cheap_checks(
         lines = protect_diagnostics(
             "the criterion ledger names tests that do not stand, and this attempt owes them: " + shown_owed, key
         ).splitlines()
-        problems.append("\n".join(_shrink(lines, TAIL_LINES)))
+        problems.append("\n".join(_shrink(lines, TAIL_LINES, subject="")))
     return problems
 
 
@@ -10230,6 +10225,7 @@ def run_attempts(
                 scope_record += [
                     protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in scope_lines
                 ]
+            scope_in_time = not problems
             exposed = verified_exposed
             if key is not None and not exposed:
                 # The gate runs repository code the model just edited: scan again after it and the
@@ -10268,9 +10264,9 @@ def run_attempts(
                     started_wall,
                     ended_wall,
                     max(0, round(ended_mono - started_mono)),
-                    # A passing attempt's verification scope stands in its time line, after the
-                    # verdict word; a failed attempt's stays in its one diagnostics block.
-                    [protect_diagnostics(line, key) for line in scope_lines] if not problems and not exposed else (),
+                    # Scope goes in the time line when no diagnostics block was written, including
+                    # a refusal discovered by the final credential scan; otherwise it is in that block.
+                    [protect_diagnostics(line, key) for line in scope_lines] if scope_in_time else (),
                 ),
                 baseline_time,
                 inputs_before,

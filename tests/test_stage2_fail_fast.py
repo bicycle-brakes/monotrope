@@ -1378,3 +1378,49 @@ def test_unparseable_ledger_file_keeps_other_missing_ids(world: World) -> None:
     assert "test_bad.py" in "\n".join(problems)
     assert "test_gone.py::test_gone" in "\n".join(problems)
     assert "test_later.py::test_later" in "\n".join(evidence)
+
+
+def test_whole_file_filter_drops_nonstanding_explicit_target(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A future target source cannot pass an absent name alongside a whole file to pytest."""
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_fresh.py").write_text("def test_present():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(stage2, "ledger_standings", lambda *_: (["tests/test_fresh.py::test_absent"], {}, []))
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    targets, fault, _, _ = stage2.selected_tests(world.root, env, b"")
+    assert fault is None
+    assert targets == ["tests/test_fresh.py"]
+
+
+def test_late_credential_refusal_keeps_missing_ledger_record(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A credential discovered after diagnostics were decided still leaves the missing test in the record."""
+    verified = False
+
+    def verify(*_args, **kwargs):
+        nonlocal verified
+        verified = True
+        kwargs["evidence"].append("missing ledger test, named but not owed: `tests/test_later.py::test_later`")
+        return []
+
+    def scan(*_args, **kwargs):
+        return [Path("src/app.py")] if verified and "findings" in kwargs else []
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}])
+    assert world.run("implement") == 2
+    assert "tests/test_later.py::test_later" in world.plan.read_text() + world.text()
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_missing_ledger_truncation_names_diagnostic_lines(world: World, verb: str) -> None:
+    """A bounded list of missing tests must not describe its omitted lines as a gate."""
+    plan = plan_with_ledger(
+        [f"- {n}: not yet written tests/test_missing.py::test_missing_{n} — later" for n in range(100)]
+    ).encode()
+    evidence: list[str] = []
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    problems = stage2.cheap_checks(world.root, env, world.plan, None, plan, verb=verb, evidence=evidence)
+    record = "\n".join([*problems, *evidence])
+    assert "lines of this gate left out" not in record
+    assert "lines left out" in record
