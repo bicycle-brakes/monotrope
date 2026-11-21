@@ -2017,3 +2017,15 @@ Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claud
 > Found 2 errors.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/runner-stamps-provenance/stage2/attempts/runner-stamps-provenance/attempt-3-20261121T002210008795Z-b1fdb594.md
 > ```
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 4996 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-R1 | BLOCKER | SPEC | base | `scripts/stage2.py:header_problems` | An implement attempt can change a human-written active `research.md` from pending to an approval naming itself, and the shared check accepts it. With no model producer, the research census skips publication checks; the active-research branch also returns before comparing the review with the committed baseline. A new active research file with a self-written approval likewise passes. The check must refuse both approvals. [Criteria 4, 11, 12] | Codex | open | — |
+| P6-R2 | MAJOR | SPEC | base | `scripts/plans_registry.py:artefacts` and `check` | An active change can contain `plans/changes/demo/INDEX.md` with an invalid or duplicate `produced_by` and the producer gate never examines it: `artefacts()` excludes every `INDEX.md`, while the separate scan covers only underscore-prefixed files. The gate must reject non-conforming producer records throughout active changes. [Criterion 17] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fbb8-5042-7e83-9df6-818069e28fe8, 2026-11-21
+Reviewer session: codex 01a1fbb8-5042-7e83-9df6-818069e28fe8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
