@@ -20,47 +20,52 @@ adr_files: []
 
 # Spec — review-diff-4000
 
-The paid review loop can receive up to 4,000 lines of a change diff as interim relief until multi-part review arrives (bead `coding-harness-mwzv.4`). Research: `research.md`. Decisions: `decisions.md`.
+Every round of the review loop shares a 4,000-line prompt diff bound as interim relief until multi-part review arrives (bead `coding-harness-mwzv.4`). Research: `research.md`. Decisions: `decisions.md`.
 
 ## Problem
 
-- On 2026-11-21 the paid review prompt is cut at 2,000 lines; a cut round cannot count as clean. The 2026-11-20 day handover reports a change of about 4,100 lines cut at 2,000 (`research.md`, “What exists today”).
-- The 2026-10-29 research measured three changes where documentation and plans filled over half the 2,000-line allowance and no test-file lines reached the reviewers (`research.md`, “The measured effect of the cut”).
+- On 2026-11-21 the shared prompt diff bound is 2,000 lines; a cut round cannot count as clean. The 2026-11-20 day handover reports a change of about 4,100 lines cut at 2,000 (`research.md`, “What exists today”).
+- Research measured on 2026-10-29 that documentation and plans filled over half the 2,000-line allowance in three changes, leaving no test-file lines in reviewers' prompts (`research.md`, “The measured effect of the cut”).
+- The free stage can produce more than 2,000 lines before its own total threshold stops later files; the shared 2,000-line prompt bound currently cuts that output (`findings.md`, phase 2a, S-1). This corrects the contrary claim in `research.md`.
 
 ## Acceptance criteria
 
-1. When a paid review receives a change diff of at most 4,000 lines, its prompt carries the complete diff without a cut note.
-   *Refuted by:* A 4,000-line diff is cut or reported as cut.
-2. When a paid review receives a change diff exceeding 4,000 lines, its prompt carries the first 4,000 lines and a cut marker, and the round record reports the cut.
-   *Refuted by:* A 4,001-line diff carries fewer or more than its first 4,000 lines, lacks the marker, or has no cut note in the record.
-3. When the free review prepares its implementation diff, its 400-line per-file and 2,000-line total bounds remain in force.
-   *Refuted by:* The free diff no longer cuts at either existing bound.
-4. When a round reviews a diff cut by the overall review bound, it cannot count as clean.
-   *Refuted by:* A cut round is recorded as clean or becomes clean after release.
-5. When the living workflow and runner overview describe review diff limits, they state the 4,000-line overall bound and distinguish the free review's 2,000-line total and 400-line per-file bounds.
-   *Refuted by:* Either document retains 2,000 as the overall bound or misstates a free-review bound.
+1. When a review-loop round receives its selected diff of at most 4,000 lines, the shared prompt bound carries that diff unchanged without its own cut note.
+   *Refuted by:* A 4,000-line selected diff is cut or reported cut by the shared bound in any stage.
+2. When a review-loop round receives its selected diff of more than 4,000 lines, the shared prompt bound carries the first 4,000 lines and a cut marker.
+   *Refuted by:* A 4,001-line selected diff carries a different prefix or lacks the marker.
+3. When the shared prompt bound cuts a round's selected diff, the round record reports that cut.
+   *Refuted by:* A round over a 4,001-line selected diff has no corresponding cut note in its record.
+4. When the free stage produces an uncut selected diff of more than 2,000 and at most 4,000 lines, its round prompt and availability probe carry that selected diff without a shared-bound cut.
+   *Refuted by:* Such an output, including an overshoot on its last file without a free-stage cut note, is truncated at 2,000 or the round record reports a shared-bound cut.
+5. When the free stage selects and bounds its implementation diff, its existing filter, 400-line per-file bound and 2,000-line total threshold remain unchanged.
+   *Refuted by:* The filter or either limit changes, or the existing threshold behavior changes, including its whole-file overshoot.
+6. When either the free stage's own bounds or the shared prompt bound cuts a round's diff, the round is recorded as cut and cannot count as clean, including after release.
+   *Refuted by:* A free per-file cut is omitted from the cut record, or a cut round ends the loop as clean before or after release.
+7. When the living workflow and runner overview describe the diff bounds, they state the 4,000-line shared bound, the free stage's 400-line per-file bound and 2,000-line total threshold, and that free per-file cuts are recorded as cut rounds.
+   *Refuted by:* Either document gives a wrong bound or threshold, treats the free total threshold as a strict 2,000-line prompt cap, or says a free per-file cut is not recorded as a cut round.
 
 ## Non-goals
 
 - Multi-part diff splitting, its recorded four-parts ceiling, diff ordering or path exclusions; multi-part review is a separate change (bead `coding-harness-hchx`).
 - Changing the 45-minute review deadline, model selection, context windows, compaction or overflow handling; the deadline's effect is measured separately (bead `coding-harness-8kht`).
-- Rewriting dated research, handovers or merged decision records that describe the former bound.
+- Rewriting dated research, handovers or merged decision records describing the former bound.
 
 ## Protected areas
 
-- ADR files and the merged decision record: this bounded interim adjustment does not amend their decisions.
-- Free-review filtering and its limits: the paid allowance does not widen what the free stage carries.
+- ADR files and the merged decision record remain historical: this bounded adjustment does not amend their decisions.
+- The free diff filter, helpers and their own bounds stay unchanged; the shared prompt bound still applies to their output, as the maintainer decided (`decisions.md`, Q-1).
 
 ## Definition of Done
 
 - `make verify` green; the criterion ledger in `plan.md` identifies the checks.
 - `docs/WORKFLOW.md` and `docs/how-it-works.md` move with the code; no ADR moves.
-- The protected areas remain untouched and the non-goals unbuilt, as shown by the pull request's file list.
+- Review the actual patch, including the contents of `scripts/stage2.py`, to verify the protected helpers and limits are unchanged and the non-goals remain unbuilt.
 - The pull request closes `coding-harness-mwzv.4`, and its last commit carries `Closes-Bead: coding-harness-mwzv.4`.
 - Special runs: none.
 
 ## Open decisions
 
-[DETAIL] A two-hour phase-4 stop is set for this bounded change: it is freely revisable and covers the parameter, regression checks and documentation.
+[DETAIL] A two-hour phase-4 stop covers the parameter, regression checks and documentation; it is freely revisable.
 
 None open.
