@@ -3916,17 +3916,18 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
     return blocks
 
 
-def open_ambiguity_row(block: SpecReviewBlock) -> str | None:
-    """The ID of the block's open ambiguity row, or None (spec terms).
+def open_ambiguity_rows(block: SpecReviewBlock) -> list[str]:
+    """The IDs of the block's open ambiguity rows (spec terms).
 
     A row is open when its Status begins `open`; an answer quoted beside it does not close
     it. The mark may sit in the Severity or the Finding cell.
     """
-    for row in block.rows:
-        marked = row["severity"].startswith("[AMBIGUITY]") or row["finding"].startswith("[AMBIGUITY]")
-        if marked and row["status"].lower().startswith("open"):
-            return row["id"]
-    return None
+    return [
+        row["id"]
+        for row in block.rows
+        if (row["severity"].startswith("[AMBIGUITY]") or row["finding"].startswith("[AMBIGUITY]"))
+        and row["status"].lower().startswith("open")
+    ]
 
 
 def review_rounds(blocks: list[SpecReviewBlock]) -> int:
@@ -3939,7 +3940,7 @@ def review_rounds(blocks: list[SpecReviewBlock]) -> int:
     awaiting_recheck = False
     for block in blocks:
         if block.is_recheck and awaiting_recheck:
-            awaiting_recheck = False
+            awaiting_recheck = block.is_fallback
             continue
         rounds += 1
         awaiting_recheck = block.is_fallback
@@ -4119,7 +4120,11 @@ def review_admission(root: Path, change: str) -> ReviewAdmission:
     except Refused as error:
         part = _review_part(root, change, None)
         return ReviewAdmission(
-            class_problem=str(error), review_problem=part.review_problem, left_out=part.left_out, rounds=part.rounds
+            class_problem=str(error),
+            review_problem=part.review_problem,
+            left_out=part.left_out,
+            rounds=part.rounds,
+            recheck=part.recheck,
         )
     if klass == "spike":
         return ReviewAdmission(klass=klass)
@@ -4157,9 +4162,11 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
     rounds = review_rounds(kept)
     stale = review_staleness(root, change, newest, current)
     recheck = stale is None and newest.is_fallback
-    can_run = review_round_open(root, change, rounds, recheck and not newest.is_recheck)
-    ambiguity = open_ambiguity_row(newest)
-    if ambiguity is not None and (can_run or not ambiguity_settled(root, change, ambiguity)):
+    can_run = review_round_open(root, change, rounds, recheck)
+    ambiguity = next(
+        (row for row in open_ambiguity_rows(newest) if can_run or not ambiguity_settled(root, change, row)), None
+    )
+    if ambiguity is not None:
         if can_run:
             remedy = "settle the row and review the spec again before a model starts."
         else:
@@ -4172,6 +4179,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
             klass=klass,
             left_out=left_out,
             rounds=rounds,
+            recheck=recheck,
             review_problem=(
                 f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; {remedy}"
             ),
@@ -4190,6 +4198,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
                 klass=klass,
                 left_out=left_out,
                 rounds=rounds,
+                recheck=recheck,
                 review_problem=(
                     f"the newest qualifying spec review of {change} has open BLOCKER row {blocker} "
                     "after three rounds; the maintainer authorizes a fourth round or re-slices the change."
@@ -4213,6 +4222,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
                 klass=klass,
                 left_out=left_out,
                 rounds=rounds,
+                recheck=recheck,
                 review_problem=f"the newest qualifying spec review of {change} is stale: {stale}. {remedy}",
             )
     return ReviewAdmission(klass=klass, left_out=left_out, rounds=rounds, recheck=recheck)
@@ -4399,9 +4409,7 @@ def spec_review(root: Path, change: str) -> None:
             current = spec_body_fingerprint(ctx.folder / "spec.md")
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
-        recheck = (
-            review_staleness(root, change, newest, current) is None and newest.is_fallback and not newest.is_recheck
-        )
+        recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
     if not review_round_open(root, change, rounds, recheck):
         raise Refused(
             f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
@@ -4503,7 +4511,7 @@ def spec_review_inventory(root: Path) -> int:
             class_refused.append(f"{name} ({admission.class_problem})")
         if admission.review_problem is not None:
             review_refused.append(f"{name} ({admission.review_problem})")
-        elif admission.recheck:
+        if admission.recheck:
             rechecks.append(name)
     print("Spec-review inventory — changes without a current spec review:")
     if class_refused:

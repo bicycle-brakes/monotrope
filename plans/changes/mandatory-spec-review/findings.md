@@ -851,9 +851,9 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | BLOCKER | SPEC | base | `scripts/stage2.py:4200` | Wenn das neueste Review zwei offene `[AMBIGUITY]`-Zeilen enthält und nach der dritten Runde nur die erste durch eine Antwort der Person geklärt ist, lässt die Zulassung die Implementierung starten: Sie prüft nur die erste Zeile und übersieht die zweite offene Mehrdeutigkeit. Jede offene Mehrdeutigkeit muss die Implementierung zurückhalten. [Kriterium 7] | Codex | taken — every open [AMBIGUITY] row of the newest review holds implement, not only the first (provisional agent decision, night run 2026-11-20-a) | — |
-| F-2 | MAJOR | SPEC | base | `scripts/stage2.py:4220`, `scripts/stage2.py:4508` | Ein aktuelles Fallback-Review mit offener Mehrdeutigkeit oder offenem BLOCKER wird in der Morgeninventur als abgelehnt aufgeführt, aber nicht für die Opus-Nachprüfung genannt. Die Inventur muss auch dieses aktuelle Fallback-Review für die Nachprüfung ausweisen. [Kriterium 17] | Codex | taken — criterion 17: the morning inventory names a current fallback review for the Opus re-check (provisional agent decision, night run 2026-11-20-a) | — |
-| F-3 | MAJOR | SPEC | base | `scripts/stage2.py:4448` | Wenn nach einem Fallback in Runde drei auch die Opus-Nachprüfung zweimal fehlschlägt und erneut der Fallback antwortet, markiert der Runner das neue Fallback als Nachprüfung. Beim nächsten Aufruf verweigert er wegen des Rundenlimits eine weitere Opus-Nachprüfung, obwohl weiterhin ein aktuelles Fallback-Review vorliegt. Die Opus-Nachprüfung muss in derselben Runde möglich bleiben. [Kriterium 17] | Codex | taken — a fallback answer after a failed Opus re-check stays a fallback review that still owes its re-check (provisional agent decision, night run 2026-11-20-a) | — |
+| F-1 | BLOCKER | SPEC | base | `scripts/stage2.py:4200` | Wenn das neueste Review zwei offene `[AMBIGUITY]`-Zeilen enthält und nach der dritten Runde nur die erste durch eine Antwort der Person geklärt ist, lässt die Zulassung die Implementierung starten: Sie prüft nur die erste Zeile und übersieht die zweite offene Mehrdeutigkeit. Jede offene Mehrdeutigkeit muss die Implementierung zurückhalten. [Kriterium 7] | Codex | fixed — tests/test_stage2.py::test_each_open_ambiguity_needs_its_own_settlement | — |
+| F-2 | MAJOR | SPEC | base | `scripts/stage2.py:4220`, `scripts/stage2.py:4508` | Ein aktuelles Fallback-Review mit offener Mehrdeutigkeit oder offenem BLOCKER wird in der Morgeninventur als abgelehnt aufgeführt, aber nicht für die Opus-Nachprüfung genannt. Die Inventur muss auch dieses aktuelle Fallback-Review für die Nachprüfung ausweisen. [Kriterium 17] | Codex | fixed — tests/test_stage2.py::test_inventory_lists_refused_current_fallback_for_recheck | — |
+| F-3 | MAJOR | SPEC | base | `scripts/stage2.py:4448` | Wenn nach einem Fallback in Runde drei auch die Opus-Nachprüfung zweimal fehlschlägt und erneut der Fallback antwortet, markiert der Runner das neue Fallback als Nachprüfung. Beim nächsten Aufruf verweigert er wegen des Rundenlimits eine weitere Opus-Nachprüfung, obwohl weiterhin ein aktuelles Fallback-Review vorliegt. Die Opus-Nachprüfung muss in derselben Runde möglich bleiben. [Kriterium 17] | Codex | fixed — tests/test_stage2.py::test_fallback_replacing_recheck_respects_round_cap | — |
 
 Phase 6 verdict: codex 01a1fcb2-8670-78b2-a4bf-15ec1739ab9b, 2026-11-21
 Reviewer session: codex 01a1fcb2-8670-78b2-a4bf-15ec1739ab9b — a fresh session reviewed: no phase-2a session was recorded
@@ -958,3 +958,128 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-21: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 5030 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 5033 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +24 -16
+> - `tests/test_stage2.py` +32 -1
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 68 lines of this gate left out …]
+> ........................................................................ [ 73%]
+> ........................................................................ [ 75%]
+> ........................................................................ [ 76%]
+> ........................................................................ [ 77%]
+> ........................................................................ [ 78%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 80%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ................                                                         [100%]
+> =================================== FAILURES ===================================
+> ___________ test_an_overwide_ambiguity_row_reads_and_reads_back_open ___________
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/.venv/bin/python3
+>
+>     def test_an_overwide_ambiguity_row_reads_and_reads_back_open() -> None:
+>         """L2-3, L2-7: an `[AMBIGUITY]` row with an extra unescaped pipe folds like any row and stays an open row."""
+>         answer = rows(1) + "\n| A1 | [AMBIGUITY] scope | SPEC | criterion 2 | spec.md:2 | one | two |"
+>         parsed = stage2.readable_review(answer)
+>         assert [row[0] for row in parsed] == ["X1", "A1"]
+>         stored = stage2.answer_block(parsed, answer, "Opus")
+>         block = stage2.spec_review_blocks(f"## Phase 2a — Opus 5.5, {FIXED_REVIEW_DAY}\n\n{stored}\n")[0]
+>         assert block.table_readable and [row["id"] for row in block.rows] == ["X1", "A1"]
+> >       assert stage2.open_ambiguity_row(block) == "A1"
+> E       AttributeError: module 'stage2' has no attribute 'open_ambiguity_row'. Did you mean: 'open_ambiguity_rows'?
+>
+> tests/test_stage2.py:8549: AttributeError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=65654) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/tests/test_stage2.py:24902: DeprecationWarning: This process (pid=65648) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_an_overwide_ambiguity_row_reads_and_reads_back_open
+> 1 failed, 6406 passed, 17 skipped, 5 warnings in 536.32s (0:08:56)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 47450 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-1-20261121T060355213835Z-74424b42.md
+> ````
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 5034 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged

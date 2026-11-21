@@ -8303,6 +8303,18 @@ def test_implement_names_open_review_ambiguity(world: World, capsys: pytest.Capt
     assert world.calls() == []
 
 
+def test_each_open_ambiguity_needs_its_own_settlement(world: World) -> None:
+    block = ambiguity_review_block(world)
+    row = "| R1 | [AMBIGUITY] round scope |"
+    assert row in block
+    second = next(line for line in block.splitlines() if line.startswith(row)).replace("| R1 |", "| R2 |", 1)
+    world.write_findings(opus_review_block(world), opus_review_block(world), block + "\n" + second)
+    decisions = world.root / "plans/changes/demo/decisions.md"
+    decisions.write_text(fourth_round_record("Q-30", "settled", title="Ambiguity R1"))
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem and "open ambiguity row R2" in admission.review_problem
+
+
 def test_implement_accepts_current_review(world: World) -> None:
     """Criterion 8 (spec): the fixture's current qualifying review admits the standing green implement call."""
     successful_implementation(world)
@@ -8534,7 +8546,7 @@ def test_an_overwide_ambiguity_row_reads_and_reads_back_open() -> None:
     stored = stage2.answer_block(parsed, answer, "Opus")
     block = stage2.spec_review_blocks(f"## Phase 2a — Opus 5.5, {FIXED_REVIEW_DAY}\n\n{stored}\n")[0]
     assert block.table_readable and [row["id"] for row in block.rows] == ["X1", "A1"]
-    assert stage2.open_ambiguity_row(block) == "A1"
+    assert stage2.open_ambiguity_rows(block) == ["A1"]
 
 
 def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
@@ -8712,6 +8724,21 @@ def test_morning_inventory_names_fallback_rechecks(world: World, capsys: pytest.
     assert admission.review_problem is None and admission.rounds == 1
     assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
     assert "\n- demo\n" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("issue", ["ambiguity", "blocker"])
+def test_inventory_lists_refused_current_fallback_for_recheck(
+    world: World, capsys: pytest.CaptureFixture[str], issue: str
+) -> None:
+    block = fallback_review_block(world, TEST_LADDER[0])
+    block = block.replace("MAJOR", "[AMBIGUITY] scope" if issue == "ambiguity" else "BLOCKER")
+    world.write_findings(opus_review_block(world), opus_review_block(world), block)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem
+    stage2.spec_review_inventory(world.root)
+    out = capsys.readouterr().out
+    assert "Fallback review to re-check with Opus" in out
+    assert "\n- demo" in out.split("Fallback review to re-check with Opus", 1)[1]
 
 
 def test_implement_rechecks_previously_implemented_change(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -29672,7 +29699,11 @@ def test_fallback_replacing_recheck_respects_round_cap(world: World, monkeypatch
     blocks, _ = stage2.qualifying_reviews(world.text())
     assert blocks[-1].is_fallback and blocks[-1].is_recheck
     assert stage2.review_rounds(blocks) == 3
-    assert world.run("spec-review") == 2
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    blocks, _ = stage2.qualifying_reviews(world.text())
+    assert not blocks[-1].is_fallback and blocks[-1].is_recheck
+    assert stage2.review_rounds(blocks) == 3
 
 
 @pytest.mark.parametrize("unreadable", ["findings", "spec"])
