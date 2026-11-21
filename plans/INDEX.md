@@ -608,7 +608,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/go-reasoning-contract/decisions.md`](changes/go-reasoning-contract/decisions.md) | draft | none | 2026-11-21 | coding-harness-1zqh |
+| [`changes/go-reasoning-contract/findings.md`](changes/go-reasoning-contract/findings.md) | draft | none | 2026-11-21 | coding-harness-1zqh |
+| [`changes/go-reasoning-contract/plan.md`](changes/go-reasoning-contract/plan.md) | draft | none | 2026-11-21 | coding-harness-1zqh |
 | [`changes/go-reasoning-contract/research.md`](changes/go-reasoning-contract/research.md) | draft | none | 2026-11-21 | coding-harness-1zqh |
+| [`changes/go-reasoning-contract/spec.md`](changes/go-reasoning-contract/spec.md) | draft | none | 2026-11-21 | coding-harness-1zqh |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
