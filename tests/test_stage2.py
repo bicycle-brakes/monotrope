@@ -2644,7 +2644,9 @@ def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
             f"time.sleep({seconds})",
         ],
         cwd=REPO_ROOT,
-        env={**os.environ, "HOLDER_READY": str(ready)},
+        # The holder runs alone (setting 1), so the runner's own check must queue behind it even
+        # where a free second slot would otherwise admit it (verify-two-slots).
+        env={**os.environ, "HOLDER_READY": str(ready), stage2.verify_lock.SLOTS_ENV: "1"},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

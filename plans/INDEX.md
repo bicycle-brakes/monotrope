@@ -661,6 +661,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-before-admission/spec.md`](changes/verify-cheap-before-admission/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-two-slots/decisions.md`](changes/verify-two-slots/decisions.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
 | [`changes/verify-two-slots/findings.md`](changes/verify-two-slots/findings.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
+| [`changes/verify-two-slots/measurements.md`](changes/verify-two-slots/measurements.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
 | [`changes/verify-two-slots/plan.md`](changes/verify-two-slots/plan.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
 | [`changes/verify-two-slots/research.md`](changes/verify-two-slots/research.md) | draft | none | 2026-11-20 | coding-harness-u1ha |
 | [`changes/verify-two-slots/spec.md`](changes/verify-two-slots/spec.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
