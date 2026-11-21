@@ -30,15 +30,16 @@ Starts unless you say stop.
 
 This is bounded: no design or ADR is due. The explore used the Stage-2 Flash route, endpoint `glm-coding-plan`, model `glm-5.3-flash`; no Stage-1 fallback was recorded.
 
-1. In `scripts/stage2.py`, retain all existing pre-call guards over all resolved rows, then extract and normalize each `Where` path as the spec defines; do not reuse strict `where_locations`. Apply the checkpoint's committed `_held_prefixes`, case-insensitive prefix semantics and applicable exceptions without another held list. A row with any held path is wholly held; unknown, non-held and pathless locations remain eligible.
-2. Append the dated bullet listing once before the attempt snapshot, report every held id, path and reason, and preserve the listing over retries and checkpoint rollback. Make the listing invisible to finding-row resolution and use only valid, conditionally authorized hand-booking hints. For held-only batches use the existing checkpoint after preflight to commit only the handoff and exit 0 without a model call; retain refusal of unrelated dirty work. For mixed batches pass only eligible rows to the prompt, answer check, unchanged-row check and both booking functions; use only repaired ids in the commit subject and held ids in its body. Preserve all held cells and the existing checkpoint rollback.
-3. In `tests/test_stage2.py`, cover the criterion ledger below against both active loop and findings rows; use the existing isolated repair fixtures, including failure and rollback paths. In `docs/WORKFLOW.md`, explain the split, the output and existing hand-booking responsibilities. Regenerate the index with its generator if headers change.
+1. In `scripts/stage2.py`, retain all existing pre-call guards over all resolved rows, then extract and normalize each `Where` path as the spec defines; do not reuse strict `where_locations`. Extract both Markdown link text and target; match an existing tracked directory without a trailing slash as that directory plus `/`. Apply the checkpoint's committed `_held_prefixes`, case-insensitive prefix semantics and applicable exceptions without another held list. A row with any held path is wholly held; unknown, non-held and pathless locations remain eligible.
+2. Append the dated bullet listing once before the attempt snapshot, report every held id, path and reason, and preserve the listing over retries and checkpoint rollback. Make the listing invisible to finding-row resolution and use only valid, conditionally authorized hand-booking hints. For held-only batches use the existing checkpoint after preflight and exit 0 without a model call; retain its existing allowances for this change's findings and derived leftovers and refusal of other dirty work, and use `docs(<change>): hand steps for the orchestrator <ids>` as the commit subject. For mixed batches pass only eligible rows to the prompt, answer check, unchanged-row check and both booking functions; tell the model held rows are not its work, ignore answer lines naming held ids without booking them, and use only repaired ids in the commit subject and held ids in its body. Preserve all held cells and the existing checkpoint rollback.
+3. In `tests/test_stage2.py`, cover the criterion ledger below against both active loop and findings rows; use the existing isolated repair fixtures, including failure and rollback paths. In `docs/WORKFLOW.md`, explain the split, the output and existing hand-booking responsibilities, including the test forms and the requirement to retake a row as `not a test` before using that fixed form when no test fits. Regenerate the index with its generator if headers change.
 
 ## Files
 
 - `scripts/stage2.py`: classify selected rows, record and commit handoffs, and pass the eligible subset through the existing repair lifecycle.
 - `tests/test_stage2.py`: add focused classification, handoff, booking, output and rollback regressions.
 - `docs/WORKFLOW.md`: document the repair handoff and the orchestrator's existing hand step.
+- `plans/changes/repair-hand-held-rows/decisions.md`: retain the corrected hand-booking decision.
 - `plans/changes/repair-hand-held-rows/spec.md`: retain the contract and update implementation metadata when warranted.
 - `plans/changes/repair-hand-held-rows/plan.md`: replace ledger placeholders with existing tests and record phase-4 time.
 - `plans/changes/repair-hand-held-rows/findings.md`: retain the audit and let the runner append attempt and review evidence.
@@ -60,7 +61,7 @@ At draft baseline `4d76c9c8`, `templates/plan.md` and `scripts/validate_change_a
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_classifies_held_paths_before_dispatch — a mixed-path row, normalized Markdown link, case-folded prefix, unknown held file or held directory reaches the model, or an outside path is treated as inside
+- 1: not yet written tests/test_stage2.py::test_repair_classifies_held_paths_before_dispatch — a mixed-path row, held link text, case-folded prefix, unknown held file or existing tracked held directory without a slash reaches the model, or an outside target is treated as inside
 - 2: not yet written tests/test_stage2.py::test_repair_keeps_nonheld_locations_in_model_batch — a pathless row, unknown non-held path or non-held directory is dropped or refused
 - 3: not yet written tests/test_stage2.py::test_repair_splits_mixed_held_and_committable_rows — a held row reaches the model or a committable row is omitted
 - 4: not yet written tests/test_stage2.py::test_repair_hands_off_all_held_without_model_call — an all-held batch calls a model, exits nonzero or lacks stdout details
@@ -70,13 +71,19 @@ At draft baseline `4d76c9c8`, `templates/plan.md` and `scripts/validate_change_a
 - 8: not yet written tests/test_stage2.py::test_repair_mixed_batch_books_only_eligible_rows — an eligible fix fails to commit or the answer check requires a held id
 - 9: not yet written tests/test_stage2.py::test_repair_handoff_preserves_existing_preflight_guards — a held legacy marker or invalid origin bypasses refusal
 - 10: not yet written tests/test_stage2.py::test_repair_handoff_survives_failed_attempt_once — retry duplicates the listing or rollback loses it
-- 11: not yet written tests/test_stage2.py::test_repair_all_held_commits_only_handoff — a successful held-only run leaves findings uncommitted or includes unrelated changes
+- 11: not yet written tests/test_stage2.py::test_repair_all_held_commits_only_handoff — a successful held-only run leaves findings uncommitted or admits changes outside the existing checkpoint allowances
 - 12: not yet written tests/test_stage2.py::test_repair_handoff_uses_dated_bullets — the listing is a table, undated or lacks the normalized paths
 - 13: not yet written tests/test_stage2.py::test_repair_handoff_is_not_resolved_as_a_finding — a subsequent resolution treats a listing bullet as a finding
 - 14: not yet written tests/test_stage2.py::test_repair_mixed_commit_distinguishes_held_rows — the subject claims a held row or the body omits it
-- 15: not yet written tests/test_stage2.py::test_repair_handoff_uses_valid_booking_hint — the hint uses an invalid form or permits not-a-test for a code row
+- 15: not yet written tests/test_stage2.py::test_repair_handoff_uses_valid_booking_hint — the hint uses an invalid form, omits the valid alternatives or permits not-a-test without the required taken status
+
+- 16: not yet written tests/test_stage2.py::test_repair_held_only_commit_names_hand_steps — the subject claims held rows as repaired
+- 17: not yet written tests/test_stage2.py::test_repair_ignores_answer_lines_for_held_rows — a held answer line fails the attempt or marks the row fixed
+- 18: not yet written tests/test_stage2.py::test_repair_prompt_excludes_handed_off_rows — the prompt does not tell the model held rows are not its work
+- 19: not a test — phase-6 review checks the workflow against the existing hand-booking forms and required taken status
 
 ## Time used
 
 2026-11-21 11:54:22–11:56:35 UTC, 132 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:06:37–15:09:21 UTC, 164 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-21 15:16:23–15:18:11 UTC, 108 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

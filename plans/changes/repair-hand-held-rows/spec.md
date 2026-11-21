@@ -32,7 +32,7 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 
 **Taken row:** the current finding selected for repair by the existing resolver, whether in the active loop record or findings.
 
-**Named path:** a repository-relative path-like token in `Where`, including a Markdown link target, with wrappers and a trailing `:line` or `:line-line` removed. An initial `./` is removed; absolute paths inside the checkout are made relative to its root. A relative link target is interpreted from the repository root, with `.` and `..` collapsed only when it remains inside that root; an external URL, an absolute path outside the checkout or a path escaping the root is not a named repository path. Case-insensitive matches to tracked paths use their tracked spelling; other paths retain their normalized spelling. A tracked file is not required.
+**Named path:** a repository-relative path-like token in `Where`, including both the text and target of a Markdown link, with wrappers and a trailing `:line` or `:line-line` removed. An initial `./` is removed; absolute paths inside the checkout are made relative to its root. A relative link target is interpreted from the repository root, with `.` and `..` collapsed only when it remains inside that root; an external URL, an absolute path outside the checkout or a path escaping the root is not a named repository path. Case-insensitive matches to tracked paths use their tracked spelling; other paths retain their normalized spelling. A tracked file is not required. A token naming an existing directory containing at least one tracked file is matched as that directory followed by `/`, even when the token has no trailing slash; an untracked bare word remains literal.
 
 ## Acceptance criteria
 
@@ -57,7 +57,7 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 10. When repair hands off held rows, it appends one listing before the attempt loop and preserves that listing through a failed or rolled-back attempt.
     *Refuted by:* The listing disappears on rollback or is duplicated by retries in the same invocation.
 11. When every selected row is held, repair commits the hand-step listing without a model attempt.
-    *Refuted by:* A successful handoff leaves the listing uncommitted or commits unrelated pre-existing changes.
+    *Refuted by:* A successful handoff leaves the listing uncommitted or admits a pre-existing change that the existing preflight and checkpoint would refuse; the existing allowances for this change's findings and derived leftovers remain in force.
 12. When the runner writes a hand-step listing to `findings.md`, it uses a dated `Hand steps for the orchestrator` heading and one bullet per row with its identifier, normalized held paths and reason.
     *Refuted by:* The listing is a table, lacks the date, or loses a row identifier, path or reason.
 13. When a later repair resolves findings, a hand-step listing is not parsed as a finding row.
@@ -65,7 +65,15 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 14. When a mixed repair commits, its subject names only the repaired row identifiers and its body names the held identifiers as hand steps.
     *Refuted by:* A held identifier is claimed as repaired in the subject or omitted from the hand-step body.
 15. When the runner writes a hand-step listing, its booking hint uses the existing valid status forms, including `fixed — not a test — orchestrator hand edit <sha>` only for a row taken as `not a test`.
-    *Refuted by:* The hint proposes `fixed — orchestrator hand edit <sha>` or allows the not-a-test form for an ordinary code row.
+    *Refuted by:* The hint proposes `fixed — orchestrator hand edit <sha>`, omits a valid test form or the option to retake a row as `taken — not a test` when no test fits, or allows the not-a-test form without that status.
+16. When a held-only handoff commits, its subject is `docs(<change>): hand steps for the orchestrator <ids>`.
+    *Refuted by:* Its subject claims the held identifiers were repaired or uses the repair subject.
+17. When a model answer mentions a held row of the current run, the answer check ignores that line without booking the row.
+    *Refuted by:* The mention fails the attempt or marks the held row fixed.
+18. When a mixed batch is dispatched, the model is told that the held rows are not its work.
+    *Refuted by:* The prompt gives no such instruction.
+19. When the workflow describes booking a handed-off row, it retains the existing test-based forms and requires a row to be taken as `not a test` before the corresponding fixed form is used.
+    *Refuted by:* The workflow treats every hand edit as automatically eligible for `fixed — not a test` or omits the test-based forms.
 
 ## Non-goals
 
@@ -87,4 +95,4 @@ Held paths, including `provenance.yaml`, endpoint configuration, agent instructi
 
 ## Open decisions
 
-None open. The reversible scope, batch split, hand-step format and preserved checkpoint are decided with reasons in `decisions.md` and the phase-2a findings. [DETAIL] Path normalization treats link targets as repository-root-relative and ignores outside paths: this gives an unambiguous, reversible interpretation without requiring a tracked file. [DETAIL] The booking hint retains all existing forms and restricts the not-a-test example to rows that authorize it, so the handoff cannot suggest an invalid status.
+None open. The reversible scope, batch split, hand-step format and preserved checkpoint are decided with reasons in `decisions.md` and the phase-2a findings. [DETAIL] Path normalization treats link targets as repository-root-relative and ignores outside paths: this gives an unambiguous, reversible interpretation without requiring a tracked file. [DETAIL] Link text as well as link targets can name a path, and a tracked directory is matched with a trailing slash: these catch the observed held-path shapes. [DETAIL] A held-only commit uses the existing checkpoint and its existing allowances, and its subject names hand steps: this keeps one commit path and does not claim a repair. [DETAIL] Held-row answer lines are ignored and the prompt excludes those rows from the model’s work: the model can still read the findings record. [DETAIL] The booking hint retains all existing forms and restricts the not-a-test example to rows that authorize it, so the handoff cannot suggest an invalid status.
