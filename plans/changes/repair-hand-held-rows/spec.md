@@ -24,7 +24,7 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 ## Problem
 
 - On 2026-11-20/21, three repair attempts encountered paths the runner does not commit; the morning handover reports that whole attempts were restored (`research.md`, “The night's evidence”).
-- At baseline `7b531fd0`, the checkpoint detects held paths only after an attempt and restores the attempt rather than advancing to another route; the existing rollback test pins that outcome (`research.md`, “The rollback” and “A rollback consumes the attempt and ends the run”).
+- At baseline `7b531fd0`, the checkpoint detects held paths only after an attempt and restores the attempt rather than advancing to another route; an existing rollback test pins that outcome (`research.md`, “The rollback” and “A rollback consumes the attempt and ends the run”).
 
 ## Terms
 
@@ -32,27 +32,45 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 
 **Taken row:** the current finding selected for repair by the existing resolver, whether in the active loop record or findings.
 
+**Named path:** a repository-relative path-like token in `Where`, including a Markdown link target, with wrappers and a trailing `:line` or `:line-line` removed. An initial `./` is removed; absolute paths inside the checkout are made relative to its root. A relative link target is interpreted from the repository root, with `.` and `..` collapsed only when it remains inside that root; an external URL, an absolute path outside the checkout or a path escaping the root is not a named repository path. Case-insensitive matches to tracked paths use their tracked spelling; other paths retain their normalized spelling. A tracked file is not required.
+
 ## Acceptance criteria
 
 1. When repair selects taken rows, each row whose `Where` names any held path is classified for an orchestrator hand step before a model call.
    *Refuted by:* A row naming both a committable path and a held path enters the model batch, or a held prefix accepted by the checkpoint is missed because of case or the committed provenance map.
-2. When a taken row's `Where` names no readable path, it remains eligible for the model as it is today.
-   *Refuted by:* A pathless row is handed off or dropped solely because its `Where` lacks a readable path.
+2. When a taken row's `Where` names no held path, it remains eligible for the model as it is today.
+   *Refuted by:* A pathless row, an unknown non-held path, or a non-held directory is handed off or refused solely because of its `Where`.
 3. When a batch contains both held and committable rows, the model receives only the committable taken rows for repair.
    *Refuted by:* The model receives a held row or does not receive an eligible committable row.
-4. If every taken row is held, repair makes no model call and exits with the hand-step listing.
-   *Refuted by:* A model is called, or the command exits without identifying the rows to hand repair.
-5. When held rows are classified, the runner reports each row's identifier, each held path it names, and the reason `runner-held path` in its answer and in a listing appended to `findings.md`.
+4. If every taken row is held and the existing pre-call checks pass, repair makes no model call and exits 0 with the hand-step listing on standard output.
+   *Refuted by:* A model is called, the exit is nonzero, or standard output does not identify the rows and their held paths.
+5. When held rows are classified, the runner reports each row's identifier, each named held path and the reason `runner-held path` in its answer and in a listing appended to `findings.md`.
    *Refuted by:* Either listing omits an affected row, a named held path, or the reason, including when no model call is made.
 6. While handing off held rows, the runner leaves their Status and `Broke a test` cells unchanged.
    *Refuted by:* A held row is marked fixed or its test mark is changed by the runner.
 7. If an attempt nevertheless changes a held path, the existing checkpoint restores the attempt and refuses it.
    *Refuted by:* An unexpected held-path edit is committed or survives the existing rollback.
+8. When a mixed batch's committable rows pass the existing repair checks, repair commits and books those rows as fixed and exits 0 even while held hand steps remain open.
+   *Refuted by:* The answer check demands a fixed line for a held row, or an eligible fixed row is not booked and committed.
+9. When repair selects rows, the existing waiting, origin and legacy-marker pre-call checks apply to all selected rows before classification or handoff.
+   *Refuted by:* A held row with a legacy completion marker bypasses the booking refusal or a waiting or invalid-origin row is bypassed.
+10. When repair hands off held rows, it appends one listing before the attempt loop and preserves that listing through a failed or rolled-back attempt.
+    *Refuted by:* The listing disappears on rollback or is duplicated by retries in the same invocation.
+11. When every selected row is held, repair commits the hand-step listing without a model attempt.
+    *Refuted by:* A successful handoff leaves the listing uncommitted or commits unrelated pre-existing changes.
+12. When the runner writes a hand-step listing to `findings.md`, it uses a dated `Hand steps for the orchestrator` heading and one bullet per row with its identifier, normalized held paths and reason.
+    *Refuted by:* The listing is a table, lacks the date, or loses a row identifier, path or reason.
+13. When a later repair resolves findings, a hand-step listing is not parsed as a finding row.
+    *Refuted by:* A previously listed identifier causes a duplicate-row refusal or becomes a repair target solely from the listing.
+14. When a mixed repair commits, its subject names only the repaired row identifiers and its body names the held identifiers as hand steps.
+    *Refuted by:* A held identifier is claimed as repaired in the subject or omitted from the hand-step body.
+15. When the runner writes a hand-step listing, its booking hint uses the existing valid status forms, including `fixed — not a test — orchestrator hand edit <sha>` only for a row taken as `not a test`.
+    *Refuted by:* The hint proposes `fixed — orchestrator hand edit <sha>` or allows the not-a-test form for an ordinary code row.
 
 ## Non-goals
 
 - Changing `implement` or `draft` routing, retry limits, model selection, or the checkpoint's held-path policy.
-- Inferring required edits from a finding's prose when its `Where` does not name a readable path.
+- Inferring required edits from a finding's prose when its `Where` does not name a held path.
 - Performing or booking the orchestrator's hand repair, or changing the hand-repair status vocabulary.
 
 ## Protected areas
@@ -69,4 +87,4 @@ Held paths, including `provenance.yaml`, endpoint configuration, agent instructi
 
 ## Open decisions
 
-None open. The reversible scope, classification source, batch split, pathless-row treatment, hand-step record and retained checkpoint are recorded with reasons in `decisions.md` under `[DETAIL]`.
+None open. The reversible scope, batch split, hand-step format and preserved checkpoint are decided with reasons in `decisions.md` and the phase-2a findings. [DETAIL] Path normalization treats link targets as repository-root-relative and ignores outside paths: this gives an unambiguous, reversible interpretation without requiring a tracked file. [DETAIL] The booking hint retains all existing forms and restricts the not-a-test example to rows that authorize it, so the handoff cannot suggest an invalid status.
