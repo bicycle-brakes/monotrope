@@ -631,3 +631,14 @@ Stage-2 call, 2026-11-21: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5063 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/ledger-ids-before-pytest/plan.md, plans/changes/ledger-ids-before-pytest/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5079 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MINOR | SPEC | base | `scripts/stage2.py:6873`, `scripts/stage2.py:6016` | A recognized ledger ID can have a test function name longer than 500 characters. If that written test is missing, the implement attempt fails, but `quote_block` cuts its diagnostic line at 500 characters in `findings.md`. The section is not line-truncated, yet the complete missing ID is absent from the attempt record. [Criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fddc-f2d7-7743-b698-5660b70f4b68, 2026-11-21
+Reviewer session: codex 01a1fddc-f2d7-7743-b698-5660b70f4b68 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
