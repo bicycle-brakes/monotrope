@@ -286,7 +286,23 @@ def validate_research_report(raw, *, run_id, topic, seat, sources, history=None,
     if not any(claim["evidence_status"] == "valid" for claim in result["claims"]) and not (
         topic == 5 and not neighbours
     ):
-        raise ResearchReportError("report has no runner-backed evidence claim")
+        # Each failed citation travels to the seat's one correction as its own rejected-attempt
+        # data: local claim id, original citation and the runner's reason, in claim/citation
+        # order. A supported reference inside an unsupported claim is no failure and stays out.
+        # Every unsupported branch of `_reference` and `resolve_research_reference` names its
+        # reason, so the reason is read, never defaulted: a generic label would mask it.
+        error = ResearchReportError("report has no runner-backed evidence claim")
+        error.citation_failures = [
+            {
+                "claim": claim["local_id"],
+                "citation": item["citation"],
+                "reason": item["reason"],
+            }
+            for claim in result["claims"]
+            for item in claim["resolved"]
+            if not item["supported"]
+        ]
+        raise error
     result["questions"] = [
         {
             **copy.deepcopy(item),

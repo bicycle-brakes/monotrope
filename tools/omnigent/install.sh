@@ -16,6 +16,13 @@
 # --remove validates nothing: it deletes only our own policies, and a foreign
 # policy Omnigent rejects must not keep them in.
 #
+# A successful install (a first merge or a no-op rerun) ends in a surface
+# report: --report-surface compares the installed Omnigent's tool names with
+# the repository's three lists and prints drift by name, a match, or that the
+# comparison could not run. It is advisory - the exit status stays the merge's,
+# a failed or unreadable report never fails the install, and a failed merge is
+# not followed by a report.
+#
 # It never starts or stops Omnigent. Omnigent reads `policies:` only when its
 # server starts - a run that changed the file says what to do about that.
 #
@@ -58,5 +65,10 @@ target="${OMNIGENT_CONFIG_HOME:-$HOME/.omnigent}/config.yaml"
 case "$mode" in
   check) exec "$py" "$tool" --installed "$target" ;;
   remove) exec "$py" "$tool" --merge-config "$target" --remove ;;
-  *) exec "$py" "$tool" --merge-config "$target" ;;
+  *)
+    "$py" "$tool" --merge-config "$target"
+    # Advisory: drift or an unreadable surface must not fail the install, so the
+    # report's status is dropped; a failed merge exits above and never reaches it.
+    "$py" "$tool" --report-surface || true
+    ;;
 esac

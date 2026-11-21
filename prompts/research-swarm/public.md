@@ -24,6 +24,12 @@ Public topic {{TOPIC_ID}} of 11 — {{TOPIC_NAME}}.
   question.
 - A report with no claim backed by a retrieved page fails. Say what you
   searched when public evidence is thin; that is a finding, not a failure.
+- Fetching budget: make at most three `public_fetch` calls per topic attempt;
+  failed fetches count toward the three. Then stop fetching and write your
+  report from your successful own retrievals only. Record every page you
+  found but did not fetch, or could not fetch, in `not_read`: it is not read,
+  which is not the same as absent. The evidence floor above still holds, and
+  you still search only the public web.
 - Prefer primary sources: documentation, papers and project sources before
   secondary pages. Your two tools: `public_search` finds pages and returns
   each result's destination URL; `public_fetch` retrieves one page.

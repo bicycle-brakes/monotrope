@@ -24,6 +24,13 @@ What it cannot count, it says so:
 - a `Phase 6` mark is counted as written; what the reviewer agreed or
   disagreed with is the mark's own business.
 
+Criterion 4 runs the runner's own declaration check, so it inherits the
+subscription-terms rule (bead coding-harness-dcu3), by intent: a Z.ai route
+without a dated terms record is not cleared, so `--rev` at a commit before
+that record reports both GLM routes as not cleared ("no dated reading"); and
+the count is judged against the run's UTC date, so a route clears no longer
+once its `valid_until` day has passed.
+
 `--rev <commit>` reads every file from that commit through git; without it the
 working tree is read. Exit: 0 printed, 2 a change not found or a bad argument.
 """

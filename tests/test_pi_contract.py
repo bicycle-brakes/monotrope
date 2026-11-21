@@ -1,12 +1,13 @@
 """The offline Pi contracts: the real pinned Pi against a loopback stand-in.
 
 Every case here starts the actual installed Pi through the repository wrapper
-(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers OpenAI-style
-chat completions from a script: a tool call, a stop, an error. No hosted
-model, no user configuration, no external network: the credentials are
-synthetic, the HOME and agent directories are scratch, and a test-only preload
-(`tests/pi_network_guard.mjs`) denies every non-loopback connection the child
-attempts. The reviewer-shaped cases run the runner's own `run_reviewer` and
+(`tools/pi/pi`), pointed at a loopback HTTP stand-in that answers the three
+measured wire APIs (OpenAI-style chat completions, Anthropic Messages and
+OpenAI Responses) plus an offline-only Google generateContent contract — a
+tool call, a stop, an error, per route. No hosted model, no user
+configuration, no external network: the credentials are synthetic, the HOME and agent directories are
+scratch, and a test-only preload (`tests/pi_network_guard.mjs`) denies every
+non-loopback connection the child attempts. The reviewer-shaped cases run the runner's own `run_reviewer` and
 inject test transport at its subprocess seam. Helper launches derive their
 isolation flags from that same production command.
 
@@ -20,10 +21,12 @@ named in the test.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -42,8 +45,24 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_availability as availability  # noqa: E402
+import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
+import stage2_swarm  # noqa: E402
 from terms_fixtures import admissible_terms  # noqa: E402
+from test_stage2 import World  # noqa: E402
+from test_stage2 import git as run_git  # noqa: E402
+from test_stage2 import world as stage2_world  # noqa: E402
+from test_stage2_research_catalog import sources as research_catalog_sources  # noqa: E402
+
+world = stage2_world
+catalog_sources = research_catalog_sources
+# The repository's own Pi wrapper, read before any test world re-points `stage2.PI_WRAPPER` at a stand-in.
+REAL_PI_WRAPPER = stage2.PI_WRAPPER
+# Preserve the production validator before the inherited world fixture replaces it.
+REAL_CHECK_OVERLAY = stage2.check_overlay
+# The runtime search path before a test world replaces it: the real Pi wrapper needs Node on it.
+REAL_PATH = os.environ.get("PATH", "")
 
 PKG = "@earendil-works/pi-coding-agent"
 GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
@@ -66,6 +85,29 @@ ZEN_SHIPPED = "https://opencode.ai/inference/openai/v1"
 GO_SHIPPED = "https://opencode.ai/inference/go/openai/v1"
 GO_SHIPPED_MESSAGES = "https://opencode.ai/inference/go/anthropic"
 PI_MOVED_PIN = "1.5.0"
+# Native Go offline contracts: Messages and Responses are measured live;
+# Google remains offline-only and undeclared (go-wire-apis, decisions.md Q-2).
+# Each keeps its own protocol route, native body schema and credential header;
+# a translation into Chat Completions, a wrong route or a credential in the
+# request body fails these contracts.
+GO_NATIVE_MODELS = {
+    "anthropic-messages": "messages-contract-model",
+    "openai-responses": "responses-contract-model",
+    "google-generative-ai": "google-contract-model",
+}
+# The expected request route suffix per API; the Google route carries the exact
+# model id plus its streaming query, so it is asserted inline instead.
+GO_NATIVE_ROUTES = {
+    "anthropic-messages": "/v1/messages",
+    "openai-responses": "/responses",
+}
+# The header each protocol's own client sends the synthetic credential in.
+GO_NATIVE_CREDENTIALS = {
+    "anthropic-messages": "x-api-key",
+    "openai-responses": "authorization",
+    "google-generative-ai": "x-goog-api-key",
+}
+NATIVE_ANSWER = "NATIVE-WIRE-CONTRACT-4e81a2"
 
 
 def declare_contract_models(root: Path) -> None:
@@ -243,11 +285,20 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": {"message": "unparseable request body"}})
             return
         self._standin().requests.append(Exchange(self.path, {k.lower(): v for k, v in self.headers.items()}, body))
-        if not self.path.endswith("/chat/completions"):
-            self._send_json(404, {"error": {"message": f"no contract route for {self.path}"}})
-            return
         try:
-            self._standin()._completions(self, body)
+            # The clients append query strings (`/v1/messages?beta=true`, `?alt=sse`): route on the
+            # path alone, while the captured exchange keeps the full path with its query.
+            path = self.path.split("?", 1)[0]
+            if path.endswith("/chat/completions"):
+                self._standin()._completions(self, body)
+            elif path.endswith("/v1/messages"):
+                self._standin()._messages(self, body)
+            elif path.endswith("/responses"):
+                self._standin()._responses(self, body)
+            elif ":streamGenerateContent" in path:
+                self._standin()._google(self, body)
+            else:
+                self._send_json(404, {"error": {"message": f"no contract route for {self.path}"}})
         except ContractFailure as error:
             # a scripted exchange that cannot be answered fails the run loudly - never a silent skip
             self._standin().failures.append(str(error))
@@ -271,13 +322,18 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class StandIn:
-    """A loopback OpenAI-compatible chat-completions server with a script.
+    """Scripted loopback contracts for three measured APIs plus offline-only Google.
 
-    Each POST ending in /chat/completions consumes the next entry of `script`
-    and every request is captured. A streaming request is answered with one
-    server-sent event, a non-streaming one with a JSON body; both carry the
-    same message. `sleep` and `error` entries serve the mandatory-failure
-    contracts. The bind is loopback-only and refused ports fail the case.
+    Each POST is routed by protocol: `/chat/completions` (OpenAI Chat
+    Completions), `/v1/messages` (Anthropic Messages), `/responses` (OpenAI
+    Responses) and `/models/<id>:streamGenerateContent?alt=sse` (Google). Each
+    request consumes the next entry of `script` and every request is captured.
+    A streaming request is answered with server-sent events in the route's own
+    protocol shape, a non-streaming completions request with a JSON body; both
+    carry the same message. `sleep` and `error` entries serve the
+    mandatory-failure contracts; `malformed` breaks the stream's payload and
+    `empty` completes the protocol with no text. The bind is loopback-only and
+    refused ports fail the case.
     """
 
     def __init__(self, script: list[dict]) -> None:
@@ -290,10 +346,13 @@ class StandIn:
         self._thread.start()
         self.url = f"http://127.0.0.1:{self._server.server_address[1]}/v1"
 
-    def _completions(self, handler: _Handler, body: dict) -> None:
+    def _next_answer(self) -> dict:
         if not self.script:
             raise ContractFailure("the stand-in ran out of script: Pi asked for more turns than the contract scripted")
-        answer = self.script.pop(0)
+        return self.script.pop(0)
+
+    def _held(self, handler: _Handler, answer: dict) -> bool:
+        """Serve the shared failure entries; True when the answer was served and the route is done."""
         if "wait_for" in answer:
             # Hold the reply until a marker file exists (bounded): Pi starts background helpers
             # (an MCP server) while it waits for the model, and ends them with the reply. On a loaded
@@ -303,9 +362,24 @@ class StandIn:
                 time.sleep(0.05)
         if "sleep" in answer:
             time.sleep(answer["sleep"])
-            return
+            return True
         if "error" in answer:
             handler._send_json(int(answer.get("status", 401)), {"error": answer["error"]})
+            return True
+        return False
+
+    def _events(self, handler: _Handler, frames: list[dict], named: bool) -> None:
+        """Send one server-sent event per frame; `named` adds the `event:` line the Messages parser keeps."""
+        pieces: list[bytes] = []
+        for frame in frames:
+            if named:
+                pieces.append(b"event: " + frame["type"].encode("utf-8") + b"\n")
+            pieces.append(b"data: " + json.dumps(frame).encode("utf-8") + b"\n\n")
+        handler._send_bytes(200, "text/event-stream", b"".join(pieces))
+
+    def _completions(self, handler: _Handler, body: dict) -> None:
+        answer = self._next_answer()
+        if self._held(handler, answer):
             return
         payload = self._completion(answer, body)
         if body.get("stream"):
@@ -321,6 +395,117 @@ class StandIn:
             handler._send_bytes(200, "text/event-stream", data)
         else:
             handler._send_json(200, payload)
+
+    def _messages(self, handler: _Handler, body: dict) -> None:
+        """Answer the Anthropic Messages route: one streamed text block, as the pinned adapter parses them."""
+        answer = self._next_answer()
+        if self._held(handler, answer):
+            return
+        if "malformed" in answer:
+            # a 200 event-stream whose payload no adapter can parse must fail the exchange
+            handler._send_bytes(200, "text/event-stream", b"event: message_start\ndata: {not-json\n\n")
+            return
+        text = "" if answer.get("empty") else answer.get("content", "No finding.")
+        frames = [
+            {
+                "type": "message_start",
+                "message": {
+                    "id": "msg-contract",
+                    "model": body.get("model"),
+                    "usage": {"input_tokens": 1, "output_tokens": 0},
+                },
+            },
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+        ]
+        if text:
+            frames.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}})
+        frames += [
+            {"type": "content_block_stop", "index": 0},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
+            {"type": "message_stop"},
+        ]
+        self._events(handler, frames, named=True)
+
+    def _responses(self, handler: _Handler, body: dict) -> None:
+        """Answer the OpenAI Responses route: streamed text plus the mandatory terminal `response.completed`."""
+        answer = self._next_answer()
+        if self._held(handler, answer):
+            return
+        if "malformed" in answer:
+            handler._send_bytes(200, "text/event-stream", b'data: {"type": "response.created"\n\n')
+            return
+        text = "" if answer.get("empty") else answer.get("content", "No finding.")
+        response_id, item_id = "resp-contract", "item-contract"
+        frames = [
+            {
+                "type": "response.created",
+                "response": {"id": response_id, "model": body.get("model"), "status": "in_progress"},
+            },
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {"type": "message", "id": item_id, "role": "assistant", "content": []},
+            },
+        ]
+        if text:
+            frames.append({"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": text})
+        frames += [
+            {
+                "type": "response.output_item.done",
+                "output_index": 0,
+                "item": {
+                    "type": "message",
+                    "id": item_id,
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": text}],
+                },
+            },
+            {
+                "type": "response.completed",
+                "response": {
+                    "id": response_id,
+                    "status": "completed",
+                    "output": [],
+                    "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+                },
+            },
+        ]
+        self._events(handler, frames, named=False)
+
+    def _google(self, handler: _Handler, body: dict) -> None:
+        """Answer the Google generateContent route: streamed text chunks ending in a `STOP` finish reason."""
+        if not isinstance(body.get("contents"), list) or not body["contents"]:
+            # the native schema check: a translation into Chat Completions carries no contents array
+            raise ContractFailure("the Google route received a body without a native contents array")
+        answer = self._next_answer()
+        if self._held(handler, answer):
+            return
+        if "malformed" in answer:
+            handler._send_bytes(
+                200, "text/event-stream", b'data: {"candidates": [{"content": {"parts": [{"text": "cut"\n\n'
+            )
+            return
+        text = "" if answer.get("empty") else answer.get("content", "No finding.")
+        frames = []
+        if text:
+            frames.append(
+                {
+                    "candidates": [
+                        {"content": {"role": "model", "parts": [{"text": text}]}, "index": 0},
+                    ]
+                }
+            )
+        frames.append(
+            {
+                "candidates": [{"finishReason": "STOP", "index": 0}],
+                "usageMetadata": {
+                    "promptTokenCount": 1,
+                    "candidatesTokenCount": 1 if text else 0,
+                    "totalTokenCount": 2 if text else 1,
+                },
+            }
+        )
+        self._events(handler, frames, named=False)
 
     def _completion(self, answer: dict, request: dict) -> dict:
         if "tool_calls" in answer:
@@ -543,6 +728,21 @@ def native_base_urls(provider: str, api: str) -> set[str]:
     return {model.get("baseUrl") for model in section.values() if isinstance(model, dict)}
 
 
+def native_contract_model(api: str, base_url: str) -> dict:
+    """A models.json definition Pi activates for one native wire API, shaped as the overlay writes them."""
+    model_id = GO_NATIVE_MODELS[api]
+    return {
+        "id": model_id,
+        "name": f"{model_id} contract",
+        "api": api,
+        "baseUrl": base_url,
+        "reasoning": False,
+        "input": ["text"],
+        "contextWindow": 128000,
+        "maxTokens": 4096,
+    }
+
+
 # ---------------------------------------------------------------------------
 # The catalog move: the locked 1.5.0 install and its shipped Go addresses
 # ---------------------------------------------------------------------------
@@ -639,8 +839,9 @@ def test_real_catalog_move_contains_new_go_models() -> None:
 def test_real_catalog_move_keeps_messages_catalog_base() -> None:
     """Ledger 3: the shipped opencode-go Messages entries carry anthropic-messages on the moved base.
 
-    Catalog evidence for the separate Messages follow-up - no wire exchange is measured or
-    admitted here (spec criterion 3).
+    Messages is now measured and admitted by the go-wire-apis declaration.
+    This test checks the shipped catalog base; the native wire contract and
+    dated live measurement provide the exchange evidence (spec criterion 3).
     """
     catalog = {
         model["id"]: model
@@ -1328,12 +1529,25 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     assert native_base_urls("opencode", "openai-completions") == {ZEN_SHIPPED}, (
         f"the installed opencode (Zen) catalog's native base is not the shipped {ZEN_SHIPPED}"
     )
-    catalog = {model["id"]: model for model in provider_data("opencode-go")["openai-completions"].values()}
-    # Every admitted rung must use the measured wire API, including ids carried
-    # under another API in Pi's shipped catalog. Missing ids fail closed too.
+    shipped = {}
+    for api, models in provider_data("opencode-go").items():
+        for entry, model in models.items():
+            assert isinstance(model, dict), f"{api}/{entry}: the shipped catalog entry is not a model dictionary"
+            model_id = model.get("id")
+            assert isinstance(model_id, str) and model_id, f"{api}/{entry}: the shipped catalog entry has no valid id"
+            assert model_id not in shipped, f"{model_id}: the shipped catalog files it under two wire APIs"
+            shipped[model_id] = (api, model)
+    # Every admitted rung must hold an exact shipped definition on a wire API the
+    # address record measures, at that API's own recorded base - including ids an
+    # older single-API declaration skipped. Missing ids fail closed too.
+    policy = stage2_go.load_address_policy(REPO_ROOT)
     for rung in stage2.ladder(REPO_ROOT):
-        assert rung in catalog, f"{rung}: wire API not measured as openai-completions"
-        assert catalog[rung]["baseUrl"] == GO_SHIPPED
+        assert rung in shipped, f"{rung}: no exact shipped catalog definition on any wire API"
+        api, model = shipped[rung]
+        assert api in policy.apis, f"{rung}: wire API {api} is not measured in the address record"
+        assert model["baseUrl"] == policy.apis[api].base, (
+            f"{rung}: the shipped base {model['baseUrl']!r} is not the record's {api} base {policy.apis[api].base!r}"
+        )
     scratch = scratch_of(tmp_path)
     for provider, model in (("opencode-go", "contract-go-model"), ("opencode", "contract-zen-model")):
         standin = StandIn([{"content": "ok"}])
@@ -1362,6 +1576,114 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
             assert SYNTHETIC_KEY not in json.dumps(exchange.body), f"the {provider} key travelled in the body"
         finally:
             standin.close()
+
+
+# ---------------------------------------------------------------------------
+# The Go native wire APIs (go-wire-apis, criteria 1-2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("api", sorted(GO_NATIVE_MODELS))
+def test_real_go_native_wire_api_exchange(project: Path, tmp_path: Path, api: str) -> None:
+    """The real pinned Pi completes a native streamed exchange on each new wire API.
+
+    The request must take the API's own protocol route carrying its native body
+    schema and the synthetic credential in that protocol's own header - never a
+    translation into Chat Completions, a foreign credential or a credential in
+    the request body - and the decoded streamed text must reach Pi's stdout.
+    """
+    model_id = GO_NATIVE_MODELS[api]
+    standin = StandIn([{"content": NATIVE_ANSWER}])
+    try:
+        done = run_pi(
+            project,
+            scratch_of(tmp_path),
+            *REVIEWER_FLAGS,
+            "--model",
+            f"opencode-go/{model_id}",
+            "answer on the native wire API",
+            providers={"opencode-go": {"baseUrl": standin.url, "models": [native_contract_model(api, standin.url)]}},
+        )
+        assert done.returncode == 0, f"{api} ended {done.returncode}: {done.stderr[-600:]}"
+        assert NATIVE_ANSWER in done.stdout, f"{api}: the streamed reply was never decoded: {done.stdout[-400:]}"
+        assert len(standin.requests) == 1, f"{api}: expected one exchange, saw {len(standin.requests)}"
+        (exchange,) = standin.requests
+        route = exchange.path.split("?", 1)[0]
+        if api == "google-generative-ai":
+            assert f"/models/{model_id}:streamGenerateContent" in route, (
+                f"{api}: the request took the foreign route {exchange.path}"
+            )
+            assert "alt=sse" in exchange.path, f"{api}: the streaming query is missing: {exchange.path}"
+        else:
+            assert route.endswith(GO_NATIVE_ROUTES[api]), f"{api}: the request took the foreign route {exchange.path}"
+        credential = GO_NATIVE_CREDENTIALS[api]
+        expected = f"Bearer {SYNTHETIC_KEY}" if api == "openai-responses" else SYNTHETIC_KEY
+        assert exchange.headers.get(credential) == expected, (
+            f"{api}: the synthetic key never arrived in {credential}: {exchange.headers.get(credential)!r}"
+        )
+        for foreign in GO_NATIVE_CREDENTIALS.values():
+            if foreign != credential:
+                assert foreign not in exchange.headers, f"{api}: a foreign credential header travelled ({foreign})"
+        assert PLANTED_KEY not in json.dumps(exchange.headers), "a foreign credential authenticated the request"
+        assert SYNTHETIC_KEY not in json.dumps(exchange.body), f"{api}: the key travelled in the body"
+        body = exchange.body
+        if api == "anthropic-messages":
+            assert body.get("model") == model_id, f"{api}: the model id arrived as {body.get('model')!r}"
+            assert body.get("stream") is True, f"{api}: the exchange was not requested as a stream"
+            assert isinstance(body.get("messages"), list) and body["messages"], f"{api}: no native messages array"
+            assert isinstance(body.get("max_tokens"), int) and body["max_tokens"] > 0, (
+                f"{api}: no native output budget: {body.get('max_tokens')!r}"
+            )
+        elif api == "openai-responses":
+            assert body.get("model") == model_id, f"{api}: the model id arrived as {body.get('model')!r}"
+            assert body.get("stream") is True, f"{api}: the exchange was not requested as a stream"
+            assert isinstance(body.get("input"), list) and body["input"], f"{api}: no native input array"
+            assert body.get("store") is False, f"{api}: the exchange asked the stand-in to store state"
+        else:
+            assert isinstance(body.get("contents"), list) and body["contents"], f"{api}: no native contents array"
+            assert exchange.path.split("?", 1)[0].endswith(f"/models/{model_id}:streamGenerateContent"), (
+                f"{api}: the exact model id is not in the route: {exchange.path}"
+            )
+    finally:
+        standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("api", sorted(GO_NATIVE_MODELS))
+@pytest.mark.parametrize("failure", ["error", "malformed", "empty"])
+def test_real_go_native_wire_api_failures_are_mandatory(project: Path, tmp_path: Path, api: str, failure: str) -> None:
+    """An HTTP failure, a malformed stream and an empty answer each fail visibly on every new wire API.
+
+    A scripted 500, a 200 event-stream whose payload no adapter can parse, and a
+    protocol-correct stream with no text must each leave Pi without a decoded
+    answer - never a silent pass.
+    """
+    model_id = GO_NATIVE_MODELS[api]
+    scripted = {
+        "error": {"error": "planned native failure", "status": 401},
+        "malformed": {"malformed": True},
+        "empty": {"empty": True},
+    }
+    standin = StandIn([scripted[failure]])
+    try:
+        done = run_pi(
+            project,
+            scratch_of(tmp_path),
+            *REVIEWER_FLAGS,
+            "--model",
+            f"opencode-go/{model_id}",
+            "answer on the native wire API",
+            providers={"opencode-go": {"baseUrl": standin.url, "models": [native_contract_model(api, standin.url)]}},
+        )
+        assert len(standin.requests) == 1, (
+            f"{api}/{failure}: expected the one broken exchange, saw {len(standin.requests)}"
+        )
+        assert done.returncode != 0 or not done.stdout.strip(), (
+            f"{api}/{failure}: Pi succeeded against the broken exchange: rc={done.returncode} out={done.stdout[:200]!r}"
+        )
+    finally:
+        standin.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1604,3 +1926,282 @@ console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefine
     assert "catalog-command-ran" not in done.stdout and "catalog-value" not in done.stdout
     assert "headers" not in (tmp_path / "models.json").read_text()
     assert json.dumps(store) == evidence
+
+
+# ---------------------------------------------------------------------------
+# Both free-model preparations on the shipped Go catalog (bead coding-harness-wb40, spec criteria 9-10)
+# ---------------------------------------------------------------------------
+
+GO = "opencode-go"
+CONTRACT_NOW = dt.datetime(2026, 11, 5, 12, 0, tzinfo=dt.UTC)
+
+
+def shipped_go_models() -> list[dict]:
+    """Every opencode-go model of the installed Pi's own catalog, one row per id, whatever its wire API.
+
+    The rows are the shipped data itself - the contract invents no roster. An id the package files under
+    two wire APIs keeps its first row, as a fresh catalog holds one row per id.
+    """
+    rows: dict[str, dict] = {}
+    for section in provider_data(GO).values():
+        if not isinstance(section, dict):
+            continue
+        for model in section.values():
+            if isinstance(model, dict) and isinstance(model.get("id"), str):
+                rows.setdefault(model["id"], {**model, "provider": GO})
+    if not rows:
+        pytest.fail("the installed Pi's opencode-go catalog holds no model; run bash tools/pi/install.sh")
+    return list(rows.values())
+
+
+@pytest.fixture
+def offline_world(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog_sources
+) -> types.SimpleNamespace:
+    """A test world holding the repository's current declaration and the installed Pi's shipped Go catalog.
+
+    Only the sources are local stand-ins: the forced refresh writes the shipped rows as the fresh overlay,
+    the listing is the real pinned Pi's own, the capability evidence is synthetic, every model request is
+    answered by the world's stand-in program, and Python may reach no non-loopback address.
+    """
+    monkeypatch.setattr(stage2, "check_overlay", REAL_CHECK_OVERLAY)
+    models = shipped_go_models()
+    ids = {m["id"] for m in models}
+    if "beam-free" not in ids:
+        pytest.fail("the installed Pi's catalog no longer carries beam-free; the collision is not exercised")
+    scratch = scratch_of(tmp_path)
+    with monkeypatch.context() as real:
+        real.setattr(stage2, "PI_WRAPPER", REAL_PI_WRAPPER)
+        done = run_pi(scratch, scratch, "--list-models", timeout=120, env_extra={"PATH": REAL_PATH})
+    if done.returncode != 0:
+        pytest.fail(f"the real Pi listing ended {done.returncode}: {done.stderr[-600:]}")
+    listing = done.stdout
+
+    shutil.copyfile(REPO_ROOT / "model-endpoints.yaml", world.root / "model-endpoints.yaml")
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: feature\nneighbours: []")
+    world.research.write_text(text, encoding="utf-8")
+    run_git(world.root, "add", "-A")
+    run_git(world.root, "commit", "--quiet", "-m", "the repository's current declaration")
+    declaration = yaml.safe_load((world.root / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(item for item in declaration["endpunkte"] if item["name"] == GO)
+
+    real_connect = socket.socket.connect
+
+    def loopback_only(self, address, *args, **kwargs):
+        if isinstance(address, tuple) and address[0] not in ("127.0.0.1", "::1", "localhost"):
+            raise AssertionError(f"the offline contract tried to reach {address[0]}")
+        return real_connect(self, address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", loopback_only)
+
+    def no_intelligence(_key):
+        raise AssertionError("the offline contract tried to read the intelligence source")
+
+    monkeypatch.delenv(availability.INTELLIGENCE_KEY_ENV, raising=False)
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", no_intelligence)
+    monkeypatch.setattr(availability, "now", lambda: CONTRACT_NOW)
+    monkeypatch.setattr(stage2, "terms_today", lambda: CONTRACT_NOW.date())
+    # The real catalog_bridge launches the production helper's CLI, which imports the pinned
+    # runtime, reads its baseline and constructs the bridge. Only HTTP transport is redirected:
+    # Pi's source serves unmodified shipped rows as a synthetic fresh response; models.dev's
+    # tool support is labelled synthetic evidence, not a capability claim about these models.
+    catalog_sources.pi_models = models
+    catalog_sources.metadata = {
+        "source": "synthetic successful capability evidence for the offline preparation contract",
+        GO: {"models": {m["id"]: {"id": m["id"], "tool_call": True} for m in models}},
+    }
+    preload = tmp_path / "synthetic-catalog-transport.mjs"
+    preload.write_text(
+        f"import {json.dumps(GUARD.as_uri())};\n"
+        "const fetch = globalThis.fetch;\n"
+        f"const local = {json.dumps(catalog_sources.url)};\n"
+        "globalThis.fetch = (input, init) => {\n"
+        "  const url = new URL(input instanceof Request ? input.url : input);\n"
+        "  if (url.origin === 'https://pi.dev' && url.pathname === '/api/models/providers/opencode-go')\n"
+        "    return fetch(local + url.pathname + url.search, init);\n"
+        "  if (url.href === 'https://models.dev/api.json') return fetch(local + '/metadata', init);\n"
+        "  return fetch(input, init);\n"
+        "};\n",
+        encoding="utf-8",
+    )
+    real_run = subprocess.run
+    helper = REPO_ROOT / "scripts" / "stage2_research_catalog.mjs"
+
+    def local_catalog_transport(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(helper):
+            command = [shutil.which("node", path=REAL_PATH), command[1]]
+            kwargs["env"] = {
+                **kwargs["env"],
+                "PATH": REAL_PATH,
+                "NODE_OPTIONS": f"--import {preload}",
+            }
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", local_catalog_transport)
+    monkeypatch.setenv("PATH", os.environ["PATH"] + os.pathsep + REAL_PATH)
+    real_launch = stage2.launch
+
+    def local_sources(command, cwd, env, *args, **kwargs):
+        if "update" in command and "--models" in command:
+            store = {GO: {"models": models, "lastModified": 0, "checkedAt": 1}}
+            (Path(env["PI_CODING_AGENT_DIR"]) / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        if "--list-models" in command:
+            return subprocess.CompletedProcess(command, 0, listing, "")
+        return real_launch(command, cwd, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", local_sources)
+    return types.SimpleNamespace(
+        world=world,
+        catalog_sources=catalog_sources,
+        paid={str(model) for model in entry["modelle"]},
+        free_ids=sorted(i for i in ids if i.endswith("-free")),
+    )
+
+
+def probed_models(calls: list[dict]) -> set[str]:
+    return {
+        call["argv"][call["argv"].index("--model") + 1].split("/")[-1] for call in calls if "--model" in call["argv"]
+    }
+
+
+def run_offline_contract(setup: types.SimpleNamespace) -> None:
+    """Run both production preparations on the shipped catalog; an AssertionError names what broke.
+
+    The preparations are the production `prepare-loop` and `prepare-explore` paths; the contract checks the
+    complete receipts and that no paid id is a free member of either.
+    """
+    w = setup.world
+    w.script(pi=[{"stdout": "OK"}] * 400, claude=[{"stdout": "OK"}] * 12)
+    start = len(w.reviews())
+    assert w.run("prepare-loop") == 0, "the review preparation refused the shipped Go catalog"
+    review = json.loads(w.record().with_name("availability.json").read_text(encoding="utf-8"))
+    assert availability.verify(review, review["report_id"]), "the review receipt is not a valid sealed receipt"
+    state = review["state"]
+    assert not set(state["free"]["selected"]) & setup.paid, "a paid id is a free member of the review swarm"
+    assert "paid model" in state["availability"]["skipped"].get("beam-free", ""), "review hides the paid drop"
+    assert f"Skipped: beam-free: {stage2_free.PAID_REASON}" in availability.report(state)
+    review_calls = w.reviews()[start:]
+    assert "beam-free" not in probed_models(review_calls), "review probed a paid id as a free candidate"
+
+    middle = len(w.reviews())
+    assert w.run("prepare-explore", "demo") == 0, "the research preparation refused the shipped Go catalog"
+    path = availability.research_receipt_path("demo", stage2, w.root)
+    research = json.loads(path.read_text(encoding="utf-8"))
+    assert availability.verify(research, research["report_id"]), "the research receipt is not a valid sealed receipt"
+    state = research["state"]
+    reasons = {item["id"]: item["reason"] for item in state["catalog"]["candidates"]}
+    assert reasons.get("beam-free") == "paid-admitted", f"research kept the paid id: {reasons.get('beam-free')}"
+    assert not set(state["free"]["selected"]) & setup.paid, "a paid id is a free member of the research swarm"
+    assert f"Dropped (free): beam-free: {stage2_free.PAID_REASON}" in availability.research_report(state)
+    source_requests = setup.catalog_sources.requests
+    assert any(path.startswith("/api/models/providers/opencode-go") for path, _ in source_requests), (
+        "the research catalog helper did not retrieve the shipped rows through the local Pi source"
+    )
+    assert any(path == "/metadata" for path, _ in source_requests), "synthetic capability evidence was not read"
+    research_calls = w.reviews()[middle:]
+    assert "beam-free" not in probed_models(research_calls), "research probed a paid id as a free candidate"
+    for call in [*review_calls, *research_calls]:
+        assert call["path"] == str(w.bin / "pin-pi"), "a model request left the stand-in program"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_shipped_catalog_prepares_both_swarms_offline(offline_world: types.SimpleNamespace) -> None:
+    """Criterion 9: both production preparations run on the installed Pi's shipped Go catalog, offline.
+
+    The shipped catalog carries `beam-free`, which the declaration admits as paid: both preparations drop it
+    before any probe and still finish with a sealed receipt. A catalog move that breaks either preparation
+    fails here, before merge; missing prerequisites fail the test, they never skip it.
+    """
+    run_offline_contract(offline_world)
+
+
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize(
+    "fault_name, expected, diagnostic",
+    [
+        (
+            "review preparation refuses",
+            "the review preparation refused the shipped Go catalog",
+            "planted: the review preparation refuses",
+        ),
+        (
+            "research preparation refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the research preparation refuses",
+        ),
+        (
+            "research catalog helper refuses",
+            "the research preparation refused the shipped Go catalog",
+            "planted: the production research catalog helper refuses",
+        ),
+        (
+            "review bypasses the shared selection",
+            "the review preparation refused the shipped Go catalog",
+            f"refused: the model beam-free is {stage2_free.PAID_REASON}",
+        ),
+        (
+            "research bypasses the shared selection",
+            "the research preparation refused the shipped Go catalog",
+            f"refused: beam-free is {stage2_free.PAID_REASON}",
+        ),
+    ],
+)
+def test_both_preparation_contracts_detect_planted_faults(
+    offline_world: types.SimpleNamespace,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    fault_name: str,
+    expected: str,
+    diagnostic: str,
+) -> None:
+    """Criterion 10: the same contract assertions fail for a refusing or bypassing preparation, on either path.
+
+    Planted faults, one at a time: the review preparation refuses, the research preparation refuses, the
+    review preparation skips the shared selection's paid veto, the research preparation does the same.
+    """
+    # Parametrization gives every fault a fresh world and a clean control.
+    run_offline_contract(offline_world)  # no fault, no failure
+    capsys.readouterr()  # Only the fault run may supply its diagnostic.
+
+    def refuse_review(*_args, **_kwargs):
+        raise stage2.Refused("planted: the review preparation refuses")
+
+    def refuse_research(*_args, **_kwargs):
+        raise stage2_swarm.ResearchCatalogError("planted: the research preparation refuses")
+
+    def bypass(include_adds: bool):
+        real = stage2_free.select
+
+        def planted(candidates, policy, **kwargs):
+            if policy.include_adds == include_adds:
+                kwargs["paid"] = ()
+            return real(candidates, policy, **kwargs)
+
+        return planted
+
+    real_run = subprocess.run
+
+    def refuse_catalog_helper(command, *args, **kwargs):
+        if len(command) == 2 and str(command[1]) == str(REPO_ROOT / "scripts/stage2_research_catalog.mjs"):
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                json.dumps({"exit_code": 1, "reason": "planted: the production research catalog helper refuses"}),
+                "",
+            )
+        return real_run(command, *args, **kwargs)
+
+    faults = {
+        "research catalog helper refuses": (subprocess, "run", refuse_catalog_helper),
+        "review preparation refuses": (stage2, "discover_free", refuse_review),
+        "research preparation refuses": (stage2_swarm, "select_research_catalog", refuse_research),
+        "review bypasses the shared selection": (stage2_free, "select", bypass(True)),
+        "research bypasses the shared selection": (stage2_free, "select", bypass(False)),
+    }
+    target, attribute, planted = faults[fault_name]
+    with monkeypatch.context() as fault:
+        fault.setattr(target, attribute, planted)
+        with pytest.raises(AssertionError, match="^" + re.escape(expected) + r"(?:\n|$)"):
+            run_offline_contract(offline_world)
+        assert diagnostic in capsys.readouterr().err, "the contract failed for a different cause than the planted fault"

@@ -15,6 +15,7 @@ import re
 from datetime import date, datetime
 from pathlib import PurePosixPath
 
+import venv_guard  # noqa: F401
 import yaml
 
 
@@ -63,6 +64,19 @@ def _canonical(value):
     raise UnsupportedReference("value has no canonical JSON representation")
 
 
+def _atx_title(rest):
+    # The title of an ATX heading: its text without the optional closing run of marks.
+    return re.sub(r"(?:^|[ \t]+)#+[ \t]*$", "", rest or "").strip()
+
+
+def _atx_heading(text):
+    # The one reading of an ATX heading line, shared by the scan and by a copied citation so the
+    # two can never disagree (loop rows L1-1, L2-3): up to three spaces of indentation, an opening
+    # run of one to six marks, then the title with its optional closing run. Returns (level, title).
+    match = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)", text)
+    return (len(match.group(1)), _atx_title(match.group(2))) if match else None
+
+
 def _markdown_scan(lines):
     active = []
     headings = []
@@ -84,18 +98,34 @@ def _markdown_scan(lines):
             fence = (run[0], len(run))
             continue
         active.append(index)
-        match = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*)|$)", text)
-        if match:
-            title = re.sub(r"(?:^|[ \t]+)#+[ \t]*$", "", match.group(2) or "").strip()
-            headings.append((index, len(match.group(1)), title))
+        heading = _atx_heading(text)
+        if heading:
+            headings.append((index, *heading))
     return active, headings
+
+
+def _heading_matches(headings, target, level_two):
+    return [(line, level) for line, level, title in headings if title == target and (not level_two or level == 2)]
 
 
 def _markdown_extent(lines, reference):
     active, headings = _markdown_scan(lines)
     criterion = re.fullmatch(r"criterion ([1-9][0-9]*)", reference)
     target = "Acceptance criteria" if criterion else reference
-    matches = [(line, level) for line, level, title in headings if title == target and (not criterion or level == 2)]
+    matches = _heading_matches(headings, target, bool(criterion))
+    if not matches:
+        # A seat may copy a whole heading line. Exact titles keep priority: the second comparison
+        # runs only after a titleless exact pass, on the same frozen scan, so literal hash titles
+        # keep their meaning and duplicates stay ambiguous without a fallback. The copy is read as
+        # the scan reads a heading line (opening run, optional closing run), and its opening run
+        # must be the cited heading's own: marks of another level name another heading.
+        copied = _atx_heading(target)
+        if copied and copied[1]:
+            matches = _heading_matches(headings, copied[1], bool(criterion))
+            if len(matches) == 1 and matches[0][1] != copied[0]:
+                raise UnsupportedReference(
+                    f"heading is level {matches[0][1]}, but the citation copies {copied[0]} opening marks"
+                )
     if len(matches) != 1:
         raise UnsupportedReference("heading is absent or ambiguous")
     start, level = matches[0]
