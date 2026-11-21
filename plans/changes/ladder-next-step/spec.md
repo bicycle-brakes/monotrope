@@ -28,7 +28,7 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
 
 ## Terms
 
-**Consumed ladder:** the saved run has no unconsumed eligible stage, has at least one completed round since its last restart, and its last completed round cannot end the loop as a clean round. An unconsumed paid rung whose terms have expired counts as consumed for this next-step rule. An unconsumed Flash stage counts as consumed for this rule only when none of its members remains admissible or replaceable; if at least one member remains admissible or replaceable, it remains eligible (`decisions.md` Q-4). A cut-diff round cannot end the loop as a clean round even when it has no accepted findings (`decisions.md` Q-5). A taken finding is repaired when its status is `fixed` with the evidence mark required by the existing row rules.
+**Consumed ladder:** the saved run has no unconsumed eligible stage, has at least one completed round since its last restart, and its last completed round cannot end the loop as a clean round. For this next-step rule, an unconsumed paid rung or Flash member is inadmissible when the current declaration fails its admission check, including expired, missing or malformed terms dates, a dated skip, exclusion, removal, or unread retention or training terms. An inadmissible rung counts as consumed. An unconsumed Flash stage counts as consumed only when none of its members is admissible or replaceable; a member is replaceable only by an unconsumed admissible rung outside that stage. If at least one member is admissible or replaceable, the stage remains eligible (`decisions.md` Q-4; phase-2a S-12 and S-13). A cut-diff round cannot end the loop as a clean round even when it has no accepted findings (`decisions.md` Q-5). A taken finding is repaired when its status is `fixed` with the evidence mark required by the existing row rules.
 
 ## Acceptance criteria
 
@@ -46,7 +46,7 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
    *Refuted by:* omitting a currently applicable reason, placing it on standard output, or claiming a stale snapshot-time reason after the declaration changes.
 7. When no round has completed in the current run, exhausting its stages exits 2 and reports to the maintainer without naming a next step.
    *Refuted by:* a zero-round outage exiting with a code other than 2, returning either `next:` instruction, or proceeding to phase 6.
-8. When the doctrine describes a consumed ladder, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, and `AGENTS.md` describe repair for open taken rows and review once repaired.
+8. When the doctrine describes a consumed ladder, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, `prompts/02a-spec-review.md`, and `AGENTS.md` describe repair for open taken rows and review once repaired.
    *Refuted by:* any of these texts requiring a maintainer decision solely because a completed run's ladder is consumed, omitting either next step, or claiming that the loop always ends with a clean round, including in their phase tables and `review-loop` descriptions.
 9. When `docs/WORKFLOW.md` describes the exit status of `review-loop`, it states that exit 0 can also mean a next step was named without writing a round.
    *Refuted by:* a statement that exit 0 always means a round was written.
@@ -54,12 +54,15 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
     *Refuted by:* saying the loop always runs until a clean round or omitting the consumed-ladder path.
 11. When phase 6 follows a consumed ladder, the documented existing sequence requires a fresh full `make verify` and the independent reviewer's read of the whole diff before release.
     *Refuted by:* documentation permitting release without either the full verification or the independent whole-diff review, including when the loop diff was cut.
-12. When every remaining unconsumed stage is ineligible because its paid terms have expired, a completed run satisfies the stage-exhaustion part of the next-step rule.
-    *Refuted by:* refusing solely because an expired rung remains in the snapshot, instead of applying the applicable next-step or prior stop, or treating a run with an admissible unconsumed rung as exhausted.
+12. When every remaining unconsumed stage is ineligible under the current admission check, a completed run satisfies the stage-exhaustion part of the next-step rule.
+    *Refuted by:* refusing solely because an inadmissible rung remains, including for expired or malformed terms, a dated skip, exclusion or removal, instead of applying the applicable next step or prior stop; or treating a run with an admissible unconsumed rung as exhausted.
 13. While an unconsumed Flash stage has an admissible or replaceable member, the next-step rule does not treat that stage as consumed.
-    *Refuted by:* a `next:` instruction when even one member is admissible or replaceable; or failure to apply the next-step rule when none is and no other eligible stage remains.
+    *Refuted by:* a `next:` instruction when even one member is admissible or replaceable; or failure to apply the next-step rule when neither a Flash member nor an unconsumed replacement rung is admissible and no other eligible stage remains.
 14. When a consumed ladder's last round had a cut diff and no accepted findings, the next-step rule names review if the other applicable stops permit it.
     *Refuted by:* a clean stop or refusal instead of `next: review <change>` for a cut round with no rows or only rejected rows.
+
+15. When the next-step rule passes over unconsumed models because their admission fails, it names each passed-over model and its admission failure reason on standard error.
+    *Refuted by:* omitting any passed-over model or its reason, or writing a diagnostic to standard output.
 
 ## Non-goals
 
@@ -72,7 +75,7 @@ Model declarations and terms, ADRs, tracker data and availability policy are out
 ## Definition of Done
 
 - `make verify` green.
-- `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, `prompts/06-review.md` and `AGENTS.md` move with the code; no ADR changes in this pull request. The consumed-ladder amendment of ADR 0021 is already in this worktree (commit `4755e255`); this change merges after that decision pull request (`decisions.md` Q-2).
+- `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, `prompts/02a-spec-review.md`, `prompts/06-review.md` and `AGENTS.md` move with the code; no ADR changes in this pull request. The consumed-ladder amendment of ADR 0021 is already in this worktree (commit `4755e255`); this change merges after that decision pull request (`decisions.md` Q-2).
 - Protected areas untouched and non-goals unbuilt, shown by the pull request's file list.
 - The pull request closes `coding-harness-hwll` and its last commit carries `Closes-Bead: coding-harness-hwll`.
 - Special runs: none.
@@ -80,3 +83,5 @@ Model declarations and terms, ADRs, tracker data and availability policy are out
 ## Open decisions
 
 None open. [DETAIL] The existing full verification and whole-diff review constitute the phase-6 check of the last repair; no additional reviewer task is implied (`decisions.md`, interview minimum). [DETAIL] The next-step line is the entire standard output and diagnostics go to standard error, so a caller can read it without parsing other messages (phase-2a S-2). [DETAIL] Exclusion diagnostics retain the existing all-paid-stages-excluded case and use current declaration reasons, avoiding a new snapshot contract (phase-2a S-3). [DETAIL] The phase-4 appetite is four hours including repairs: this bounded change alters an existing stop and its tests, and the limit provides a concrete stop for the implementer.
+
+[DETAIL] Apply the same current admission check to rungs and Flash members, and count only an admissible unconsumed rung as a replacement, so ineligible models cannot keep a spent run blocked (phase-2a S-12 and S-13). [DETAIL] Name each passed-over model and reason on standard error to preserve the reason for its exclusion while keeping standard output machine-readable (phase-2a S-14). [DETAIL] Align the spec-review prompt as well, so it describes both terminal paths consistently (phase-2a S-15).
