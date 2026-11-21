@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -82,6 +82,47 @@ In the context of an AGENTS.md rule worded around a refusal, facing a runner
 that will end with exit 0 and a next-step line, we decided to reword the rule
 in this change's pull request, to achieve one statement in rule and runner,
 accepting a held file in the change's diff — 2026-11-20
+
+## Q-4 · Ambiguity S-8 (expired-terms stage in a consumed ladder)
+
+asked: 2026-11-21
+answer: "An unconsumed rung whose admission no longer holds (terms expired / valid_until passed) counts as consumed for the next-step rule, so the runner names the next step (next: review <change> or next: repair <change>) instead of launching a round that refuses. (Detail for Flash stage: if every member of an unconsumed stage is no longer admissible, the stage counts as consumed; if at least one member remains admissible or replaceable, the stage remains eligible.)"
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 2 ambiguity row S-8 of ladder-next-step.
+  Intention: determine whether an unconsumed rung with expired data terms blocks the exhausted-ladder next-step rule.
+  Today: `next_stage` still returns an unconsumed rung whose `valid_until` passed, and launching it refuses with `terms_problem` (exit 2).
+  Repository change: `scripts/stage2.py` (`next_stage` / consumed-ladder check) and its spec/tests in `plans/changes/ladder-next-step/`.
+  Architecture change: none — aligns eligibility with admission inside the consumed-ladder check.
+
+In the context of a snapshot holding an unconsumed rung whose terms reading
+has expired, facing a runner that would otherwise refuse at launch instead of
+naming the next step, we decided that an expired rung counts as consumed for
+the next-step rule (and a Flash stage counts as consumed when none of its
+members remain admissible or replaceable), to achieve a clean transition to
+repair or phase 6 without manual stage retirement, accepting that a stage with
+expired terms is not retried automatically — 2026-11-21
+
+## Q-5 · Ambiguity S-9 (cut-diff round in a consumed ladder)
+
+asked: 2026-11-21
+answer: "A round whose diff was cut is not clean for the next-step rule, even when zero findings were accepted; the next step follows the taken rows (next: repair <change> if any taken row is unrepaired, else next: review <change>)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 2 ambiguity row S-9 of ladder-next-step.
+  Intention: clarify whether a consumed ladder ending on a cut-diff round with no accepted findings counts as clean or emits `next:`.
+  Today: `clean_round` returns true when zero rows were accepted, yet the clean-round stop does not fire on a cut diff, leaving today's refusal active.
+  Repository change: `scripts/stage2.py`, `plans/changes/ladder-next-step/spec.md` Terms, and tests.
+  Architecture change: none — keeps cut-diff rounds non-terminal so phase 6 reviews the whole diff.
+
+In the context of a consumed ladder whose final round had a cut diff and no
+accepted findings, facing a clean-round stop that already refuses to end the
+loop on a cut diff, we decided that a cut-diff round is not clean for the
+next-step rule and follows the taken rows (`next: repair` or `next: review`),
+to achieve consistent handoff to phase 6 on the whole diff, accepting that
+zero-finding cut rounds still trigger phase 6 — 2026-11-21
 
 ## Interview minimum
 
