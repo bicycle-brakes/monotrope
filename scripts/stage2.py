@@ -6870,25 +6870,33 @@ def cheap_checks(
                 if done.returncode:
                     problems.append(f"{identity} exited {done.returncode}\n{_cheap_evidence(done, key)}")
     if owed:
-        shown_owed = ", ".join(f"`{ref}` ({state})" for ref, state in sorted(owed.items()))
-        problems.append("the criterion ledger names tests that do not stand, and this attempt owes them: " + shown_owed)
+        shown_owed = "\n".join(f"`{ref}` ({state})" for ref, state in sorted(owed.items()))
+        lines = protect_diagnostics(
+            "the criterion ledger names tests that do not stand, and this attempt owes them: " + shown_owed, key
+        ).splitlines()
+        problems.append("\n".join(_shrink(lines, TAIL_LINES)))
     return problems
 
 
-def must_run_refs(plan: bytes) -> str:
-    """The accepted plan's ledger test references as the implement prompt's must-run list, or why there is none.
-
-    A reference still marked `not yet written` is listed as it stands - the instruction says to
-    write it, never that it exists (spec, criterion 12). A ledger that cannot be read names the
-    section to follow instead of a list, so the prompt build never fails on it.
-    """
+def must_run_refs(root: Path, plan: bytes) -> str:
+    """Classify implement's ledger targets; every missing test remains owed."""
     try:
-        refs = _ledger_test_refs(plan)
+        standing, missing, faults = ledger_standings(root, plan)
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
         return "the plan's criterion ledger could not be read for test names; follow its `## Criterion ledger` section itself"
-    if not refs:
+    if not standing and not missing and not faults:
         return "none - the plan's criterion ledger names no test; write every test the plan asks for"
-    return "\n".join(f"- {ref}" for ref in refs)
+    lines = []
+    if standing:
+        lines.append("Standing ledger tests, the pytest targets - run them and leave them green:")
+        lines.extend(f"- {ref}" for ref in sorted(standing))
+    if missing:
+        lines.append("Missing ledger tests - owed: write them before running them:")
+        lines.extend(f"- {ref}" for ref in sorted(missing))
+    if faults:
+        lines.append("Ledger tests the runner cannot inspect, their files unreadable or unparseable - owed:")
+        lines.extend(f"- {fault}" for fault in faults)
+    return "\n".join(lines)
 
 
 def repair_must_run_refs(root: Path, plan: bytes) -> str:
@@ -9283,7 +9291,7 @@ def implementation_prompt(
         "## Must-run checks before handback\n\n"
         + MUST_RUN_DELEGATED
         + "\n\nLedger tests:\n"
-        + must_run_refs(plan.encode("utf-8")),
+        + must_run_refs(ctx.root, plan.encode("utf-8")),
         f"Implementation baseline: {baseline}",
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",

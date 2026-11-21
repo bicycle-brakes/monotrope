@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.9
@@ -73,3 +73,4 @@ The runner performs the final full check and commit. Explore used Stage 2, route
 2026-11-20 17:39:25–17:42:29 UTC, 185 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-20 17:57:44–18:00:50 UTC, 186 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-20 19:50:24–22:17:52 UTC, 8848 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-20 22:31:44–2026-11-21 00:19:06 UTC, 6443 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

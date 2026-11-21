@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.9
@@ -152,3 +152,7 @@ Stage-2 call, 2026-11-20: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-20: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1149 files, 4980 commits, 12 rules.
 
 Stage-2 call, 2026-11-20: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1149 files, 4980 commits, 12 rules.
+
+Stage-2 call, 2026-11-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 4981 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/ledger-ids-before-pytest/plan.md, plans/changes/ledger-ids-before-pytest/spec.md — unchanged

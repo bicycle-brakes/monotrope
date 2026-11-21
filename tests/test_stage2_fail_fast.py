@@ -792,11 +792,14 @@ def test_ledger_ids_are_checked_before_pytest(world: World) -> None:
     calls = world.calls("python3")
     assert calls[0]["argv"] == [*PYTEST_HEAD, "tests/test_new.py", "tests/test_standing.py::test_standing"]
     assert world.calls("make") == [], "a red cheap check still started `make verify`"
-    assert (
-        "the criterion ledger names tests that do not stand, and this attempt owes them: "
-        "`tests/test_gone.py::test_gone` (written), `tests/test_later.py::test_later` (not yet written), "
-        "`tests/test_standing.py::test_in_string` (written)"
-    ) in world.text()
+    text = world.text()
+    assert "the criterion ledger names tests that do not stand, and this attempt owes them:" in text
+    for ref in (
+        "`tests/test_gone.py::test_gone` (written)",
+        "`tests/test_later.py::test_later` (not yet written)",
+        "`tests/test_standing.py::test_in_string` (written)",
+    ):
+        assert ref in text
 
 
 def test_missing_ledger_ids_persist_in_attempt_record(world: World) -> None:
@@ -1185,3 +1188,36 @@ def test_malformed_ledger_entry_is_not_selected(world: World) -> None:
     targets, fault, missing, faults = stage2.selected_tests(world.root, env, plan)
     assert fault is None and missing == {} and faults == []
     assert targets == ["tests/test_real.py::test_real"]
+
+
+def test_implement_prompt_separates_standing_and_missing_ledger_tests(world: World) -> None:
+    tests = world.root / "tests"
+    tests.mkdir()
+    (tests / "test_standing.py").write_text("def test_standing():\n    pass\n", encoding="utf-8")
+    world.plan.write_text(
+        plan_with_ledger(
+            [
+                "- 1: tests/test_standing.py::test_standing — standing",
+                "- 2: not yet written tests/test_later.py::test_later — owed",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    prompt = stage2.implementation_prompt(ctx, "baseline-sha", [])
+    assert (
+        "Standing ledger tests, the pytest targets - run them and leave them green:\n- tests/test_standing.py::test_standing"
+        in prompt
+    )
+    assert "Missing ledger tests - owed: write them before running them:\n- tests/test_later.py::test_later" in prompt
+
+
+def test_owed_ledger_diagnostic_is_protected_and_bounded(world: World, monkeypatch) -> None:
+    monkeypatch.setattr(stage2, "format_targets", lambda *_args: [])
+    missing = {f"tests/test_{i}.py::test_secretvalue_{i}": "written" for i in range(100)}
+    monkeypatch.setattr(stage2, "selected_tests", lambda *_args: ([], None, missing, []))
+    problems = stage2.cheap_checks(world.root, {}, world.plan, "secretvalue", b"plan")
+    assert len(problems) == 1
+    assert "secretvalue" not in problems[0]
+    assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
+    assert "left out" in problems[0]
