@@ -115,11 +115,6 @@ def _context_entry(
     )
 
 
-def _slot_record(state: Path, slot: int = 1) -> Path:
-    """The published holder record of one slot."""
-    return state / "coding-harness" / verify_lock.SLOT_HOLDER_NAMES[slot - 1]
-
-
 TEST_TOKEN = "test-admission-token"
 
 
@@ -1314,6 +1309,11 @@ def test_admission_measurement_survives_cli_and_inherited_context(
 # ---------------------------------------------------------------------------
 # Two shared verification slots (bead coding-harness-u1ha)
 # ---------------------------------------------------------------------------
+
+
+def _slot_record(state: Path, slot: int = 1) -> Path:
+    """The published holder record of one slot."""
+    return state / "coding-harness" / verify_lock.SLOT_HOLDER_NAMES[slot - 1]
 
 
 @contextlib.contextmanager
