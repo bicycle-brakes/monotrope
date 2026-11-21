@@ -28,20 +28,26 @@ On 2026-11-19 and 2026-11-20, the process-creation signal test reported a surviv
 
 ## Acceptance criteria
 
-1. When the reported failure's cause is established, a controlled regression reproduces that cause against the pre-fix code and records the observed interleaving and baseline failure.
+1. When the reported failure's cause is established, a controlled regression reproduces that cause against the faulty pre-fix production code or test helper and records the observed ordering and baseline failure.
    *Refuted by:* the test merely sends a signal without establishing the relevant ordering, or its recorded pre-fix result passes or fails for an unrelated reason.
 2. When cancellation arrives while a timed launch is creating a child on the main thread or a worker, the launched child is stopped and its leader reaped before that launch returns or raises.
-   *Refuted by:* a forced interruption leaves the child running or unreaped after the launch finishes, for SIGINT or SIGTERM on either thread.
+   *Refuted by:* a forced interruption leaves the child running or unreaped after its own launch finishes, for SIGINT or SIGTERM on either thread; a worker must be joined before its verdict.
 3. When cancellation stops the runner, a timed launch attempted afterwards starts no program.
    *Refuted by:* a late launch creates its marker or child after cancellation.
 4. When an interrupted timed launch has a running descendant in its process group, cancellation stops that descendant and reaps the group leader.
    *Refuted by:* the descendant remains live or the leader remains unreaped after the interrupted launch finishes.
-5. When the sibling main-thread interrupt failure is investigated, its relationship to the established cause is recorded with evidence and, if it has a different cause, a separate follow-up is handed to the orchestrator.
-   *Refuted by:* the sibling failure is assumed to share the cause without evidence, or an evidenced different cause is left without a follow-up handoff.
+5. When the sibling main-thread interrupt failures are investigated, the relationship of each recorded failure to the established cause is recorded with evidence.
+   *Refuted by:* the Terminated failure on PR #404 or the KeyboardInterrupt failure on PR #419 is assumed to share the cause without evidence, or a recorded sibling failure is omitted.
 6. When the verification runner's process-creation path is assessed for the established race, the result records why that path is affected or not affected and an affected path is protected and regression-tested.
    *Refuted by:* the assessment omits its actual calling thread and cancellation behavior, or an affected path can leave a gate process alive without a failing regression.
-7. When the deterministic signal tests complete, their verdicts depend on observed process state and synchronization rather than increased watchdogs, sleeps or retries to conceal the failure.
-   *Refuted by:* a passing result requires a longer watchdog, an added timing delay or a retry, or succeeds through the child's natural exit.
+7. When the existing process-creation signal test and any sibling case explained by the same cause complete, their verdicts depend on observed process state and controlled ordering rather than timing workarounds.
+   *Refuted by:* the existing flaky test remains uncontrolled, a passing result requires a longer watchdog, an added timing delay or a retry, or succeeds through the child's natural exit.
+8. If a sibling failure has a different established cause, a `Follow-up for the orchestrator` section in the change's `findings.md` attempt record names the cause, evidence and test IDs.
+   *Refuted by:* an evidenced different cause has no such handoff or lacks any of those details.
+9. If the cause cannot be established and reproduced within the two-hour appetite, the attempt stops and reports the interleavings tried and their results to the orchestrator without shipping a speculative fix or test change.
+   *Refuted by:* the attempt continues past the limit, ships a speculative change, or omits the attempted interleavings or results from its report.
+10. If the established cause is solely in the test's cleanup or liveness verdict, the evidence records why production cleanup is safe for the observed ordering.
+    *Refuted by:* the test alone is changed without evidence of production cleanup and reaping for that ordering.
 
 ## Non-goals
 
@@ -55,7 +61,7 @@ Tracker and held paths are owned by the orchestrator; the implementation attempt
 
 ## Definition of Done
 
-- The controlled pre-fix failure and post-fix result, cause, sibling assessment and verification-runner assessment are recorded in the pull request with the tested commits.
+- For a completed fix, the controlled pre-fix failure and post-fix result, cause, sibling assessment and verification-runner assessment are recorded in the pull request with the tested commits. If the appetite expires first, criterion 9 governs the stopped attempt instead.
 - `make verify` green; no ADR or external document changes are required.
 - Protected areas untouched and non-goals unbuilt, shown by the pull request file list.
 - The pull request closes bead coding-harness-oag7 and its last commit carries `Closes-Bead: coding-harness-oag7`.
@@ -65,3 +71,5 @@ Tracker and held paths are owned by the orchestrator; the implementation attempt
 [DETAIL] The phase-4 appetite is two hours including repairs; this bounds the investigation and implementation without prescribing the cause.
 
 [DETAIL] The reproduction must control the ordering while keeping an independent release path for any thread blocked by the signal handler; this prevents the test barrier itself from deadlocking the run.
+
+[DETAIL] The cancellation guarantee is per launch call, not the return of the runner's main function; joining the worker before judging its child measures that contract.
