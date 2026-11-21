@@ -753,7 +753,11 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_map.py:177 | If the schema contains a non-JSON value such as `"title": NaN`, the schema loader accepts it and finder calls can start. The run must instead stop before any finder call and name the schema file. [Acceptance criterion 23] | Codex | taken — criterion 23: the schema loader rejects non-finite JSON constants (NaN, Infinity, -Infinity) as invalid JSON naming the schema file, before any finder call; orchestrator 2026-11-21 | — |
+| R6-1 | MAJOR | SPEC | base | scripts/stage2_research_map.py:177 | If the schema contains a non-JSON value such as `"title": NaN`, the schema loader accepts it and finder calls can start. The run must instead stop before any finder call and name the schema file. [Acceptance criterion 23] | Codex | fixed — tests/test_stage2_swarm.py::test_nonfinite_finder_schema_stops_before_calls | — |
 
 Phase 6 verdict: codex 01a1fdf9-ce09-7b62-9dec-61ab0b40cd55, 2026-11-21
 Reviewer session: codex 01a1fdf9-ce09-7b62-9dec-61ab0b40cd55 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 5095 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/finder-partial-report/plan.md, plans/changes/finder-partial-report/spec.md — unchanged

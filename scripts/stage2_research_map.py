@@ -174,7 +174,7 @@ def interpret_locator_schema(value):
     """
     if isinstance(value, str | bytes):
         try:
-            value = json.loads(value)
+            value = json.loads(value, parse_constant=_bad_json_constant, parse_float=_finite_json_float)
         except ValueError as error:
             raise ResearchMapError(f"the locator schema is not valid JSON: {error}") from error
     if not isinstance(value, dict):

@@ -4740,6 +4740,19 @@ def test_invalid_finder_schema_stops_before_calls(sworld: SwarmWorld, case: str)
     assert stage2_research_run.LOCATOR_SCHEMA in text, "the reason names the schema file"
 
 
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_nonfinite_finder_schema_stops_before_calls(sworld: SwarmWorld, constant: str) -> None:
+    path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
+    path.write_text(schema_text().replace('"type": "object"', f'"title": {constant}, "type": "object"', 1))
+    sworld.complete()
+    assert sworld.run() == 1
+    assert sworld.calls() == [], "no finder call starts with invalid JSON in the schema"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    assert stage2_research_run.LOCATOR_SCHEMA in text
+    assert "not valid JSON" in text
+
+
 @pytest.mark.parametrize("location,bad", [("outer", {}), ("outer", []), ("entry", {}), ("entry", [])])
 def test_malformed_required_schema_stops_before_calls(sworld: SwarmWorld, location: str, bad) -> None:
     path = sworld.root / "prompts" / "research-swarm" / stage2_research_run.LOCATOR_SCHEMA
