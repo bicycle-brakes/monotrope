@@ -508,3 +508,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > No finding.
 
 Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1149 files, 5026 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1149 files, 5027 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/ledger-ids-before-pytest/plan.md, plans/changes/ledger-ids-before-pytest/spec.md — unchanged

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-20
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-bxxt.9
@@ -35,8 +35,8 @@ The runner names missing criterion-ledger tests before pytest while letting repa
 
 1. When an implement or repair attempt selects tests, the runner checks every ledger test for existence before invoking pytest.
    *Refuted by:* a missing ledger test reaches pytest as a test ID.
-2. When test selection finds one or more missing ledger tests, the attempt record names each missing test ID.
-   *Refuted by:* a missing ID is absent from the record, including for an otherwise successful repair.
+2. When test selection finds one or more missing ledger tests, the attempt record names the missing test IDs in bounded diagnostic sections, including for an otherwise successful repair. Each section retains at most 80 lines; when it exceeds that bound, the record counts the omitted diagnostic lines.
+   *Refuted by:* a missing ID is absent from an untruncated section, or a truncated section omits the count of diagnostic lines left out.
 3. When missing ledger tests coexist with other selected targets, pytest runs the standing selected targets without the missing IDs.
    *Refuted by:* a missing ID prevents a standing selected test from running or is passed to pytest.
 4. When no selected target stands, the runner skips pytest.
