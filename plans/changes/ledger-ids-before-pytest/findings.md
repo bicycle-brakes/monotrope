@@ -539,8 +539,8 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | scripts/stage2.py:6829 | If a ledger test file cannot be parsed and the plan also names 80 missing written tests, truncation removes the line identifying the unparseable file. The attempt fails, but its diagnostic no longer identifies the faulty input. [Criterion 9] | Codex | open | — |
-| F-2 | MAJOR | SPEC | base | scripts/stage2.py:6675, scripts/stage2.py:6904 | If checking a ledger test file raises a permission error, for example because its parent directory cannot be searched, the repair prompt says the plan’s ledger could not be read. It does not identify the affected test file as unreadable. [Criterion 16] | Codex | open | — |
+| F-1 | MAJOR | SPEC | base | scripts/stage2.py:6829 | If a ledger test file cannot be parsed and the plan also names 80 missing written tests, truncation removes the line identifying the unparseable file. The attempt fails, but its diagnostic no longer identifies the faulty input. [Criterion 9] | Codex | taken — criterion 9: keep faulty-file diagnostics outside or ahead of missing-test truncation so an unparseable file is always named even with 80+ missing written tests | — |
+| F-2 | MAJOR | SPEC | base | scripts/stage2.py:6675, scripts/stage2.py:6904 | If checking a ledger test file raises a permission error, for example because its parent directory cannot be searched, the repair prompt says the plan’s ledger could not be read. It does not identify the affected test file as unreadable. [Criterion 16] | Codex | taken — criterion 16: a PermissionError checking a ledger test file (e.g. unsearchable parent dir) must identify the affected test file as unreadable rather than blaming the plan's ledger | — |
 
 Phase 6 verdict: codex 01a1fda6-4280-74a0-b43a-29d43ee09bb7, 2026-11-21
 Reviewer session: codex 01a1fda6-4280-74a0-b43a-29d43ee09bb7 — a fresh session reviewed: no phase-2a session was recorded
