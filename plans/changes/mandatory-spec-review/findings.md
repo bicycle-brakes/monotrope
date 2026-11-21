@@ -1094,3 +1094,62 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 Phase 6 verdict: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8, 2026-11-21
 Reviewer session: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5097 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files none; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-1-20261121T122315246880Z-ab7dcf16.md
+> ```
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1153 files, 5097 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2.py` +10 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ....................F...............                                     [100%]
+> =================================== FAILURES ===================================
+> ______________ test_final_draft_after_review_of_uncommitted_spec _______________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/mandatory-spec-review/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-2992/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_final_draft_after_review_of_uncommitted_spec(world: World) -> None:
+>         """F-4: a reviewed working-tree body may follow an older committed spec."""
+>         spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+>         spec.write_text(spec.read_text(encoding="utf-8") + "\nReviewed working-tree version.\n", encoding="utf-8")
+>         seed_review_rounds(world, 3)
+>         spec.write_text(spec.read_text(encoding="utf-8") + "\nFinal draft.\n", encoding="utf-8")
+>         admission = stage2.review_admission(world.root, "demo")
+> >       assert admission.review_problem is None, admission.review_problem
+> E       AssertionError: the newest qualifying spec review of demo is stale: it names sha256:26b151f3800cc485870d01be2fdf52ced063ff91fda30c61ccb1de455ed28fc1 and the spec body on disk hashes to sha256:993bc7a6153181bdebc5173b8dd13ab5dac20d5fec1a0a3f07254efa884815bd; the spec body changed after the review. 3 spec-review rounds have run and the final draft after the third admits one spec body edit only; the maintainer authorizes a fourth round in decisions.md or the change is re-sliced.
+> E       assert 'the newest qualifying spec review of demo is stale: it names sha256:26b151f3800cc485870d01be2fdf52ced063ff91fda30c61c...d admits one spec body edit only; the maintainer authorizes a fourth round in decisions.md or the change is re-sliced.' is None
+> E        +  where 'the newest qualifying spec review of demo is stale: it names sha256:26b151f3800cc485870d01be2fdf52ced063ff91fda30c61c...d admits one spec body edit only; the maintainer authorizes a fourth round in decisions.md or the change is re-sliced.' = ReviewAdmission(klass='bounded', class_problem=None, review_problem='the newest qualifying spec review of demo is stal...aintainer authorizes a fourth round in decisions.md or the change is re-sliced.', left_out='', rounds=3, recheck=False [… 16 characters left out …]
+>
+> tests/test_stage2.py:9216: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_final_draft_after_review_of_uncommitted_spec
+> 1 failed, 35 passed in 3.56s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/mandatory-spec-review/stage2/attempts/mandatory-spec-review/attempt-2-20261121T122315246880Z-ab7dcf16.md
+> ```
+
+Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1153 files, 5097 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
