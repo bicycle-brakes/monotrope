@@ -36,30 +36,38 @@ Non-blocking gates carry a dated review point and a tracking item, and their rea
 
 1. When a gate has `report` or `advisory` enforcement, the schema check rejects it unless it declares a valve mapping.
    *Refuted by:* A non-blocking gate without a mapping passes the check.
-2. When a non-blocking gate declares a valve, the schema check rejects a missing or invalid calendar date in `until`.
-   *Refuted by:* A missing, malformed or impossible date passes the check.
-3. When a non-blocking gate declares a valve, the schema check rejects a missing or malformed repository bead identifier in `bead`.
-   *Refuted by:* An empty or malformed identifier passes the check.
-4. When a non-blocking gate's reason contains a numeric count, the schema check rejects that reason.
-   *Refuted by:* A reason containing `35 findings`, `90 days` or a standalone count `35` passes.
-5. When a non-blocking gate has a well-formed valve whose date is before today, `--check-schema` reports its gate, date and bead without failing solely because the date has passed.
+2. When a non-blocking gate declares a valve, the schema check rejects an `until` that is not an unquoted YAML calendar date in ISO form.
+   *Refuted by:* A missing, quoted, malformed or impossible date passes; a YAML parsing failure is a rejection even if it cannot identify the gate.
+3. When a non-blocking gate declares a valve, the schema check rejects a `bead` that is not `coding-harness-` followed by one or more lowercase letters or digits and zero or more dot-separated numeric child components.
+   *Refuted by:* `bt8`, an empty component or a non-numeric child passes, or `coding-harness-bt8` or `coding-harness-73gi.4` fails.
+4. When a non-blocking gate's reason contains a count, the schema check rejects it; a count is a run of decimal digits bounded on both sides by whitespace, the start or end of the reason, or a comma, colon, semicolon or parenthesis.
+   *Refuted by:* `35 findings`, `90 days`, `(35)` or `35` passes, or a reason containing only `D-10`, `ADR-028`, `Python 3.12`, `coding-harness-bxxt.1` or `2026-10-05` as digit-bearing tokens is rejected as a count.
+5. When a non-blocking gate has a valid valve whose `until` date is before the current UTC date, `--check-schema` reports the gate, date and bead without failing solely because the date has passed.
    *Refuted by:* An expired valve is silent, omits its identity or makes an otherwise valid schema check fail.
-6. When a non-blocking gate has a valid valve dated today or later and a count-free reason, the valve rules accept it.
-   *Refuted by:* A valid current or future valve is rejected by the new rules.
-7. When a blocking gate has no valve, the new valve rules leave it valid.
+6. When a non-blocking gate has a valid valve dated on the current UTC date or later and a count-free reason, the valve rules accept it.
+   *Refuted by:* A valid valve dated today or in the future is rejected by the new rules.
+7. When a blocking gate has no valve, the valve rules leave it valid.
    *Refuted by:* A valid blocking gate is rejected for lacking a valve.
-8. When the revised gate list is checked, every existing non-blocking gate has a valid valve and a count-free reason, and `docs-links` retains its existing tracking item.
-   *Refuted by:* An existing non-blocking gate lacks either field, keeps a numeric count, or `docs-links` no longer identifies its corpus-correction item.
-9. When a reader consults the gate schema and catalog, both describe the valve's date, tracking item and non-blocking expiry behavior.
-   *Refuted by:* Either description omits a field or says expiry changes the enforcement or fails the schema check.
-10. When a non-blocking gate fails during verification, its existing report-only behavior remains unchanged.
+8. When a blocking gate declares a valve, the schema check rejects it.
+   *Refuted by:* A blocking gate with a valve passes the check.
+9. When the revised gate list is checked, `docs-links` names `coding-harness-bt8` in its valve and `markdownlint`, `lychee` and `research-currency` each name the rule-registry epic `coding-harness-73gi` in theirs.
+   *Refuted by:* Any of those four gates names a different tracking item or has no valve.
+10. When the revised gate list is checked, each existing non-blocking gate has an unquoted `until` date of 2026-12-19 and a count-free reason that retains its stated purpose.
+    *Refuted by:* A date or reason differs from that requirement, including removal of the research-currency decision date or its intended end state.
+11. When a reader consults the gate schema and catalog, both describe the valve's date, tracking item and warning-only expiry, and the generated catalog inventory shows each gate's valve date and bead.
+    *Refuted by:* Either description omits a field or says expiry blocks, or a generated inventory row omits or misstates its valve values.
+12. When a valid expired valve is read by a gate-list consumer other than `--check-schema`, that consumer emits no expiry notice.
+    *Refuted by:* An expiry notice appears in generated catalog or workflow output, command TSV or another consumer's output.
+13. When the changed schema is checked, its version is the integer 4.
+    *Refuted by:* Version 3 or a non-integer passes, or integer 4 fails solely on version.
+14. When a non-blocking gate fails during verification, its existing report-only behavior remains unchanged.
     *Refuted by:* A report or advisory failure becomes a blocking failure locally or in the generated hosted workflow.
 
 ## Non-goals
 
 - Automatically switching enforcement, introducing a blocking deadline, or changing the three existing enforcement levels.
 - Reusing or changing rule ramps, creating a rule registry, validating tracker state or existence, or repairing the documentation corpus.
-- Translating unrelated German text or changing other gate reasons and counts.
+- Translating existing German text or changing unrelated gate reasons and counts; the docs-links reason stays German with its count removed.
 
 ## Protected areas
 
@@ -75,6 +83,7 @@ The local verification scheduler and rule-ramp machinery stay unchanged: this ch
 
 ## Open decisions
 
-- [DETAIL] A valve expires on the day after its `until` date; this makes the named date inclusive and avoids a partial-day deadline.
-- [DETAIL] A numeric count is a standalone decimal integer, including one followed by a noun; digits inside identifiers and ISO dates are not counts. This deterministic boundary catches the aged examples without mistaking a bead identifier for a count; spelled-out numbers are outside this check.
-- [DETAIL] The proposed dates are 2026-12-19, four weeks after the 2026-11-21 decision record; the maintainer decides them through the decision pull request. A tracking item must be evidenced, not invented.
+- [DETAIL] The `until` date is inclusive and today is the UTC date, so expiry is consistent between local and hosted runs.
+- [DETAIL] The count token boundaries are explicit in criterion 4, so identifiers and dates are not mistaken for counts; spelled-out numbers are outside this check.
+- [DETAIL] Additional keys in a valve mapping are ignored, consistent with the existing gate-row treatment; only `until` and `bead` are required here.
+- [DETAIL] The proposed date and tracking items in criteria 9 and 10 are review points, not promises that deliberately non-blocking gates will flip; the decision pull request puts these proposals to the maintainer.
