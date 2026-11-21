@@ -30,15 +30,15 @@ At commit `aacfe4d4` on 2026-11-21, `research.md` records that a repair uses the
 
 - **Attempt:** the repair's current Git-visible tree, including uncommitted work.
 - **Qualifying red:** the existing red-first outcome: a named test's assertion or pytest failed outcome in its call, with the existing outcome and execution protections satisfied.
-- **Saved-attempt ref:** a local ref under `refs/stage2/attempts/<change>/`; its tip and its ancestors are reachable from it, and the ref need not exist on another machine.
+- **Saved-attempt ref:** a local ref under `refs/stage2/attempts/<change>/` whose name has the runner's `save_attempt` shape `<verb>-attempt-<number>-<UTC timestamp>`, with verb `draft`, `implement` or `repair` and timestamp `YYYYMMDDTHHMMSSffffffZ`; its tip and ancestors are reachable from it. The refs and their tip IDs are captured once at repair run start, and need not exist on another machine. The name shape is not proof of authorship.
 - **SHA:** 7–64 hexadecimal characters, uppercase or lowercase, occupying the entire final suffix token; revision expressions and names are not SHAs. Ambiguity means more than one matching commit, regardless of matching objects of other types.
 
 ## Acceptance criteria
 
 1. When an ordinary repair's fixed line names `fixed — tests/<path>::<function> — red against <sha>`, the runner accepts that form for validation and, after successful proof, records `fixed — tests/<path>::<function> — red against <full sha>` in the row Status.
    *Refuted by:* a valid line being rejected or the Status retaining an abbreviation instead of the resolved full commit ID.
-2. If the supplied SHA is malformed, ambiguous, unavailable, not a commit, or the run-start HEAD itself, or neither a proper ancestor of the run-start HEAD nor reachable from a saved-attempt ref for this change, the runner refuses the repair with a reason and leaves its rows taken.
-   *Refuted by:* accepting HEAD itself, a missing object, a tag or tree as the named object, an unrelated commit, another change's saved attempt, `HEAD~1`, trailing text, fewer than 7 or more than 64 hex characters, or a prefix matching multiple commits, or marking a refused row fixed. A prefix matching exactly one commit and a blob or tree must not be refused as ambiguous; a saved-attempt tip is eligible unless it equals HEAD.
+2. If the supplied SHA is malformed, ambiguous, unavailable, not a commit, or the run-start HEAD itself, or neither a proper ancestor of the run-start HEAD nor reachable from a captured saved-attempt tip for this change, the runner refuses the repair with a reason and leaves its rows taken.
+   *Refuted by:* accepting HEAD itself, a missing object, a tag or tree as the named object, an unrelated commit, another change's saved attempt, `HEAD~1`, trailing text, fewer than 7 or more than 64 hex characters, or a prefix matching multiple commits, or marking a refused row fixed. A prefix matching exactly one commit and a blob or tree must not be refused as ambiguous; a captured saved-attempt tip is eligible unless it equals HEAD.
 3. If the named test file is absent from the selected commit, the runner refuses the repair with a reason and leaves its rows taken.
    *Refuted by:* an attempt-only test file being sufficient for a selected commit that lacks that file.
 4. When an eligible commit is selected, the red proof runs the attempt's Git-visible tests against that commit's production tree in the existing isolated proof environment.
@@ -51,15 +51,19 @@ At commit `aacfe4d4` on 2026-11-21, `research.md` records that a repair uses the
    *Refuted by:* a success mark without both legs, a mark omitting or misidentifying the commit, or partial fixed statuses when another row fails.
 8. When an ordinary fixed line has no selected commit, the existing run-start baseline and evidence behavior remain in force.
    *Refuted by:* changing the baseline, status or evidence of an otherwise identical ordinary repair.
-9. When guard-test or `not a test` repair forms are used, their existing authorization and proof rules remain in force, except that a terminal ` — red against <sha>` suffix is refused, including when it is part of a not-a-test reason.
-   *Refuted by:* the suffix bypassing guard authorization or allowing a proof-free ordinary code repair.
+9. When guard-test or `not a test` repair forms are used, their existing authorization and proof rules remain in force, except that a terminal ` — red against <token>` is refused even within a not-a-test reason, regardless of whether the token is a valid SHA.
+   *Refuted by:* a guard line carrying the suffix being accepted, or a not-a-test reason ending in ` — red against HEAD~1`, ` — red against main`, ` — red against abc12`, or a valid SHA being accepted.
 10. When a selected-commit proof runs, the existing isolation, outcome validation, tool integrity, admission, timeout, diagnostic scrubbing and cleanup protections remain in force.
     *Refuted by:* a source worktree or ref being changed by ordinary proof setup, a nonqualifying outcome passing, a modified tool running, a secret appearing in a refusal, or a failed cleanup being treated as success.
-11. When repair instructions describe fixed lines, they explain the optional selected-commit form, its eligibility, its proof requirements and the corresponding success mark.
-    *Refuted by:* instructions omitting the form or mark, or claiming that the form bypasses either proof leg.
+11. When repair instructions and the legacy-marker refusal describe fixed lines for hand booking, they include the selected-commit form alongside the existing forms and explain its eligibility, both proof requirements and corresponding success mark.
+    *Refuted by:* instructions or the refusal omitting the selected-commit hand-booking form, or instructions omitting its mark or claiming it bypasses either proof leg.
 
-12. When either repair route receives taken rows, its prompt lists the run-start HEAD and its first-parent ancestors since the merge base with `origin/main`, and this change’s saved-attempt ref tips, with each commit ID and subject; it identifies HEAD as the default baseline, not a selectable SHA.
-    *Refuted by:* either route lacking the list, a listed commit lacking its ID or subject, including another change’s saved refs, or presenting HEAD as a selectable SHA.
+12. When either repair route receives taken rows and `origin/main` has a merge base with run-start HEAD, its prompt lists HEAD, the first-parent commits in the range `<merge-base>..HEAD`, the merge base itself and the captured saved-attempt tips, each with its full commit ID and subject, identifying HEAD as the default baseline rather than a selectable SHA.
+    *Refuted by:* either route omitting the merge base or a required ID or subject, walking to the root when the merge base is off the first-parent chain, including another change's saved refs, or presenting HEAD as selectable.
+13. When `origin/main` is missing or has no merge base with run-start HEAD, either repair route lists HEAD, up to 20 first-parent commits before HEAD and the captured saved-attempt tips, each with full ID and subject, and explains the fallback without refusing the repair.
+    *Refuted by:* refusing an otherwise valid repair, failing to disclose the fallback, omitting an available recent first-parent commit or saved tip, or listing more than 20 previous first-parent commits.
+14. When a repair attempt creates, moves or deletes a saved-attempt ref after the run-start snapshot, selected-commit eligibility and the candidate list continue to use the captured ref names and tip IDs for the whole run.
+    *Refuted by:* accepting a newly created or moved-to unrelated target, rejecting an otherwise eligible captured tip solely because its ref moved or disappeared, or admitting an incorrectly named ref as a saved attempt.
 
 ## Non-goals
 
@@ -70,7 +74,7 @@ At commit `aacfe4d4` on 2026-11-21, `research.md` records that a repair uses the
 
 ## Boundary
 
-The selected commit must contain the test file, but the red run uses the attempt's Git-visible test tree. A qualifying red does not establish by itself that the failure is the intended fault. Existing private-repository isolation is not an operating-system sandbox against a test addressing an external path directly.
+The selected commit must contain the test file, but the red run uses the attempt's Git-visible test tree. A qualifying red does not establish by itself that the failure is the intended fault. A saved ref's name shape cannot authenticate who wrote it before the snapshot. Existing private-repository isolation is not an operating-system sandbox against a test addressing an external path directly.
 
 ## Protected areas
 
@@ -93,3 +97,6 @@ None open. The maintainer's answer and the reasoned interview skip are recorded 
 - [DETAIL] Record the resolved full commit ID in both Status and the distinct success mark: an abbreviation can later become ambiguous.
 - [DETAIL] List recent first-parent history and same-change saved-attempt tips in both repair prompts so the file-tools route can select a commit; eligibility remains broader than this prompt list.
 - [DETAIL] Accept 7–64 hexadecimal characters and resolve ambiguity among commits only; this gives a checkable input boundary. HEAD is excluded because the ordinary form already uses it. Refuse the suffix on `not a test` even as trailing reason text so it cannot be mistaken for proof.
+- [DETAIL] Capture matching saved-attempt refs and their tip IDs at run start so an attempt cannot add or redirect its own red target; matching the runner's name shape cannot authenticate earlier authorship.
+- [DETAIL] Include the merge base itself, even off the first-parent chain, and use the last 20 prior first-parent commits when no merge base is available; this keeps the fallback usable without adding a dependency on `origin/main`.
+- [DETAIL] Reject a terminal red-against token on a not-a-test reason even when malformed, and include the selected-commit form in hand-booking guidance; neither a misleading suffix nor the prior manual workflow is left implicit.
