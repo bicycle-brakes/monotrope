@@ -598,7 +598,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/contract-real-pi-data/decisions.md`](changes/contract-real-pi-data/decisions.md) | draft | none | 2026-11-21 | coding-harness-z4oo |
+| [`changes/contract-real-pi-data/findings.md`](changes/contract-real-pi-data/findings.md) | draft | none | 2026-11-21 | coding-harness-z4oo |
+| [`changes/contract-real-pi-data/plan.md`](changes/contract-real-pi-data/plan.md) | draft | none | 2026-11-21 | coding-harness-z4oo |
 | [`changes/contract-real-pi-data/research.md`](changes/contract-real-pi-data/research.md) | draft | none | 2026-11-21 | coding-harness-z4oo |
+| [`changes/contract-real-pi-data/spec.md`](changes/contract-real-pi-data/spec.md) | draft | none | 2026-11-21 | coding-harness-z4oo |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
