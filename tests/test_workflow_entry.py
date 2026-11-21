@@ -184,7 +184,14 @@ COMMAND_SKIP = pytest.mark.skipif(
 
 # The entry script imports these from `scripts/`; a fixture tree that runs the
 # real recipes carries its own copies.
-ENTRY_SCRIPTS = ("new_change.py", "plans_registry.py", "_verdict.py", "bead_render.py", "check_worktree_state.sh")
+ENTRY_SCRIPTS = (
+    "new_change.py",
+    "plans_registry.py",
+    "_verdict.py",
+    "bead_render.py",
+    "check_worktree_state.sh",
+    "venv_guard.py",
+)
 
 
 def _fixture_tree(tmp_path: Path, name: str = "tree") -> Path:

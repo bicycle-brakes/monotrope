@@ -25,6 +25,7 @@ from test_stage2 import (  # noqa: E402
     FakeClock,
     ScriptedPrograms,
     World,
+    _beside_docs_gate,
     formatted_attempt,  # noqa: E402
     git,  # noqa: E402
     prompt_entry,  # noqa: E402
@@ -255,7 +256,10 @@ def test_cheap_green_still_requires_full_verification(world: World) -> None:
         make=[red] * 3,
     )
     assert world.run("implement") == 1
-    names = [call["name"] for call in world.calls()]
+    # Since bead coding-harness-bxxt.6 the full check runs the gates of the one list itself, the world's
+    # document gate (a seconds member of the verify job) before the protected `make verify`; it is counted
+    # apart, so the full check's launch order stays exactly as pinned.
+    names = [call["name"] for call in _beside_docs_gate(world.calls())]
     assert names[:2] == ["claude", "make"], names[:2]
     assert "make" in names, "the full check did not run for an uncovered attempt"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a red full check checkpointed"
