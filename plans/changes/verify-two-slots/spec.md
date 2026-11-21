@@ -39,16 +39,18 @@ Independent protected checks can use two shared verification slots by default, w
    *Refuted by:* a third admission runs, or the second cannot reserve an otherwise free slot.
    *Basis:* `decisions.md#Q-1`.
 
-2. When all new entries use `HARNESS_VERIFY_SLOTS=1` or `2`, that capacity applies without a code change, including draining existing excess reservations after a reduction.
-   *Refuted by:* one permits a second reservation, two leaves a free slot unused, or a new reservation starts before an over-capacity state drains below the configured count.
+2. When an independent entry requests capacity `1` or `2` through `HARNESS_VERIFY_SLOTS` (default `2`), effective capacity is the minimum of the settings of all live updated holders and the head live waiter; an older waiter counts as `1` and requires exclusive access.
+   *Refuted by:* a `1` holder shares capacity, a head `1` waiter enters before all holders drain, or two `2` entries cannot use both free slots.
+
+   Local child processes receive the setting when present; the foreign-model environment allow-list remains closed to `HARNESS_*` variables.
    *Basis:* `decisions.md#Q-1`.
 
-3. If `HARNESS_VERIFY_SLOTS` is present but is not exactly `1` or `2`, the entry refuses before protected work with a diagnostic naming the setting.
-   *Refuted by:* an empty, zero, fractional, nonnumeric or greater-than-two value silently falls back or starts work.
+3. If an independent entry has `HARNESS_VERIFY_SLOTS` set to anything other than the exact strings `1` or `2`, it refuses before protected work with a diagnostic naming the setting.
+   *Refuted by:* an empty, padded, `02`, `+2`, fractional or other invalid value starts work, or a valid inherited descendant is refused because of that setting.
    *Basis:* `decisions.md#Q-1`.
 
-4. While independent live checks wait, each free slot goes to the earliest registered live waiter.
-   *Refuted by:* a later waiter overtakes a live earlier waiter, a dead waiter blocks progress, or an occupied slot prevents another free slot from being used.
+4. While independent live checks wait, the earliest registered live waiter, including an older checkout waiting exclusively, has first claim on capacity free under criterion 2.
+   *Refuted by:* a later waiter overtakes a live earlier waiter, a dead waiter blocks progress, or a free slot under the effective capacity remains unused.
    *Basis:* `decisions.md#Q-1` and `research.md`, “The admission”.
 
 5. When a valid descendant enters protected work, it reuses its own ancestor's admission and measured context without reserving another slot.
@@ -60,7 +62,7 @@ Independent protected checks can use two shared verification slots by default, w
    *Basis:* `decisions.md#Q-1`.
 
 7. When a holder exits, fails or is cancelled, its slot stays reserved until its protected descendants release their inherited ownership, without disturbing another holder.
-   *Refuted by:* a replacement overlaps a surviving protected child, one release removes a peer's record, or a dead holder without surviving ownership blocks capacity indefinitely.
+   *Refuted by:* a replacement overlaps a surviving protected child, one release removes a peer's record, or after the final inherited descriptor closes, a free slot is not reservable by the next eligible live waiter within two queue poll intervals (0.5 seconds at the 0.25-second default), with no other holder or older waiter blocking it.
    *Basis:* `decisions.md#Q-1` and `research.md`, “The admission”.
 
 8. When an admission reserves either slot, the existing per-admission memory floor and refusal behavior apply before protected work starts.
@@ -71,17 +73,21 @@ Independent protected checks can use two shared verification slots by default, w
    *Refuted by:* a holder overwrites its peer, an occupied slot disappears from the diagnostic, a legacy holder is omitted, or a token appears.
    *Basis:* `decisions.md#Q-1`.
 
-10. When an older single-slot checkout shares the machine state with an updated checkout, the old exclusive admission and updated admissions cannot overlap.
-    *Refuted by:* an old holder, including a surviving protected child, runs beside an updated holder.
+10. When an older single-slot checkout shares machine state with an updated checkout, the older exclusive admission cannot overlap updated admissions and its earlier live queue entry is honored.
+    *Refuted by:* an old holder or its surviving child overlaps an updated holder, or a later updated waiter overtakes an earlier live old waiter.
     *Basis:* `decisions.md#Q-1` and `research.md`, “The admission”.
 
 11. When shell or runner checks use admission, their check selection, verdict, timeouts, inherited descriptors and separation of admission wait from execution time remain intact.
     *Refuted by:* a full or targeted check bypasses admission, wait consumes an execution timeout, an inherited descriptor is lost, or a failure becomes success.
     *Basis:* `decisions.md#Q-1` and `research.md`, “The scheduler and its callers”.
 
-12. Before completion, a recorded trial on the implemented revision compares one full serial run with two simultaneous full runs under representative night load, using the unchanged worker calculation; both parallel run durations are at most 1.6 times the serial duration and no test turns red or flaky because of parallelism.
-    *Refuted by:* missing revision, date, workload, configuration, outcomes, individual wall times, sampled load or ratios; a ratio above 1.6; or a parallelism-caused red or flaky test. An unrelated content failure is investigated separately. If the trial cannot be run or fails, stop and report; do not claim completion.
-    *Basis:* `decisions.md#Q-1`; the prior lane's maintainer answers Q-3 and Q-4, `feat/verify-slots:plans/changes/verify-slots/decisions.md` at `b5c2105b`, specify the night load and threshold.
+12. Before completion, a recorded trial compares one serial `make verify` with two simultaneous `make verify` invocations, starting each trial with both slots free and using the unchanged default worker calculation; each simultaneous invocation's launch-to-exit wall time is at most 1.6 times the serial invocation's launch-to-exit wall time, and all three exit zero.
+    *Refuted by:* a nonzero exit, either ratio above 1.6, or missing recorded revision, date, configuration, verdicts, individual end-to-end wall times, execution seconds, admission and memory wait seconds, or ratios.
+    *Basis:* `decisions.md#Q-1`; the 2026-11-17 handover records that the 1.6 threshold applies to two slots.
+
+    Run under normal active workstation or harness load: other non-verify lanes may work, but no third verify may overlap or contend for the slots. Record background processes or lanes, start and end 1-, 5- and 15-minute load averages, and starting and minimum available memory percentage; missing readings or a third verify invalidate the trial. If a parallel test fails, rerun that test serially on the same revision: a serial pass classifies the observed failure as parallelism-caused and the trial fails; a serial failure is a content failure that must be fixed before repeating the complete trial green. A single pair demonstrates zero observed failures, not a statistical absence of flakes. If the trial cannot run or fails, stop and report.
+
+    The trial revision must match the final `scripts/` tree: `git diff <trial-commit>..HEAD -- scripts/` is empty. Record and verify any later documentation-only, test-only or plans changes; repeat the complete trial after any later `scripts/` change, subject to the four-hour stop.
 
 ## Non-goals
 
@@ -95,12 +101,12 @@ One process has at most one independent admission, including while acquiring it.
 
 ## Protected areas
 
-Leave worker calculation, `Makefile`, `decisions/gates.yaml`, `provenance.yaml`, ADRs, `AGENTS.md`, prompts, templates, and hosted CI configuration unchanged: this slice changes admission capacity, not gate policy or worker tuning. Historical observations stay dated.
+Leave worker calculation, `Makefile`, `decisions/gates.yaml`, `provenance.yaml`, ADRs, `AGENTS.md`, prompts, templates, and hosted CI configuration unchanged: this slice changes admission capacity, not gate policy or worker tuning. Historical observations stay dated. The single-slot comments in `decisions/gates.yaml:49-59` remain an accepted out-of-scope follow-up for a separate decision pull request.
 
 ## Definition of Done
 
 - `make verify` green and criteria 1–11 covered by the plan's regressions.
-- `docs/WORKFLOW.md`, `docs/orchestration.md`, `docs/how-it-works.md` and `docs/governance/gate-catalog.md` describe the resulting current behavior; the trial is recorded in `plans/changes/verify-two-slots/measurements.md` and identified by revision in the pull request.
+- `docs/WORKFLOW.md`, `docs/orchestration.md`, `docs/how-it-works.md` and `docs/governance/gate-catalog.md` describe the resulting current behavior; the trial is recorded in `plans/changes/verify-two-slots/measurements.md` and identified by revision in the pull request, with the final `scripts/` tree checked against that revision.
 - Protected areas untouched and non-goals unbuilt, as shown by the pull request's file list.
 - The pull request closes bead `coding-harness-u1ha` (two verify slots) and its last commit carries `Closes-Bead: coding-harness-u1ha`.
 
@@ -108,6 +114,9 @@ Leave worker calculation, `Makefile`, `decisions/gates.yaml`, `provenance.yaml`,
 
 No maintainer decision is open.
 
-- [DETAIL] Accept only `1` and `2`, with an absent setting meaning `2`; reject an empty value. The bounded range prevents the previously measured three-run overload; consistent values must be supplied to all new entries because an environment setting is per process. A lower setting drains already held reservations before new ones enter.
-- [DETAIL] Preserve the old lock as a compatibility lock shared by new holders and exclusive for old holders; FIFO applies among updated waiters. This preserves the old machine-wide bound during rollout without changing old checkouts.
+- [DETAIL] Accept exact `1` and `2` for independent entries, defaulting to `2`, and forward the setting locally. The bounded range avoids the previously measured three-run overload; the minimum of live holders and the queue head protects mixed settings without opening the foreign-model environment.
+- [DETAIL] Preserve the old lock as a compatibility lock shared by new holders and exclusive for old holders; FIFO includes older waiters in the shared queue. This preserves the old machine-wide bound during rollout without changing old checkouts.
+- [DETAIL] Measure launch-to-exit time under the stated active load and require all exits green; the trial exposes waits and cannot prove long-run flake rates. Recheck the final `scripts/` tree because a later runtime repair invalidates the result.
+- [DETAIL] Two queue polls bound release after the last descriptor closes; it makes recovery testable without changing the existing poll interval.
+- [DETAIL] Keep the protected gate manifest unchanged and record its stale single-slot comment for a separate decision pull request; its owner controls that text.
 - [DETAIL] Four hours for implementation, repairs and the trial is the stop, carried from the earlier bounded slice's spec at `b5c2105b`; report unfinished work at the limit.
