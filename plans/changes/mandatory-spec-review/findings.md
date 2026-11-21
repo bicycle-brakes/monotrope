@@ -1194,3 +1194,16 @@ Reviewer session: codex 01a1fe61-fc15-7b21-98d8-010f8c340c54 — a fresh session
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5107 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5108 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-10 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` and `body_edits_after_review`; `tests/test_stage2.py`, `opus_review_block` | A genuine legacy review has no `Spec review commit` line, because the old runner did not write one. Even when its date is current and the spec body has no uncommitted change, implement refuses it before the legacy date check. The legacy test fixture adds a commit line that genuine old blocks lack, so it does not cover this case. [Criteria 8 and 12] | Codex | open | — |
+| F-11 | MAJOR | SPEC | base | `scripts/stage2.py`, `_review_part` | After a fingerprinted review of body A, if the spec is committed as body B and then restored to exactly A, the runner counts two edits and refuses implement even though the current body matches the review fingerprint. A current readable review without an open ambiguity must pass the review precondition. [Criteria 8 and 11] | Codex | open | — |
+| F-12 | BLOCKER | SPEC | base | `scripts/stage2.py`, `split_row` and `readable_review` | If a reviewer returns one valid row followed by a row beginning with `\|` but missing its closing `\|`, the runner treats the second line as prose and accepts the review. An `[AMBIGUITY]` at the start of that row’s finding is then quoted outside the table and cannot hold implement. One unparseable table line must make the whole review unreadable. [Criteria 6 and 7] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fe85-07a3-7510-9c72-41aef2f23bd9, 2026-11-21
+Reviewer session: codex 01a1fe85-07a3-7510-9c72-41aef2f23bd9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
