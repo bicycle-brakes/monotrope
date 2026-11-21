@@ -33,6 +33,8 @@ Each distinct address notice is printed once per runner call while its durable e
 
 **Distinct notice:** the complete notice text produced by the address assessment, including its model and path pair or wire API, independent of output prefix or stream.
 
+**Encountered:** an existing console print site would print the notice during the call, including a notice held for a preparation report. Assessment alone does not make a notice encountered.
+
 ## Acceptance criteria
 
 1. When the same address notice occurs more than once during one runner call, the combined console output contains exactly one occurrence of that notice.
@@ -57,6 +59,10 @@ Each distinct address notice is printed once per runner call while its durable e
     *Refuted by:* a previously announced notice is missing from the probe audit or installation audit lines.
 11. When a notice is emitted by a direct function call outside a runner entry, it prints as before without inheriting another call's suppression.
     *Refuted by:* two independent direct calls that previously printed the same notice no longer both print it.
+12. When an assessment produces a notice that no existing console print site would print during the call, that assessment does not cause a console notice.
+    *Refuted by:* a refused session binding or an early research-preparation failure prints a notice that previously existed only in audit or selection state.
+13. When preparation ends before printing its report, each held notice is printed once using the wording and stream of its first existing console print site.
+    *Refuted by:* a notice held from free discovery is lost, repeated, or flushed to stdout instead of its original stderr on an early refusal.
 
 ## Non-goals
 
@@ -80,4 +86,4 @@ Each distinct address notice is printed once per runner call while its durable e
 
 None open. [DETAIL] The four-hour phase-4 appetite is a stop including repairs; it keeps this bounded change time-limited. The deduplication scope, evidence and exclusions are recorded with reasons in `decisions.md`.
 
-[DETAIL] A runner call is an entry invocation, not a whole process: embedded invocations need independent output. A direct call outside an entry keeps its existing behavior. Preparation reports keep their notice lines; earlier matching announcements are suppressed so the report remains complete and the console shows one copy. If preparation exits before printing its report, already encountered notices still appear once. The report's existing stdout takes precedence over an earlier discovery stream in this case. Probe and installation audit lines remain evidence. The two existing round-record spellings are separate sections, each deduplicated independently; this preserves both sources (phase-2a findings S-1 through S-4).
+[DETAIL] A runner call is an entry invocation, not a whole process: embedded invocations need independent output. A direct call outside an entry keeps its existing behavior. When a preparation report is printed, its existing stdout line takes precedence over earlier matching announcements, preserving the report and showing one copy. When preparation exits before the report, only held notices from existing console print sites are flushed, using their first site's wording and stream; an assessment alone does not create a console line. Probe and installation audit lines remain evidence. The two existing round-record spellings are separate sections, each deduplicated independently; this preserves both sources (phase-2a findings S-1 through S-6).
