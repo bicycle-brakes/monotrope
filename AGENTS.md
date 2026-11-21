@@ -115,7 +115,7 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   parallel-session ownership, and one concrete resumption action. Preserve
   prior records with a dated addendum; task status stays in Beads.
 - The morning handover carries the findings-per-model table for main
-  (`make findings-per-model REV=main`) and for each unmerged change branch that gained rows
+  (`git fetch origin`, then `make findings-per-model REV=origin/main`; a local `main` may be stale) and for each unmerged change branch that gained rows
   that night, including an earlier branch of a lane (`make findings-per-model` on that branch),
   each with its cutoff commit.
 - Link the handover in the closing message; the next session resumes from it.
