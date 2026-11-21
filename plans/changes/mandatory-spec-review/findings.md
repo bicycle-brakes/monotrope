@@ -838,3 +838,9 @@ Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint 
 Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
 
 Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1114 files, 5024 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1114 files, 5025 commits, 12 rules.
+
+Loop attempt: 2026-11-21 — no round was written; the review-loop calls above consumed no stage; audit calls: 1
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
