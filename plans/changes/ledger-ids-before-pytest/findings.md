@@ -638,7 +638,7 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-3 | MINOR | SPEC | base | `scripts/stage2.py:6873`, `scripts/stage2.py:6016` | A recognized ledger ID can have a test function name longer than 500 characters. If that written test is missing, the implement attempt fails, but `quote_block` cuts its diagnostic line at 500 characters in `findings.md`. The section is not line-truncated, yet the complete missing ID is absent from the attempt record. [Criterion 2] | Codex | open | — |
+| F-3 | MINOR | SPEC | base | `scripts/stage2.py:6873`, `scripts/stage2.py:6016` | A recognized ledger ID can have a test function name longer than 500 characters. If that written test is missing, the implement attempt fails, but `quote_block` cuts its diagnostic line at 500 characters in `findings.md`. The section is not line-truncated, yet the complete missing ID is absent from the attempt record. [Criterion 2] | Codex | accepted limit — [DETAIL] orchestrator 2026-11-21: a MINOR SPEC row on a diagnostic line bound, not on tests, security or a false statement (AGENTS.md: such rows are accepted limits named in the PR); test function names over 500 characters are not expected in practice; named in the PR | — |
 
 Phase 6 verdict: codex 01a1fddc-f2d7-7743-b698-5660b70f4b68, 2026-11-21
 Reviewer session: codex 01a1fddc-f2d7-7743-b698-5660b70f4b68 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
