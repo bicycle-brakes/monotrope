@@ -1083,3 +1083,14 @@ Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1114 files, 5034 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 5059 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-4 | MAJOR | SPEC | base | `scripts/stage2.py:4015` (`body_edits_after_review`) | Wenn nach drei Review-Runden eine bereits früher commitete Spezifikation mit uncommitteten Änderungen geprüft und danach genau einmal für den finalen Entwurf geändert wird, verweigert der Runner die Implementierung. Er findet den Fingerabdruck der geprüften Fassung nicht in der Git-Historie und kann die eine erlaubte Änderung deshalb nicht zählen. Diese erste geänderte Fassung muss zugelassen werden. [Kriterium 19] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8, 2026-11-21
+Reviewer session: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
