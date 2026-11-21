@@ -709,3 +709,5 @@ Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model mimo-v2.6
 Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1114 files, 5020 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: review-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1114 files, 5021 commits, 12 rules.
