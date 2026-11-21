@@ -565,8 +565,8 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/findings_per_model.py`, `branch_of` | The prescribed main report, `make findings-per-model REV=origin/main`, writes to `revisions/<commit>.jsonl` instead of `main.jsonl`: `branch_of` recognizes only local branches. A consumer reading the specified main file therefore sees stale data or no report. [Criterion 14] | Codex | open | — |
-| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `MODEL_NAME` and `attribute_rows` | A released loop row naming the model `Vendor/model-free` is counted as unattributed, with no gap. The runner permits uppercase letters and `/` in model IDs, but the reader rejects both, so an eligible named model loses its credit. [Criterion 3] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_per_model.py`, `branch_of` | The prescribed main report, `make findings-per-model REV=origin/main`, writes to `revisions/<commit>.jsonl` instead of `main.jsonl`: `branch_of` recognizes only local branches. A consumer reading the specified main file therefore sees stale data or no report. [Criterion 14] | Codex | taken — maintainer 2026-11-21: branch_of maps origin/main to main so REV=origin/main writes main.jsonl | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `MODEL_NAME` and `attribute_rows` | A released loop row naming the model `Vendor/model-free` is counted as unattributed, with no gap. The runner permits uppercase letters and `/` in model IDs, but the reader rejects both, so an eligible named model loses its credit. [Criterion 3] | Codex | taken — maintainer 2026-11-21: reader uses the runner's model-id character set (one shared pattern accepting uppercase and '/') | — |
 
 Phase 6 verdict: codex 01a1fbe9-fd92-76a3-82ac-995996b17240, 2026-11-21
 Reviewer session: codex 01a1fbe9-fd92-76a3-82ac-995996b17240 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
