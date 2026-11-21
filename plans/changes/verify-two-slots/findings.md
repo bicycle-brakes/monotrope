@@ -660,3 +660,316 @@ Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claud
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-two-slots/stage2/attempts/verify-two-slots/attempt-3-20261121T171110154894Z-ee330d01.md
 > ````
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1150 files, 5210 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/orchestration.md` +3 -3
+> - `scripts/verify_lock.py` +22 -9
+> - `tests/test_verify_lock.py` +61 -15
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/verify-two-slots/plan.md, plans/changes/verify-two-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 153 lines of this gate left out …]
+>             # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
+>             # for a real second before the holder lets go.
+>             queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+>             deadline = time.monotonic() + 60
+>             while time.monotonic() < deadline and not (queue.is_dir() and any(queue.iterdir())):
+>                 time.sleep(0.02)
+>             time.sleep(1.0)
+>             holder.terminate()
+>     
+>         monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
+>         monkeypatch.setattr(stage2, "launch", launch)
+>         _real_gate_shell(monkeypatch)
+>         monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+>         releaser = threading.Thread(target=release_when_queued)
+>         releaser.start()
+>         try:
+>             _holder_acquired(ready)
+>             uncovered_implementation(world)
+>             assert world.run("implement") == 0, "the queue wait starved the shared allowance"
+>             assert marker.read_text(encoding="utf-8").strip() == "done"
+>         finally:
+>             releaser.join(timeout=90)
+>             if holder.poll() is None:
+>                 holder.kill()
+>                 holder.wait(timeout=10)
+>     
+>         # Three gate launches: the slow cheap gate, the document subset, then the protected full check.
+>         assert len(deadlines) == 3, deadlines
+> >       assert len(waits) == 1 and waits[0] > 0.8, waits
+> E       AssertionError: [0.004682332975789905]
+> E       assert (1 == 1 and 0.004682332975789905 > 0.8)
+> E        +  where 1 = len([0.004682332975789905])
+>
+> tests/test_stage2.py:2953: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 31 files, 3 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=64698) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/verify-two-slots/tests/test_stage2.py:24185: DeprecationWarning: This process (pid=64704) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free
+> 1 failed, 6587 passed, 17 skipped, 5 warnings in 654.02s (0:10:54)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 51319 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-two-slots/stage2/attempts/verify-two-slots/attempt-1-20261121T171854828448Z-01f0fa3a.md
+> ````
+
+Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1150 files, 5226 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-two-slots/plan.md, plans/changes/verify-two-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 # The world's PATH holds only the stand-ins and git, so `sleep` is named by its path.
+>                 "command": f"/bin/sleep 1.5 && echo done > {marker}",
+>                 "enforcement": "block",
+>                 "cost": "seconds",
+>                 "floor": True,
+>                 "needs_tracker": False,
+>                 "needs_history": False,
+>                 "placement": "both",
+>                 "reason": "The cheap gate whose active seconds the shared allowance must survive.",
+>             },
+>         )
+>         datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+>         git(world.root, "add", "-A")
+>         git(world.root, "commit", "--quiet", "-m", "a slow cheap gate joins the verify job")
+>     
+>         ready = world.state / "holder-ready-budget"
+>         holder = _real_holder(ready, seconds=30.0)
+>         deadlines: list[float] = []
+>         waits: list[float] = []
+>         real_launch = stage2.launch
+>         real_hold = stage2.verify_lock.hold_admission
+>     
+>         def launch(command, root, env, *rest, **kwargs):
+>             if _gate_launch(command) is not None:
+>                 deadlines.append(kwargs.get("deadline"))
+>             return real_launch(command, root, env, *rest, **kwargs)
+>     
+>         @contextlib.contextmanager
+>         def hold_admission(command):
+>             # The wait happens when the admission is entered, not when it is requested.
+>             entered = time.monotonic()
+>             with real_hold(command) as owned:
+>                 waits.append(time.monotonic() - entered)
+>                 yield owned
+>     
+>         def release_when_queued() -> None:
+>             # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
+>             # for a real second before the holder lets go.
+>             queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+>             deadline = time.monotonic() + 60
+>             while time.monotonic() < deadline and not (queue.is_dir() and any(queue.iterdir())):
+>                 time.sleep(0.02)
+>             time.sleep(1.0)
+>             holder.terminate()
+>     
+>         monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
+>         monkeypatch.setattr(stage2, "launch", launch)
+>         _real_gate_shell(monkeypatch)
+>         monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+>         releaser = threading.Thread(target=release_when_queued)
+>         releaser.start()
+>         try:
+>             _holder_acquired(ready)
+>             uncovered_implementation(world)
+>             assert world.run("implement") == 0, "the queue wait starved the shared allowance"
+>             assert marker.read_text(encoding="utf-8").strip() == "done"
+>         finally:
+>             releaser.join(timeout=90)
+>             if holder.poll() is None:
+>                 holder.kill()
+>                 holder.wait(timeout=10)
+>     
+>         # Three gate launches: the slow cheap gate, the document subset, then the protected full check.
+>         assert len(deadlines) == 3, deadlines
+> >       assert len(waits) == 1 and waits[0] > 0.8, waits
+> E       AssertionError: [0.0033052919898182154]
+> E       assert (1 == 1 and 0.0033052919898182154 > 0.8)
+> E        +  where 1 = len([0.0033052919898182154])
+>
+> tests/test_stage2.py:2953: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 31 files, 3 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free
+> 1 failed, 15 passed in 69.15s (0:01:09)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-two-slots/stage2/attempts/verify-two-slots/attempt-2-20261121T171854828448Z-01f0fa3a.md
+> ```
+
+Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1150 files, 5227 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/verify_lock.py` +4 -0
+> - `tests/test_verify_lock.py` +7 -5
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/verify-two-slots/plan.md, plans/changes/verify-two-slots/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 # The world's PATH holds only the stand-ins and git, so `sleep` is named by its path.
+>                 "command": f"/bin/sleep 1.5 && echo done > {marker}",
+>                 "enforcement": "block",
+>                 "cost": "seconds",
+>                 "floor": True,
+>                 "needs_tracker": False,
+>                 "needs_history": False,
+>                 "placement": "both",
+>                 "reason": "The cheap gate whose active seconds the shared allowance must survive.",
+>             },
+>         )
+>         datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+>         git(world.root, "add", "-A")
+>         git(world.root, "commit", "--quiet", "-m", "a slow cheap gate joins the verify job")
+>     
+>         ready = world.state / "holder-ready-budget"
+>         holder = _real_holder(ready, seconds=30.0)
+>         deadlines: list[float] = []
+>         waits: list[float] = []
+>         real_launch = stage2.launch
+>         real_hold = stage2.verify_lock.hold_admission
+>     
+>         def launch(command, root, env, *rest, **kwargs):
+>             if _gate_launch(command) is not None:
+>                 deadlines.append(kwargs.get("deadline"))
+>             return real_launch(command, root, env, *rest, **kwargs)
+>     
+>         @contextlib.contextmanager
+>         def hold_admission(command):
+>             # The wait happens when the admission is entered, not when it is requested.
+>             entered = time.monotonic()
+>             with real_hold(command) as owned:
+>                 waits.append(time.monotonic() - entered)
+>                 yield owned
+>     
+>         def release_when_queued() -> None:
+>             # The queue entry proves the scheduler is past the cheap phase and waiting; it stays there
+>             # for a real second before the holder lets go.
+>             queue = world.state / "coding-harness" / verify_lock.QUEUE_DIR
+>             deadline = time.monotonic() + 60
+>             while time.monotonic() < deadline and not (queue.is_dir() and any(queue.iterdir())):
+>                 time.sleep(0.02)
+>             time.sleep(1.0)
+>             holder.terminate()
+>     
+>         monkeypatch.setattr(stage2, "VERIFY_SECONDS", 30.0)
+>         monkeypatch.setattr(stage2, "launch", launch)
+>         _real_gate_shell(monkeypatch)
+>         monkeypatch.setattr(stage2.verify_lock, "hold_admission", hold_admission)
+>         releaser = threading.Thread(target=release_when_queued)
+>         releaser.start()
+>         try:
+>             _holder_acquired(ready)
+>             uncovered_implementation(world)
+>             assert world.run("implement") == 0, "the queue wait starved the shared allowance"
+>             assert marker.read_text(encoding="utf-8").strip() == "done"
+>         finally:
+>             releaser.join(timeout=90)
+>             if holder.poll() is None:
+>                 holder.kill()
+>                 holder.wait(timeout=10)
+>     
+>         # Three gate launches: the slow cheap gate, the document subset, then the protected full check.
+>         assert len(deadlines) == 3, deadlines
+> >       assert len(waits) == 1 and waits[0] > 0.8, waits
+> E       AssertionError: [0.0027734999312087893]
+> E       assert (1 == 1 and 0.0027734999312087893 > 0.8)
+> E        +  where 1 = len([0.0027734999312087893])
+>
+> tests/test_stage2.py:2953: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 31 files, 3 commits, 1 rules, 1 prompt texts
+> implement: verified and committed · route flash · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_before_admission_execution_budget_is_shared_and_wait_free
+> 1 failed, 15 passed in 68.92s (0:01:08)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/verify-two-slots/stage2/attempts/verify-two-slots/attempt-3-20261121T171854828448Z-01f0fa3a.md
+> ```
