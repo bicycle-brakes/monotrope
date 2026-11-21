@@ -38,8 +38,10 @@ scope and interview skip: `decisions.md`.
 The two exchanges use `stage2.run_reviewer`: its production overlay and
 address assessment admit a synthetic row before the transport is redirected to
 the guarded loopback stub. The answer is the text that reviewer path returns
-after extracting and scrubbing Pi's output. Each row has the native API and
-synthetic id and base for that protocol, `reasoning: true`, `input: [text]`,
+after extracting and scrubbing Pi's output. The synthetic Messages row uses
+the admitted id `qwen3.8-flash`; the synthetic Responses row uses the
+admitted id `grok-4.7`. Each row has its native API and base,
+`reasoning: true`, `input: [text]`,
 `contextWindow: 128000` and `maxTokens: 4096`; the overlay does not pass
 `thinkingLevelMap` or `compat`. Both exchanges use the production launch's
 `--thinking max` flag. The captured request values in criteria 1 and 2 remain
@@ -110,3 +112,8 @@ and S4 before treating the spec or plan as final.
 
 [DETAIL] Use distinct synthetic reasoning and answer markers, so the test can
 detect both lost text and leaked reasoning without live data.
+
+[DETAIL] Use `qwen3.8-flash` and `grok-4.7` as the synthetic row ids, so the
+measured requests use the cheapest admitted, measured model on each native
+API as recorded in `model-endpoints.yaml` on 2026-11-21; this does not assert
+that the other admitted models have the same reasoning settings.
