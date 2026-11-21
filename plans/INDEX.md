@@ -7,6 +7,8 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/adr-0021-consumed-ladder/decisions.md`](changes/adr-0021-consumed-ladder/decisions.md) | draft | none | 2026-11-20 | coding-harness-hwll |
+| [`changes/adr-0021-consumed-ladder/spec.md`](changes/adr-0021-consumed-ladder/spec.md) | accepted | none | 2026-11-20 | coding-harness-hwll |
 | [`changes/adr-repair-check/decisions.md`](changes/adr-repair-check/decisions.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/adr-repair-check/research.md`](changes/adr-repair-check/research.md) | draft | none | 2026-11-08 | coding-harness-firy |
 | [`changes/adr-repair-check/spec.md`](changes/adr-repair-check/spec.md) | draft | none | 2026-11-08 | coding-harness-firy |
@@ -595,6 +597,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
+| [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
+| [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
+| [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
+| [`changes/finder-partial-report/research.md`](changes/finder-partial-report/research.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
+| [`changes/finder-partial-report/spec.md`](changes/finder-partial-report/spec.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/flaky-swarm-leak-test/decisions.md`](changes/flaky-swarm-leak-test/decisions.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/findings.md`](changes/flaky-swarm-leak-test/findings.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
@@ -617,6 +624,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/journal-citation-gate/plan.md`](changes/journal-citation-gate/plan.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/research.md`](changes/journal-citation-gate/research.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/spec.md`](changes/journal-citation-gate/spec.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
+| [`changes/ledger-ids-before-pytest/decisions.md`](changes/ledger-ids-before-pytest/decisions.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/findings.md`](changes/ledger-ids-before-pytest/findings.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/plan.md`](changes/ledger-ids-before-pytest/plan.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/research.md`](changes/ledger-ids-before-pytest/research.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
+| [`changes/ledger-ids-before-pytest/spec.md`](changes/ledger-ids-before-pytest/spec.md) | draft | none | 2026-11-20 | coding-harness-bxxt.9 |
 | [`changes/loop-record-other-worktree/decisions.md`](changes/loop-record-other-worktree/decisions.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/findings.md`](changes/loop-record-other-worktree/findings.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/plan.md`](changes/loop-record-other-worktree/plan.md) | draft | none | 2026-11-18 | coding-harness-e82i |
