@@ -42,8 +42,10 @@ Every round of the review loop shares a 4,000-line prompt diff bound as interim 
    *Refuted by:* The filter or either limit changes, or the existing threshold behavior changes, including its whole-file overshoot.
 6. When either the free stage's own bounds or the shared prompt bound cuts a round's diff, the round is recorded as cut and cannot count as clean, including after release.
    *Refuted by:* A free per-file cut is omitted from the cut record, or a cut round ends the loop as clean before or after release.
-7. When the living workflow and runner overview describe the diff bounds, they state the 4,000-line shared bound, the free stage's 400-line per-file bound and 2,000-line total threshold, and that free per-file cuts are recorded as cut rounds.
-   *Refuted by:* Either document gives a wrong bound or threshold, treats the free total threshold as a strict 2,000-line prompt cap, or says a free per-file cut is not recorded as a cut round.
+7. When the living workflow and runner overview describe diff bounds and cuts, each states correctly the bounds and cut behavior it describes; both state the 4,000-line shared bound, and the runner overview states the 400-line per-file bound and that free per-file cuts make a round cut.
+   *Refuted by:* Either document omits its required statement, gives a wrong bound or threshold, treats the free total threshold as a strict 2,000-line prompt cap, or says a free per-file or total-threshold cut is not a cut round or can count as clean.
+8. When a free-stage selected diff exceeds 2,000 lines but fits within the shared bound and includes a free per-file or total-threshold cut, the availability probe carries that selected diff in full.
+   *Refuted by:* A probe truncates either a per-file-cut overshoot or a total-threshold-cut diff at 2,000 lines, or otherwise omits part of that selected diff.
 
 ## Non-goals
 
@@ -67,5 +69,7 @@ Every round of the review loop shares a 4,000-line prompt diff bound as interim 
 ## Open decisions
 
 [DETAIL] A two-hour phase-4 stop covers the parameter, regression checks and documentation; it is freely revisable.
+
+[DETAIL] Each living document states the bounds it describes accurately; the workflow need not add the free stage's own numeric thresholds because they are not currently stated there (S-6). Free total-threshold cuts, when described, are recorded as cut rounds like per-file cuts (S-7). The probe covers free-cut overshoots as well as uncut overshoots because both travel through the same shared bound (S-8).
 
 None open.
