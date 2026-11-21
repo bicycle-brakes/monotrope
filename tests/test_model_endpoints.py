@@ -13,6 +13,7 @@ without a single row of payload data.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from pathlib import Path
 
@@ -263,11 +264,15 @@ def routing_models(text: str) -> list[str]:
     """The model names of the routing rows in `text`.
 
     A routing row starts with a phase number and an optional letter (`2a`,
-    `4b`), then a phase name of one or more words, then the model in bold. The
+    `4b`), then a phase name of one or more words, then the model or local-command cell. The
     pattern used to read one digit and one word, and skipped the rows a stage 2
     adds.
     """
-    return re.findall(r"^\| \d[a-z]? [A-Za-z][A-Za-z ]*? \| \*\*([^*]+)\*\* \|", text, re.M)
+    return [
+        model.strip("*")
+        for phase, model in re.findall(r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| ([^|]+) \|", text, re.M)
+        if phase == "4b Triage" or (model.startswith("**") and model.endswith("**"))
+    ]
 
 
 def test_every_model_in_the_routing_table_resolves() -> None:
@@ -282,8 +287,8 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     # The table names display names ("Haiku 4.5"), the declaration ids.
     ids = zugelassene_modelle()
     for anzeige in tabelle:
-        if anzeige in {"the ladder", "the swarms, then the ladder"}:
-            continue  # no model id: the ids live in the `opencode-go` entry, checked by its own test
+        if anzeige in {"the ladder", "the swarms, then the ladder", "none (a local command)"}:
+            continue  # a local command has no model; ladder ids are checked in the endpoint declaration
         if anzeige == "the research swarm":
             # No single model id: the swarm is a declared role roster. The row
             # resolves only while the declaration itself is complete and every
@@ -321,6 +326,8 @@ def test_the_routing_check_reads_lettered_and_multi_word_rows() -> None:
     text = "| 2a Spec review | **k3** | x |\n| 4b Review loop | **k3** | x |\n"
     assert routing_models(text) == ["k3", "k3"]
     assert routing_models("| 1 | Explore | x |\n") == []
+    assert routing_models("| 4b Triage | none (a local command) | local |\n") == ["none (a local command)"]
+    assert routing_models("| 4b Triage | misspelled-model | local |\n") == ["misspelled-model"]
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +370,13 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert free["include"] == []
     # Each exclusion is a dated decision; its record shape is validated below
     # through the runner's own `free_rule_problems`.
-    assert [record["id"] for record in free["exclude"]] == ["step-5-preview-free"]
+    assert [record["id"] for record in free["exclude"]] == [
+        "longcat-2.5-free",
+        "step-5-preview-free",
+        "iceman-contributor-free",
+        "cat-jam-free",
+        "longcat-2.5-preview-free",
+    ]
     assert free["input"] == "implementation-diff"
 
 
@@ -486,6 +499,170 @@ def test_unread_terms_reach_the_free_stage_alone() -> None:
         assert forbidden in one, f"the acceptance does not name what it does not cover: {forbidden}"
 
 
+# ---------------------------------------------------------------------------
+# The one Go address record (go-access-point)
+# ---------------------------------------------------------------------------
+
+
+def _address_problems(entry: dict) -> list[str]:
+    """What makes the entry's `adresse` unusable as the one Go address record.
+
+    The synthetic cases below carry the faults; the real entry is checked with
+    the same function, so the orchestrator's bootstrap cannot land a weaker
+    shape than these tests hold (plan step 10: the runner never edits the held
+    file). The strictness mirrors the runner's `load_address_policy`: exact
+    keys, one host, per-wire-api bases on that host, dated sources.
+    """
+    problems: list[str] = []
+    record = entry.get("adresse")
+    if not isinstance(record, dict):
+        return ["no adresse record"]
+    if set(record) != {"host", "apis"}:
+        problems.append(f"unknown or missing address keys: {sorted(record)}")
+        return problems
+    host = record["host"]
+    if not isinstance(host, str) or not re.fullmatch(r"[a-z0-9.-]+", host or ""):
+        problems.append(f"host is not a plain hostname: {host!r}")
+        return problems
+    apis = record["apis"]
+    if not isinstance(apis, dict) or not apis:
+        problems.append("no per-wire-api bases")
+        return problems
+    for api, part in apis.items():
+        if not isinstance(api, str) or not api:
+            problems.append("a wire api key is not a plain string")
+            continue
+        if not isinstance(part, dict) or set(part) != {"basis", "quelle", "gelesen"}:
+            problems.append(f"{api}: not exactly basis, quelle and gelesen")
+            continue
+        if not isinstance(part["basis"], str) or not part["basis"].startswith(f"https://{host}/"):
+            problems.append(f"{api}: basis is not an HTTPS URL on {host}")
+        if not isinstance(part["quelle"], str) or not part["quelle"].strip():
+            problems.append(f"{api}: quelle is missing or blank")
+        read = part["gelesen"]
+        if not isinstance(read, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", read):
+            problems.append(f"{api}: gelesen is not a quoted ISO date")
+        else:
+            try:
+                dt.date.fromisoformat(read)
+            except ValueError:
+                problems.append(f"{api}: gelesen is not a calendar date")
+    return problems
+
+
+# Supported wire-API shapes on Go (go-wire-apis, criterion 4).
+# Google is supported but not measured (decisions.md Q-2).
+SUPPORTED_WIRE_APIS = {"openai-completions", "anthropic-messages", "openai-responses", "google-generative-ai"}
+
+
+def _address_fixture() -> dict:
+    """A minimal valid record covering all four supported wire-API shapes.
+
+    Google is mapped only to test the shape, not to mirror the repository's
+    measured declaration; its live measurement remains deferred.
+
+    Responses legitimately shares the completions base: the adapters append
+    different routes to the same base.
+    """
+    bases = {
+        "openai-completions": "https://opencode.ai/inference/go/openai/v1",
+        "anthropic-messages": "https://opencode.ai/inference/go/anthropic",
+        "openai-responses": "https://opencode.ai/inference/go/openai/v1",
+        "google-generative-ai": "https://opencode.ai/inference/go/google/v1beta",
+    }
+    return {
+        "name": "opencode-go",
+        "adresse": {
+            "host": "opencode.ai",
+            "apis": {
+                api: {"basis": base, "quelle": "https://opencode.ai/docs/go", "gelesen": "2026-10-31"}
+                for api, base in bases.items()
+            },
+        },
+    }
+
+
+ADDRESS_FAULTS = {
+    "no-record": lambda e: e.pop("adresse"),
+    "unknown-key": lambda e: e["adresse"].update(gueltig_bis="x"),
+    "no-apis": lambda e: e["adresse"].pop("apis"),
+    "apis-not-a-map": lambda e: e["adresse"].update(apis=[]),
+    "api-key-empty": lambda e: e["adresse"].update(apis={"": e["adresse"]["apis"]["openai-completions"]}),
+    "host-with-scheme": lambda e: e["adresse"].update(host="https://opencode.ai"),
+    "host-empty": lambda e: e["adresse"].update(host=""),
+    "base-keys-broken": lambda e: e["adresse"]["apis"]["openai-completions"].pop("quelle"),
+    "extra-base-key": lambda e: e["adresse"]["apis"]["openai-completions"].update(notiz="x"),
+    "foreign-host-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://elsewhere.invalid/zen/go/v1"
+    ),
+    "plain-http-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="http://opencode.ai/zen/go/v1"
+    ),
+    "userinfo-base": lambda e: e["adresse"]["apis"]["openai-completions"].update(
+        basis="https://user@opencode.ai/zen/go/v1"
+    ),
+    "blank-source": lambda e: e["adresse"]["apis"]["openai-completions"].update(quelle="   "),
+    "native-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen=dt.date(2026, 10, 31)),
+    "impossible-date": lambda e: e["adresse"]["apis"]["openai-completions"].update(gelesen="2026-13-45"),
+    # The same strictness on the new native rows: an unsourced, undated or
+    # invalid base of any measured API must not load (go-wire-apis, criterion 4).
+    "messages-unsourced": lambda e: e["adresse"]["apis"]["anthropic-messages"].pop("quelle"),
+    "responses-undated": lambda e: e["adresse"]["apis"]["openai-responses"].pop("gelesen"),
+    "google-impossible-date": lambda e: e["adresse"]["apis"]["google-generative-ai"].update(gelesen="2026-13-45"),
+    "google-foreign-base": lambda e: e["adresse"]["apis"]["google-generative-ai"].update(
+        basis="https://elsewhere.invalid/google/v1beta"
+    ),
+}
+
+
+def test_the_address_record_shape_is_validated() -> None:
+    """The record's faults are named: shape, dated sources, bases on the host (plan step 10)."""
+    assert _address_problems(_address_fixture()) == []
+    for name, fault in ADDRESS_FAULTS.items():
+        entry = _address_fixture()
+        fault(entry)
+        assert _address_problems(entry), f"{name}: the fault passed the record shape check"
+
+
+def test_the_opencode_go_entry_declares_its_address_record() -> None:
+    """Criterion 1 (go-access-point): the real entry carries the record the runner loads.
+
+    The orchestrator's bootstrap has landed (plan step 12): a missing or
+    malformed record must fail, including deletion of the whole record.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    stage2_go = pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+
+    entry = _endpunkt("opencode-go")
+    assert _address_problems(entry) == []
+    # The runner's own loader accepts exactly what the shape check accepts.
+    try:
+        policy = stage2_go.load_address_policy(REPO_ROOT)
+    except stage2_go.RecordUnusable as error:
+        raise AssertionError(f"the declared record does not load: {error}") from None
+    assert policy.host == entry["adresse"]["host"]
+
+
+def test_missing_address_record_fails_the_real_entry_proof(monkeypatch) -> None:
+    """Deleting the bootstrapped address must fail the criterion's named proof, never skip it."""
+    # The exported kit carries this test but not the runner. Only that missing
+    # dependency may skip the proof; a missing production address may not.
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    pytest.importorskip("stage2_go", reason="the runner is not part of this repository")
+    entry = dict(_endpunkt("opencode-go"))
+    entry.pop("adresse", None)
+    monkeypatch.setattr(__import__(__name__), "_endpunkt", lambda _name: entry)
+    try:
+        with pytest.raises(AssertionError, match="no adresse record"):
+            test_the_opencode_go_entry_declares_its_address_record()
+    except pytest.skip.Exception:
+        pytest.fail("the missing production address record skipped its proof")
+
+
 def opencode_remark_problems(remark: str) -> list[str]:
     """Criterion 2: every point of the remark, each one stated by its source."""
     one = " ".join(remark.split())
@@ -509,6 +686,9 @@ def opencode_remark_problems(remark: str) -> list[str]:
         "0 days",
         '"Not used"',
         "valid through 2026-10-31",
+        "Address until 2026-10-31 (history; the admitted address is the `adresse` record)",
+        "On 2026-10-31 the Go page names only `/inference/go/` addresses",
+        "the admitted host and the known base stand in `adresse` (ADR 0024)",
         "states no region",
         '"All our models are hosted in the US and EU."',
         "read 2026-10-07",
@@ -769,6 +949,52 @@ def test_seat_candidate_lists_and_availability_rule_are_validated() -> None:
     assert not any("q-flash" in problem for problem in stage2_swarm.seat_problems(data))
 
 
+def _measured_apis_problems(data: dict) -> list[str]:
+    """Require exactly the three measured APIs and matching address mappings.
+
+    Criterion 4 requires completions, Messages and Responses. Google remains
+    undeclared until measured; matching incomplete lists and mappings fail too.
+    """
+    problems: list[str] = []
+    rule = (data.get("research_swarm") or {}).get("availability_preflight") or {}
+    measured = rule.get("measured_wire_apis")
+    if not isinstance(measured, list) or not measured or not all(isinstance(api, str) for api in measured):
+        return ["measured_wire_apis is not a nonempty list of names"]
+    if len(set(measured)) != len(measured):
+        problems.append("measured_wire_apis repeats a name")
+    expected = {"openai-completions", "anthropic-messages", "openai-responses"}
+    if set(measured) != expected:
+        problems.append("measured_wire_apis must contain exactly completions, Messages and Responses")
+    unsupported = sorted(set(measured) - SUPPORTED_WIRE_APIS)
+    if unsupported:
+        problems.append(f"measured_wire_apis leaves the supported four: {unsupported}")
+    entry = next((e for e in data.get("endpunkte") or [] if e.get("name") == "opencode-go"), {})
+    mapped = set((entry.get("adresse") or {}).get("apis") or {})
+    for api in sorted(set(measured) - mapped):
+        problems.append(f"{api}: measured without an address-record mapping")
+    for api in sorted(mapped - set(measured)):
+        problems.append(f"{api}: mapped without being measured")
+    unrelated = sorted(mapped - SUPPORTED_WIRE_APIS)
+    if unrelated:
+        problems.append(f"the address record maps unsupported wire APIs: {unrelated}")
+    return problems
+
+
+def _measured_synthetic(measured: list[str], mapped: set[str]) -> dict:
+    """A declaration shaped as the completed change's bootstrap declares it: measured list and mappings given."""
+    return {
+        "endpunkte": [
+            {
+                "name": "opencode-go",
+                "adresse": {"host": "opencode.ai", "apis": {api: {} for api in sorted(mapped)}},
+            }
+        ],
+        "research_swarm": {
+            "availability_preflight": {"measured_wire_apis": list(measured)},
+        },
+    }
+
+
 def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     import sys
 
@@ -787,8 +1013,59 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     ]
     assert block["online_seats"] == [{"endpoint": "opencode-go"}] * 3
     rule = block["availability_preflight"]
-    assert rule["max_age_seconds"] == 900 and rule["measured_wire_apis"] == ["openai-completions"]
-    assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
+    assert rule["max_age_seconds"] == 900
+    # The research free rule keeps the review loop's exclusions (maintainer, 2026-11-13, bead coding-harness-363r.2).
+    assert block["online_free"] == {
+        "provider": "opencode-go",
+        "suffix": "-free",
+        "include": [],
+        "exclude": ["iceman-contributor-free", "longcat-2.5-free"],
+    }
+    # Criterion 4: exactly the three measured APIs, with matching mappings.
+    assert _measured_apis_problems(geladen) == []
+    # The check's own teeth: each planted fault names its disagreement, on a
+    # synthetic declaration shaped as the completed change's bootstrap declares.
+    expected = {"openai-completions", "anthropic-messages", "openai-responses"}
+    assert _measured_apis_problems(_measured_synthetic(sorted(expected), expected)) == []
+    # Matching omissions must fail, including the old completions-only state.
+    names = sorted(expected)
+    for mask in range(1 << len(names)):
+        subset = {api for index, api in enumerate(names) if mask & (1 << index)}
+        if subset != expected:
+            assert _measured_apis_problems(_measured_synthetic(sorted(subset), subset)), subset
+    assert _measured_apis_problems(_measured_synthetic(sorted(SUPPORTED_WIRE_APIS), SUPPORTED_WIRE_APIS))
+    faults = {
+        "measured-without-mapping": (
+            sorted(SUPPORTED_WIRE_APIS),
+            SUPPORTED_WIRE_APIS - {"anthropic-messages"},
+            "measured without an address-record mapping",
+        ),
+        "mapped-without-measured": (
+            sorted(SUPPORTED_WIRE_APIS - {"google-generative-ai"}),
+            SUPPORTED_WIRE_APIS,
+            "mapped without being measured",
+        ),
+        "unrelated-api": (
+            sorted(SUPPORTED_WIRE_APIS),
+            SUPPORTED_WIRE_APIS | {"other-wire"},
+            "unsupported wire APIs",
+        ),
+        "unsupported-measured": (
+            sorted(SUPPORTED_WIRE_APIS | {"some-new-wire"}),
+            SUPPORTED_WIRE_APIS,
+            "leaves the supported four",
+        ),
+        "repeated-name": (
+            ["openai-completions", "openai-completions"],
+            {"openai-completions"},
+            "repeats a name",
+        ),
+        "empty-measured": ([], {"openai-completions"}, "not a nonempty list"),
+    }
+    for name, (measured, mapped, expected) in faults.items():
+        found = _measured_apis_problems(_measured_synthetic(measured, mapped))
+        assert found, f"{name}: the fault passed the measured-API check"
+        assert any(expected in problem for problem in found), f"{name}: named {found}, not {expected!r}"
     # A model's data-terms record belongs to the review swarm's declaration (#157); until that merges,
     # only "not declared" may remain open here, never a shape or permission fault.
     open_problems = [p for p in stage2_swarm.seat_problems(geladen) if "is not declared" not in p]

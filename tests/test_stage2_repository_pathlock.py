@@ -156,14 +156,33 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     from types import SimpleNamespace
 
     sys.path.insert(0, str(HERE.parent / "scripts"))
+    import json
+
     import stage2
     from stage2_research_run import Run
 
+    # The launch reads the one Go address record of its root (go-access-point); JSON is YAML.
+    record = {
+        "host": "opencode.ai",
+        "apis": {
+            "openai-completions": {
+                "basis": "https://opencode.ai/zen/go/v1",
+                "quelle": "a synthetic test record",
+                "gelesen": "2026-10-31",
+            }
+        },
+    }
+    (tmp_path / "model-endpoints.yaml").write_text(
+        json.dumps({"endpunkte": [{"name": "opencode-go", "adresse": record}]}), encoding="utf-8"
+    )
     run = Run.__new__(Run)
     run.root, run.change, run.key = tmp_path, "some-change", "k"
     run.selection = {}
     run.runner = SimpleNamespace(
-        PI_WRAPPER=Path("/pinned/pi"), PI_TOOLS=stage2.PI_TOOLS, foreign_env=stage2.foreign_env
+        PI_WRAPPER=Path("/pinned/pi"),
+        PI_TOOLS=stage2.PI_TOOLS,
+        PI_AGENT_SETTINGS=stage2.PI_AGENT_SETTINGS,
+        foreign_env=stage2.foreign_env,
     )
     scratch = tmp_path / "seat"
     scratch.mkdir()

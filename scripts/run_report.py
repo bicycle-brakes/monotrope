@@ -23,11 +23,14 @@ What it cannot read, it says so:
 
 It runs no network, tracker, model, Git mutation or state-writing command and
 prints only summary fields - never prompt, answer or raw diagnostic text
-(criterion 12). `scripts/stage2.py` and `scripts/stage2_runs.py` stay the
-writers of the formats: this script uses `stage2.time_log`,
-`stage2.CARD_LABELS` and `stage2_runs.CALL_LINE`/`CALL_PREFIXES`, without
-duplicating their section and audit-line recognition. Only the runner's own
-fixed time format counts; every orchestrator time record stays unread.
+(criterion 12). `scripts/time_records.py` stays the one grammar of the fixed
+records, and `scripts/stage2.py` and `scripts/stage2_runs.py` stay the writers
+of the surrounding formats: this script uses `time_records.parse_entry` for
+every record line, `stage2.time_log` for the section, `stage2.CARD_LABELS` and
+`stage2_runs.CALL_LINE`/`CALL_PREFIXES`, without duplicating their
+recognition. Only the fixed record format counts - the runner's attempts and
+the `route orchestrator` spans the shared writer produced; every orchestrator
+prose note stays unread.
 """
 
 from __future__ import annotations
@@ -47,6 +50,8 @@ from datetime import UTC, datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import time_records  # noqa: E402
 
 try:
     import stage2  # noqa: E402
@@ -140,21 +145,14 @@ def read_text(path: Path) -> tuple[str | None, str]:
 # Time: the plan's `## Time used` section
 # ---------------------------------------------------------------------------
 
-# The runner's time-entry shape (`stage2.time_entry`). Its explicit seconds are
-# the authority; the endpoints only name the span and are never subtracted.
-RUNNER_ENTRY = re.compile(
-    r"(?P<date>\d{4}-\d{2}-\d{2}) (?P<start>\d{2}:\d{2}:\d{2})"
-    r"–(?:(?P<end_date>\d{4}-\d{2}-\d{2}) )?(?P<end>\d{2}:\d{2}:\d{2}) UTC, "
-    r"(?P<seconds>\d+) s — "
-    r"(?P<verb>[^·]+?) · attempt (?P<attempt>\d+) · route (?P<route>[^·]+?)"
-    r" · model (?P<model>[^·]+?) · (?P<result>accepted|rejected) · measured by the runner"
-)
+# The fixed record grammar is `time_records.parse_entry`'s; its explicit seconds
+# are the authority, and the endpoints only name the span and are never subtracted.
 FURNITURE = re.compile(r"^(?:#{1,6} |```|~~~)")
 
 
 @dataclass
 class TimeRecord:
-    """One readable duration record; the attempt fields exist only on runner entries."""
+    """One readable duration record; the attempt fields exist only on fixed-format record lines."""
 
     seconds: int
     verb: str | None = None
@@ -179,19 +177,18 @@ class TimeReading:
 
 
 def parse_time_line(content: str) -> TimeRecord | None:
-    """One runner duration record, or None; only its explicit seconds count."""
-    body = content[2:].strip() if content.startswith("- ") else content
-    matched = RUNNER_ENTRY.fullmatch(body)
-    if matched:
-        return TimeRecord(
-            seconds=int(matched.group("seconds")),
-            verb=matched.group("verb").strip(),
-            attempt=int(matched.group("attempt")),
-            route=matched.group("route").strip(),
-            model=matched.group("model").strip(),
-            result=matched.group("result"),
-        )
-    return None
+    """One fixed-format record, or None; only its explicit seconds count (the shared parser)."""
+    parsed = time_records.parse_entry(content)
+    if parsed is None:
+        return None
+    return TimeRecord(
+        seconds=parsed.seconds,
+        verb=parsed.verb,
+        attempt=parsed.attempt,
+        route=parsed.route,
+        model=parsed.model,
+        result=parsed.result,
+    )
 
 
 def read_time(plan: Path) -> tuple[TimeReading, str]:

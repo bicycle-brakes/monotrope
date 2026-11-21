@@ -18,7 +18,13 @@
 own_sid=$1
 own_cwd=$2
 sdir="$HOME/.claude/sessions"
-[ -d "$sdir" ] || exit 0
+strict=${3:-}
+if [ "$strict" = "--strict" ]; then
+  # Startup may trust an empty scan only after all registry reads succeeded.
+  [ -d "$sdir" ] && [ -r "$sdir" ] && [ -x "$sdir" ] || exit 1
+else
+  [ -d "$sdir" ] || exit 0
+fi
 
 gq() { git --no-optional-locks -C "$1" "${@:2}" 2>/dev/null; }
 own_top=""; own_common=""
@@ -26,8 +32,18 @@ if [ -n "$own_cwd" ]; then
   own_top=$(gq "$own_cwd" rev-parse --show-toplevel)
   own_common=$(gq "$own_cwd" rev-parse --path-format=absolute --git-common-dir)
 fi
+if [ "$strict" = "--strict" ]; then
+  [ -n "$own_top" ] && [ -n "$own_common" ] || exit 1
+fi
 
 for f in "$sdir"/*.json; do
+  if [ "$strict" = "--strict" ] && { [ -e "$f" ] || [ -L "$f" ]; }; then
+    jq -e 'type == "object" and
+      (.pid | type == "number" and . > 0 and . == floor) and
+      (.sessionId | type == "string" and length > 0) and
+      (.cwd | type == "string" and length > 0) and
+      (.kind | type == "string" and length > 0)' "$f" >/dev/null 2>&1 || exit 1
+  fi
   [ -e "$f" ] || continue
   # Feldtrennung ohne Kollaps (bead hit): `IFS=$'\t' read` liess leere Felder
   # (Session ohne Namen oder Status) auf die Nachbarn rutschen — die Session
@@ -46,13 +62,22 @@ for f in "$sdir"/*.json; do
     i=$((i + 1))
   done < <(
     jq -j '[.pid, .sessionId, .cwd, (.name // ""), (.status // ""), (.kind // ""), (.procStart // "")]
-           | map(tostring) | join("\u0000")' "$f" 2>/dev/null)
+           | map(tostring) | join("\u0000") + "\u0000"' "$f" 2>/dev/null)
+  if [ "$strict" = "--strict" ] && [ "$i" -ne 7 ]; then exit 1; fi
   [ -z "$opid" ] || [ "$osid" = "$own_sid" ] || [ "$okind" != "interactive" ] && continue
   kill -0 "$opid" 2>/dev/null || continue
   if [ -n "$ostart" ]; then
     # The registry stores the start time in UTC and English; ps localises both.
-    live=$(TZ=UTC LC_ALL=C ps -o lstart= -p "$opid" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')
-    [ "$live" != "$(printf '%s' "$ostart" | tr -s ' ')" ] && continue
+    live=$(TZ=UTC LC_ALL=C ps -o lstart= -p "$opid" 2>/dev/null)
+    ps_rc=$?
+    live=$(printf '%s' "$live" | tr -s ' ' | sed 's/^ //; s/ $//')
+    if [ "$ps_rc" -ne 0 ] || [ -z "$live" ]; then
+      # An unreadable identity is not proof of PID reuse. Startup must skip
+      # writing; display scans conservatively retain the known-live peer.
+      [ "$strict" = "--strict" ] && exit 1
+    elif [ "$live" != "$(printf '%s' "$ostart" | tr -s ' ')" ]; then
+      continue
+    fi
   fi
   label=${oname:-$(basename "$ocwd")}
   # Das Zeilenformat ist tab-separiert: Tabs und Zeilenenden im Namen wuerden
@@ -65,8 +90,49 @@ for f in "$sdir"/*.json; do
   st=${st//$'\n'/ }
   rel="other"
   if [ -n "$own_top" ]; then
-    otop=$(gq "$ocwd" rev-parse --show-toplevel)
-    ocommon=$(gq "$ocwd" rev-parse --path-format=absolute --git-common-dir)
+    outside_git=false
+    if [ "$strict" = "--strict" ]; then
+      # Only an existing directory can establish unrelated ownership.
+      [ -d "$ocwd" ] || exit 1
+      # A non-repository diagnostic is only safe without a Git marker in the
+      # ancestry: broken metadata can produce the same diagnostic in a repo.
+      otop=$(LC_ALL=C git --no-optional-locks -C "$ocwd" rev-parse --show-toplevel 2>&1)
+      top_rc=$?
+      if [ "$top_rc" -ne 0 ]; then
+        case "$otop" in
+          "fatal: not a git repository (or any of the parent directories): .git"|\
+          "fatal: not a git repository (or any parent up to mount point "*$'\n'"Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).")
+            ancestor=$(cd -- "$ocwd" 2>/dev/null && pwd -P) || exit 1
+            while :; do
+              # Unreadable ancestry cannot establish absence of metadata.
+              [ -r "$ancestor" ] && [ -x "$ancestor" ] || exit 1
+              if [ -e "$ancestor/.git" ] || [ -L "$ancestor/.git" ]; then break; fi
+              if [ "$ancestor" = / ]; then outside_git=true; break; fi
+              ancestor=${ancestor%/*}
+              ancestor=${ancestor:-/}
+            done
+            if [ "$outside_git" = true ]; then otop=""; top_rc=0; fi
+            ;;
+        esac
+      fi
+    else
+      otop=$(gq "$ocwd" rev-parse --show-toplevel)
+      top_rc=$?
+    fi
+    if [ "$outside_git" = true ]; then
+      ocommon=""; common_rc=0
+    else
+      ocommon=$(gq "$ocwd" rev-parse --path-format=absolute --git-common-dir)
+      common_rc=$?
+    fi
+    if [ "$strict" = "--strict" ]; then
+      # A live peer with unreadable Git metadata has unknown ownership.
+      # Failed commands can emit output; require success as well as a value.
+      if [ "$outside_git" != true ]; then
+        [ "$top_rc" -eq 0 ] && [ "$common_rc" -eq 0 ] &&
+          [ -n "$otop" ] && [ -n "$ocommon" ] || exit 1
+      fi
+    fi
     if [ -n "$otop" ] && [ "$otop" = "$own_top" ]; then rel="clash"
     elif [ -n "$ocommon" ] && [ "$ocommon" = "$own_common" ]; then rel="sibling"
     fi

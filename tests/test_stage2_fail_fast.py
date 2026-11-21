@@ -21,7 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import stage2  # noqa: E402
 from test_stage2 import (  # noqa: E402
     KEY,
+    UTC_START,
+    FakeClock,
+    ScriptedPrograms,
     World,
+    _beside_docs_gate,
     formatted_attempt,  # noqa: E402
     git,  # noqa: E402
     prompt_entry,  # noqa: E402
@@ -39,7 +43,23 @@ RESTORED = (
     "before the call, and the attempt failed for the reasons below"
 )
 NOTICE = "The attempt edited findings.md; the runner restored it before the post-run checks"
-CHEAP = "Runner cheap checks before `make verify`"
+CHEAP = "Runner cheap checks before post-run verification"
+
+
+def overstaying_cheap_pytest(monkeypatch: pytest.MonkeyPatch) -> ScriptedPrograms:
+    """The cheap pytest doubled at the `Popen` boundary to outlast `TOOL_SECONDS` on the fake clock.
+
+    Spec criterion 4 of the runner clock: a budget expires through the clock seam, never by a real
+    child sleeping past it, so the timeout costs no wall time.
+    """
+    clock = FakeClock(monkeypatch, UTC_START)
+
+    def cheap_pytest(command: list[str]) -> bool:
+        return command[:3] == [".venv/bin/python3", "-m", "pytest"] or (
+            command[0].endswith("/.venv/bin/python3") and command[1:3] == ["-m", "pytest"]
+        )
+
+    return ScriptedPrograms(monkeypatch, clock, [(cheap_pytest, {"duration": stage2.TOOL_SECONDS + 1.0})])
 
 
 def one_test_step(**more: object) -> dict:
@@ -194,7 +214,19 @@ def test_failed_test_ids_are_read_from_the_pytest_summary() -> None:
 
 def test_empty_targets_skip_their_command(world: World) -> None:
     """Ledger 4. Planted fault: a zero-target check started ruff or pytest, or rejected a text-only attempt."""
-    successful_implementation(world)  # plants `src/app.py` only: outside `scripts/` and `tests/`
+    # A text-only attempt: it changes `src/app.py` alone, outside `scripts/` and `tests/`. The shared
+    # helper `successful_implementation` also plants a covering test file, which rightly starts ruff
+    # and pytest, so this guarantee states its own attempt.
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
     assert world.run("implement") == 0
     assert world.calls("ruff") == [] and world.calls("python3") == []
     assert len(world.calls("make")) == 1
@@ -203,26 +235,34 @@ def test_empty_targets_skip_their_command(world: World) -> None:
 
 
 def test_cheap_green_still_requires_full_verification(world: World) -> None:
-    """Ledger 5. Planted fault: cheap green checkpointed without `make verify`, or despite its red result."""
+    """Ledger 5. Planted fault: an uncovered attempt checkpointed without `make verify`, or despite its red result.
+
+    A targeted green checkpoints when the coverage is safe (no `make verify`); when it is not, the
+    admitted full check runs and its red result still blocks the checkpoint (`decisions.md#Q-6`).
+    """
     red = red_verify(("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"]))
-    venv_ruff(world)
-    venv_pytest(world)
     baseline = git(world.root, "rev-parse", "HEAD")
+    # `src/app.py` is tracked code with no linked test: the coverage is not safe, so the full check runs.
     world.script(
         claude=[
-            formatted_attempt(plant={"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"}),
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
             {"stdout": "must not run"},
             {"stdout": "must not run"},
         ],
-        ruff=[{}] * 8,
-        python3=[{}] * 3,
         make=[red] * 3,
     )
     assert world.run("implement") == 1
-    names = [call["name"] for call in world.calls()]
-    assert names[:7] == ["claude", "ruff", "ruff", "ruff", "ruff", "python3", "make"], names[:7]
-    assert len(names) == 21 and names.count("make") == 3, "a checkpoint or a skipped verification appeared"
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    # Since bead coding-harness-bxxt.6 the full check runs the gates of the one list itself, the world's
+    # document gate (a seconds member of the verify job) before the protected `make verify`; it is counted
+    # apart, so the full check's launch order stays exactly as pinned.
+    names = [call["name"] for call in _beside_docs_gate(world.calls())]
+    assert names[:2] == ["claude", "make"], names[:2]
+    assert "make" in names, "the full check did not run for an uncovered attempt"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a red full check checkpointed"
 
 
 def test_cheap_failures_reach_findings_and_next_route_safely(world: World) -> None:
@@ -415,15 +455,16 @@ def test_unstartable_or_timed_out_cheap_checks_never_pass(world: World, case: st
         venv_pytest(world)
     if case == "missing":
         (world.root / ".venv" / "bin" / "python3").unlink()
-    if case == "timeout":
-        monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    programs = overstaying_cheap_pytest(monkeypatch) if case == "timeout" else None
     baseline = git(world.root, "rev-parse", "HEAD")
     world.script(
         claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
-        python3=[{"sleep": 2}] * 3 if case == "timeout" else [{}] * 3,
+        python3=[{}] * 3,
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 1
+    if programs is not None:
+        assert [row["outcome"] for row in programs.waits()] == ["timeout"] * 3, "the overstay was not simulated"
     assert world.calls("make") == [], "an unstartable or over-bound cheap check still reached `make verify`"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
     expected = {
@@ -465,13 +506,14 @@ def test_a_timed_out_cheap_pytest_names_its_selected_tests(world: World, monkeyp
     """Row L1-10. Planted fault: the timeout diagnostic named only the command, not what it ran."""
     venv_ruff(world)
     venv_pytest(world)
-    monkeypatch.setattr(stage2, "TOOL_SECONDS", 0.5)
+    programs = overstaying_cheap_pytest(monkeypatch)
     world.script(
         claude=[one_test_step(), {"stdout": "must not run"}, {"stdout": "must not run"}],
-        python3=[{"sleep": 2}] * 3,
+        python3=[{}] * 3,
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 1
+    assert [row["outcome"] for row in programs.waits()] == ["timeout"] * 3, "the overstay was not simulated"
     assert "did not finish" in world.text()
     assert "selected tests: tests/test_new.py" in world.text()
 

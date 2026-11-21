@@ -3,8 +3,8 @@ title: "How the workflow works — phases, models, classes and swarms"
 category: architecture
 status: proposed
 created: 2026-10-16
-last_reviewed: 2026-10-16
-updated: 2026-10-28
+last_reviewed: 2026-11-02
+updated: 2026-11-13
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -70,7 +70,7 @@ only framework content goes to them:
 | Job | Who does it | Status on main |
 |---|---|---|
 | Orchestrate: run phases, decide findings, write the handover | Claude Code session | active |
-| Explore (phase 1) | GLM 5.3 Flash (Z.ai) | active |
+| Explore (phase 1) | GLM 5.3 Flash for a `spike` or `bounded` change; the research swarm for a `feature` or `architectural` one | active |
 | Draft spec, design and plan (2, 2b, 3) | Codex, OpenAI | active |
 | Review the spec (2a) | Opus 5.5 (Anthropic) | active |
 | Review loop (4b) | Pi, running the free and Flash swarms, then one paid model per round | active; until a clean round or a stop |
@@ -82,6 +82,10 @@ only framework content goes to them:
 - **Pi** is the agent program the repository pins for the review loop
   (ADR 0019). It sends the calls to **OpenCode Go**, which offers models from
   several vendors. The operator is one, so the data recipient is one.
+- **Two read-only helpers** inside Claude Code: an explorer on Haiku 5.5 and a
+  reviewer on Opus 5.5, each with its model pinned
+  (`.claude/agents/explorer.md`, `reviewer.md`). They read and report; they
+  do not write.
 
 The models behind each job are listed in `model-endpoints.yaml` and in
 `docs/WORKFLOW.md`, section 4. This table can lag behind them.
@@ -143,10 +147,62 @@ These are operator details; you can skip them on a first read.
   `flash_swarm` list. A failed Flash member is replaced by the cheapest unused
   rung; a failed single rung is retired with
   `release-loop --stage-failed <model> --reason <text>`.
+- An implement or repair attempt fails fast: ruff and the attempt's own tests
+  run first and stop at the first red one. An implement attempt then runs the
+  full `make verify`. A repair runs a targeted check (the touched and linked
+  test files and the gates their file kinds need) and falls back to the full
+  `make verify` when that selection cannot cover it safely; the final review
+  runs a fresh full `make verify` of its own. A draft runs only its document
+  gates, not the full suite.
+- The runner is one call per verb, not a service. Between calls its state
+  lives in git (the change folder, the branch, failed attempts under
+  `refs/stage2/attempts/`) and in a state directory outside the repository
+  (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/`), which holds
+  the loop record until the final review releases it into `findings.md`.
+- The `session` verb opens a macOS Terminal window through `osascript`, so it
+  needs a graphical login. Every other verb runs in a plain shell.
+- One admission per machine, for protected work only: a run's cheap gates —
+  every unmarked `seconds` gate — execute before any wait, so a lint failure
+  appears in seconds even while another check holds the slot; the queue and
+  the memory floor (`scripts/verify_lock.py`) are entered once, by the
+  shared scheduler (`scripts/verify_run.py`), only when no cheap gate failed
+  blocking, for the `minutes` gates and the `seconds` gates marked
+  `needs_admission: true`.
 - Free models are admitted for the diff-only review under retention and
   training terms that have not been read. A paid model needs a terms reading
   whose declared `valid_until` date has not passed; the runner warns before
   it does.
+
+One call of the runner, from start to end. A verb that writes (`draft`,
+`implement`, `repair`) takes the whole path; a review verb ends after the
+answer is read, with its findings recorded:
+
+```mermaid
+flowchart TD
+    V[One verb for one change] --> P{Change folder, bead and endpoint in order?}
+    P -->|no| R1[Refused before any call]
+    P -->|yes| L{Leak check clean?}
+    L -->|no| R2[Stop, no fallback to another model]
+    L -->|yes| M[Start the model for this verb]
+    M --> A{Answer in the expected form?}
+    A -->|no, also after one reminder| X[Attempt failed]
+    A -->|review verb| F[Findings recorded]
+    A -->|writing verb| H{Only paths the verb may change?}
+    H -->|no| X
+    H -->|yes| C{Cheap checks green: ruff and the attempt's own tests?}
+    C -->|no| X
+    C -->|yes| T{Post-run check green?}
+    T -->|no| X
+    T -->|yes| K[One commit]
+    X --> N{Another route left?}
+    N -->|yes, with the diagnostics| M
+    N -->|no| U[Tree restored, attempt saved on a side ref, exit with an error]
+```
+
+The post-run check is the document gates for a draft, the full `make verify`
+for an implement attempt, and the targeted check or its full fallback for a
+repair. Deciding on findings, the tracker, worktrees and merges are outside
+the runner: the orchestrating session and the maintainer do them.
 
 ### Research swarm
 
@@ -212,8 +268,12 @@ These are development stages, not the review stages of phase 4b.
   through `scripts/stage2.py`, and the scope is framework content (ADR 0007,
   amended since). Whether the second check finds more errors than one has not
   been measured.
-- **Stage 3 — orchestration.** Agents as YAML files, parallel worktrees and
-  automatic routing. This stage is evaluated, not built.
+- **Stage 3 — a meta-harness.** A proposed layer in which each agent is a
+  short YAML file and an orchestrator spreads work across parallel worktrees
+  and routes each diff to a reviewer on its own. Parallel worktrees and the
+  runner's model routes with their fallbacks already exist in Stage 2; a
+  session still starts each step by hand. The meta-harness is described for
+  evaluation and is not in use (`docs/WORKFLOW.md`, section 5).
 
 How a call to a second vendor is allowed to happen in the second development
 stage:
@@ -232,15 +292,18 @@ flowchart LR
 
 - **Files, because a change must outlive the session, the machine and the
   harness.** A state kept inside a tool dies with the tool.
-- **One list, because two lists drift.** 22 gates live in one file
-  (`decisions/gates.yaml`); 18 block, 3 report, 1 advisory (as of 2026-10-22).
+- **One list, because two lists drift.** 24 gates live in one file
+  (`decisions/gates.yaml`); 20 block, 3 report, 1 advisory (as of 2026-11-12,
+  `8c54b1a0`).
   The file drives the local runner and the CI generator, and a gate holds the
   generated workflow to it byte for byte. `AGENTS.md` is the same kind of single
   entry for the agents; a test fails if a harness-specific file would replace
   it.
 - **A merge, because a decision that lives in a chat is not a decision.** A
   rule or a person-reserved file changes when its pull request is merged, not
-  when someone typed "yes".
+  when someone typed "yes". `main` takes a pull request only through the merge
+  queue, which runs CI once more on the pull request combined with the current
+  `main`.
 - **Appetite, not estimates.** A plan card names a time limit as a stop, and a
   pre-mortem: "suppose it failed — most likely because …".
 - **Evidence over summaries.** You judge a change by its tests, its findings
@@ -274,8 +337,11 @@ What is particular to this repository:
   `scripts/`. That measures how much is checked, not how well; mutation
   testing on one or two scripts is planned (bead coding-harness-bvy).
 - **Runs take time.** A full `make verify` took about 11 minutes on
-  2026-10-28 (pytest 515–638 s, run at lower priority with `-n 4`). The three
-  lanes therefore share one verification slot ([three lanes](orchestration.md)).
+  2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
+  4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
+  test workers from the machine (half the cores, at most one per 2 GiB of
+  memory), and all lanes share one verification slot for protected work,
+  enforced by one admission per machine ([lanes](orchestration.md)).
 
 ## Follow one completed change
 

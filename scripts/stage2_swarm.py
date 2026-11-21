@@ -8,7 +8,8 @@ The runner module (`scripts/stage2.py`) is passed in as `runner` and is never im
 runs as `__main__`, so importing it would execute the module a second time.
 
 Eleven topics (1-8 repository, 9-11 online), a finder trio, an Opus map merge, an Opus public sentence and
-an Opus judge: `39 + 3N` calls for `N` selected free models. Every seat is named by the run's frozen
+an Opus judge: `39 + 3N` calls for `N` selected free models, and at most `72 + 6N` when every
+topic report takes its one correction (ADR 0020 point 9). Every seat is named by the run's frozen
 selection, never by a hardcoded roster (ADR 0020 draft, Q-12 to Q-14).
 """
 
@@ -19,7 +20,9 @@ import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
-from urllib.parse import urlsplit
+
+import stage2_free
+import stage2_go
 
 # The free researcher's whole tool surface, as Pi's `--tools` allow-list: the
 # extension's two tools and no built-in one (the extension's own gate stays).
@@ -88,7 +91,17 @@ def _identity_doubt(entries):
     )
 
 
-def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
+def select_research_catalog(
+    bridge,
+    policy,
+    fixed_ids,
+    *,
+    expected_version,
+    measured_wire_apis,
+    address,
+    paid,
+    exclusion,
+):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
     The bridge transports raw source bodies. Python retains duplicate identity and
@@ -97,7 +110,18 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
     preferred models) and every paid model of the fresh overlay; it does not
     authorize or dispatch any model. A candidate that is absent, baseline-only,
     non-chat, malformed or on an unmeasured wire API is skipped with its raw
-    evidence, never a failure of the whole preflight (Q-12, Q-14).
+    evidence, never a failure of the whole preflight (Q-12, Q-14). Its
+    destination is assessed against the one address record (`address`, the
+    loaded `stage2_go` policy): any path on the recorded host is admissible, a
+    move from the recorded path and an explicit base on an unrecorded wire api
+    are kept as notices, a foreign destination refuses the candidate alone
+    (go-access-point). Notices are collected before the eligibility filters:
+    a candidate excluded later — `wire-api-not-measured`, a veto of the free
+    selection included — keeps its notice in `address_notices`, each model
+    once. The free candidates are chosen by the one free
+    selection (`stage2_free`) the review loop uses as well: `paid` (the endpoint's `modelle`) and `exclusion`
+    (the declaration's public-web exclusion) are its hard vetoes, so an id admitted as paid is dropped here
+    with the reason `paid-admitted` and never reaches a probe (bead coding-harness-wb40).
     """
     validate_research_free_policy(policy)
     provider = policy["provider"]
@@ -148,22 +172,17 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             return "not-chat"
         if item.get("provider", provider) != provider:
             return "pi-malformed"
-        try:
-            target = urlsplit(item.get("baseUrl", "https://opencode.ai/zen/go/v1"))
-            safe_origin = (
-                target.scheme == "https"
-                and target.hostname == "opencode.ai"
-                and target.port in (None, 443)
-                and target.username is None
-                and target.password is None
-                and target.path in ("/zen/go/v1", "/zen/go/v1/")
-                and not target.query
-                and not target.fragment
-            )
-        except (TypeError, ValueError, AttributeError):
-            safe_origin = False
-        if not safe_origin:
+        base = item.get("baseUrl")
+        if "baseUrl" in item and not isinstance(base, str):
+            # An explicit null or non-string base is unreadable to the one
+            # policy (`stage2_go.assess`); it is never treated as absent.
             return "pi-malformed"
+        if base is None:
+            # A row without a base resolves offline from the record for its
+            # wire api; an unmapped api has no default and no origin to check.
+            if address.default_base(item.get("api")) is None:
+                return "no-recorded-base"
+            return None
         return None
 
     baseline = set(bridge.get("baseline", []))
@@ -176,6 +195,9 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         reason = pi_reason(item)
         if reason:
             return reason
+        verdict = stage2_go.assess(address, ident, item)
+        if not verdict.admitted:
+            return "destination-refused"
         return None if item.get("api") in wire_apis else "wire-api-not-measured"
 
     metadata = sources.get("models_dev", {})
@@ -248,8 +270,31 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
             return "deprecated"
         return None
 
+    def address_notice(ident: str) -> str | None:
+        """The address-drift notice of an admissible candidate, or None."""
+        item = models.get(ident)
+        if item is None:
+            return None
+        # The row's own keys only: an absent base stays absent and resolves
+        # from the record for its api, an explicit null is refused, and no
+        # absent base is turned into an explicit null here.
+        probe = {key: item[key] for key in ("api", "baseUrl") if key in item}
+        verdict = stage2_go.assess(address, ident, probe)
+        return verdict.notice if verdict.admitted else None
+
     candidates = []
-    eligible = set()
+    free_input = []
+    notices: list[str] = []
+    noticed: set[str] = set()
+
+    def collect_notice(ident: str) -> None:
+        """Keep a candidate's drift notice once, ahead of every eligibility filter."""
+        if ident in noticed:
+            return
+        noticed.add(ident)
+        if (notice := address_notice(ident)) is not None:
+            notices.append(notice)
+
     ids = sorted(
         {ident for ident in models if ident.endswith("-free")}
         | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
@@ -260,12 +305,49 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         reason = "not-in-fresh-pi" if item is None else pi_reason(item)
         if reason is None:
             reason = metadata_reason(ident)
-        if reason is None:
-            eligible.add(ident)
+        # The notice is collected whatever the filters decide: an
+        # address-admissible row excluded later keeps its notice.
+        collect_notice(ident)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
+        definition = None
+        if item is not None:
+            definition = {"api": item.get("api")}
+            if item.get("baseUrl") is not None:
+                definition["baseUrl"] = item["baseUrl"]
+        free_input.append(stage2_free.Candidate(provider, ident, definition, reason))
+    chosen = stage2_free.select(
+        free_input,
+        stage2_free.Policy(
+            provider=provider,
+            suffix=policy["suffix"],
+            include=tuple(policy["include"]),
+            exclude=tuple(policy["exclude"]),
+            include_adds=False,
+        ),
+        fresh=set(models),
+        paid=paid,
+        exclusion=exclusion,
+        address=address,
+    )
+    # The shared selection keeps notices of eligible ids only; each of them was
+    # collected above from the same row, so this adds nothing twice.
+    notices.extend(notice for notice in chosen.notices if notice not in notices)
+    veto_codes = {"paid": "paid-admitted", "excluded": "excluded-by-declaration", "plain": "pi-malformed"}
+    for candidate in candidates:
+        ident = candidate["id"]
+        if ident in chosen.vetoed:
+            candidate["reason"] = veto_codes[chosen.vetoed[ident].kind]
+            candidate["detail"] = chosen.vetoed[ident].reason
+        elif ident in chosen.refused_destination:
+            candidate["reason"] = "destination-refused"
+            candidate["detail"] = chosen.dropped.get(ident, chosen.refused_destination[ident])
+        elif candidate["reason"] is None:
+            if chosen.skipped.get(ident) in (stage2_free.SKIP_EXCLUDED, stage2_free.SKIP_NOT_INCLUDED):
+                candidate["reason"] = chosen.skipped[ident]
     seat_models = []
     for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
         reason = seat_reason(ident)
+        collect_notice(ident)
         seat_models.append(
             {
                 "id": ident,
@@ -274,14 +356,14 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
                 "tool_support": metadata_reason(ident) if reason is None else "not-assessed",
             }
         )
+    eligible = set(chosen.eligible)
     for ident in policy["include"]:
+        veto = chosen.vetoed.get(ident)
         if ident not in eligible:
+            if veto:
+                raise ResearchCatalogError(f"explicit free include is ineligible: {ident}: {veto.reason}", 2)
             raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
-    selected = eligible & set(policy["include"]) if policy["include"] else eligible
-    selected -= set(policy["exclude"])
-    for candidate in candidates:
-        if candidate["reason"] is None and candidate["id"] not in selected:
-            candidate["reason"] = "excluded" if candidate["id"] in policy["exclude"] else "not-included"
+    selected = set(chosen.selected)
     return {
         "selected": sorted(selected),
         "N": len(selected),
@@ -292,6 +374,7 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         if selected
         else ("capability-unavailable" if capability_reason else "measured-empty"),
         "fixed": list(fixed_ids),
+        "address_notices": sorted(notices),
         "models_store": bridge["models_store"],
         "sources": {
             name: {key: value for key, value in source.items() if key != "body"} for name, source in sources.items()
@@ -404,6 +487,10 @@ def invocation_problem(
             return f"{model} is excluded by the free selection policy"
         if policy["include"] and model not in policy["include"]:
             return f"{model} is not among the policy's explicit includes"
+        # The current declaration decides, never the frozen selection: an id admitted as paid is no free member.
+        veto = stage2_free.model_veto(model, paid=_declared_endpoint(data, endpoint).get("modelle") or [], plain=False)
+        if veto:
+            return f"{model} is {veto.reason}"
         if model not in set(selected_free):
             return f"{model} is not in this run's frozen free selection"
         return None

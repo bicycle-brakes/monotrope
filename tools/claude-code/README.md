@@ -2,10 +2,12 @@
 
 The maintainer's Claude Code setup for working across several repositories and
 parallel sessions: a status line that says where a session is and what it is
-doing, an entry point at session start, a safety net under the handover, and a
-warning when two sessions share one checkout. It is user-level tooling — it is
-installed into `~/.claude` and works in every repository, so it stays here and
-does not travel with the kit (`scripts/kit/manifest.yaml`, catch-all `tools/`).
+doing, an entry point at session start, a safety net under the handover, a
+warning when two sessions share one checkout, and a night profile that keeps an
+unattended session from stalling on a permission question. It is user-level
+tooling — it is installed into `~/.claude` and works in every repository, so it
+stays here and does not travel with the kit (`scripts/kit/manifest.yaml`,
+catch-all `tools/`).
 
 Provenance: written by Claude Code (Opus 5) at the maintainer's request on
 2026-09-18, tested on the maintainer's machine (macOS, bash 3.2, jq 1.7);
@@ -48,6 +50,33 @@ automatic note is only a safety net for a session that ended without one: the
 next start shows it when the last session kept working after the newest
 handover, and says so.
 
+### The repository's own start hook
+
+`hooks/beads-start.sh` in this directory is not part of the user-level set
+`install.sh` copies: `.claude/settings.json` of this repository runs it as its
+SessionStart hook, in place of a bare `tools/bd prime --hook-json`. It first
+reconciles merged closures (`scripts/close_merged_beads.py --write`, the
+`Closes-Bead` trailers on `origin/main`), then runs `tools/bd prime`. It
+reconciles only when the session scan shows no other writing session in the
+same repository (the conservative writer check of house rule 4); otherwise it
+skips and says why. Each step runs under its own time bound
+(`BEADS_START_RECONCILE_TIMEOUT`, `BEADS_START_SCAN_TIMEOUT`,
+`BEADS_START_PRIME_TIMEOUT`), and the settings timeout lies above their sum. A
+failed or skipped reconciliation is reported in the session context, and prime
+still runs; `make close-merged ARGS=--write` repeats the reconciliation by hand.
+
+Without `ARGS`, `make close-merged` only reports and never closes or publishes.
+Both reporting and writing return nonzero for unknown or newly reported malformed declarations;
+report-only describes the absence of writes, not an unconditional success status.
+Preflight failures also return nonzero; writing additionally fails on refused
+closures or failed publication. A published write run records malformed trailers
+by declaring commit and value in `close-merged-malformed.json` in the checkout's
+Git directory. Later runs still display them but do not fail for the same
+immutable mistake. Reporting never writes these receipts. New malformed trailers
+still fail once; unknown beads and refused closures keep failing until resolved.
+Deleting the receipt file makes historical malformed trailers fail once again;
+no history is skipped, and valid closures always use the current tracker state.
+
 ## Install, check, update
 
 ```bash
@@ -55,7 +84,7 @@ tools/claude-code/install.sh --check   # what differs from ~/.claude; changes no
 tools/claude-code/install.sh           # copy the files, merge settings.json
 ```
 
-The install copies the six files into `~/.claude` and merges `settings.json`:
+The install copies the eight files into `~/.claude` and merges `settings.json`:
 it sets `statusLine` and adds each hook of `./settings.json` whose command is
 not there yet; everything else in the file stays. A replaced file is kept as
 `<name>.bak-<timestamp>`. Restart Claude Code afterwards.
@@ -63,8 +92,41 @@ not there yet; everything else in the file stays. A replaced file is kept as
 Change a file here and reinstall — a change made only in `~/.claude` is
 overwritten by the next install, which `--check` shows first.
 
-Needs `jq`, `git` and `perl`. Without `claude` on the PATH the recap and the
-note stay empty; without `bd` the beads line stays hidden.
+Needs `jq`, `git`, `perl` and Python 3 (`python3`, for the night launcher).
+Without `claude` on the PATH the recap and the note stay empty; without `bd`
+the beads line stays hidden.
+
+## Night runs (unattended)
+
+For an unattended session the same install provides the night profile:
+`night.py` and its settings fragment `night-settings.json`. It starts Claude
+Code so that a permission question cannot hold the run
+(plans/changes/night-stall-guard, bead `coding-harness-ibde`):
+
+```bash
+python3 ~/.claude/night.py -p "continue the change"   # any normal claude arguments
+```
+
+The launcher reads the explicit ask and deny rules of the supported settings
+scopes — the user settings under `$CLAUDE_CONFIG_DIR` (else `~/.claude`), the
+current Git worktree's `.claude/settings.json` and the optional
+`.claude/settings.local.json` beside it; outside Git the working directory is
+the project root — and writes a private overlay that repeats the denies and
+turns every sourced ask rule into a deny. It then runs
+`claude --settings <overlay> --permission-mode dontAsk` for this invocation
+only. Inherited settings stay in their native layers and are never rewritten;
+the overlay lives in a temporary directory exactly as long as the child, and
+the child's exit status is forwarded.
+
+The launch is refused — before `claude` starts — when a present settings file
+cannot be read or parsed, or when an argument would replace the profile
+(`--settings`, `--permission-mode`, `--dangerously-skip-permissions`, in
+`--flag value` or `--flag=value` form). When an action is denied at night, the
+session continues with an authorised alternative or parks the denied step and
+records it; it does not disable the brake to get through.
+
+There is no phone alert and no independent heartbeat yet: that returns as its
+own change once the maintainer chooses a push service.
 
 ## State it keeps
 

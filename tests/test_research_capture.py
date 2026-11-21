@@ -341,3 +341,26 @@ def test_a_unicode_line_separator_inside_a_receipt_stays_one_captured_line(tmp_p
     assert online["receipts"]["count"] == 1
     assert online["receipts"]["lines"] == [line]
     assert json.loads(online["receipts"]["lines"][0]) == receipt
+
+
+def test_the_capture_probe_reads_its_fixture_address_record(tmp_path, monkeypatch):
+    import stage2_availability
+
+    probe = stage2_availability.probe_go
+    roots = []
+    fixture_root = tmp_path / "scratch" / "world" / "repo"
+
+    def checked_probe(runner, root, *args, **kwargs):
+        roots.append(root)
+        assert root == fixture_root, "the probe must never read the working tree's address record"
+        return probe(runner, root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2_availability, "probe_go", checked_probe)
+    code, report = run_capture(tmp_path)
+    assert roots == [fixture_root]
+    assert report["probe"]["error"] is None, report["probe"]
+    probe_routes = [route for route in report["transport_routes"] if route["model"] == rc.PROBE_MODEL]
+    assert len(probe_routes) == 1
+    assert probe_routes[0]["original_base"] == rc.CAPTURE_ADDRESS["apis"]["openai-completions"]["basis"]
+    assert probe_routes[0]["mock_base"].startswith("http://127.0.0.1:")
+    assert code == 0, report["checks"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -97,6 +98,30 @@ def test_report_without_any_supported_claim_fails_except_empty_neighbours():
         validate(empty, topic=5)
 
 
+def test_report_evidence_floor_retains_each_failed_citation_reason():
+    # Criterion 3. Planted fault: the failure diagnostics drop or rewrite a failed citation, keep a
+    # supported one, or leave the correcting seat only the generic evidence-floor message.
+    value = report(evidence=["a.py::absent"])
+    second = copy.deepcopy(value["claims"][0])
+    second.update(id="C2", evidence=["a.py::existing", "a.py:1"])
+    value["claims"].append(second)
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(value)
+    assert str(raised.value) == "report has no runner-backed evidence claim", "the generic message is unchanged"
+    assert raised.value.citation_failures == [
+        {"claim": "C1", "citation": "a.py::absent", "reason": "definition is absent or ambiguous"},
+        {"claim": "C2", "citation": "a.py:1", "reason": "no runner evidence"},
+    ], "each failed citation keeps its claim, original text and the runner's reason; supported ones stay out"
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(report(evidence=[]))
+    assert raised.value.citation_failures == [], "an empty evidence list invents no reference"
+    schema = report()
+    schema["claims"] *= 2
+    with pytest.raises(module().ResearchReportError) as raised:
+        validate(schema)
+    assert not hasattr(raised.value, "citation_failures"), "an earlier failure keeps its generic error alone"
+
+
 def test_report_one_shared_unicode_excerpt_cap_in_citation_order():
     large = {name + ".md": ("# " + name + "\n" + "ü" * 5000).encode() for name in ("First", "Second", "Third")}
     result = module().validate_research_report(
@@ -164,6 +189,27 @@ def test_report_online_claim_requires_all_own_successful_page_receipts():
     value["claims"][0]["evidence"].append("https://example.org/not-fetched")
     with pytest.raises(module().ResearchReportError, match="evidence"):
         validate(value, topic=9, receipts=[fetched])
+
+
+def test_online_brief_unread_field_is_the_validated_report_field():
+    # Criterion 6 (loop rows L1-6, L1-11). Planted fault: the public brief sends a seat to record
+    # unfetched pages in a field the report contract does not declare, so following the brief turns
+    # into a template rejection; or the contract stops carrying the recorded pages.
+    root = Path(__file__).resolve().parents[1] / "prompts" / "research-swarm"
+    brief = (root / "public.md").read_text()
+    budget = next(part for part in brief.split("\n- ") if "public_fetch" in part and "three" in part)
+    named = re.findall(r"`([a-z_]+)`", budget)
+    fields = [name for name in named if name != "public_fetch"]
+    assert fields == ["not_read"], "the budget bullet names exactly one report field for unread pages"
+    template = json.loads((root / "report.md").read_text().split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert fields[0] in template, "the documented base object carries the field the brief names"
+    fetched = receipt()
+    value = report(topic=9, evidence=[fetched["url"]])
+    unread = ["https://example.org/second — not fetched: the three-fetch budget was spent"]
+    value[fields[0]] = unread
+    result = validate(value, topic=9, receipts=[fetched])
+    assert result["claims"][0]["evidence_status"] == "valid"
+    assert result["not_read"] == unread, "the validated report keeps the recorded unread pages"
 
 
 def test_report_public_citations_cannot_attach_private_sources_or_neighbour_identities():
@@ -328,6 +374,43 @@ def test_report_documented_base_object_matches_the_validated_contract():
     )
     assert result["claims"][0]["evidence_status"] == "valid"
     assert result["questions"][0]["claims"] == [result["claims"][0]["id"]]
+
+
+def test_report_prompt_markdown_example_resolves():
+    # Criterion 5. Planted fault: the common contract's Markdown example loses the shown heading or
+    # its bare-title citation, the pair cannot resolve against the illustrated frozen source, a line
+    # number replaces the heading, or the invented example is written as a repository fact.
+    text = (Path(__file__).resolve().parents[1] / "prompts" / "research-swarm" / "report.md").read_text()
+    shown = re.search(r"`(#{1,6}[ \t][^`\n]+)`", text)
+    assert shown, "the contract illustrates one fictional Markdown heading with its opening marks, in backticks"
+    title = re.sub(r"^#{1,6}[ \t]+", "", shown.group(1))
+    cited = re.search(r"`([^`\n]+::" + re.escape(title) + r")`", text)
+    assert cited, "the shown heading carries the corresponding bare-title path::heading citation, in backticks"
+    # The disclaimer is read from the pair's own paragraph outside its code spans, so a fictional path
+    # such as `docs/example/...` or a passing "this example's" cannot stand in for it (loop row L1-2).
+    paragraph = next(
+        part for part in re.split(r"\n[ \t]*\n", text) if shown.group(0) in part and cited.group(0) in part
+    )
+    prose = " ".join(re.sub(r"`[^`\n]*`", "", paragraph).split())
+    assert re.search(r"\billustrative example\b", prose, re.I) and re.search(
+        r"\bnot a fact about this repository\b", prose, re.I
+    ), "the illustrated pair names itself an example, not a repository fact"
+    source_path, reference = cited.group(1).split("::", 1)
+    assert not re.fullmatch(r"[0-9]+", reference), "the example cites a heading, never a line number"
+    # The example's fictional status is carried by the disclaimer asserted above, and the resolution
+    # below reads only the illustrated source supplied here, never the working tree: a real file at
+    # the same path cannot change the outcome (loop row L3-4).
+    import stage2_research_refs as refs
+
+    sources = {source_path: (shown.group(1) + "\nbody line\n").encode()}
+    # The bare citation as the contract writes it, and the shown heading copied with its opening marks
+    # as the contract says is tolerated (loop row L2-2: both sides once resolved the same string).
+    assert reference == title
+    copied = refs.resolve_research_reference(sources, source_path, shown.group(1))
+    bare = refs.resolve_research_reference(sources, source_path, reference)
+    assert copied["supported"] and bare["supported"], f"the illustrated citation resolves: {copied}"
+    assert copied["start_line"] == bare["start_line"] == 1
+    assert copied["end_line"] == bare["end_line"] and copied["excerpt"] == bare["excerpt"]
 
 
 @pytest.mark.parametrize("seat", ["unqualified", ":model", "endpoint:", "endpoint:model:ambiguous"])
