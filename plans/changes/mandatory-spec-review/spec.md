@@ -78,6 +78,10 @@ A spec review precedes the plan card for bounded, feature and architectural chan
 19. When three spec-review rounds have run, implement accepts one final spec body version after the newest qualifying review without a new review, subject to the remaining preconditions; a later body version needs a current review.
    *Refuted by:* The first changed body alone causes refusal after three rounds, a later body version passes without a current review, or a changed body passes before three rounds.
 
+## Boundary
+
+A spec review starts only when `spec.md` is committed and has no staged or unstaged changes; an older review whose fingerprint cannot be found in committed history requires the spec to be committed and reviewed again.
+
 ## Non-goals
 
 - Undoing prior implementation or automatically deciding which reviews to catch up.

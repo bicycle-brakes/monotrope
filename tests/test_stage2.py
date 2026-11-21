@@ -9206,6 +9206,37 @@ def test_final_draft_after_three_spec_review_rounds(
         assert world.calls() == []
 
 
+@pytest.mark.parametrize("state", ["unstaged", "staged", "staged-reverted", "untracked"])
+def test_spec_review_requires_committed_spec_and_explains_unknown_fingerprint(
+    world: World, state: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F-4: reviews start from committed files, and old unknown fingerprints have a remedy."""
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text(encoding="utf-8")
+    spec.write_text(original + "\nReviewed but uncommitted.\n", encoding="utf-8")
+    if state == "untracked":
+        git(world.root, "rm", "--cached", "--", "plans/changes/demo/spec.md")
+    elif state in ("staged", "staged-reverted"):
+        git(world.root, "add", "--", "plans/changes/demo/spec.md")
+        if state == "staged-reverted":
+            spec.write_text(original, encoding="utf-8")
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    assert "plans/changes/demo/spec.md" in error and "commit the spec, then rerun" in error
+    assert world.calls() == []
+
+    # Simulate a review created by an older runner over bytes absent from history.
+    spec.write_text(original + "\nPreviously reviewed dirty body.\n", encoding="utf-8")
+    seed_review_rounds(world, 3)
+    git(world.root, "reset", "--quiet", "HEAD", "--", "plans/changes/demo/spec.md")
+    spec.write_text(original + "\nFinal draft.\n", encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem
+    assert "fingerprint" in admission.review_problem and "no commit" in admission.review_problem
+    assert "commit the spec, then rerun" in admission.review_problem
+
+
 def test_final_draft_with_uncommitted_only_spec(world: World) -> None:
     # L4-1: after three rounds the single-edit admission (criterion 19) also holds for a spec never committed.
     folder = world.root / "plans" / "changes" / "fresh"

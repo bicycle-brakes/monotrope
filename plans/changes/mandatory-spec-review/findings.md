@@ -1090,7 +1090,7 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-4 | MAJOR | SPEC | base | `scripts/stage2.py:4015` (`body_edits_after_review`) | Wenn nach drei Review-Runden eine bereits früher commitete Spezifikation mit uncommitteten Änderungen geprüft und danach genau einmal für den finalen Entwurf geändert wird, verweigert der Runner die Implementierung. Er findet den Fingerabdruck der geprüften Fassung nicht in der Git-Historie und kann die eine erlaubte Änderung deshalb nicht zählen. Diese erste geänderte Fassung muss zugelassen werden. [Kriterium 19] | Codex | taken — criterion 19, re-decided by the orchestrator 2026-11-21 [DETAIL] after Codex attempt 1 showed a fingerprint alone cannot count later edits: close it at the choke point instead — `spec-review` refuses to start while `spec.md` differs from HEAD (uncommitted or staged changes), naming the file and the remedy 'commit the spec, then rerun', so every reviewed body is a commit `body_edits_after_review` can count; an existing review whose fingerprint is in no commit keeps today's refusal, which must name that case and the same remedy; add the Boundary sentence to spec.md and regression tests for both; plan.md needs no new version record | — |
+| F-4 | MAJOR | SPEC | base | `scripts/stage2.py:4015` (`body_edits_after_review`) | Wenn nach drei Review-Runden eine bereits früher commitete Spezifikation mit uncommitteten Änderungen geprüft und danach genau einmal für den finalen Entwurf geändert wird, verweigert der Runner die Implementierung. Er findet den Fingerabdruck der geprüften Fassung nicht in der Git-Historie und kann die eine erlaubte Änderung deshalb nicht zählen. Diese erste geänderte Fassung muss zugelassen werden. [Kriterium 19] | Codex | fixed — tests/test_stage2.py::test_spec_review_requires_committed_spec_and_explains_unknown_fingerprint | — |
 
 Phase 6 verdict: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8, 2026-11-21
 Reviewer session: codex 01a1fdb9-3073-7871-adfd-16a1354fe7e8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -1153,3 +1153,7 @@ Stage-2 call, 2026-11-21: repair · attempt 2 · route codex-repair · endpoint 
 Stage-2 call, 2026-11-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1153 files, 5097 commits, 12 rules.
 
 Runner restoration, 2026-11-21: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+Stage-2 call, 2026-11-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5099 commits, 12 rules.
+
+Runner restoration, 2026-11-21: repair · attempt 1 · route codex — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged

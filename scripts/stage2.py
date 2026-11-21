@@ -4210,7 +4210,12 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
     if stale is not None:
         edits = body_edits_after_review(root, change, newest, disk) if rounds >= 3 else None
         if edits is None or edits > 1:
-            if can_run:
+            if edits is None and rounds >= 3 and newest.fingerprint is not None:
+                remedy = (
+                    f"the reviewed fingerprint is in no commit for plans/changes/{change}/spec.md; "
+                    "commit the spec, then rerun spec-review."
+                )
+            elif can_run:
                 remedy = (
                     f"Run `python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
                     "spec-review rounds have run)."
@@ -4398,6 +4403,15 @@ def spec_review(root: Path, change: str) -> None:
     when decisions.md records the maintainer's authorization.
     """
     ctx = preflight(root, change, OPUS)
+    spec_path = f"plans/changes/{change}/spec.md"
+    tracked_at_head = _git_bytes(root, "ls-tree", "--name-only", "HEAD", "--", spec_path)
+    staged = _git_bytes(root, "diff", "--cached", "--name-only", "HEAD", "--", spec_path)
+    try:
+        disk = (root / spec_path).read_bytes()
+    except OSError as error:
+        raise Refused(f"{spec_path} cannot be read ({error}).") from error
+    if not tracked_at_head or staged or disk != _git_bytes(root, "show", f"HEAD:{spec_path}"):
+        raise Refused(f"{spec_path} differs from HEAD; commit the spec, then rerun spec-review.")
     config = spec_review_call_config(root)
     try:
         findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
