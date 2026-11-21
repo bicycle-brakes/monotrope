@@ -28,10 +28,10 @@ On 2026-11-19 and 2026-11-20, the process-creation signal test reported a surviv
 
 ## Acceptance criteria
 
-1. When the reported failure's cause is established, a controlled regression reproduces that cause against the faulty pre-fix production code or test helper and records the observed ordering and baseline failure.
-   *Refuted by:* the test merely sends a signal without establishing the relevant ordering, or its recorded pre-fix result passes or fails for an unrelated reason.
-2. When cancellation arrives while a timed launch is creating a child on the main thread or a worker, the launched child is stopped and its leader reaped before that launch returns or raises.
-   *Refuted by:* a forced interruption leaves the child running or unreaped after its own launch finishes, for SIGINT or SIGTERM on either thread; a worker must be joined before its verdict.
+1. When the process-creation failures' cause is established, a controlled regression for each recorded worker parametrization, SIGINT (run 44591912821) and SIGTERM (PR #418), reproduces the cause against the faulty pre-fix production code or test helper and records the ordering and baseline failure of each case.
+   *Refuted by:* either case lacks its own controlled pre-fix failure, does not establish the relevant ordering, or fails for an unrelated reason.
+2. When cancellation arrives while a timed launch is creating a child on the main thread or a worker, cancellation stops the child and reaps its leader before the launch returns or raises, before the child's natural exit or the launch's timeout, and, for a worker, within two seconds after `Popen` returns once the run is cancelled.
+   *Refuted by:* for SIGINT or SIGTERM on either thread, the child survives cancellation, exits naturally or times out, is unreaped when its launch finishes, or, on a worker, is still running or unreaped two seconds after `Popen` returns after cancellation; the worker is joined before its verdict.
 3. When cancellation stops the runner, a timed launch attempted afterwards starts no program.
    *Refuted by:* a late launch creates its marker or child after cancellation.
 4. When an interrupted timed launch has a running descendant in its process group, cancellation stops that descendant and reaps the group leader.
@@ -44,8 +44,8 @@ On 2026-11-19 and 2026-11-20, the process-creation signal test reported a surviv
    *Refuted by:* the existing flaky test remains uncontrolled, a passing result requires a longer watchdog, an added timing delay or a retry, or succeeds through the child's natural exit.
 8. If a sibling failure has a different established cause, a `Follow-up for the orchestrator` section in the change's `findings.md` attempt record names the cause, evidence and test IDs.
    *Refuted by:* an evidenced different cause has no such handoff or lacks any of those details.
-9. If the cause cannot be established and reproduced within the two-hour appetite, the attempt stops and reports the interleavings tried and their results to the orchestrator without shipping a speculative fix or test change.
-   *Refuted by:* the attempt continues past the limit, ships a speculative change, or omits the attempted interleavings or results from its report.
+9. If the cause cannot be established and reproduced within the two-hour appetite, the attempt stops without committing a speculative fix or test change and records the interleavings tried, the result of each, and what was not tried under `Stopped without a cause` in the `findings.md` attempt record for the orchestrator.
+   *Refuted by:* the attempt continues past the limit, commits a speculative change, or omits the named section or any of its three contents.
 10. If the established cause is solely in the test's cleanup or liveness verdict, the evidence records why production cleanup is safe for the observed ordering.
     *Refuted by:* the test alone is changed without evidence of production cleanup and reaping for that ordering.
 
@@ -61,7 +61,8 @@ Tracker and held paths are owned by the orchestrator; the implementation attempt
 
 ## Definition of Done
 
-- For a completed fix, the controlled pre-fix failure and post-fix result, cause, sibling assessment and verification-runner assessment are recorded in the pull request with the tested commits. If the appetite expires first, criterion 9 governs the stopped attempt instead.
+- For a completed fix, the controlled pre-fix failure and post-fix result, cause, sibling assessment and verification-runner assessment are recorded in the pull request with the tested commits. If the cause is not established and reproduced by the appetite limit, criterion 9 governs the stopped attempt instead.
+- If the cause is established and reproduced but the fix is unfinished at the appetite limit, the attempt stops and the findings attempt record gives the evidence, work completed and remaining, without committing an unverified fix.
 - `make verify` green; no ADR or external document changes are required.
 - Protected areas untouched and non-goals unbuilt, shown by the pull request file list.
 - The pull request closes bead coding-harness-oag7 and its last commit carries `Closes-Bead: coding-harness-oag7`.
@@ -73,3 +74,7 @@ Tracker and held paths are owned by the orchestrator; the implementation attempt
 [DETAIL] The reproduction must control the ordering while keeping an independent release path for any thread blocked by the signal handler; this prevents the test barrier itself from deadlocking the run.
 
 [DETAIL] The cancellation guarantee is per launch call, not the return of the runner's main function; joining the worker before judging its child measures that contract.
+
+[DETAIL] Worker cancellation has a two-second bound after `Popen` returns once cancellation has occurred; this distinguishes cancellation cleanup from a later natural exit or launch timeout (phase-2a finding S-7).
+
+[DETAIL] If the appetite expires after reproduction but before a finished fix, the attempt reports its evidence and remaining work without committing an unverified fix; this makes the stop reviewable without treating a reproduced cause as an absent one.
