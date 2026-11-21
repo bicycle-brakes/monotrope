@@ -8313,7 +8313,7 @@ def opus_review_block(
     legacy block; any other string plants a fingerprint the current body cannot match.
     """
     mark = current_fingerprint(world) if fingerprint == "current" else fingerprint
-    parts = []
+    parts = [f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}"]
     if mark is not None:
         parts.append(f"Spec fingerprint: {mark}")
     parts.append(review_table(count, "Opus 5.5"))
@@ -8334,19 +8334,27 @@ def clean_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
     body = stage2.answer_block([], "No finding.", "Opus")
     return (
         f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
-        f"Spec fingerprint: {current_fingerprint(world)}\n\n{body}"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{body}"
     )
 
 
 def fallback_review_block(world: World, model: str, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
     """A seeded fallback review: its audit line names the Pi endpoint and the model declared at write."""
-    parts = [f"Spec fingerprint: {current_fingerprint(world)}", review_table(count, model)]
+    parts = [
+        f"Spec fingerprint: {current_fingerprint(world)}",
+        f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}",
+        review_table(count, model),
+    ]
     return f"{review_audit_line(model, 'opencode-go')}\n## Phase 2a — fallback {model}, {day}\n\n" + "\n\n".join(parts)
 
 
 def opus_recheck_block(world: World, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
     """The Opus re-check of a fallback review, headed as the same round (spec criterion 17)."""
-    parts = [f"Spec fingerprint: {current_fingerprint(world)}", review_table(count, "Opus 5.5")]
+    parts = [
+        f"Spec fingerprint: {current_fingerprint(world)}",
+        f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}",
+        review_table(count, "Opus 5.5"),
+    ]
     heading = f"## Phase 2a — Opus 5.5 ({stage2.RECHECK_MARKER}), {day}"
     return f"{review_audit_line(stage2.OPUS[1])}\n{heading}\n\n" + "\n\n".join(parts)
 
@@ -8369,7 +8377,7 @@ def ambiguity_review_block(world: World, *, status: str = "open", day: str = FIX
     table = stage2.render_table(stage2.ROW_COLUMNS, table_rows)
     return (
         f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
-        f"Spec fingerprint: {current_fingerprint(world)}\n\n{table}"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{table}"
     )
 
 
@@ -8378,7 +8386,7 @@ def unreadable_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str
     table = review_table(1, "Opus 5.5") + "\n| only | three | cells |"
     return (
         f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
-        f"Spec fingerprint: {current_fingerprint(world)}\n\n{table}"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{table}"
     )
 
 
@@ -8766,6 +8774,7 @@ def test_spec_review_fingerprints_reviewed_bytes(world: World) -> None:
     assert world.run("spec-review") == 0
     fingerprint = current_fingerprint(world)
     assert f"Spec fingerprint: {fingerprint}" in world.text()
+    assert f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}" in world.text()
     prompt = world.calls("claude")[0]["prompt_file"]
     assert "## The spec body under review" in prompt
     assert "# Spec" in prompt
@@ -9276,11 +9285,11 @@ def test_final_draft_with_uncommitted_only_spec(world: World) -> None:
     blocks = [opus_review_block(world, 1, fingerprint=mark) for _ in range(3)]
     (folder / "findings.md").write_text("# Findings — fresh\n\n" + "\n\n".join(blocks) + "\n", encoding="utf-8")
     assert stage2.spec_body_versions(world.root, "fresh") == [], "the spec must live on disk only"
-    assert stage2.review_admission(world.root, "fresh").review_problem is None
+    assert stage2.review_admission(world.root, "fresh").review_problem is not None
     spec.write_text(spec.read_text(encoding="utf-8") + "\nThe final draft.\n", encoding="utf-8")
     admission = stage2.review_admission(world.root, "fresh")
     assert admission.rounds == 3
-    assert admission.review_problem is None, admission.review_problem
+    assert admission.review_problem is not None and "commit the spec" in admission.review_problem
 
 
 def test_inventory_continues_after_measurement_error(
@@ -30961,7 +30970,7 @@ def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: p
     ]
     monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
     assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
-    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 2
+    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 1
 
 
 def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31001,3 +31010,51 @@ def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatc
     assert not commands.of("gate")
     assert "deferred to full check" in scope
     assert all(gate["id"] in scope for gate in protected)
+
+
+def test_review_commit_counts_return_to_prior_body(world: World) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text(encoding="utf-8")
+    blocks = [opus_review_block(world) for _ in range(3)]
+    world.write_findings(*blocks)
+    for suffix in ("\nB\n", "", "\nC\n"):
+        spec.write_text(original + suffix, encoding="utf-8")
+        git(world.root, "add", "--", str(spec.relative_to(world.root)))
+        git(world.root, "commit", "--quiet", "-m", "change spec body")
+        if not suffix:
+            assert stage2.review_admission(world.root, "demo").review_problem is not None
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "one spec body edit" in problem
+
+
+def test_review_commit_required_for_uncommitted_spec(world: World) -> None:
+    folder = world.root / "plans/changes/fresh"
+    folder.mkdir()
+    (folder / "research.md").write_text("---\nclass: bounded\n---\n", encoding="utf-8")
+    spec = folder / "spec.md"
+    spec.write_text("---\nclass: bounded\n---\n\nReviewed.\n", encoding="utf-8")
+    mark = stage2.spec_body_fingerprint(spec)
+    (folder / "findings.md").write_text(
+        "\n\n".join(opus_review_block(world, fingerprint=mark) for _ in range(3)), encoding="utf-8"
+    )
+    spec.write_text(spec.read_text() + "Changed.\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "fresh").review_problem
+    assert problem is not None and "commit the spec" in problem and "spec-review" in problem
+
+
+def test_workflow_describes_cheap_gate_failures() -> None:
+    text = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
+    assert "other unprotected gates still run" in text
+    assert "no protected gate starts" in text
+
+
+@pytest.mark.parametrize("stamp", ["missing", "unknown"])
+def test_review_refuses_missing_or_unknown_commit(world: World, stamp: str) -> None:
+    block = opus_review_block(world)
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    block = block.replace(
+        f"Spec review commit: {head}", "" if stamp == "missing" else f"Spec review commit: {'0' * 40}"
+    )
+    world.write_findings(block)
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "commit the spec" in problem and "spec-review" in problem

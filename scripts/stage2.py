@@ -3702,6 +3702,7 @@ LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 19)
 # and a body edit always does.
 FRONT_MATTER = re.compile(rb"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
 FINGERPRINT_LINE = re.compile(r"^Spec fingerprint: (sha256:[0-9a-f]{64})$", re.M)
+REVIEW_COMMIT_LINE = re.compile(r"^Spec review commit: ([0-9a-f]{40})$", re.M)
 PHASE2A_DAY = re.compile(r"^## Phase 2a — .+, (\d{4}-\d{2}-\d{2})$")
 # The runner call line a qualifying block carries directly above its heading (spec terms).
 SPEC_AUDIT_LINE = re.compile(
@@ -3803,6 +3804,7 @@ class SpecReviewBlock:
     rows: list[dict[str, str]]
     rest: str
     fingerprint: str | None
+    commit: str | None
     table_readable: bool
     clean: bool
     bad_row: str | None = None
@@ -3895,6 +3897,7 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
         body_text = "\n".join(body).strip()
         rows, bad_row = _stored_rows(body_text)
         found = FINGERPRINT_LINE.search(body_text)
+        commit = REVIEW_COMMIT_LINE.search(body_text)
         clean = (
             not rows
             and NOT_ROWS_NOTE in body_text
@@ -3907,6 +3910,7 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
                 rows=rows,
                 rest=body_text,
                 fingerprint=found.group(1) if found else None,
+                commit=commit.group(1) if commit else None,
                 table_readable=bad_row is None,
                 clean=clean,
                 bad_row=bad_row,
@@ -3980,33 +3984,26 @@ def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
 
 
 def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, disk: bytes) -> int | None:
-    """How many spec body versions followed the reviewed one, or None when the reviewed body is unknown.
-
-    A fingerprinted block is located by its digest among the committed bodies; an undigested
-    legacy block counts the versions committed on a UTC day after its heading day (same-day edits
-    cannot be told apart). An uncommitted body difference counts as one more version.
-    A spec with no committed version has two bodies only, the reviewed one and the one on disk: a
-    fingerprinted block then counts one edit when they differ and none when they agree (review row L4-1).
-    """
-    versions = spec_body_versions(root, change)
-    dirty = 1 if not versions or versions[-1][1] != disk else 0
-    if block.fingerprint is not None:
-        if not versions:
-            return 0 if "sha256:" + hashlib.sha256(disk).hexdigest() == block.fingerprint else 1
-        matches = [
-            index
-            for index, (_, body) in enumerate(versions)
-            if "sha256:" + hashlib.sha256(body).hexdigest() == block.fingerprint
-        ]
-        if not matches:
-            return None
-        return len(versions) - 1 - matches[-1] + dirty
-    try:
-        written = dt.date.fromisoformat(block.heading_day or "")
-    except ValueError:
+    """Count body changes after the reviewed commit, including an uncommitted final draft."""
+    if block.commit is None:
         return None
-    later = sum(1 for stamp, _ in versions if dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written)
-    return later + dirty
+    path = f"plans/changes/{change}/spec.md"
+    try:
+        ancestor = run_git(root, "merge-base", "--is-ancestor", block.commit, "HEAD", allow={1: ""})
+        if ancestor.returncode != 0:
+            return None
+        body = spec_body_of(_git_bytes(root, "show", f"{block.commit}:{path}"))
+        if block.fingerprint and "sha256:" + hashlib.sha256(body).hexdigest() != block.fingerprint:
+            return None
+        commits = _git_output(root, "rev-list", "--reverse", f"{block.commit}..HEAD", "--", path).splitlines()
+        edits = 0
+        for commit in commits:
+            next_body = spec_body_of(_git_bytes(root, "show", f"{commit}:{path}"))
+            edits += next_body != body
+            body = next_body
+        return edits + (body != disk)
+    except Refused:
+        return None
 
 
 def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None:
@@ -4162,7 +4159,18 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
         )
     newest = kept[-1]
     rounds = review_rounds(kept)
+    edits = body_edits_after_review(root, change, newest, disk)
+    if edits is None:
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            rounds=rounds,
+            review_problem="the spec review is stale: its reviewed fingerprint or commit is in no commit in this history; "
+            "commit the spec, then rerun spec-review.",
+        )
     stale = review_staleness(root, change, newest, current)
+    if edits > 1 and stale is None:
+        stale = "the spec body changed more than once since the reviewed commit"
     recheck = stale is None and newest.is_fallback
     can_run = review_round_open(root, change, rounds, recheck)
     ambiguity = next(
@@ -4207,7 +4215,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
                 ),
             )
     if stale is not None:
-        edits = body_edits_after_review(root, change, newest, disk) if rounds >= 3 else None
+        edits = edits if rounds >= 3 else None
         if edits is None or edits > 1:
             if edits is None and rounds >= 3 and newest.fingerprint is not None:
                 remedy = (
@@ -4326,6 +4334,7 @@ def write_review_block(
     result: object,
     heading: str,
     fingerprint: str | None,
+    commit: str,
     rows: list[list[str]],
     answer: str,
     reviewer: str,
@@ -4340,6 +4349,7 @@ def write_review_block(
     parts = [f"{call_line('spec-review', endpoint, result)}\n{heading}"]
     if fingerprint is not None:
         parts.append(f"Spec fingerprint: {fingerprint}")
+    parts.append(f"Spec review commit: {commit}")
     parts.append(answer_block(rows, answer, reviewer))
     append(ctx.findings, "\n\n".join(parts))
 
@@ -4359,7 +4369,7 @@ def require_committed_review_spec(root: Path, change: str) -> None:
 
 def run_fallback_review(
     ctx: Context, config: dict, opus_failure: CallFailed
-) -> tuple[bytes, list[list[str]], str, tuple[str, str, str | None], object]:
+) -> tuple[bytes, str, list[list[str]], str, tuple[str, str, str | None], object]:
     """The declared fallback review through Pi, after the Opus route failed twice (spec criteria 13-15).
 
     The leak check runs first and a BLOCK still refuses - no fallback call starts. The
@@ -4380,7 +4390,11 @@ def run_fallback_review(
     problem = terms_problem(endpoint_entry(ctx.root), endpoint[1])
     if problem is not None:
         raise CallFailed(f"the fallback review is not admitted on its declared terms: {problem}")
+    require_committed_review_spec(ctx.root, ctx.change)
+    commit = _git_output(ctx.root, "rev-parse", "HEAD").strip()
     body = spec_body_bytes(ctx.folder / "spec.md")
+    if body != spec_body_of(_git_bytes(ctx.root, "show", f"{commit}:plans/changes/{ctx.change}/spec.md")):
+        raise CallFailed("the spec changed while the review snapshot was read.")
     prompt = spec_review_prompt(ctx.root, ctx.change, body)
     result = checked_prompt(ctx, endpoint, prompt)
     require_pi()
@@ -4406,7 +4420,7 @@ def run_fallback_review(
         raise CallFailed(
             "the spec body changed during the fallback review; no block is written for bytes the reviewer did not read."
         )
-    return body, rows, answer, endpoint, result
+    return body, commit, rows, answer, endpoint, result
 
 
 def spec_review(root: Path, change: str) -> None:
@@ -4445,10 +4459,13 @@ def spec_review(root: Path, change: str) -> None:
             "the fourth; otherwise the change is re-sliced."
         )
     spec = ctx.folder / "spec.md"
+    commit = _git_output(root, "rev-parse", "HEAD").strip()
     try:
         body = spec_body_bytes(spec)
     except (OSError, UnicodeDecodeError) as error:
         raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
+    if body != spec_body_of(_git_bytes(root, "show", f"{commit}:plans/changes/{change}/spec.md")):
+        raise CallFailed("the spec changed while the review snapshot was read.")
     prompt = spec_review_prompt(root, change, body)
     fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
     limit = f"the spec review's limit of {config['timeout_seconds'] // 60:g} minutes"
@@ -4479,7 +4496,9 @@ def spec_review(root: Path, change: str) -> None:
             rows = readable_review(answer)
             failure = None
         except CallFailed as retry_error:
-            body, rows, answer, fallback_endpoint, fallback_result = run_fallback_review(ctx, config, retry_error)
+            body, commit, rows, answer, fallback_endpoint, fallback_result = run_fallback_review(
+                ctx, config, retry_error
+            )
             fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
             marker = f" ({RECHECK_MARKER})" if recheck else ""
             heading = f"## Phase 2a — fallback {config['fallback_model']}{marker}, {today()}"
@@ -4489,6 +4508,7 @@ def spec_review(root: Path, change: str) -> None:
                 fallback_result,
                 heading,
                 fingerprint,
+                commit,
                 rows,
                 answer,
                 str(config["fallback_model"]),
@@ -4502,7 +4522,7 @@ def spec_review(root: Path, change: str) -> None:
     heading = f"## Phase 2a — Opus 5.5, {today()}"
     if recheck:
         heading = f"## Phase 2a — Opus 5.5 ({RECHECK_MARKER}), {today()}"
-    write_review_block(ctx, OPUS, result, heading, fingerprint, rows, answer, "Opus")
+    write_review_block(ctx, OPUS, result, heading, fingerprint, commit, rows, answer, "Opus")
     print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
 
 
