@@ -201,6 +201,7 @@ def claude_finder_output(stdout: str) -> tuple[str, dict | None, dict | None]:
             (stdout or "").strip(),
             object_pairs_hook=stage2_research_map._json_object,
             parse_constant=stage2_research_map._bad_json_constant,
+            parse_float=stage2_research_map._finite_json_float,
         )
     except (ValueError, RecursionError):
         envelope = None

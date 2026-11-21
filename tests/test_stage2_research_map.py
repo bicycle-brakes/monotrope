@@ -272,6 +272,17 @@ def test_map_duplicate_raw_json_keys_fail_preparation(target):
     assert failure.value.exit_code == 1
 
 
+@pytest.mark.parametrize("number", ["1e999", "-1e999", "NaN", "Infinity", "-Infinity"])
+def test_finder_nonfinite_number_rejects_whole_report(number):
+    report = json.dumps(sample(code=[finder("src/app.py"), {"path": "bad", "reference": "x", "reason": "x"}]))
+    report = report.replace('"path": "bad"', '"path": ' + number)
+    try:
+        module().filter_locator_report(report, schema())
+    except module().ResearchMapError:
+        return
+    pytest.fail("a non-finite number must invalidate the entire finder report before filtering")
+
+
 @pytest.mark.parametrize("fault", ["finder-extra", "merge-extra", "empty-reason"])
 def test_map_locator_schema_accepts_only_locators_and_meaningful_reasons(fault):
     reports, merge, frozen = overlapping()

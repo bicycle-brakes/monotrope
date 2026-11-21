@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from datetime import date
 from pathlib import PurePosixPath
@@ -88,10 +89,22 @@ def _bad_json_constant(_value):
     raise ResearchMapError("non-finite finder/merge JSON value")
 
 
+def _finite_json_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        _bad_json_constant(value)
+    return number
+
+
 def _entries(report, *, merged=False):
     if isinstance(report, str):
         try:
-            report = json.loads(report, object_pairs_hook=_json_object, parse_constant=_bad_json_constant)
+            report = json.loads(
+                report,
+                object_pairs_hook=_json_object,
+                parse_constant=_bad_json_constant,
+                parse_float=_finite_json_float,
+            )
         except (ValueError, RecursionError) as error:
             raise ResearchMapError("invalid finder/merge JSON") from error
     if not isinstance(report, dict) or set(report) != set(CATEGORIES):
@@ -290,7 +303,12 @@ def filter_locator_report(report, schema):
         raise ResearchMapError("finder filtering needs the interpreted locator schema")
     if isinstance(report, str):
         try:
-            report = json.loads(report, object_pairs_hook=_json_object, parse_constant=_bad_json_constant)
+            report = json.loads(
+                report,
+                object_pairs_hook=_json_object,
+                parse_constant=_bad_json_constant,
+                parse_float=_finite_json_float,
+            )
         except (ValueError, RecursionError) as error:
             raise ResearchMapError("invalid finder JSON") from error
     if not isinstance(report, dict) or set(report) != set(shape):
