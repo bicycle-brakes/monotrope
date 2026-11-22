@@ -40,3 +40,5 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | F-11 | MINOR | SPEC | base | spec.md:43 (AC4), spec.md:62 (Non-goals) | [AMBIGUITY] Removing "35" means rewriting the German docs-links reason. Reading A: rewrite it in English. AGENTS.md rule 1 says the repository is English, and the non-goal excludes only "unrelated" German, which this reason is not. Reading B: keep the German and delete only the count. research.md says German in touched fields (the docs-links reason) is translated in its own pull request under bead yim, "never in passing". The two readings put different text into the human-decided gate file. | Opus | rejected — the repository rule assigns translation of existing German to its own pull request, never in passing; remove the count while preserving the German reason and its meaning | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1170 files, 5294 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1170 files, 5295 commits, 12 rules.
