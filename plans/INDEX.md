@@ -639,7 +639,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
 | [`changes/red-first-root-refs/decisions.md`](changes/red-first-root-refs/decisions.md) | draft | none | 2026-11-22 | coding-harness-dk0h |
+| [`changes/red-first-root-refs/findings.md`](changes/red-first-root-refs/findings.md) | draft | none | 2026-11-22 | coding-harness-dk0h |
+| [`changes/red-first-root-refs/plan.md`](changes/red-first-root-refs/plan.md) | draft | none | 2026-11-22 | coding-harness-dk0h |
 | [`changes/red-first-root-refs/research.md`](changes/red-first-root-refs/research.md) | draft | none | 2026-11-22 | coding-harness-dk0h |
+| [`changes/red-first-root-refs/spec.md`](changes/red-first-root-refs/spec.md) | draft | none | 2026-11-22 | coding-harness-dk0h |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
