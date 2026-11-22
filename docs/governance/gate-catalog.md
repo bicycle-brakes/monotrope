@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-11-21
+updated: 2026-11-22
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
@@ -33,7 +33,7 @@ changes. `cost` is the gate's declared cost class, `seconds` or
 `minutes`: a local run executes unmarked `seconds` gates first — every one of
 them, collecting all their diagnostics even past a blocking red — and, if
 none failed blocking-red and protected work remains, takes one of the
-machine's two admission slots for that work (since 2026-11-21, `HARNESS_VERIFY_SLOTS`,
+machine's two admission slots for that work (since the two-slot change, `HARNESS_VERIFY_SLOTS`,
 default `2`; before, one admission serialised all protected checks). There it
 stops at the first red blocking gate,
 naming the gates it did not run; the hosted CI

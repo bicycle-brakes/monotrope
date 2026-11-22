@@ -26,6 +26,10 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# The single-slot implementation before the two-slot change: the merge base of
+# the change's branch. Fixed, so the "older checkout" keeps its meaning after
+# the change merges.
+PRE_CHANGE_REVISION = "3b8a1ccf"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import verify_lock  # noqa: E402
@@ -1833,17 +1837,26 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
 
     Fault this pins: an old holder or its surviving child overlapping an
     updated holder, or a later updated waiter overtaking an earlier live old
-    waiter. The older checkout runs the origin/main implementation.
+    waiter. The older checkout runs the single-slot implementation pinned at
+    the fixed pre-change revision (the merge base), never a moving ref: a ref
+    such as origin/main holds the two-slot code once this change merges.
+    Planted fault (STAGE2_PLANT_FAULT=1): the "older" checkout is the current
+    two-slot implementation, which shares the machine with the newcomer.
     """
     state = tmp_path / "state"
 
     old_script = tmp_path / "old_verify_lock.py"
-    old_revision = subprocess.run(
-        ["git", "show", "origin/main:scripts/verify_lock.py"], cwd=REPO_ROOT, capture_output=True
-    )
-    if old_revision.returncode:
-        pytest.skip("origin/main is unavailable in this checkout; the older implementation was not tested")
-    old_script.write_bytes(old_revision.stdout)
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        old_script.write_bytes((REPO_ROOT / "scripts" / "verify_lock.py").read_bytes())
+    else:
+        old_revision = subprocess.run(
+            ["git", "show", f"{PRE_CHANGE_REVISION}:scripts/verify_lock.py"], cwd=REPO_ROOT, capture_output=True
+        )
+        assert old_revision.returncode == 0, (
+            f"the pre-change revision {PRE_CHANGE_REVISION} is unavailable in this checkout "
+            "(a shallow clone needs it fetched); the older implementation was not tested"
+        )
+        old_script.write_bytes(old_revision.stdout)
 
     def old_supervised(body: str, extra: dict[str, str]) -> subprocess.Popen[bytes]:
         return subprocess.Popen(
@@ -1890,6 +1903,33 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
         assert entry.wait(timeout=60) == 0
     assert log.read_text(encoding="utf-8").split() == ["old-waiter", "updated-waiter"], (
         f"an updated waiter overtook an earlier live old waiter: {log.read_text(encoding='utf-8').split()}"
+    )
+
+
+def test_slot_setting_reaches_local_children_not_foreign_calls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2, second paragraph: local children get the setting; foreign calls never do.
+
+    Planted fault (STAGE2_PLANT_FAULT=1): the foreign-model allow-list is
+    opened to the setting, which the real check below must refuse.
+    """
+    import stage2
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
+
+    monkeypatch.setenv(verify_lock.SLOTS_ENV, "1")
+    assert verify_lock.inherit_env({}).get(verify_lock.SLOTS_ENV) == "1", (
+        "a local child did not receive the slot setting"
+    )
+    monkeypatch.delenv(verify_lock.SLOTS_ENV)
+    assert verify_lock.SLOTS_ENV not in verify_lock.inherit_env({}), "an unset setting was invented for a child"
+
+    allow = tuple(stage2.ENV_ALLOW)
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        allow = (*allow, verify_lock.SLOTS_ENV)
+    assert [name for name in allow if name.startswith("HARNESS_")] == [], (
+        "the foreign-model environment allow-list is open to HARNESS_* variables"
     )
 
 

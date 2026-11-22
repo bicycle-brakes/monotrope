@@ -598,7 +598,7 @@ holder has drained. The admission does not serialise the rest: the seconds
 gates and the runner's full-mode preparation (formatting, its cheap checks)
 run in every lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
 records why that is safe today and what it did not measure; free disk space
-is not checked (bead coding-harness-87b0). Until 2026-11-21 the admission
+is not checked (bead coding-harness-87b0). Before the two-slot change (bead coding-harness-u1ha) the admission
 held one exclusive machine-wide lock and serialised protected checks, as the
 three-lane trial had shown necessary at the time; that lock remains the
 compatibility path — an older checkout still takes it exclusively, updated

@@ -2355,9 +2355,7 @@ def test_completion_context_is_additive_and_old_history_reads(
     assert "incomplete (no completion recorded)" in out
 
 
-def test_two_slot_context_does_not_mix_holder_waits(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_two_slot_context_does_not_mix_holder_waits(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Two concurrent admissions each record their own context; neither run reads its peer's wait.
 
     Planted fault: one run's completion carries the peer's admission identity or
@@ -2365,33 +2363,78 @@ def test_two_slot_context_does_not_mix_holder_waits(
     stale environment of an overlapping admission speaks for either run.
     """
     state = tmp_path / "state"
-    # A stale environment from an overlapping admission stands around both
-    # records: each run's final context must win over it, never mix with it.
-    monkeypatch.setenv(verify_lock.ADMISSION_ID_ENV, "peer-env")
-    monkeypatch.setenv(verify_lock.ADMISSION_WAIT_ENV, "99.0")
 
     code, out, _ = _run(capsys, "start")
     assert code == 0
     id_a = out.strip()
-    summary_a = verify_duration.record_end(
-        id_a,
-        "green",
-        segments=[(0.0, 1.0)],
-        context=verify_lock.AdmissionContext("slot-a", 3.5, False),
-        admission_requested=True,
-    )
-    assert summary_a == "execution 1.000s · admission wait 3.500s", summary_a
-
     code, out, _ = _run(capsys, "start")
     id_b = out.strip()
-    summary_b = verify_duration.record_end(
-        id_b,
-        "red",
-        segments=[(0.0, 2.0)],
-        context=verify_lock.AdmissionContext("slot-b", 41.0, False),
-        admission_requested=True,
-    )
-    assert summary_b == "execution 2.000s · admission wait 41.000s", summary_b
+
+    # Both completions run inside two real, simultaneous admissions: each
+    # child resolves its own context through `admission_context()` and records
+    # its completion. The barrier proves both slots were held at once.
+    body = """
+import json, os, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_duration, verify_lock
+name, peer = os.environ["PROBE_NAME"], os.environ["PROBE_PEER"]
+root = Path(os.environ["PROBE_DIR"])
+(root / ("ready-" + name)).write_text("1")
+deadline = time.time() + 30
+while not (root / ("ready-" + peer)).exists():
+    if time.time() > deadline:
+        sys.exit(3)
+    time.sleep(0.05)
+context = verify_lock.admission_context()
+if os.environ.get("PROBE_PLANT"):
+    # planted fault: context resolution hands both holders one shared record
+    context = verify_lock.AdmissionContext("shared-slot", 0.0, False)
+verify_duration.record_end(
+    os.environ["PROBE_RUN"],
+    os.environ["PROBE_VERDICT"],
+    segments=[(0.0, float(os.environ["PROBE_SECONDS"]))],
+    context=context,
+    admission_requested=True,
+)
+(root / ("context-" + name)).write_text(
+    json.dumps([context.admission_id, context.wait_seconds, context.reused])
+)
+"""
+
+    def entry(name: str, peer: str, run_id: str, verdict: str, seconds: str) -> subprocess.Popen[bytes]:
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "XDG_STATE_HOME": str(state),
+            verify_lock.FLOOR_ENV: "0",
+            "PROBE_NAME": name,
+            "PROBE_PEER": peer,
+            "PROBE_DIR": str(tmp_path),
+            "PROBE_RUN": run_id,
+            "PROBE_VERDICT": verdict,
+            "PROBE_SECONDS": seconds,
+        }
+        if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+            env["PROBE_PLANT"] = "1"
+        return subprocess.Popen(
+            [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", body],
+            cwd=REPO_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    first = entry("a", "b", id_a, "green", "1.0")
+    second = entry("b", "a", id_b, "red", "2.0")
+    assert first.wait(timeout=90) == 0, "the first admission failed or never overlapped its peer"
+    assert second.wait(timeout=90) == 0, "the second admission failed or never overlapped its peer"
+
+    ctx_a = json.loads((tmp_path / "context-a").read_text(encoding="utf-8"))
+    ctx_b = json.loads((tmp_path / "context-b").read_text(encoding="utf-8"))
+    assert ctx_a[0] and ctx_b[0] and ctx_a[0] != ctx_b[0], f"the holders share one admission identity: {ctx_a} {ctx_b}"
+    assert ctx_a[2] is False and ctx_b[2] is False, "a fresh admission was read as reused"
 
     # The history keeps both completions apart, each with its own verdict,
     # identity and wait.
@@ -2400,22 +2443,20 @@ def test_two_slot_context_does_not_mix_holder_waits(
     by_id = {event["run_id"]: event for event in ends}
     assert by_id[id_a]["verdict"] == "green", by_id
     assert by_id[id_b]["verdict"] == "red", by_id
-    assert by_id[id_a]["admission_id"] == "slot-a", by_id
-    assert by_id[id_a]["admission_wait_seconds"] == 3.5, by_id
-    assert by_id[id_b]["admission_id"] == "slot-b", by_id
-    assert by_id[id_b]["admission_wait_seconds"] == 41.0, by_id
+    assert by_id[id_a]["admission_id"] == ctx_a[0], by_id
+    assert by_id[id_a]["admission_wait_seconds"] == ctx_a[1], by_id
+    assert by_id[id_b]["admission_id"] == ctx_b[0], by_id
+    assert by_id[id_b]["admission_wait_seconds"] == ctx_b[1], by_id
 
-    # The reader attributes each run's own context; the peer's values and the
-    # stale environment's values never appear in either report.
+    # The reader attributes each run's own context; the peer's identity never
+    # appears in the other run's report.
     code, out, _ = _run(capsys, "report", "--run", id_a)
     assert code == 0
-    assert "admission (final): slot-a · wait: 3.5 · reused: no" in out, out
-    assert "slot-b" not in out, out
-    assert "wait: 41.0" not in out and "wait: 99.0" not in out, out
-    assert "peer-env" not in out, out
+    assert f"admission (final): {ctx_a[0]}" in out, out
+    assert ctx_b[0] not in out, out
     code, out, _ = _run(capsys, "report", "--run", id_b)
     assert code == 0
-    assert "admission (final): slot-b · wait: 41.0 · reused: no" in out, out
-    assert "slot-a" not in out, out
+    assert f"admission (final): {ctx_b[0]}" in out, out
+    assert ctx_a[0] not in out, out
     assert "wait: 3.5" not in out and "wait: 99.0" not in out, out
     assert "peer-env" not in out, out

@@ -77,6 +77,10 @@ make verify
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-11-22
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile.
+
 ## Time used
 
 2026-11-21 11:04:34–11:08:05 UTC, 211 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -88,3 +92,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-11-21 17:47:46–18:07:05 UTC, 1159 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure · measured by the runner
 2026-11-22 03:20:56–03:39:17 UTC, 1101 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-22 03:39:26–03:57:03 UTC, 1057 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/verify_lock.py` is shared execution infrastructure · measured by the runner
+2026-11-22 15:29:23–15:36:44 UTC, 441 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_check_criterion_ledger.py`, `tests/test_check_interview_minimums.py`, `tests/test_check_question_context.py`, `tests/test_explorer_reviewer_agents.py`, `tests/test_frontmatter_current.py`, `tests/test_gate_catalog.py`, `tests/test_kit.py`, `tests/test_leakcheck.py`, `tests/test_model_endpoints.py`, `tests/test_outcome_test.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_templates.py`, `tests/test_verify_duration.py`, `tests/test_verify_lock.py`, `tests/test_workflow_entry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
