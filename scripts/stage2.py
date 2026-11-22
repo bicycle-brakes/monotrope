@@ -9751,7 +9751,11 @@ def without_held_answer_lines(answer: str, held_ids: list[str]) -> str:
     for line in answer.splitlines():
         body = re.sub(r"^[-*+]\s+", "", line.strip())
         ident, sep, _rest = body.partition(":")
-        if sep and ident.strip().strip("*`").strip() in held:
+        left = ident.strip().strip("*`").strip()
+        # An annotated mention (`L1-1 (held)`, `L1-1 — held`) names the held row as well: the filter
+        # matches the id as its first token, the way the parser reads a fixed claim.
+        lead = re.match(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", left)
+        if sep and lead and lead.group(0) in held and not re.match(r"[\w.]", left[lead.end() :]):
             continue
         kept.append(line)
     return "\n".join(kept)
@@ -11807,13 +11811,6 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
-    # The waiting, origin and legacy refusals above bind every selected row before any row is
-    # classified or handed off (spec, criterion 9).
-    hand = repair_hand_rows(root, change, taken)
-    hand_ids = [row[0] for _, row, _ in hand]
-    handed = set(hand_ids)
-    eligible = [(place, row) for place, row in taken if row[0] not in handed]
-    ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
@@ -11825,9 +11822,44 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
             "of marking it fixed."
         )
+    # The waiting, origin and legacy refusals above bind every selected row before any row is
+    # classified or handed off (spec, criterion 9).
+    hand = repair_hand_rows(root, change, taken)
+    hand_ids = [row[0] for _, row, _ in hand]
+    handed = set(hand_ids)
+    eligible = [(place, row) for place, row in taken if row[0] not in handed]
+    ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+
+    def write_hand_listing(producer: str) -> None:
+        # One dated listing, appended once before the attempt snapshot: a retry and a checkpoint
+        # rollback put findings.md back to bytes that already carry it, so neither duplicates nor
+        # loses it (spec, criteria 5 and 10).
+        if not ctx.findings.exists():
+            ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+        append(ctx.findings, hand_step_listing(hand, today()))
+        for _, row, held_paths in hand:
+            print(f"repair: hand step {row[0]} — held path {', '.join(held_paths)} — {HAND_STEP_REASON}")
+
+    if hand and not eligible:
+        # Every selected row is held: no model call and no attempt, so no time heading is needed.
+        # The existing checkpoint commits the listing after preflight, with its existing allowances
+        # for this change's findings and derived leftovers and its refusal of other dirty work
+        # (spec, criteria 4, 11 and 16), and the run exits 0.
+        write_hand_listing("stage2-runner")
+        checkpoint(
+            root,
+            change,
+            baseline,
+            None,
+            ignored_before,
+            message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
+            keep=allowed,
+        )
+        print("repair: hand steps committed for the orchestrator · no model call")
+        return
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
     key = None
     if stage2_off is None:
@@ -11839,31 +11871,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     else:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     if hand:
-        # One dated listing, appended once before the attempt snapshot: a retry and a checkpoint
-        # rollback put findings.md back to bytes that already carry it, so neither duplicates nor
-        # loses it (spec, criteria 5 and 10).
-        if not ctx.findings.exists():
-            producer = producer_for(routes[0][0]) if eligible else "stage2-runner"
-            ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
-        append(ctx.findings, hand_step_listing(hand, today()))
-        for _, row, held_paths in hand:
-            print(f"repair: hand step {row[0]} — held path {', '.join(held_paths)} — {HAND_STEP_REASON}")
-        if not eligible:
-            # Every selected row is held: no model call. The existing checkpoint commits the
-            # listing after preflight, with its existing allowances for this change's findings and
-            # derived leftovers and its refusal of other dirty work (spec, criteria 4, 11 and 16),
-            # and the run exits 0.
-            checkpoint(
-                root,
-                change,
-                baseline,
-                key,
-                ignored_before,
-                message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
-                keep=allowed,
-            )
-            print("repair: hand steps committed for the orchestrator · no model call")
-            return
+        write_hand_listing(producer_for(routes[0][0]))
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
     rows_before = findings_rows(current)

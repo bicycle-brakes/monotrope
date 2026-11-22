@@ -11953,6 +11953,49 @@ def test_repair_ignores_answer_lines_for_held_rows(world: World) -> None:
     assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
 
 
+@pytest.mark.parametrize("annotation", ["L1-1 (held)", "L1-1 — held", "`L1-1` held note", "- **L1-1** (hand step)"])
+def test_repair_ignores_annotated_answer_lines_for_held_rows(world: World, annotation: str) -> None:
+    """Criterion 17, L2-1. Planted fault: an annotated mention of a held row fails the attempt."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer=f"L1-2: fixed — tests/test_fix.py::test_fix\n{annotation}: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "taken — test_a"
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_repair_legacy_refusal_precedes_hand_classification(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 9, L2-2. Planted fault: classification runs before the legacy refusal and its
+    provenance read raises first, replacing the booking instruction."""
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a; fixed by hand", where="AGENTS.md")])
+    world.script(codex=[codex_ok("TR1", "must not run")])
+
+    def broken(*_args: object, **_kwargs: object) -> list:
+        raise stage2.Refused("classification ran before the legacy refusal")
+
+    monkeypatch.setattr(stage2, "repair_hand_rows", broken)
+    assert world.run("repair") == 2
+    assert "already names a fix" in capsys.readouterr().err
+
+
+def test_repair_held_only_run_needs_no_time_used_heading(world: World) -> None:
+    """Criterion 4, L2-3. Planted fault: a held-only run refuses for a plan without `## Time used`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    world.plan.write_text("---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan without a time heading")
+    assert world.run("repair") == 0
+    assert world.calls() == []
+    assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
 def test_repair_prompt_excludes_handed_off_rows(world: World) -> None:
     """Criterion 18. Planted fault: the prompt does not tell the model that the held rows are not its work."""
     held_world(
