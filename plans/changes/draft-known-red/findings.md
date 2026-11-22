@@ -72,3 +72,31 @@ Stage-2 call, 2026-11-22: spec-review · endpoint claude-code-plan · model clau
 | F-10 | MINOR | SPEC | base | spec.md criterion 9; `save_attempt` in scripts/stage2.py | Missing: what happens when the save in criterion 9 fails. `save_attempt` does not raise; it returns "saving the attempt failed (…)", and on the call-failure path the restore runs anyway ("never blocks the restore that follows"). Criterion 9 says "first saves …, then puts every changed path back" but does not cover a failed save. If the restore runs anyway, as on the call-failure path, the attempt's draft is lost with no ref and the message names none ("a final message naming no ref"). If the tree is kept instead, the work survives but the next `--stage2-off` run is refused ("a leftover tree with no saved ref"). The criterion is red for a failed save either way, so a test of that case cannot show which behaviour was meant. | Opus | in spec — [DETAIL] decided by the orchestrator: if the save fails, the put-back does not run; the tree stays, and the message says the save failed and names the changed paths, so nothing is lost | — |
 | F-11 | MINOR | SPEC | base | spec.md criterion 12, "Definition of Done" (moved files) and "Non-goals" (last bullet); docs/WORKFLOW.md §3 | Missing: whether §3 changes. Two §3 passages become false for a Stage-1 runner draft, where the runner drafts, Opus writes and Opus also does the 2a review. The first reads "Spec and plan on Opus 5.5 at effort `xhigh` by hand — a spike, or Stage 2 off … where the runner drafts (§4), Codex writes them instead". The second, in the spec-review paragraph, reads "where the runner drafts (§4), the spec's author is Codex or GLM 5.3 and the review reads another vendor's error profile; where a person writes the spec by hand — a spike, or Stage 2 off — the author is Opus 5.5 itself". Criterion 12 covers only texts that state which verbs accept `--stage2-off`. The DoD's moved list names only §4's `draft` bullet and the end of "The draft". The non-goals keep §3's by-hand draft as it is. So the implementer decides whether §3 is edited, and no criterion goes red if it is not. | Opus | in spec — [DETAIL] decided by the orchestrator: the two docs/WORKFLOW.md §3 passages are updated in this change (Move together) to name the Stage-1 runner draft on Opus xhigh | — |
 | F-12 | MINOR | SPEC | base | spec.md "Non-goals", second bullet | The non-goal says the per-attempt put-back rule must not change and describes it as "everything except `findings.md` and the one new ADR file". The rule in code (`draft_keep`) and in WORKFLOW §4 keeps every changed path under the change folder except `decisions.md`, plus the one new ADR file. "Everything except `findings.md`" is the call-failure rule (criteria 5 and 9). Taken literally, the stated rule puts `spec.md` and `plan.md` back before the document check, and every attempt would fail with "spec.md is missing". Read as "the rule as it stands", nothing changes. Phase 6 checks "non-goals unbuilt" against this text, and the stated rule disagrees with the one that is built. | Opus | in spec — [DETAIL] decided by the orchestrator: the non-goal is corrected to the rule in code — per attempt the change folder except decisions.md plus the one new ADR file is kept; everything except findings.md is only the call-failure rule of criteria 5 and 9 | — |
+
+Stage-2 call, 2026-11-22: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1171 files, 5405 commits, 12 rules.
+
+> Attempt 1 (codex) failed its call: codex call failed: exit 1 (Reading additional input from stdin...)
+>
+> the attempt is saved at refs/stage2/attempts/draft-known-red/draft-attempt-1-20261122T214601832899Z (01bc58b73069); `git diff 844eed6c72c3 refs/stage2/attempts/draft-known-red/draft-attempt-1-20261122T214601832899Z` shows it.
+
+Stage-2 call, 2026-11-22: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason the first draft attempt failed · leak check clean over 1171 files, 5405 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its call: codex call failed: exit 1 (Reading additional input from stdin...)
+>
+> the attempt is saved at refs/stage2/attempts/draft-known-red/draft-attempt-2-20261122T214613258338Z (f8a671b81de2); `git diff 844eed6c72c3 refs/stage2/attempts/draft-known-red/draft-attempt-2-20261122T214613258338Z` shows it.
+
+Stage-2 call, 2026-11-22: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1171 files, 5405 commits, 12 rules.
+
+> Attempt 3 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/draft-known-red/plan.md` +101 -61
+> - `plans/changes/draft-known-red/spec.md` +108 -55
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 20 characters left out …]
+> - Runner targeted checks: gate `interview-minimums` (block) exited 1
+> 1 finding(s):
+>   - draft-known-red (feature): 1 of 3 counted interview record(s) in decisions.md
+> ```
