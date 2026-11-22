@@ -10851,6 +10851,442 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
     assert record["L1-4"] == "fixed — tests/test_fix.py::test_fix"
 
 
+# ---------------------------------------------------------------------------
+# Held rows: the runner hands them to the orchestrator before any model call
+# (bead coding-harness-0zhf, spec criteria 1-19; criterion 7 is pinned by
+# test_repair_lifecycle_checkpoint_rollback_reports_restoration, criterion 19
+# is checked against docs/WORKFLOW.md in phase 6)
+# ---------------------------------------------------------------------------
+
+
+def record_cells(
+    ident: str, status: str, where: str = "src/app.py:1", finding: str | None = None, origin: str = "base"
+) -> list[str]:
+    """One record row's cells, with a `Where` cell of its own."""
+    return [
+        ident,
+        "MAJOR",
+        "MAINT",
+        origin,
+        where,
+        finding or f"finding of {ident}",
+        "deepseek-v4.1-flash",
+        status,
+        "no",
+    ]
+
+
+def write_cells_record(w: World, cells: list[list[str]], number: int = 1) -> None:
+    """A loop record of one round whose rows carry whole cell lists, unlike `World.write_record`."""
+    directory = w.record().parent
+    directory.mkdir(parents=True, exist_ok=True)
+    snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(loop_state(), sort_keys=True)}"
+    w.record().write_text(
+        f"# Loop record — demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
+        f"## Round {number} — deepseek-v4.1-flash, 2026-09-30\n\n"
+        f"{stage2.render_table(stage2.ROW_COLUMNS, cells)}\n",
+        encoding="utf-8",
+    )
+
+
+def held_world(world: World, cells: list[list[str]], answer: str) -> str:
+    """A repair world whose record rows carry whole cell lists, scripted for one mixed repair."""
+    seed_tests(world)
+    write_cells_record(world, cells)
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def hand_steps_of(w: World) -> str:
+    """The change's hand-step listing block, or an empty string when findings.md holds none."""
+    text = w.text() if w.findings.exists() else ""
+    index = text.find(stage2.HAND_STEP_HEADING)
+    return text[index:] if index >= 0 else ""
+
+
+def decide_provenance_prefix(world: World, prefix: str) -> None:
+    """Commit a provenance map whose `prefix` is human-decided, with a tracked file below it."""
+    directory = world.root / prefix
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "0001-decided.md").write_text("# A decided record\n", encoding="utf-8")
+    (world.root / "provenance.yaml").write_text(
+        "paths:\n"
+        "  - {prefix: 'plans/', frontmatter: required}\n"
+        f"  - {{prefix: '{prefix}', allowed: [human-decided]}}\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a decided prefix")
+
+
+def test_repair_classifies_held_paths_before_dispatch(world: World) -> None:
+    """Criterion 1. Planted fault: a mixed-path row, a held link text, a case-folded prefix, an
+    unknown held file, `docs/adr, decisions.md` or `see prompts.` reaches the model, or an outside
+    target is treated as inside."""
+    decide_provenance_prefix(world, "docs/adr")
+    held_world(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="src/app.py, AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="[read AGENTS.md](src/app.py)"),
+            record_cells("L1-3", "taken — test_c", where="agents.md"),
+            record_cells("L1-4", "taken — test_d", where="templates/keep.md"),
+            record_cells("L1-5", "taken — test_e", where="docs/adr, decisions.md"),
+            record_cells("L1-6", "taken — test_f", where="see prompts."),
+            record_cells("L1-7", "taken — test_g", where="[link](../../outside.md)"),
+        ],
+        answer="L1-7: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "finding of L1-7" in prompt, "the row naming no held path stays in the model batch"
+    for held in ("L1-1", "L1-2", "L1-3", "L1-4", "L1-5", "L1-6"):
+        assert f"finding of {held}" not in prompt, held
+
+
+def test_repair_keeps_nonheld_locations_in_model_batch(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 2. Planted fault: a pathless row, an unknown non-held path or a non-held directory
+    is handed off or refused solely because of its `Where`."""
+    answer = "\n".join(f"{ident}: fixed — tests/test_fix.py::test_fix" for ident in ("L1-1", "L1-2", "L1-3", "L1-4"))
+    held_world(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="everywhere in the runner prose"),
+            record_cells("L1-2", "taken — test_b", where="src/missing.py:9"),
+            record_cells("L1-3", "taken — test_c", where="src"),
+            record_cells("L1-4", "taken — test_d", where="[spec](plans/changes/demo/spec.md:3)"),
+        ],
+        answer=answer,
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    for eligible in ("finding of L1-1", "finding of L1-2", "finding of L1-3", "finding of L1-4"):
+        assert eligible in prompt, eligible
+    assert "## Held rows" not in prompt
+    assert hand_steps_of(world) == ""
+    assert "runner-held path" not in capsys.readouterr().out
+    assert len(repair_calls(world)) == 1
+
+
+def test_repair_splits_mixed_held_and_committable_rows(world: World) -> None:
+    """Criterion 3. Planted fault: the model receives a held row, or an eligible committable row is omitted."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "finding of L1-2" in prompt, "the committable row must reach the model"
+    assert "finding of L1-1" not in prompt, "the held row must not reach the model"
+
+
+def test_repair_hands_off_all_held_without_model_call(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 4. Planted fault: an all-held batch calls a model, exits nonzero, or standard
+    output does not identify the rows and their held paths — loop record, released and phase-6
+    rows alike."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    released = ["L1-3", "MAJOR", "MAINT", "base", "AGENTS.md:12", "released finding", "deepseek-v4.1-flash"]
+    phase = ["F-1", "MAJOR", "SPEC", "base", "templates/keep.md", "phase finding", "Codex", "taken — crit 6"]
+    world.write_findings(
+        VERDICT,
+        released_block([[*released, "taken — test_c", "no", "—"]]),
+        phase6_block([[*phase, "—"]]),
+    )
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    assert world.run("repair") == 0
+    assert world.calls() == [], "an all-held batch must make no model call"
+    out = capsys.readouterr().out
+    fragments = (
+        "L1-1",
+        "AGENTS.md",
+        "L1-2",
+        "model-endpoints.yaml",
+        "L1-3",
+        "F-1",
+        "runner-held path",
+        "no model call",
+    )
+    for fragment in fragments:
+        assert fragment in out, fragment
+
+
+def test_repair_reports_and_records_each_held_path(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5. Planted fault: stdout or the findings listing omits an affected row, a named
+    held path, or the reason, including when no model call is made."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md templates/keep.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    assert world.run("repair") == 0
+    out = capsys.readouterr().out
+    fragments = ("L1-1", "AGENTS.md", "templates/keep.md", "L1-2", "model-endpoints.yaml", "runner-held path")
+    for fragment in fragments:
+        assert fragment in out, fragment
+    text = world.text()
+    assert text.startswith("---\n"), "the runner-created findings file carries its registry header"
+    block = hand_steps_of(world)
+    bullets = (
+        "- L1-1 — `AGENTS.md`, `templates/keep.md` — runner-held path",
+        "- L1-2 — `model-endpoints.yaml` — runner-held path",
+    )
+    for bullet in bullets:
+        assert bullet in block, bullet
+
+
+def test_repair_handoff_preserves_held_row_cells(world: World) -> None:
+    """Criterion 6. Planted fault: the handoff marks a held row fixed or changes its `Broke a test` cell."""
+    held = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    eligible = record_cells("L1-2", "taken — test_b")
+    held_world(world, [held, eligible], answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    assert world.run("repair") == 0
+    record_text = world.record().read_text(encoding="utf-8")
+    assert render_row(held) in record_text, "the held row's cells must stand unchanged"
+    rows = {row[0]: row for row in stage2.record_rows(record_text)}
+    assert rows["L1-1"][7] == "taken — test_a" and rows["L1-1"][8] == "no"
+    assert rows["L1-2"][7].startswith("fixed")
+
+
+def test_repair_mixed_batch_books_only_eligible_rows(world: World) -> None:
+    """Criterion 8. Planted fault: the answer check demands a fixed line for a held row, or an
+    eligible fixed row is not booked and committed."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the eligible fix must be committed"
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+    assert record["L1-2"][8] == "yes — tests/test_fix.py::test_fix"
+    assert record["L1-1"][7] == "taken — test_a", "a held row is never booked by the runner"
+    assert record["L1-1"][8] == "no"
+
+
+def test_repair_handoff_preserves_existing_preflight_guards(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 9. Planted fault: a held row with a legacy completion marker bypasses the booking
+    refusal, or a waiting or invalid-origin row is bypassed."""
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a; fixed by hand yesterday", where="AGENTS.md")])
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    assert world.run("repair") == 2
+    assert "rows carry a taken status that already names a fix" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+    write_cells_record(
+        world,
+        [record_cells("L1-1", "taken — test_a"), record_cells("L1-2", "open", where="AGENTS.md")],
+    )
+    assert world.run("repair") == 2
+    assert "rows are waiting for a decision" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+    invalid = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    invalid[3] = "invalid"
+    write_cells_record(world, [invalid])
+    assert world.run("repair") == 2
+    assert "selected repair rows carry an invalid Origin" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+
+
+@pytest.mark.parametrize("scenario", ["retry", "rollback"])
+def test_repair_handoff_survives_failed_attempt_once(world: World, scenario: str) -> None:
+    """Criterion 10. Planted fault: a retry duplicates the listing, or a rollback loses it."""
+    cells = [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")]
+    held_world(world, cells, answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    if scenario == "retry":
+        script_repair(
+            world,
+            [
+                repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+                repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+            ],
+            make=[{"exit": 1, "stdout": "red\n"}, {"stdout": "green\n"}],
+        )
+        assert world.run("repair") == 0
+        assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a retry must not duplicate the listing"
+    else:
+        script_repair(
+            world,
+            [
+                repair_step(
+                    plant={
+                        "src/app.py": "value = 2\n",
+                        "tests/test_fix.py": FIX_TEST,
+                        "AGENTS.md": "tampered\n",
+                    }
+                )
+            ],
+            make=[{"stdout": "green\n"}],
+        )
+        baseline = git(world.root, "rev-parse", "HEAD")
+        # The attempt is refused and commits nothing; the held-path refusal's own wording is
+        # criterion 7's contract, pinned by
+        # test_repair_lifecycle_checkpoint_rollback_reports_restoration. This scenario pins
+        # criterion 10: the listing neither duplicates nor is lost, whatever refusal fired.
+        assert world.run("repair") == 1
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+        assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a rollback must not lose the listing"
+
+
+def test_repair_all_held_commits_only_handoff(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 11. Planted fault: a successful held-only run leaves findings uncommitted, or
+    admits changes outside the existing checkpoint allowances."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+    assert git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines() == [
+        "plans/changes/demo/findings.md"
+    ]
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "no model call" in capsys.readouterr().out
+    after_first = git(world.root, "rev-parse", "HEAD")
+    (world.root / "AGENTS.md").write_text("# tampered\n", encoding="utf-8")
+    write_cells_record(world, [record_cells("L1-2", "taken — test_b", where="AGENTS.md")])
+    assert world.run("repair") == 2
+    refusal = capsys.readouterr().err
+    assert "the worktree has pre-existing changes outside this change's findings.md: AGENTS.md" in refusal
+    assert git(world.root, "rev-parse", "HEAD") == after_first, "the refusal must not commit"
+    assert "finding of L1-2" not in world.text()
+
+
+def test_repair_handoff_uses_dated_bullets(world: World) -> None:
+    """Criterion 12. Planted fault: the listing is a table, undated, lacks normalized paths, or
+    retains the location in `AGENTS.md#L24` or `agents.md:24–30`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md#L24"),
+            record_cells("L1-2", "taken — test_b", where="agents.md:24–30 and prompts/04-implement.md#L3-L9"),
+        ],
+    )
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert block.startswith(f"{stage2.HAND_STEP_HEADING} — {stage2.today()}")
+    assert "- L1-1 — `AGENTS.md` — runner-held path" in block
+    assert "- L1-2 — `AGENTS.md`, `prompts/04-implement.md` — runner-held path" in block
+    for retained in ("#L24", ":24–30", "#L3-L9"):
+        assert retained not in block, retained
+    assert not any(line.lstrip().startswith("|") for line in block.splitlines()), "the listing is no table"
+
+
+def test_repair_handoff_is_not_resolved_as_a_finding(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 13. Planted fault: a later resolution treats a listing bullet as a finding — a
+    previously listed identifier causes a duplicate-row refusal or becomes a repair target."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    capsys.readouterr()
+    assert world.run("repair") == 0, "the second handoff must resolve the listing as no finding"
+    error = capsys.readouterr().err
+    for refusal in ("several rows", "carries this id", "duplicate"):
+        assert refusal not in error, refusal
+    assert world.calls() == []
+
+
+def test_repair_mixed_commit_distinguishes_held_rows(world: World) -> None:
+    """Criterion 14. Planted fault: the subject claims a held row as repaired, or the body omits it."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    subject = message.splitlines()[0]
+    assert subject == "fix(demo): repair taken findings L1-2"
+    assert "L1-1" not in subject, "a held identifier is never claimed as repaired"
+    assert "Hand steps for the orchestrator" in message
+    assert "L1-1 — runner-held path AGENTS.md" in message
+
+
+def test_repair_handoff_uses_valid_booking_hint(world: World) -> None:
+    """Criterion 15. Planted fault: the hint proposes `fixed — orchestrator hand edit <sha>`, omits
+    a valid test form or the option to retake a row as `taken — not a test`, or allows the
+    not-a-test form without that status."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert "`fixed — tests/<path>::<function>`" in block
+    assert "`fixed — guard test — tests/<path>::<function>`" in block
+    assert "`taken — not a test — <reason>`" in block
+    assert "`fixed — not a test — orchestrator hand edit <sha>`" in block
+    assert "fixed — orchestrator hand edit" not in block, "the bare hand-edit form does not exist"
+    assert block.index("`taken — not a test — <reason>`") < block.index("orchestrator hand edit")
+
+
+def test_repair_held_only_commit_names_hand_steps(world: World) -> None:
+    """Criterion 16. Planted fault: the subject claims the held identifiers were repaired, or uses
+    the repair subject."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    assert world.run("repair") == 0
+    subject = git(world.root, "log", "-1", "--format=%s")
+    assert subject == "docs(demo): hand steps for the orchestrator L1-1, L1-2"
+    assert "repair taken findings" not in subject
+
+
+def test_repair_ignores_answer_lines_for_held_rows(world: World) -> None:
+    """Criterion 17. Planted fault: a held answer line fails the attempt or marks the held row fixed."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "taken — test_a", "a held row is never booked from the answer"
+    assert record["L1-1"][8] == "no"
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_repair_prompt_excludes_handed_off_rows(world: World) -> None:
+    """Criterion 18. Planted fault: the prompt does not tell the model that the held rows are not its work."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "## Held rows" in prompt
+    assert "not your work" in prompt
+    held_block = prompt.split("## Held rows", 1)[1]
+    assert "L1-1" in held_block
+    assert "- L1-1 [" not in prompt, "the held row is not listed among the taken rows"
+    assert "finding of L1-1" not in prompt
+
+
 @pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS"])
 def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
     """No tool route may promise unconditional full verification after a work verb (repair-targeted-check L5-2)."""

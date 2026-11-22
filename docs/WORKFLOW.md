@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-19
+updated: 2026-11-22
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1834,6 +1834,32 @@ When the live record shadows a released copy in `findings.md`, repair fixes
 only the live row and prints a notice. The released copy stays unchanged: an
 outstanding status there remains outstanding after a successful repair until
 the next `release-loop` rewrites the released block from the record.
+
+Before any model call, repair classifies every selected row by the repository
+paths its `Where` cell names, read the way the checkpoint's own protection
+reads them — case-insensitive prefixes from the committed provenance map and
+the runner-held paths, with the change's own folder exempt. A token counts
+whether it stands bare, in backticks or as the text or target of a Markdown
+link, without a trailing line location, and a tracked directory counts with
+its trailing slash; prose, external URLs and paths outside the checkout name
+nothing, and an unknown location is never a refusal. A row that names any
+held path is handed to the orchestrator before the call: the runner prints
+the row with its normalized held paths and the reason `runner-held path`,
+appends one dated `Hand steps for the orchestrator` listing — one bullet per
+row with its ID, held paths and reason — to `findings.md` before the attempt
+snapshot, and leaves the row's Status and `Broke a test` cells untouched. The
+listing is not a findings table: no later resolution reads its bullets as
+rows. When every selected row is held, the run makes no model call and exits
+0 after the existing checkpoint commits the listing under `docs(<change>):
+hand steps for the orchestrator <ids>`. A mixed batch dispatches only the
+committable rows, tells the model the held rows are not its work, ignores an
+answer line that names a held row instead of failing on it, and names the
+held rows as hand steps in the commit body while the subject carries only the
+repaired IDs. The orchestrator books each handed row itself from the listing:
+`fixed — tests/<path>::<function>` or `fixed — guard test —
+tests/<path>::<function>` with its `Broke a test` mark when a test shows the
+repair, and only a row taken as `taken — not a test` may then be booked
+`fixed — not a test — orchestrator hand edit <sha>`.
 
 After the model call, verification and answer check, repair checks every
 selected row against its resolved contents and location on disk. If a selected

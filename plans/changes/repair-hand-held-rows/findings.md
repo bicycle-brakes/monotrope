@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-0zhf
@@ -74,3 +74,313 @@ Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-c
 2026-11-21 11:54:22–11:56:35 UTC, 132 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:06:37–15:09:21 UTC, 164 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:16:23–15:18:11 UTC, 108 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+
+Stage-2 call, 2026-11-22: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1153 files, 5368 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +26 -0
+> - `plans/changes/repair-hand-held-rows/plan.md` +19 -19
+> - `scripts/stage2.py` +259 -8
+> - `tests/test_stage2.py` +437 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> capsys = <_pytest.capture.CaptureFixture object at 0x109348740>
+>
+>     def test_repair_handoff_preserves_existing_preflight_guards(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+>         """Criterion 9. Planted fault: a held row with a legacy completion marker bypasses the booking
+>         refusal, or a waiting or invalid-origin row is bypassed."""
+>         write_cells_record(world, [record_cells("L1-1", "taken — test_a; fixed by hand yesterday", where="AGENTS.md")])
+>         world.script(codex=[codex_ok("TR1", "must not run")])
+>         assert world.run("repair") == 2
+>         assert "rows carry a taken status that already names a fix" in capsys.readouterr().err
+>         assert world.calls() == []
+>         assert hand_steps_of(world) == ""
+>         write_cells_record(
+>             world,
+>             [record_cells("L1-1", "taken — test_a"), record_cells("L1-2", "open", where="AGENTS.md")],
+>         )
+>         assert world.run("repair") == 2
+>         assert "rows are waiting for a decision" in capsys.readouterr().err
+>         assert world.calls() == []
+>         assert hand_steps_of(world) == ""
+>         invalid = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+>         invalid[3] = "invalid"
+>         write_cells_record(world, [invalid])
+>         assert world.run("repair") == 2
+> >       assert "accepted rows carry an invalid Origin" in capsys.readouterr().err
+> E       assert 'accepted rows carry an invalid Origin' in "refused: selected repair rows carry an invalid Origin: L1-1 (loop.md, Origin `invalid`). The orchestrator sets it whe...or a finding that repair round N caused; correct the cell, not the reviewer's answer. Nothing is called or repaired.\n"
+> E        +  where "refused: selected repair rows carry an invalid Origin: L1-1 (loop.md, Origin `invalid`). The orchestrator sets it whe...or a finding that repair round N caused; correct the cell, not the reviewer's answer. Nothing is called or repaired.\n" = CaptureResult(out='', err="refused: selected repair rows carry an invalid Origin: L1-1 (loop.md, Origin `invalid`). Th...r a finding that repair round N caused; correct the cell, not the reviewer's answer. Nothing is called or repaired.\n" [… 5 characters left out …]
+> E        +    where CaptureResult(out='', err="refused: selected repair rows carry an invalid Origin: L1-1 (loop.md, Origin `invalid`). Th...r a finding that repair round N caused; correct the cell, not the reviewer's answer. Nothing is called or repaired.\n") = readouterr()
+> E        +      where readouterr = <_pytest.capture.CaptureFixture object at 0x109348740>.readouterr
+>
+> tests/test_stage2.py:11101: AssertionError
+> __________ test_repair_handoff_survives_failed_attempt_once[rollback] __________
+> [gw6] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-hand-held-rows/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3175/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3175/popen-gw6/test_repair_handoff_survives_f0/state'))
+> scenario = 'rollback'
+> capsys = <_pytest.capture.CaptureFixture object at 0x10a78cf50>
+>
+>     @pytest.mark.parametrize("scenario", ["retry", "rollback"])
+>     def test_repair_handoff_survives_failed_attempt_once(
+>         world: World, scenario: str, capsys: pytest.CaptureFixture[str]
+>     ) -> None:
+>         """Criterion 10. Planted fault: a retry duplicates the listing, or a rollback loses it."""
+>         cells = [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")]
+>         held_world(world, cells, answer="L1-2: fixed — tests/test_fix.py::test_fix")
+>         if scenario == "retry":
+>             script_repair(
+>                 world,
+>                 [
+>                     repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+>                     repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+>                 ],
+>                 make=[{"exit": 1, "stdout": "red\n"}, {"stdout": "green\n"}],
+>             )
+>             assert world.run("repair") == 0
+>             assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a retry must not duplicate the listing"
+>         else:
+>             script_repair(
+>                 world,
+>                 [
+>                     repair_step(
+>                         plant={
+>                             "src/app.py": "value = 2\n",
+>                             "tests/test_fix.py": FIX_TEST,
+>                             "AGENTS.md": "tampered\n",
+>                         }
+>                     )
+>                 ],
+>                 make=[{"stdout": "green\n"}],
+>             )
+>             baseline = git(world.root, "rev-parse", "HEAD")
+>             assert world.run("repair") == 1
+>             error = capsys.readouterr().err
+> >           assert "the attempt changed paths a stage-2 run does not commit" in error
+> E           AssertionError: assert 'the attempt changed paths a stage-2 run does not commit' in '[verify-lock] admitted\n[verify-lock] available memory cannot be measured; proceeding without a reading\nfailed: code...open-gw6/test_repair_handoff_survives_f0/repo/.git/stage2/attempts/demo/attempt-2-20261122T140346618755Z-52311596.md\n'
+>
+> tests/test_stage2.py:11141: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_handoff_preserves_existing_preflight_guards
+> FAILED tests/test_stage2.py::test_repair_handoff_survives_failed_attempt_once[rollback]
+> 2 failed, 17 passed in 10.22s
+> ```
+
+Stage-2 call, 2026-11-22: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1153 files, 5368 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-hand-held-rows/plan.md` +18 -18
+> - `tests/test_stage2.py` +6 -7
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 9629 lines of this gate left out …]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[302-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[303-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[307-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[308-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[foreign-origin]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[other-path]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[altered-original-value]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[duplicated-original-pair]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[comma-collision]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[wrong-version]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[duplicate-version]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[extra-parameter]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[credentials]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[fragment]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[empty-fragment]
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_uses_locked_pi_1_5_0
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_contains_new_go_models
+> ERROR tests/test_pi_contract.py::test_real_catalog_move_keeps_messages_catalog_base
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-0]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-946684800000]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-0]
+> ERROR tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[deepseek-v4.1-flash-946684800000]
+> ERROR tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[synthetic-protocol-check-free]
+> ERROR tests/test_pi_contract.py::test_real_resolution_uses_the_assessed_base[deepseek-v4.1-flash]
+> ERROR tests/test_pi_contract.py::test_real_reviewer_tool_contract - Failed: t...
+> ERROR tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff
+> ERROR tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps
+> ERROR tests/test_pi_contract.py::test_real_reviewer_ignores_ambient_credentials
+> ERROR tests/test_pi_contract.py::test_real_extension_tool_input_and_result - ...
+> ERROR tests/test_pi_contract.py::test_real_session_policy_blocks_foreign_reads
+> ERROR tests/test_pi_contract.py::test_real_session_binding_holds_the_assessed_base
+> ERROR tests/test_pi_contract.py::test_real_model_listing_is_a_provider_table
+> ERROR tests/test_pi_contract.py::test_real_opencode_provider_contracts - Fail...
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[anthropic-messages]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[google-generative-ai]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_exchange[openai-responses]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[error-anthropic-messages]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[error-google-generative-ai]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[error-openai-responses]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[malformed-anthropic-messages]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[malformed-google-generative-ai]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[malformed-openai-responses]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[empty-anthropic-messages]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[empty-google-generative-ai]
+> ERROR tests/test_pi_contract.py::test_real_go_native_wire_api_failures_are_mandatory[empty-openai-responses]
+> ERROR tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory
+> ERROR tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused
+> ERROR tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction
+> ERROR tests/test_pi_contract.py::test_contract_environment_excludes_parent_provider_keys
+> ERROR tests/test_pi_contract.py::test_real_catalog_headers_remain_literal - F...
+> ERROR tests/test_pi_contract.py::test_shipped_catalog_prepares_both_swarms_offline
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[review preparation refuses-the review preparation refused the shipped Go catalog-planted: the review preparation refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research preparation refuses-the research preparation refused the shipped Go catalog-planted: the research preparation refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research catalog helper refuses-the research preparation refused the shipped Go catalog-planted: the production research catalog helper refuses]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[review bypasses the shared selection-the review preparation refused the shipped Go catalog-refused: the model beam-free is a paid model; the free class does not admit it]
+> ERROR tests/test_pi_contract.py::test_both_preparation_contracts_detect_planted_faults[research bypasses the shared selection-the research preparation refused the shipped Go catalog-refused: beam-free is a paid model; the free class does not admit it]
+> 110 failed, 6442 passed, 17 skipped, 5 warnings, 41 errors in 692.18s (0:11:32)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 51119 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
+
+Stage-2 call, 2026-11-22: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1153 files, 5368 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-hand-held-rows/plan.md` +18 -18
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             "missing-location",
+>             "unparsable-location",
+>         ],
+>     )
+>     def test_preflight_refuses_unapproved_catalog_redirect(tmp_path, sources, fault):
+>         # Criterion 2. Planted fault: a forbidden target is contacted before the refusal, or the refusal
+>         # evidence is absent or reads as an empty catalog.
+>         with foreign_server() as (foreign_requests, foreign_url):
+>             chosen: dict[str, str | None] = {}
+>     
+>             def refused(path: str) -> tuple[int, str | None]:
+>                 base, _, query = path.partition("?")
+>                 admitted = f"{path}&pi-version={PIN}"
+>                 if fault == "foreign-origin":
+>                     location = f"{foreign_url}{admitted}"
+>                 elif fault == "other-path":
+>                     location = f"/api/models/providers/other?{query}&pi-version={PIN}"
+>                 elif fault == "altered-original-value":
+>                     location = f"{base}?{query.split('=', 1)[0]}=altered&pi-version={PIN}"
+>                 elif fault == "duplicated-original-pair":
+>                     location = f"{path}&{query}&pi-version={PIN}"
+>                 elif fault == "comma-collision":
+>                     # Row L1-6: `types=chat,image` and `types,chat=image` joined to the same string.
+>                     name, value = next((n, v) for n, v in urllib.parse.parse_qsl(query) if "," in v)
+>                     head, _, rest = value.partition(",")
+>                     moved = urllib.parse.urlencode([(f"{name},{head}", rest)])
+>                     others = [(n, v) for n, v in urllib.parse.parse_qsl(query) if n != name]
+>                     tail = f"&{urllib.parse.urlencode(others)}" if others else ""
+>                     location = f"{base}?{moved}{tail}&pi-version={PIN}"
+>                 elif fault == "wrong-version":
+>                     location = f"{path}&pi-version=0"
+>                 elif fault == "duplicate-version":
+>                     location = f"{admitted}&pi-version={PIN}"
+>                 elif fault == "extra-parameter":
+>                     location = f"{admitted}&extra=1"
+>                 elif fault == "credentials":
+>                     location = f"{sources.url.replace('http://', 'http://catalog-user@')}{admitted}"
+>                 elif fault == "fragment":
+>                     location = f"{admitted}#catalog"
+>                 elif fault == "empty-fragment":
+>                     # Phase-6 row F6-1: a bare `#` leaves `URL.hash` empty, so the raw Location is checked.
+>                     location = f"{admitted}#"
+>                 elif fault == "missing-location":
+>                     location = None
+>                 else:
+>                     location = "http://"
+>                 chosen["location"] = location
+>                 return 307, location
+>     
+>             sources.pi_redirect = refused
+>             bridge = collect(tmp_path, sources)
+>     
+>         evidence = bridge["sources"]["pi"]
+> >       assert evidence["outcome"] == "redirect-refused"
+> E       AssertionError: assert 'request-failed' == 'redirect-refused'
+> E         
+> E         - redirect-refused
+> E         + request-failed
+>
+> tests/test_stage2_research_catalog.py:1152: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[307-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[302-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[303-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[308-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[foreign-origin]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[other-path]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[duplicated-original-pair]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[altered-original-value]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[extra-parameter]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[credentials]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[comma-collision]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[missing-location]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[empty-fragment]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[fragment]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[unparsable-location]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_accepts_one_pinned_version_redirect[301-<lambda>]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[wrong-version]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_refuses_unapproved_catalog_redirect[duplicate-version]
+> 18 failed, 19 passed in 11.84s
+> ```
+
+Orchestrator hand finish, 2026-11-22: implement attempt 3 failed its post-run checks for an environment reason (the pinned Pi was not installed in this worktree). After `bash tools/pi/install.sh`, the attempt's tree left in the worktree passed the full suite (6593 passed, 17 skipped, 448 s) and a full `make verify` (VERIFY GREEN, execution 934.5 s, 2026-11-22). The orchestrator committed that tree unchanged apart from frontmatter stamps.

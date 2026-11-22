@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-0zhf
@@ -61,26 +61,30 @@ At draft baseline `4d76c9c8`, `templates/plan.md` and `scripts/validate_change_a
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_classifies_held_paths_before_dispatch — a mixed-path row, held link text, case-folded prefix, unknown held file, `docs/adr, decisions.md` or `see prompts.` reaches the model, or an outside target is treated as inside
-- 2: not yet written tests/test_stage2.py::test_repair_keeps_nonheld_locations_in_model_batch — a pathless row, unknown non-held path or non-held directory is dropped or refused
-- 3: not yet written tests/test_stage2.py::test_repair_splits_mixed_held_and_committable_rows — a held row reaches the model or a committable row is omitted
-- 4: not yet written tests/test_stage2.py::test_repair_hands_off_all_held_without_model_call — an all-held batch calls a model, exits nonzero or lacks stdout details
-- 5: not yet written tests/test_stage2.py::test_repair_reports_and_records_each_held_path — stdout or findings omit an id, normalized path or reason
-- 6: not yet written tests/test_stage2.py::test_repair_handoff_preserves_held_row_cells — handoff changes a held Status or test mark
+- 1: tests/test_stage2.py::test_repair_classifies_held_paths_before_dispatch — a mixed-path row, held link text, case-folded prefix, unknown held file, `docs/adr, decisions.md` or `see prompts.` reaches the model, or an outside target is treated as inside
+- 2: tests/test_stage2.py::test_repair_keeps_nonheld_locations_in_model_batch — a pathless row, unknown non-held path or non-held directory is dropped or refused
+- 3: tests/test_stage2.py::test_repair_splits_mixed_held_and_committable_rows — a held row reaches the model or a committable row is omitted
+- 4: tests/test_stage2.py::test_repair_hands_off_all_held_without_model_call — an all-held batch calls a model, exits nonzero or lacks stdout details
+- 5: tests/test_stage2.py::test_repair_reports_and_records_each_held_path — stdout or findings omit an id, normalized path or reason
+- 6: tests/test_stage2.py::test_repair_handoff_preserves_held_row_cells — handoff changes a held Status or test mark
 - 7: tests/test_stage2.py::test_repair_lifecycle_checkpoint_rollback_reports_restoration — an unexpected held edit survives or is committed
-- 8: not yet written tests/test_stage2.py::test_repair_mixed_batch_books_only_eligible_rows — an eligible fix fails to commit or the answer check requires a held id
-- 9: not yet written tests/test_stage2.py::test_repair_handoff_preserves_existing_preflight_guards — a held legacy marker or invalid origin bypasses refusal
-- 10: not yet written tests/test_stage2.py::test_repair_handoff_survives_failed_attempt_once — retry duplicates the listing or rollback loses it
-- 11: not yet written tests/test_stage2.py::test_repair_all_held_commits_only_handoff — a successful held-only run leaves findings uncommitted or admits changes outside the existing checkpoint allowances
-- 12: not yet written tests/test_stage2.py::test_repair_handoff_uses_dated_bullets — the listing is a table, undated, lacks normalized paths, or retains the location in `AGENTS.md#L24` or `agents.md:24–30`
-- 13: not yet written tests/test_stage2.py::test_repair_handoff_is_not_resolved_as_a_finding — a subsequent resolution treats a listing bullet as a finding
-- 14: not yet written tests/test_stage2.py::test_repair_mixed_commit_distinguishes_held_rows — the subject claims a held row or the body omits it
-- 15: not yet written tests/test_stage2.py::test_repair_handoff_uses_valid_booking_hint — the hint uses an invalid form, omits the valid alternatives or permits not-a-test without the required taken status
+- 8: tests/test_stage2.py::test_repair_mixed_batch_books_only_eligible_rows — an eligible fix fails to commit or the answer check requires a held id
+- 9: tests/test_stage2.py::test_repair_handoff_preserves_existing_preflight_guards — a held legacy marker or invalid origin bypasses refusal
+- 10: tests/test_stage2.py::test_repair_handoff_survives_failed_attempt_once — retry duplicates the listing or rollback loses it
+- 11: tests/test_stage2.py::test_repair_all_held_commits_only_handoff — a successful held-only run leaves findings uncommitted or admits changes outside the existing checkpoint allowances
+- 12: tests/test_stage2.py::test_repair_handoff_uses_dated_bullets — the listing is a table, undated, lacks normalized paths, or retains the location in `AGENTS.md#L24` or `agents.md:24–30`
+- 13: tests/test_stage2.py::test_repair_handoff_is_not_resolved_as_a_finding — a subsequent resolution treats a listing bullet as a finding
+- 14: tests/test_stage2.py::test_repair_mixed_commit_distinguishes_held_rows — the subject claims a held row or the body omits it
+- 15: tests/test_stage2.py::test_repair_handoff_uses_valid_booking_hint — the hint uses an invalid form, omits the valid alternatives or permits not-a-test without the required taken status
 
-- 16: not yet written tests/test_stage2.py::test_repair_held_only_commit_names_hand_steps — the subject claims held rows as repaired
-- 17: not yet written tests/test_stage2.py::test_repair_ignores_answer_lines_for_held_rows — a held answer line fails the attempt or marks the row fixed
-- 18: not yet written tests/test_stage2.py::test_repair_prompt_excludes_handed_off_rows — the prompt does not tell the model held rows are not its work
+- 16: tests/test_stage2.py::test_repair_held_only_commit_names_hand_steps — the subject claims held rows as repaired
+- 17: tests/test_stage2.py::test_repair_ignores_answer_lines_for_held_rows — a held answer line fails the attempt or marks the row fixed
+- 18: tests/test_stage2.py::test_repair_prompt_excludes_handed_off_rows — the prompt does not tell the model held rows are not its work
 - 19: not a test — phase-6 review checks the workflow against the existing hand-booking forms and required taken status
+
+## Runner route — 2026-11-22
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
 
@@ -88,3 +92,6 @@ At draft baseline `4d76c9c8`, `templates/plan.md` and `scripts/validate_change_a
 2026-11-21 15:06:37–15:09:21 UTC, 164 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:16:23–15:18:11 UTC, 108 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:26:05–15:27:57 UTC, 112 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-22 13:21:47–14:03:52 UTC, 2525 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-11-22 14:04:01–14:41:38 UTC, 2257 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-11-22 14:41:47–14:42:44 UTC, 57 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
