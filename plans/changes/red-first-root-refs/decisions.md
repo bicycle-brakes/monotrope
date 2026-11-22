@@ -35,6 +35,6 @@ reason: The bead and F-10 fix the gap and its remedy (root references must also 
 ## [DETAIL] items decided by the orchestrator
 
 - **Which root references:** every file directly in the git directory whose name is all capitals, digits and underscores and ends in `HEAD` (ORIG_HEAD, FETCH_HEAD, MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD, BISECT_HEAD, AUTO_MERGE and HEAD itself), read as file content, so a pseudo-ref with several lines (FETCH_HEAD) compares whole. Reason: git's own pseudo-ref naming, and FETCH_HEAD is not a single object id.
-- **Both snapshots** (`_proof_ref_targets` and `_ref_targets`) include them; a created, changed or deleted root reference invalidates the proof with the reference named. Reason: F-10's remedy.
+- **The two snapshots on the private store** include them (setup and the source-side `_ref_targets` stay unchanged — corrected after spec-review F-1); a created, changed or deleted root reference invalidates the proof with the reference named. Reason: F-10's remedy.
 - **The limit text** that named this gap is removed from the living docs where it stands. Reason: the limit no longer holds.
 - **Regression:** a named test that runs `git update-ref ORIG_HEAD HEAD` (and one that writes FETCH_HEAD) is refused, red before the fix. Reason: F-10's case.
