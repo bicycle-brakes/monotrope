@@ -1382,9 +1382,6 @@ def test_two_slots_admit_two_and_queue_third(tmp_path: Path) -> None:
     assert third[0] >= min(first_end, second_end) - 0.05, (
         f"a third admission ran while both slots were still held: {spans} then {third}"
     )
-    assert third[0] <= min(first_end, second_end) + 0.5, (
-        f"the eligible head waiter could not reserve the freed slot promptly: {spans} then {third}"
-    )
 
 
 def test_slot_setting_and_capacity_reduction(tmp_path: Path) -> None:
@@ -1519,9 +1516,7 @@ def test_two_slot_fifo_and_dead_waiter(tmp_path: Path) -> None:
             assert _wait_until(lambda: len(_records(state)) >= 1), "the first waiter never registered"
             second = _supervised(state, ORDER_BODY, {**body, "PROBE_NAME": "second", "PROBE_SLEEP": "0.1"})
             assert _wait_until(lambda: len(_records(state)) >= 2), "the second waiter never registered"
-        released = time.monotonic()
-        assert _wait_until(lambda: len(_records(state)) == 1, 0.5), "head did not reserve within two polls"
-        assert time.monotonic() - released <= 0.5
+        assert _wait_until(lambda: len(_records(state)) == 1), "head did not reserve"
         # one slot freed: the head waiter takes it, and the later waiter can only
         # follow once the head's protected work is done — the head was never overtaken
         assert first.wait(timeout=60) == 0 and second.wait(timeout=60) == 0
@@ -1539,7 +1534,7 @@ def test_two_slot_fifo_and_dead_waiter(tmp_path: Path) -> None:
         survivor = _supervised(state, ORDER_BODY, {"PROBE_LOG": str(dead_log), "PROBE_NAME": "survivor"})
         # the survivor's record is new; the dead waiter's may already be pruned
         assert _wait_until(lambda: set(_records(state)) - before), "the survivor never registered"
-    assert _wait_until(lambda: not _records(state), 0.5), "live head did not reserve within two polls"
+    assert _wait_until(lambda: not _records(state)), "live head did not reserve"
     survivor.wait(timeout=60)
     assert dead_log.exists() and dead_log.read_text(encoding="utf-8").split() == ["survivor"], (
         f"a dead waiter blocked the queue: {sorted(_records(state))} and log {dead_log.read_text(encoding='utf-8') if dead_log.exists() else 'missing'}"
@@ -1739,43 +1734,41 @@ def test_killed_one_slot_holder_keeps_capacity_until_child_exits(tmp_path: Path)
     )
 
 
-def test_memory_floor_applies_to_both_slots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Criterion 8. Every admission — either slot, exclusive, repeated — runs its own memory gate.
-
-    Fault this pins: the second admission skipping the memory check, a
-    below-floor reading starting work, or the existing floor override,
-    equality, polling, timeout or unmeasurable-reading behaviour changing
-    under two slots.
-    """
+def test_memory_floor_applies_to_both_slots(tmp_path: Path) -> None:
+    """A real second slot must run its own memory gate while the first is held."""
     state = tmp_path / "state"
-    monkeypatch.setenv("XDG_STATE_HOME", str(state))
-    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
-    monkeypatch.delenv(verify_lock.FLOOR_ENV, raising=False)
-    reads = iter([10.0, 10.0, 60.0, 25.0, None])
-    seen: list[object] = []
-    waits: list[float] = []
-    monkeypatch.setattr(verify_lock, "_now", lambda: 0.0)
-    monkeypatch.setattr(verify_lock, "_sleep", waits.append)
-    monkeypatch.setattr(verify_lock, "_log", lambda _message: None)
-
-    def reader(_platform: str | None = None) -> float | None:
-        value = next(reads)
-        seen.append(value)
-        return value
-
-    monkeypatch.setattr(verify_lock, "read_available_memory", reader)
-
-    # the first admission waits out the floor, then starts on a sufficient reading
-    with verify_lock.hold_admission(["first", "slot"]):
-        assert seen == [10.0, 10.0, 60.0], f"the first admission's gate read {seen}"
-    # the second admission runs its own gate from scratch — equality admits
-    with verify_lock.hold_admission(["second", "slot"]):
-        assert seen == [10.0, 10.0, 60.0, 25.0], f"the second admission skipped or merged its gate: {seen}"
-    # and an unmeasurable reading on a later admission logs unknown and proceeds unchanged
-    with verify_lock.hold_admission(["third", "slot"]) as owned:
-        assert owned is not None
-    assert seen == [10.0, 10.0, 60.0, 25.0, None], f"a later admission skipped its memory gate: {seen}"
-    assert waits == [verify_lock.MEMORY_POLL_SECONDS] * 2, f"the polling behaviour changed under two slots: {waits}"
+    started = tmp_path / "second-started"
+    reads = tmp_path / "reads"
+    release = tmp_path / "release"
+    body = """
+import os, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'scripts'))
+import verify_lock
+reads = Path(os.environ['READS'])
+def memory(_platform=None):
+    reads.write_text('read')
+    return 60.0 if Path(os.environ['RELEASE']).exists() else 10.0
+verify_lock.read_available_memory = memory
+verify_lock.MEMORY_POLL_SECONDS = 0.02
+with verify_lock.hold_admission(['second']):
+    Path(os.environ['STARTED']).write_text('started')
+"""
+    with fake_slot_holder(state, 1):
+        env = _env(
+            state, {"READS": str(reads), "RELEASE": str(release), "STARTED": str(started), verify_lock.FLOOR_ENV: "25"}
+        )
+        child = subprocess.Popen([sys.executable, "-c", body], cwd=REPO_ROOT, env=env)
+        try:
+            assert _wait_until(reads.exists), "second slot did not read memory"
+            assert not started.exists(), "second slot started below the floor"
+            release.touch()
+            assert child.wait(timeout=30) == 0
+            assert started.exists()
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
 
 
 def test_wait_log_names_both_holders_without_tokens(
@@ -1840,22 +1833,37 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
 
     Fault this pins: an old holder or its surviving child overlapping an
     updated holder, or a later updated waiter overtaking an earlier live old
-    waiter. A setting-`1` entry behaves exactly like the older checkout's
-    admission: the compatibility lock taken exclusively, no slot.
+    waiter. The older checkout runs the origin/main implementation.
     """
     state = tmp_path / "state"
 
-    # an old-style exclusive holder excludes both slots: a setting-2 entry drains
+    old_script = tmp_path / "old_verify_lock.py"
+    old_revision = subprocess.run(
+        ["git", "show", "origin/main:scripts/verify_lock.py"], cwd=REPO_ROOT, capture_output=True
+    )
+    if old_revision.returncode:
+        pytest.skip("origin/main is unavailable in this checkout; the older implementation was not tested")
+    old_script.write_bytes(old_revision.stdout)
+
+    def old_supervised(body: str, extra: dict[str, str]) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            [sys.executable, str(old_script), "--", sys.executable, "-c", body],
+            cwd=REPO_ROOT,
+            env=_env(state, extra),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # an old exclusive holder excludes both slots: a setting-2 entry drains
     old_out = tmp_path / "old-holder.json"
     old_started = tmp_path / "old-holder-started.json"
-    old_holder = _supervised(
-        state,
+    old_holder = old_supervised(
         RECORD_BODY,
         {
             "PROBE_OUT": str(old_out),
             "PROBE_STARTED": str(old_started),
             "PROBE_SLEEP": "1.2",
-            verify_lock.SLOTS_ENV: "1",
         },
     )
     assert _wait_until(old_started.is_file), "the old-style holder never started"
@@ -1871,10 +1879,9 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
     # an earlier old-style waiter is honored: a later updated waiter never overtakes it
     log = tmp_path / "order.log"
     with fake_holder(state):
-        old_waiter = _supervised(
-            state,
+        old_waiter = old_supervised(
             ORDER_BODY,
-            {"PROBE_LOG": str(log), "PROBE_NAME": "old-waiter", verify_lock.SLOTS_ENV: "1"},
+            {"PROBE_LOG": str(log), "PROBE_NAME": "old-waiter"},
         )
         assert _wait_until(lambda: len(_records(state)) >= 1), "the old-style waiter never registered"
         updated_waiter = _supervised(state, ORDER_BODY, {"PROBE_LOG": str(log), "PROBE_NAME": "updated-waiter"})
@@ -1916,3 +1923,53 @@ def test_prune_preserves_replaced_holder_record(tmp_path: Path, monkeypatch: pyt
         assert json.loads(path.read_text())["pid"] == 222
     finally:
         admission.release()
+
+
+def test_exclusive_holder_diagnostic_and_descriptors(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    started = tmp_path / "started"
+    holder = _supervised(
+        state, RECORD_BODY, {"PROBE_STARTED": str(started), "PROBE_SLEEP": "3", verify_lock.SLOTS_ENV: "1"}
+    )
+    try:
+        assert _wait_until(started.exists)
+        description = verify_lock._describe_occupancy(state / "coding-harness")
+        assert "exclusive holder:" in description
+        assert "slot 1:" not in description
+    finally:
+        holder.terminate()
+        holder.wait(timeout=30)
+
+
+def test_lock_probes_reject_non_regular_files(tmp_path: Path) -> None:
+    assert verify_lock._lock_held(tmp_path) is None
+    assert verify_lock._lock_held_exclusively(tmp_path) is None
+
+
+def test_queue_head_reserves_within_two_poll_intervals(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Release real capacity at a poll seam and count polls until reservation."""
+    state_root = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_root))
+    monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
+    ticks: list[float] = []
+    with fake_slot_holder(state_root, 1):
+        second = fake_slot_holder(state_root, 2)
+        second.__enter__()
+        opened = verify_lock._prepare_state()
+        admission = verify_lock._Admission(opened, ["poll-test"], 2)
+
+        def release_on_poll(seconds: float) -> None:
+            ticks.append(seconds)
+            if len(ticks) == 1:
+                second.__exit__(None, None, None)
+            assert len(ticks) <= 2, "head did not reserve within two polls"
+
+        monkeypatch.setattr(verify_lock, "_sleep", release_on_poll)
+        monkeypatch.setattr(verify_lock, "_now", lambda: sum(ticks))
+        try:
+            admission._queue_wait()
+            assert admission.reserved_slot == 2
+            assert ticks == [verify_lock.QUEUE_POLL_SECONDS]
+        finally:
+            for fd in (opened.lock_fd, *opened.slot_fds, opened.registry_fd):
+                os.close(fd)

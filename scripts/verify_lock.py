@@ -178,7 +178,10 @@ class SupervisorInterrupted(BaseException):
 
 @dataclasses.dataclass
 class State:
-    """The opened shared state of one machine: stable descriptors, never reopened by path.
+    """The opened shared state of one machine: stable reservation descriptors.
+
+    Independent liveness probes reopen lock paths: flock on an owned descriptor
+    would alter its lock. These probes refuse non-regular files and symlinks.
 
     `lock_fd` is the compatibility lock a setting-`2` holder keeps shared and
     a setting-`1` entry or an older checkout keeps exclusive; `slot_fds` are
@@ -352,6 +355,8 @@ def _lock_held_exclusively(path: Path) -> bool | None:
     except OSError:
         return None
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
         try:
             fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except OSError:
@@ -374,6 +379,8 @@ def _lock_held(path: Path) -> bool | None:
     except OSError:
         return None
     try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
@@ -450,7 +457,7 @@ def _nested_record() -> tuple[int, dict] | None:
         record = reader()
         if record is None or not _names(record, pid, token):
             continue
-        if reader is compatibility[1] and _lock_held(root / SLOT_LOCK_NAMES[0]) is not True:
+        if reader is compatibility[1] and read_holder(root) is not None:
             continue
         if _lock_held_exclusively(root / LOCK_NAME) is not True:
             # Free, or only shared by setting-`2` holders: no exclusive
@@ -729,8 +736,9 @@ class _Admission:
         holder's survivor keeps its slot and the shared compatibility mark, a
         setting-`1` holder's survivor keeps the exclusive compatibility lock.
         """
-        slot = self.reserved_slot or 1
-        return (self.state.lock_fd, self.state.slot_fds[slot - 1])
+        if self.reserved_slot is None:
+            return (self.state.lock_fd,)
+        return (self.state.lock_fd, self.state.slot_fds[self.reserved_slot - 1])
 
     def enter(self) -> None:
         """Queue for a slot, publish ownership, then hold the memory gate."""
@@ -791,7 +799,7 @@ class _Admission:
         if path.name in SLOT_HOLDER_NAMES:
             lock = self.state.root / SLOT_LOCK_NAMES[SLOT_HOLDER_NAMES.index(path.name)]
         else:
-            lock = self.state.root / SLOT_LOCK_NAMES[0]
+            lock = self.state.root / LOCK_NAME
         try:
             fd = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except OSError:
@@ -885,8 +893,6 @@ class _Admission:
             if name in SLOT_HOLDER_NAMES:
                 lock = self.state.root / SLOT_LOCK_NAMES[SLOT_HOLDER_NAMES.index(name)]
                 free = _lock_held(lock) is False
-            elif name == EXCLUSIVE_HOLDER_NAME:
-                free = _lock_held(self.state.root / SLOT_LOCK_NAMES[0]) is False
             else:
                 free = _lock_held_exclusively(self.state.root / LOCK_NAME) is False
             if free:
@@ -955,11 +961,6 @@ class _Admission:
             try:
                 fcntl.flock(self.state.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
-                return None
-            try:
-                fcntl.flock(self.state.slot_fds[0], fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                fcntl.flock(self.state.lock_fd, fcntl.LOCK_UN)
                 return None
             self._leave_queue_locked()
             return ("exclusive", None)

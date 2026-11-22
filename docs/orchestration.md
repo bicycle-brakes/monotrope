@@ -50,7 +50,11 @@ then:
    back to the full run, the final review's own check, or the orchestrator's
    own full run, which runs at lower priority (`nice -n 10`). The number of test
    workers is sized from the machine: half the logical cores, at most one per
-   2 GiB of memory (bead coding-harness-l7sc, #305).
+   2 GiB of memory (bead coding-harness-l7sc, #305). This unchanged count is
+   per run, so two runs can use twice as many workers in total; per-slot tuning
+   remains follow-up work (bead coding-harness-bxxt.11). Each slot checks the
+   machine-wide memory floor at admission, an instantaneous reading that may
+   precede the first run's peak memory use.
 2. **Other lanes can take remote steps.** Explore, draft, review-loop rounds,
    the phase-6 review, CI waits and pull-request text use little local
    memory.

@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-21
+updated: 2026-11-22
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -610,10 +610,15 @@ holder's process id, command and start time — or explicitly that a holder is
 unavailable — without exposing ownership tokens. A nested protected entry — a
 check descended from a live admission — carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
-instead of deadlocking on it; a stale or unrelated marker uses ordinary
+instead of deadlocking on it when the descendant uses updated code (or an updated
+descendant uses a legacy admission). An older checkout inside a new admission
+cannot validate the new marker and may wait for its own ancestor. A stale or unrelated marker uses ordinary
 admission, and one process holds at most one independent admission — a second
 request while holding or acquiring one is refused promptly. After the lock,
-each admission reads the system's free memory (macOS
+each admission reads the system's free memory at that instant; a second reading
+need not include the first run's eventual peak. Each run retains the unchanged
+worker count, so two runs can use twice that count in total. Each admission reads
+free memory (macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
 `MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
 the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
