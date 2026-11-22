@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-21
+updated: 2026-11-22
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -564,17 +564,45 @@ CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Before its
-gates, `verify_all.sh` hands the run to `scripts.verify_lock`: protected work
-of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the three-lane trial's
-concurrent full checks cannot happen again. Waiters are admitted in
-registration order; while waiting, an entry logs its wait immediately and
-every five minutes, naming the holder's process id, command and start time.
-A nested protected entry — a check descended from a live admission — carries
+**One admission per user and machine, two slots by default** (beads
+coding-harness-p6mu, coding-harness-u1ha). Only protected work enters it:
+before its protected gates, the shared scheduler hands the run to
+`scripts.verify_lock` — protected work of one user on one machine shares
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+across repositories and worktrees, so independent protected checks reserve
+one of two machine-wide admission slots instead of serialising. At most two
+protected admissions are live machine-wide; each is independent, with its own
+memory wait and its own ownership lifetime. `HARNESS_VERIFY_SLOTS` selects
+`1` or `2` per entry (default `2`, exact strings only — any other value
+refuses the entry before protected work, naming the setting), is forwarded to
+local child processes, and stays outside the foreign-model environment
+allow-list. Effective capacity is the minimum of the settings of all live
+holders and the head live waiter: a `1` entry admits alone, after every other
+holder has drained. The admission does not serialise the rest: the seconds
+gates and the runner's full-mode preparation (formatting, its cheap checks)
+run in every lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+records why that is safe today and what it did not measure; free disk space
+is not checked (bead coding-harness-87b0). Before the two-slot change (bead coding-harness-u1ha) the admission
+held one exclusive machine-wide lock and serialised protected checks, as the
+three-lane trial had shown necessary at the time; that lock remains the
+compatibility path — an older checkout still takes it exclusively, updated
+holders share it, and an older checkout's live queue entry keeps its place at
+the head of the shared queue. Waiters are admitted in registration order; a
+dead waiter never blocks the queue. While waiting, an entry logs its wait
+immediately and every five minutes, naming each occupied slot and its
+holder's process id, command and start time — or explicitly that a holder is
+unavailable — without exposing ownership tokens. A nested protected entry — a
+check descended from a live admission — carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
-instead of deadlocking on it; a stale or unrelated marker uses ordinary
-admission. After the lock, admission reads the system's free memory (macOS
+instead of deadlocking on it when the descendant uses updated code (or an updated
+descendant uses a legacy admission). An older checkout inside a new admission
+cannot validate the new marker and may wait for its own ancestor. A stale or unrelated marker uses ordinary
+admission, and one process holds at most one independent admission — a second
+request while holding or acquiring one is refused promptly. After the lock,
+each admission reads the system's free memory at that instant; a second reading
+need not include the first run's eventual peak. Each run retains the unchanged
+worker count, so two runs can use twice that count in total. Each admission reads
+free memory (macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
 `MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
 the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
@@ -584,11 +612,13 @@ the last reading; a reading that cannot be taken is logged and the entry
 proceeds. Unusable state — a substituted or unwritable lock, holder or queue
 file — refuses the entry before any protected work instead of running
 unlocked. Ownership ends only when the protected work and its children stop,
-including on failure, cancellation and signals, so a dead entry never blocks
-the next one. The queue and memory waits consume no runner step limit and no
-pytest proof's execution timeout; the configured limits still bind the
-executing check. Hosted CI is untouched: its gate steps never enter the
-runner's shell path, and nothing disables admission because CI is set.
+including on failure, cancellation and signals; a holder's configured
+capacity stays reserved until its last inherited lock descriptor closes, so a
+dead supervisor's children keep the machine's capacity honest. The queue and
+memory waits consume no runner step limit and no pytest proof's execution
+timeout; the configured limits still bind the executing check. Hosted CI is
+untouched: its gate steps never enter the runner's shell path, and nothing
+disables admission because CI is set.
 
 Verification durations are appended locally to `verify-duration.jsonl` in
 that shared state directory. Each run records gate and execution durations,
@@ -1088,13 +1118,35 @@ implement or repair attempt's cheap checks and stops at the first red one
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
 over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
 file the top-level test functions that are new or differ from HEAD (a new file
-whole), the accepted plan's criterion-ledger test references in both forms as
+whole), the accepted plan's standing criterion-ledger test references as
 function ids, and, on a retry, the test ids pytest reported as failed in the
 previous attempt of the same run whose file and test still stand, each by its function without a
 parameter part (a test inherited by a class with a base counts as standing); deduplicated and
 sorted (a file selected whole covers its own ids, which are then not repeated as
 explicit targets), and no importer of a changed `scripts/` module is selected
-(`decisions.md` Q-3 of the change). The cheap checks run on the attempt's own
+(`decisions.md` Q-3 of the change). Before pytest is ever started, the ledger
+references are classified against the tree (bead coding-harness-bxxt.9): each
+reference in either entry form is judged by the same parsed-name check the
+selection uses — a top-level `async def` stands, a name defined only inside a
+string does not — and a reference whose file or name does not stand is
+classified missing and never becomes one of pytest's arguments. The runner
+names it in the attempt's own record instead, a standing test runs beside it,
+and pytest is skipped altogether when no selected target stands. A missing
+test keeps its entry's state — written, or still marked `not yet written`,
+written taking precedence when duplicate entries name one id — and the state
+decides what the attempt owes: an implement attempt owes every ledger test and
+fails when any of them is missing, even when all standing selected tests pass; a
+repair owes the written entries and the proof of each finding it addresses, so
+a missing written entry fails it too, while a missing unwritten-only entry
+alone fails no repair and stands in its record as named but not owed. A failing
+selected test fails the attempt whatever the classification found. A ledger
+file that does not exist makes its references missing; an existing file that
+cannot be read or parsed is a fault that names that input, and the cheap check
+fails on it instead of diagnosing a missing test. A ledger line in none of the
+recognized entry forms is neither selected nor named — the criterion-ledger
+gate reports it. The classification lands in the attempt's record wherever the
+verdict puts it: in the measured time line of an accepted attempt, beside the
+failure reasons in the diagnostics block of a failed one. The cheap checks run on the attempt's own
 bytes, before the runner stamps documents and renders derived files: a selected
 test that reads runner-derived state (`plans/INDEX.md`, a stamped `updated:`
 line) sees it unprepared, and such a test belongs to `make verify`, not to the
@@ -1109,10 +1161,15 @@ check reads model-written state — through the recovery preflight, never
 through a linked parent — and records the restoration in the attempt's
 bookkeeping with its real verdict: a note beside the failure for a rejected
 attempt, a quoted notice under the audit line of one that passes. The
-implement and repair prompts carry the accepted plan's ledger test references
-as must-runs before handback, taken from the plan's snapshot so a retry
-rereads nothing its predecessor may have edited: a command-capable Codex runs
-ruff and the named tests itself before handing back, while the file-only Flash
+implement and repair prompts carry the accepted plan's ledger tests as
+must-runs before handback, taken from the plan's snapshot so a retry
+rereads nothing its predecessor may have edited, and each variant states what
+its attempt owes: the implement prompt owes every ledger test, including the
+entries still marked `not yet written`; a repair prompt owes the proof of every
+finding it addresses and every written ledger entry, standing or missing, while
+missing unwritten entries are named but not owed and never stand in the
+repair's pytest list — a command-capable Codex runs ruff and the standing
+ledger tests itself before handing back, while the file-only Flash
 and Sonnet routes delegate the same checks to the runner, with no extra tool
 of their own.
 
@@ -1252,6 +1309,31 @@ into a shell. Thirteen verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+  While another worktree of this repository holds an active record of the
+  change, the plain restart refuses and names those keys: the maintainer
+  supersedes them instead with `--restart --supersedes <key> --reason <text>`,
+  repeating `--supersedes` for every active other-worktree key the refusal
+  names. Supersede before any new record exists in this worktree: a `review-loop` here can
+  start a fresh run when no audit call is unaccounted for, and its record must be released
+  after a phase-6 verdict before supersession can proceed. Supersession archives each selected record — everything a release
+  would delete, `availability.json` included, never the research siblings —
+  in one directory under
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/`, and
+  writes one accounting line naming every key, its round-number range, its
+  archive subdirectory and the audit calls pending since the last release or
+  restart; zero calls are allowed and reported as zero. The keys are discovered
+  from `git worktree list` of this repository only — a worktree still listed by git remains
+  discoverable even if its directory is gone; one pruned from git metadata and another
+  repository's record are excluded. If a removed worktree path is reused, its old
+  unarchived record has the same key and can continue; follow-up coding-harness-0aht addresses this
+  limit. A plain restart checks records under their locks and reports unreadable or symlinked records;
+  readable active records require supersession. Each selected record is
+  read only under its lock. The next `review-loop` here is a fresh run whose
+  rounds continue after the highest round ever assigned, a later release needs a
+  verdict written after the restart line, and releasing before any fresh round
+  fails without writing: the archived run is history, not something this
+  worktree can release again. The superseded worktree can run `release-loop`: it recognizes
+  the accounting line and records `Loop rows: superseded by <key>` (bead coding-harness-e82i).
 - `triage` — the orchestrator records one already-made decision on the loop
   record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
   '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
@@ -1729,8 +1811,15 @@ beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
-(also the release inside `review`) and `release-loop --stage-failed` refuse and name the record path they
-expected. A review-loop call that wrote audit lines and then ended without
+(also the release inside `review`), `prepare-loop` and
+`release-loop --stage-failed` refuse. `triage` separately refuses whenever this worktree
+has no record of the change, regardless of pending audit calls. When unaccounted audit calls reveal a missing record, the
+refusal names the expected record path. When active records of the same change stand under other
+worktree keys of this repository in the same state directory, it names every such key.
+The keys are derived from `git worktree list` alone; a listed worktree remains discoverable
+even if its directory is gone. Records of worktrees no longer listed by git, of other
+repositories and of other changes are never named, and
+neither is anything already archived. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
 member failed still runs. Each no-round line's `audit calls: N` accounts for
@@ -1747,6 +1836,33 @@ next `review-loop` starts a fresh run. It does not recover the lost record.
 Without a completed round, restart refuses; the maintainer must reconcile
 the missing record. This resolves the lost-record recovery question: the
 existing restart is the way past the refusal when its precondition holds.
+
+A record that is not lost but stands under **another worktree's key** — the
+change was continued in a second worktree of this repository — is never
+adopted by an ordinary verb; each worktree's record stays private, and the
+plain `--restart` refuses while such a record is active, naming its keys. The
+maintainer supersedes it explicitly: `release-loop <change> --restart
+--supersedes <key> --reason <text>`, repeating `--supersedes <key>` in that one call for every active other-worktree key.
+Supersession reads each selected record only under its lock, moves everything
+a release would delete — `availability.json` included — into one unique
+archive directory
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/`, one subdirectory per key, keeps the research state
+at its own key, and then writes one `Loop restarted:` line whose tail begins
+with the fixed clause `superseded record` and names every key, its
+round-number range, its archive subdirectory, the audit calls pending since
+the last release or restart (zero allowed and reported as zero) and the
+reason. An interrupted supersession is completed by repeating the same
+command: the staged archive's manifest carries the complete key set and the
+superseding worktree key, the retry matches its accounting line to the archive
+by the archive directory name, and it completes only that worktree's own key
+set. The next `review-loop` in this worktree is a fresh run; its rounds — and
+every later release's — continue after the highest round ever assigned, a later
+plain restart takes the highest round ever assigned, the clean stop and the
+repair brake read only the rounds after the restart, and a release before the
+first fresh round fails without writing. A record that is genuinely lost —
+its key is not derivable from any listed worktree, or it sits in another state
+directory — is not recovered by this: the command refuses it exactly like any
+other missing record.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
@@ -1880,8 +1996,9 @@ reword its reason so it names no fix instead of marking it fixed.
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. The repair prompt names the accepted
-plan's ledger tests as must-runs before handback, and commands Codex to run
-ruff and them itself; a file-only fallback delegates the same cheap checks to
+plan's standing ledger tests as pytest targets before handback, and commands Codex to run
+ruff and those standing tests itself; missing written entries remain owed, while missing unwritten
+entries are named but not owed; a file-only fallback delegates the same cheap checks to
 the runner, which stops at the first red one before post-run verification. An
 attempt's edit of the change's `findings.md` is restored from the runner's
 pre-call snapshot before any check reads model-written state: the fixed lines

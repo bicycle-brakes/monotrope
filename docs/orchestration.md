@@ -19,7 +19,8 @@ and by night.** Most of a change's time is spent waiting for a remote model,
 so parallel lanes keep the work moving. The trial began with three lanes on
 2026-10-27; since 2026-10-31 up to five run, and the run plan of each day or
 night names how many. The limits are the machine's memory,
-the one local verification slot and the maintainer's attention, not the
+the local verification slots (two since the two-slot change, `HARNESS_VERIFY_SLOTS`;
+one before) and the maintainer's attention, not the
 number of lanes. This page describes how this repository runs it as of
 2026-11-06. Much of it is still kept by hand.
 
@@ -44,16 +45,20 @@ limit (2026-10-27/28). One verify beside two runner verbs made Claude Code
 stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
 then:
 
-1. **One verify-bearing step at a time, across all lanes.** Such a step runs
+1. **Up to two verify-bearing steps across all lanes.** Such a step runs
    `make verify`: an implement or repair attempt whose targeted check falls
    back to the full run, the final review's own check, or the orchestrator's
    own full run, which runs at lower priority (`nice -n 10`). The number of test
    workers is sized from the machine: half the logical cores, at most one per
-   2 GiB of memory (bead coding-harness-l7sc, #305).
-2. **The other lanes take remote steps.** Explore, draft, review-loop rounds,
+   2 GiB of memory (bead coding-harness-l7sc, #305). This unchanged count is
+   per run, so two runs can use twice as many workers in total; per-slot tuning
+   remains follow-up work (bead coding-harness-bxxt.11). Each slot checks the
+   machine-wide memory floor at admission, an instantaneous reading that may
+   precede the first run's peak memory use.
+2. **Other lanes can take remote steps.** Explore, draft, review-loop rounds,
    the phase-6 review, CI waits and pull-request text use little local
    memory.
-3. **The order of the verify slot:** first a runner attempt, because its
+3. **When slots are contested, prioritise:** first a runner attempt, because its
    step limit can kill it; then the lane nearest its pull request; then the
    rest.
 4. **No restart after a memory stop without the maintainer's word.** The
@@ -142,7 +147,7 @@ incomplete runs on both sides of a possible pair.
 | Rule | Today | Planned |
 | --- | --- | --- |
 | Machine facts at the start of a night run | kept by hand: the orchestrator runs `python3 scripts/machine_facts.py` and records its snapshot (bead coding-harness-yql7) | — |
-| One protected verify step at a time, memory floor | enforced for protected work only: one admission per machine and a memory floor (bead coding-harness-p6mu, #284) cover the `minutes` gates and marked `seconds` gates. The cheap gates and the runner's full-mode preparation run outside it, in every lane at once, so a lane's red lint appears before any wait (bead coding-harness-bxxt.6); the [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md) found them free of shared writes | a disk bound for concurrent work (bead coding-harness-87b0) |
+| Two protected verify slots, memory floor | enforced for protected work only: two admission slots per machine since the two-slot change (`HARNESS_VERIFY_SLOTS`, default `2`) and a memory floor per admission (beads coding-harness-p6mu, coding-harness-u1ha, #284) cover the `minutes` gates and marked `seconds` gates. The cheap gates and the runner's full-mode preparation run outside it, in every lane at once, so a lane's red lint appears before any wait (bead coding-harness-bxxt.6); the [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md) found them free of shared writes | a disk bound for concurrent work (bead coding-harness-87b0) |
 | The appetite stops the next attempt | kept by hand; the runner keeps trying | the runner stops itself (bead coding-harness-uxa9) |
 | A rejected attempt's output is committed | by hand, after the verb | the runner commits it (bead coding-harness-t3s3) |
 | Route by measured success | fixed route | measured first (beads coding-harness-o2yc, coding-harness-hleu) |
