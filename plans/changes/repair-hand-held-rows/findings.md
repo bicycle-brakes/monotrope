@@ -424,3 +424,5 @@ Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model grok-4.7
 Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1153 files, 5372 commits, 12 rules.
 
 Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1153 files, 5373 commits, 12 rules.
