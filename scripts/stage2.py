@@ -8805,8 +8805,19 @@ def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | 
     nothing, and never refuses: classification must not raise where the strict `where_locations` does.
     """
     wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">", "[": "]"}
-    while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
-        token = token[1:-1]
+    # Whole-token wrappers come off first; then prose punctuation after a wrapper (`AGENTS.md`. or
+    # "AGENTS.md",) is dropped and the unwrapping tried again, so the opening wrapper cannot survive.
+    for _ in range(4):
+        if len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+            continue
+        if token in tracking.exact:
+            break
+        trimmed = token.rstrip(".,;:!?")
+        if trimmed != token and len(trimmed) >= 2 and trimmed[0] in wrappers and trimmed[-1] == wrappers[trimmed[0]]:
+            token = trimmed[1:-1]
+            continue
+        break
     if not token or _WHERE_URL.match(token):
         return None
     # Check the whole name first: punctuation may itself belong to an indexed filename.
@@ -8842,7 +8853,9 @@ def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | 
     if folded in tracking.spellings:
         return tracking.spellings[folded]
     directory = tracking.directories.get(folded)
-    if directory is not None and (root / collapsed).is_dir():
+    # The canonical tracked spelling is checked on disk, so a case-variant token still answers with
+    # the tracked directory and its slash on a case-sensitive checkout.
+    if directory is not None and (root / directory.rstrip("/")).is_dir():
         return directory
     return collapsed
 
@@ -11049,7 +11062,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         return problems
 
     def before_commit() -> None:
-        require_unchanged_repair_rows(ctx, eligible, resolved)
+        # Held rows keep the unchanged-cell guarantee: an attempt that edits one is refused.
+        require_unchanged_repair_rows(ctx, taken, resolved)
         mark_repaired_findings(ctx, eligible, fixes, resolved=resolved)
 
     commit_message = f"fix({change}): repair taken findings {', '.join(ids)}"

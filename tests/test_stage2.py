@@ -10944,6 +10944,70 @@ def test_repair_classifies_held_paths_before_dispatch(world: World) -> None:
         assert f"finding of {held}" not in prompt, held
 
 
+def test_repair_classifies_wrapped_tokens_with_trailing_punctuation(world: World) -> None:
+    """L1-1. Planted fault: prose punctuation after a wrapper leaves the opening wrapper on the token,
+    so the held path comes back as a literal and the row stays committable."""
+    for cell in ("`AGENTS.md`.", '"AGENTS.md",', "(AGENTS.md).", "see `AGENTS.md`;"):
+        assert world.root.joinpath("AGENTS.md").exists()
+        named = stage2.where_named_paths(cell, world.root)
+        assert "AGENTS.md" in named, (cell, named)
+        assert not any(path.startswith(("`", '"', "(")) for path in named), (cell, named)
+    hand = stage2.repair_hand_rows(
+        world.root, "demo", [("record", record_cells("L1-1", "taken — test_a", where="`AGENTS.md`."))]
+    )
+    assert [row[0] for _, row, _ in hand] == ["L1-1"]
+
+
+def test_repair_case_variant_directory_answers_with_tracked_spelling(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L1-3. Planted fault: the directory is checked on disk by the token's spelling, so on a
+    case-sensitive checkout a case-variant directory loses its canonical slash and its held prefix."""
+    real = Path.is_dir
+
+    def case_sensitive_is_dir(self: Path) -> bool:
+        try:
+            relative = self.relative_to(world.root)
+        except ValueError:
+            return real(self)
+        current = world.root
+        for part in relative.parts:
+            if part not in os.listdir(current):
+                return False
+            current = current / part
+        return real(current)
+
+    (world.root / "templates").mkdir(exist_ok=True)
+    (world.root / "templates" / "held.md").write_text("held\n", encoding="utf-8")
+    git(world.root, "add", "templates/held.md")
+    git(world.root, "commit", "--quiet", "-m", "track a directory")
+    monkeypatch.setattr(Path, "is_dir", case_sensitive_is_dir)
+    assert stage2.where_named_paths("TEMPLATES", world.root) == ["templates/"]
+    assert stage2.where_named_paths("Templates/", world.root) == ["templates/"]
+
+
+def test_repair_held_rows_keep_unchanged_cell_check(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L1-2. Planted fault: the unchanged-row check receives only the eligible rows, so an attempt
+    that edits a held row's Status or Broke a test cell is not refused."""
+    checked: list[list[str]] = []
+    real = stage2.require_unchanged_repair_rows
+
+    def spy(ctx: object, taken: list, resolved: list) -> None:
+        checked.append([row[0] for _, row in taken])
+        real(ctx, taken, resolved)
+
+    monkeypatch.setattr(stage2, "require_unchanged_repair_rows", spy)
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    assert checked, "the unchanged-row check must run before the commit"
+    for ids in checked:
+        assert "L1-1" in ids and "L1-2" in ids, ids
+
+
 def test_repair_keeps_nonheld_locations_in_model_batch(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 2. Planted fault: a pathless row, an unknown non-held path or a non-held directory
     is handed off or refused solely because of its `Where`."""

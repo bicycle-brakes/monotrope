@@ -426,3 +426,62 @@ Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1153 files, 5372 commits, 12 rules.
 
 Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1153 files, 5373 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1153 files, 5398 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +18 -4
+> - `tests/test_stage2.py` +60 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......F...............                                                   [100%]
+> =================================== FAILURES ===================================
+> _______ test_repair_case_variant_directory_answers_with_tracked_spelling _______
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-hand-held-rows/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3230/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3230/popen-gw1/test_repair_case_variant_direc0/state'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10747ad50>
+>
+>     def test_repair_case_variant_directory_answers_with_tracked_spelling(
+>         world: World, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         """L1-3. Planted fault: the directory is checked on disk by the token's spelling, so on a
+>         case-sensitive checkout a case-variant directory loses its canonical slash and its held prefix."""
+>         real = Path.is_dir
+>     
+>         def case_sensitive_is_dir(self: Path) -> bool:
+>             try:
+>                 relative = self.relative_to(world.root)
+>             except ValueError:
+>                 return real(self)
+>             current = world.root
+>             for part in relative.parts:
+>                 if part not in os.listdir(current):
+>                     return False
+>                 current = current / part
+>             return current.is_dir()
+>     
+>         monkeypatch.setattr(Path, "is_dir", case_sensitive_is_dir)
+> >       assert stage2.where_named_paths("TEMPLATES", world.root) == ["templates/"]
+> E       AssertionError: assert ['TEMPLATES'] == ['templates/']
+> E         
+> E         At index 0 diff: 'TEMPLATES' != 'templates/'
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:10981: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_case_variant_directory_answers_with_tracked_spelling
+> 1 failed, 21 passed in 10.51s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261122T211943290543Z-e4e44dc2.md
+> ```
+
+Orchestrator hand finish, 2026-11-22: the Sonnet repair attempt of loop rows L1-1..L1-3 (stage-1 route, Codex usage-limited) failed its post-run checks only on its own L1-3 test: the fixture tracked no directory, and the test's case-sensitive `Path.is_dir` stand-in called itself. The orchestrator (Opus 5.5) fixed the test (a tracked `templates/held.md` in the fixture, the stand-in calls the real `is_dir`); the runner code of the attempt is unchanged. Full `make verify` green on 2026-11-22 (execution 1005 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).
