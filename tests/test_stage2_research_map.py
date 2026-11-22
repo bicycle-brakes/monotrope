@@ -14,12 +14,37 @@ OWN = "plans/changes/own/spec.md"
 ACTIVE = "plans/changes/adjacent/spec.md"
 ARCHIVE = "plans/changes/archive/2026-10-01-old/spec.md"
 LIVING = "plans/specs/capability/spec.md"
+SCHEMA_TEXT = (
+    Path(__file__).resolve().parents[1] / "prompts" / "research-swarm" / "finder-locator.schema.json"
+).read_text(encoding="utf-8")
 
 
 def module():
     import stage2_research_map
 
     return stage2_research_map
+
+
+def schema():
+    """The interpreted form of the one real locator schema the finder calls receive."""
+    return module().interpret_locator_schema(SCHEMA_TEXT)
+
+
+def altered(edit):
+    """The interpreted schema after one mutation of the parsed file."""
+    value = json.loads(SCHEMA_TEXT)
+    edit(value)
+    return module().interpret_locator_schema(value)
+
+
+def sample(code=None):
+    """A finder answer whose code list is `code` and whose other lists hold one locator each."""
+    return {
+        "code": [finder("src/app.py", "run")] if code is None else code,
+        "rules": [finder("AGENTS.md", "Agent rules")],
+        "tests": [{"not_read": "none mapped"}],
+        "neighbours": [{"not_read": "none mapped"}],
+    }
 
 
 def empty(merged=False, reports=None):
@@ -247,6 +272,17 @@ def test_map_duplicate_raw_json_keys_fail_preparation(target):
     assert failure.value.exit_code == 1
 
 
+@pytest.mark.parametrize("number", ["1e999", "-1e999", "NaN", "Infinity", "-Infinity"])
+def test_finder_nonfinite_number_rejects_whole_report(number):
+    report = json.dumps(sample(code=[finder("src/app.py"), {"path": "bad", "reference": "x", "reason": "x"}]))
+    report = report.replace('"path": "bad"', '"path": ' + number)
+    try:
+        module().filter_locator_report(report, schema())
+    except module().ResearchMapError:
+        return
+    pytest.fail("a non-finite number must invalidate the entire finder report before filtering")
+
+
 @pytest.mark.parametrize("fault", ["finder-extra", "merge-extra", "empty-reason"])
 def test_map_locator_schema_accepts_only_locators_and_meaningful_reasons(fault):
     reports, merge, frozen = overlapping()
@@ -295,10 +331,182 @@ def test_map_unread_categories_preserve_each_finder_reason():
 
 @pytest.mark.parametrize("reason", [42, None, [], {}, "", "   "])
 def test_finder_validation_refuses_malformed_reasons(reason):
-    report = {category: [{"not_read": reason}] for category in ("code", "rules", "tests", "neighbours")}
+    body = {category: [{"not_read": reason}] for category in ("code", "rules", "tests", "neighbours")}
     with pytest.raises(module().ResearchMapError):
-        module().validate_locator_report(report)
-    report = empty()
-    report["code"] = [finder("src/app.py", "run", reason)]
+        module().validate_locator_report(body, schema())
+    body = empty()
+    body["code"] = [finder("src/app.py", "run", reason)]
     with pytest.raises(module().ResearchMapError):
-        module().validate_locator_report(report)
+        module().validate_locator_report(body, schema())
+
+
+def test_finder_validation_uses_shared_schema():
+    # Criterion 3. Planted fault: the schema's rules and validation's rules diverge.
+    module().validate_locator_report(sample(), schema())
+    blank = sample()
+    blank["code"][0]["reference"] = "   "
+    with pytest.raises(module().ResearchMapError):
+        module().validate_locator_report(blank, schema())
+    # The same answer passes the schema that dropped the rule, so validation reads the schema it is given.
+    without_pattern = altered(
+        lambda value: value["properties"]["code"]["items"]["anyOf"][0]["properties"]["reference"].pop("pattern")
+    )
+    module().validate_locator_report(blank, without_pattern)
+    sparse = {"path": "src/app.py", "reference": "run"}
+    with pytest.raises(module().ResearchMapError):
+        module().validate_locator_report(sample(code=[sparse]), schema())
+
+    def drop_reason(value):
+        value["properties"]["code"]["items"]["anyOf"][0]["required"].remove("reason")
+
+    module().validate_locator_report(sample(code=[sparse]), altered(drop_reason))
+
+
+@pytest.mark.parametrize(
+    "edit,keyword",
+    [
+        pytest.param(lambda value: value.update(enum=["code"]), "enum", id="root"),
+        pytest.param(lambda value: value["properties"]["code"].update(maxItems=5), "maxItems", id="category"),
+        pytest.param(lambda value: value["properties"]["code"]["items"].update(oneOf=[]), "oneOf", id="items"),
+        pytest.param(
+            lambda value: value["properties"]["code"]["items"]["anyOf"][0]["properties"]["path"].update(format="uri"),
+            "format",
+            id="field",
+        ),
+    ],
+)
+def test_finder_schema_rejects_unknown_keyword(edit, keyword):
+    # Criterion 19. Planted fault: an unknown keyword is silently ignored.
+    with pytest.raises(module().ResearchMapError) as failure:
+        altered(edit)
+    assert "unsupported schema keyword" in str(failure.value) and keyword in str(failure.value)
+
+
+def test_finder_filter_reports_each_invalid_entry():
+    # Criterion 5. Planted fault: an entry fault survives or a dropped entry has no applicable error.
+    entries = [
+        finder("src/app.py", "run"),  # retained
+        "not an entry",  # not an object
+        {"path": "src/app.py", "reference": "run"},  # reason missing
+        {**finder("src/app.py", "run"), "decision": "rewrite"},  # extra field
+        finder("src/app.py", "   "),  # blank reference
+        finder("src/app.py", "run", ""),  # empty reason
+    ]
+    retained, rows = module().filter_locator_report(sample(code=entries), schema())
+    assert [row["index"] for row in rows] == [1, 2, 3, 4, 5], "every invalid entry carries its own errors"
+    assert rows[0]["errors"] == ["the entry must be a JSON object"]
+    assert rows[1]["errors"] == ["the required field 'reason' is missing"]
+    assert rows[2]["errors"] == ["the field 'decision' is not part of the entry form"]
+    assert any("'reference'" in message for message in rows[3]["errors"])
+    assert any("'reason'" in message for message in rows[4]["errors"])
+    assert retained["code"] == [entries[0]]
+    assert rows[0]["category"] == "code" and rows[4]["entry"] == entries[5]
+
+
+def test_finder_filter_marks_emptied_category():
+    # Criterion 6. Planted fault: the fixed marker is missing, another marker, or one beside a retained entry.
+    answer = sample(
+        code=[finder("src/app.py", "   "), {"path": "src/app.py"}],  # every entry dropped
+    )
+    answer["rules"] = [finder("AGENTS.md", "Agent rules"), {"path": "AGENTS.md"}]  # one retained
+    retained, rows = module().filter_locator_report(answer, schema())
+    assert retained["code"] == [{"not_read": module().FILTERED_MARKER}]
+    assert retained["rules"] == [finder("AGENTS.md", "Agent rules")], "no marker beside a retained entry"
+    assert len(rows) == 3  # two in code, one in rules
+    module().validate_locator_report(retained, schema())  # the retained answer is itself a valid finder answer
+
+
+def test_finder_schema_outer_shape_and_entry_fault_boundary():
+    # Criterion 22. Planted fault: outer rules are ignored, categories diverge, or a fault is misclassified.
+    assert set(schema()["categories"]) == set(module().CATEGORIES), "the schema's categories match the merge"
+    outer = [
+        sample(code=[finder("src/app.py", "run")]) | {"design": [{"not_read": "x"}]},  # extra category
+        {k: v for k, v in sample().items() if k != "rules"},  # missing category
+        sample(code="x"),  # category not a list
+        sample(code=[]),  # originally empty category
+    ]
+    for answer in outer:
+        with pytest.raises(module().ResearchMapError):
+            module().filter_locator_report(answer, schema())
+
+    def demand_two(value):
+        value["properties"]["code"]["minItems"] = 2
+
+    with pytest.raises(module().ResearchMapError):  # the outer minItems rule comes from the schema, not a copy
+        module().filter_locator_report(sample(), altered(demand_two))
+    retained, rows = module().filter_locator_report(sample(code=[{"path": "src/app.py"}]), schema())
+    assert len(rows) == 1, "a violation inside a category item is an entry fault, not an outer one"
+    assert retained["code"] == [{"not_read": module().FILTERED_MARKER}]
+
+
+def test_finder_schema_annotations_and_reference_guidance():
+    # Criterion 24. Planted fault: an annotation is rejected or enforced, or the reference guidance is absent.
+    parsed = json.loads(SCHEMA_TEXT)
+    assert {"$schema", "title", "description"} <= set(parsed), "the file carries the annotation keywords"
+    module().validate_locator_report(sample(), schema())  # annotations are accepted
+
+    def demand_uppercase(value):
+        value["properties"]["code"]["items"]["anyOf"][0]["properties"]["path"]["description"] = "UPPERCASE PATHS ONLY"
+
+    module().validate_locator_report(sample(), altered(demand_uppercase))  # a description is never enforced
+    flat = " ".join(SCHEMA_TEXT.split())
+    assert "exact, case-sensitive symbol or section" in flat
+    assert "Line numbers, bare paths and prose are not references" in flat
+    assert "`criterion <n>`" in flat
+
+
+def test_finder_field_form_is_resolved_at_merge():
+    # Criterion 25. Planted fault: a form-only issue is filtered or bypasses merge resolution.
+    entries = [finder("src/app.py", "run"), finder("src/app.py", "NoSuch")]
+    answer = sample(code=entries)
+    answer["rules"] = [{"not_read": "none mapped"}]  # the merge fixture below stays the retained report's exact union
+    retained, rows = module().filter_locator_report(answer, schema())
+    assert rows == [], "a nonblank path and reference pass the schema whatever their form"
+    reports = trio()
+    reports["deepseek-finder"] = retained
+    merge = empty(merged=True, reports=reports)
+    merge["code"] += [merged(entry["path"], [("deepseek-finder", "locate")], entry["reference"]) for entry in entries]
+    frozen = sources() | {"src/app.py": b"def run():\n    return 1\n"}
+    result = module().merge_research_map(reports, merge, frozen, [], OWN)
+    by_reference = {entry["reference"]: entry for entry in result["entries"]}
+    assert by_reference["run"]["status"] == "resolved" and result["scope"] == [["code", "src/app.py", "run"]]
+    assert by_reference["NoSuch"]["status"] == "unresolved", "the form stays the merge resolution's business"
+
+
+def test_unpatterned_string_field_still_checks_type():
+    value = json.loads(SCHEMA_TEXT)
+    field = value["properties"]["code"]["items"]["anyOf"][0]["properties"]["path"]
+    field.pop("pattern", None)
+    compiled = module().interpret_locator_schema(value)
+    retained, faults = module().filter_locator_report(sample(code=[finder(42)]), compiled)
+    assert faults and "must be a string" in str(faults)
+    assert retained["code"][0].get("not_read")
+
+
+def test_finder_faults_follow_entry_form() -> None:
+    # L3-4: a dropped entry's errors come from the form its keys aim at, not the closest other form.
+    report = {key: [{"not_read": "not available"}] for key in ("code", "rules", "tests", "neighbours")}
+    report["code"].extend([{"path": 42}, {}])
+    _, rows = module().filter_locator_report(report, schema())
+    assert "the field 'path' must be a string" in rows[0]["errors"]
+    assert "the required field 'reference' is missing" in rows[0]["errors"]
+    assert all("not_read" not in error for error in rows[0]["errors"])
+    assert "the required field 'path' is missing" in rows[1]["errors"]
+
+
+def test_schema_rejects_categories_incompatible_with_merge():
+    def rename_category(value):
+        value["properties"]["design"] = value["properties"].pop("code")
+        value["required"][value["required"].index("code")] = "design"
+
+    with pytest.raises(module().ResearchMapError, match="categor"):
+        altered(rename_category)
+
+
+def test_empty_entry_matches_any_declared_form():
+    def allow_empty_unread(value):
+        value["properties"]["code"]["items"]["anyOf"][1]["required"] = []
+
+    retained, rows = module().filter_locator_report(sample(code=[{}]), altered(allow_empty_unread))
+    assert retained["code"] == [{}]
+    assert rows == []
