@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-rm8
@@ -19,7 +19,7 @@ tags: [plan, stage-2, session]
 
 ```text
 For you:     Long checked handovers reach Codex and Pi intact through a short Terminal command.
-Done when:   A terminal-input stand-in executes the short command and records the complete boundary-size prompt for both CLIs; the criterion ledger and make verify pass.
+Done when:   A terminal-input stand-in executes the short command and records an eligible boundary-size prompt for both CLIs; the criterion ledger and make verify pass.
 Appetite:    2 h of phase 4 including repair; stop at the limit.
 Not now:     CLI startup detection, VS Code transport, unrelated unexecuted input, or live model qualification.
 Pre-mortem:  suppose it failed: most likely because tests inspect the launcher text without executing the dispatched command.
@@ -34,16 +34,19 @@ was recorded. The interview's answered skip permits this transport repair.
 ## Steps and files
 
 1. **Implementer: `scripts/stage2_session.py`.** Add a fixed launcher name
-   `terminal-session.sh` and a 1,024-byte terminal-input budget. Keep
-   `cli_argv` and the quoting in `terminal_command`: write its existing
+   `terminal-session.sh` and a 1,024-byte typed-line budget including the
+   terminating newline. Keep `cli_argv` and the quoting in `terminal_command`:
+   write its existing
    `cd ... && exec /usr/bin/env -i ... <argv>` body into the launcher instead
    of sending it through Terminal. Use `/bin/sh <quoted absolute launcher>`
    as the short dispatched command; preserve interactive stdin, with no
    command substitution or prompt-file argument sent to either CLI.
    Create each fresh attempt directory with mode 0700 before writing any
    content and the launcher with mode 0600, independent of umask. Keep the
-   existing 32 KiB prompt check and 64 KiB full-command bound; add the short
-   command's UTF-8 byte and CR/LF checks before dispatch, with exit-2 reasons.
+   existing 32 KiB prompt check and apply the 64 KiB bound to the UTF-8 bytes
+   of the exact launch-file content, with no extra wrapper bytes; reject longer
+   content. Limit the dispatched command to 1,023 UTF-8 bytes and refuse a
+   launch-file path containing CR, LF or NUL before dispatch, with exit-2 reasons.
    Prepare the launcher before the second `checked_prompt` call so that scan
    remains immediately before audit/dispatch; it checks the exact same prompt
    passed to `cli_argv`. Keep Go binding and `dispatch_go` around the send.
@@ -53,13 +56,18 @@ was recorded. The interview's answered skip permits this transport repair.
    Update the module description to state that the launcher contains the
    checked prompt but no copied credentials.
 2. **Implementer: `tests/test_stage2_session.py`.** Extend the osascript
-   stand-in with a 1,024-byte input ceiling that drops excess input before
-   shell execution; use it in the new transport tests, never a real window.
+   stand-in with a 1,024-byte typed-line ceiling including the terminating
+   newline that drops excess input before shell execution; use it in the new
+   transport tests, never a real window.
    Parameterize Codex/Pi with normal, exactly 32,768-byte assembled UTF-8 and
-   multibyte/quote/newline-heavy prompts; record actual CLI argv and its tail
-   sentinel after executing the short command. The positive boundary test
-   must go red with the old inline-prompt dispatch. Test NUL, 32,769 bytes,
-   oversized short paths and line-breaking launch paths before dispatch.
+   multibyte/quote/newline-heavy prompts that fit the launch-file bound; record
+   actual CLI argv and its tail sentinel after executing the short command. The positive boundary test
+   must go red with the old inline-prompt dispatch. Test the inclusive short
+   command boundary (1,023 bytes dispatched, 1,024 refused), the launch-file
+   content boundary (65,536 bytes accepted, 65,537 refused, including a
+   quote-expanded prompt under 32 KiB), prompt NUL and 32,769 bytes, and launch
+   paths containing CR, LF or NUL: every invalid case refuses before dispatch
+   with its reason. Use byte counts, including multibyte characters.
    Inject launcher-write failure and run under a permissive umask to check
    owner-only modes, failure cleanup and accepted retention. Adapt existing
    assertions that parse inline argv or expect only the AppleScript file:
@@ -68,10 +76,12 @@ was recorded. The interview's answered skip permits this transport repair.
    values and quoted worktree paths; confirm sentinels never execute.
    Preserve audit, second-scan, flags, credentials and policy regression tests.
 3. **Implementer: `docs/WORKFLOW.md`.** In “The interactive session”, describe
-   the short 1,024-byte Terminal input, unchanged 32 KiB prompt and 64 KiB
-   full-command ceilings, prompt-bearing private launcher and retained-file
-   lifecycle. Replace “no prompt” for launch files; retain dispatch-only
-   acceptance, credential handling and launch-only leak-check wording.
+   the short command form, its 1,023-byte dispatch limit and 1,024-byte typed
+   line including newline, the 32 KiB prompt and 64 KiB launcher-content
+   limits, prompt-bearing private launcher, removal on refusal or failed
+   dispatch, and retention on acceptance. Replace “no prompt” for launch files;
+   retain dispatch-only acceptance, credential handling and launch-only
+   leak-check wording. Put the same transport facts in the module description.
 4. **Implementer: this `plan.md`.** Convert each new ledger entry to a test
    entry when defined and record measured phase-4 time below. Change
    `spec.md`'s and `plan.md`'s implementation status only as work advances.
@@ -94,9 +104,10 @@ are absent at this baseline; use the phase-3 prompt's form and existing gates.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_session.py::test_long_prompts_use_a_bounded_terminal_command — inline payload exceeds the stand-in's input ceiling or changes command length.
+- 1: not yet written tests/test_stage2_session.py::test_long_prompts_use_a_bounded_terminal_command — inline payload exceeds the typed-line ceiling, changes command length, or a 1,023-byte command is refused.
 - 2: not yet written tests/test_stage2_session.py::test_boundary_prompts_reach_both_interactive_clis_intact — shell execution loses the final sentinel or changes one argument byte.
-- 3: not yet written tests/test_stage2_session.py::test_invalid_prompt_or_launch_line_refuses_before_dispatch — NUL, byte overflow or line-breaking launch path reaches osascript.
+- 3: not yet written tests/test_stage2_session.py::test_invalid_prompt_or_launch_line_refuses_before_dispatch — prompt NUL or overflow, a 1,024-byte command, or a CR/LF/NUL launch path reaches osascript without an identifying refusal.
+- 3: not yet written tests/test_stage2_session.py::test_launch_file_content_limit_counts_quoted_utf8_bytes — 65,536 bytes is refused, or 65,537 bytes including quote expansion dispatches.
 - 4: tests/test_stage2_session.py::test_hostile_prompt_text_stays_data — prompt shell syntax executes a planted sentinel.
 - 4: not yet written tests/test_stage2_session.py::test_launcher_paths_and_environment_stay_data — quoted path or environment value executes shell syntax or changes value.
 - 5: not yet written tests/test_stage2_session.py::test_prompt_launcher_is_private_and_follows_attempt_lifecycle — permissive umask exposes content, failed write dispatches, or cleanup touches siblings.
@@ -109,7 +120,7 @@ are absent at this baseline; use the phase-3 prompt's form and existing gates.
 - 7: tests/test_stage2_session.py::test_the_audit_names_the_attempt_and_keeps_prior_findings — transport changes erase the audit or its facts.
 - 7: tests/test_stage2_session.py::test_a_failed_terminal_dispatch_is_recorded_and_cleaned — rejected Terminal dispatch returns success or records acceptance.
 - 7: tests/test_stage2_session.py::test_codex_is_dispatched_interactively_with_its_exact_safety_flags — accepted stand-in dispatch fails the existing exit-0 contract.
-- 8: not yet written tests/test_stage2_session.py::test_session_transport_documentation_matches_private_launcher — workflow/module still promise no stored prompt or CLI-start acknowledgement.
+- 8: not yet written tests/test_stage2_session.py::test_session_transport_documentation_matches_private_launcher — workflow or module omits or misstates command form, prompt, any byte limit, removal/retention, or dispatch-only acceptance.
 
 ## Not touched
 
@@ -121,3 +132,5 @@ No new production script or CI caller is introduced: the launcher is per-attempt
 runtime data invoked through the already-covered session entry point.
 
 ## Time used
+
+2026-11-22 03:25:20–03:27:49 UTC, 149 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

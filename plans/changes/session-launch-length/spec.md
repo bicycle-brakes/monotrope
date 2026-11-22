@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-rm8
@@ -44,22 +44,26 @@ as the existing session contract requires.
 ## Acceptance criteria
 
 1. When either supported session transport dispatches, Terminal receives one
-   command of at most 1,024 UTF-8 bytes, without embedded line breaks, prompt
+   command of at most 1,023 UTF-8 bytes, without embedded line breaks, prompt
    text or environment assignments, independent of the prompt's length.
+   The 1,024-byte typed-line budget includes Terminal's terminating newline.
    *Refuted by:* a near-limit prompt enlarging the dispatched command, a
-   multiline command, or dispatch of a command exceeding that byte budget.
-2. When an otherwise valid assembled first prompt is at most 32 KiB, executing
-   the dispatched command delivers that exact prompt as one CLI argument for
-   both Codex and Pi.
-   *Refuted by:* a boundary-size or multibyte prompt losing its tail, being
-   split into arguments, changing text, or being refused solely for its length.
-3. If the assembled prompt contains NUL, exceeds 32 KiB, or its short launch
-   command cannot fit criterion 1's budget, the runner refuses before Terminal
-   dispatch with exit 2 and a reason naming the invalid input or exceeded bound.
-   *Refuted by:* dispatch after such input, a byte/character-count mismatch,
-   silent truncation, or an unexplained refusal.
-4. When prompt text, paths or allowed environment values contain shell syntax,
-   their contents remain data throughout launch-file execution.
+   multiline command, or dispatch of a command exceeding 1,023 bytes.
+2. When an otherwise valid assembled first prompt is at most 32 KiB and the
+   launch-file content is at most 64 KiB, executing the dispatched command
+   delivers that exact prompt as one CLI argument for both Codex and Pi.
+   *Refuted by:* an eligible boundary-size or multibyte prompt losing its tail,
+   being split into arguments, changing text, or being refused solely for its length.
+3. If the assembled prompt contains NUL or exceeds 32 KiB, the launch-file
+   content exceeds 64 KiB, the short command exceeds 1,023 UTF-8 bytes, or the
+   launch-file path contains a newline, carriage return or NUL, the runner
+   refuses before Terminal dispatch with exit 2 and a reason identifying the
+   invalid input or exceeded bound.
+   *Refuted by:* dispatch after any such input, refusal at an inclusive byte
+   limit, a byte/character-count mismatch, silent truncation, or an unexplained
+   refusal.
+4. When prompt text, eligible paths or allowed environment values contain shell
+   syntax, their contents remain data throughout launch-file execution.
    *Refuted by:* quotes, substitutions, Unicode or newlines changing the
    recorded prompt/environment or executing an extra command in a stand-in.
 5. When launch files are prepared, the prompt-bearing file is confined to a
@@ -81,10 +85,13 @@ as the existing session contract requires.
    *Refuted by:* a rejected dispatch returning success, a lost audit, or an
    accepted dispatch being reported as proof that the CLI authenticated or ran.
 8. When the new transport is documented, the workflow and module description
-   accurately describe the short command, local prompt-bearing file, byte
-   bounds, retained-file lifecycle and dispatch-only acceptance.
-   *Refuted by:* either description claiming that launch files contain no
-   prompt, or promising successful CLI startup from dispatch acceptance.
+   describe the short command form, prompt-bearing local launch file, 32 KiB
+   prompt limit, 64 KiB launch-file-content limit, 1,023-byte dispatched-command
+   limit, file removal on refusal or failed dispatch, retention on acceptance,
+   and dispatch-only acceptance.
+   *Refuted by:* either description omitting or misstating any of those facts,
+   claiming launch files contain no prompt, or promising CLI startup from
+   dispatch acceptance.
 
 ## Non-goals
 
@@ -106,8 +113,8 @@ as the existing session contract requires.
 - `scripts/stage2.py`, `scripts/stage2_session_policy.mjs`, `tools/pi/`,
   `prompts/`, `templates/` and harness configuration: reuse existing boundaries.
 - Neighbouring change artifacts, including `plans/changes/stage2-session/`:
-  their 64 KiB command ceiling still holds under the tighter dispatch bound;
-  their dispatch-only acceptance contract is preserved.
+  the 64 KiB ceiling holds for the launch-file content and the tighter dispatch
+  bound; their dispatch-only acceptance contract is preserved.
 
 ## Definition of Done
 
@@ -127,9 +134,12 @@ None open. The agent chose the following reversible details and recorded why:
 - [DETAIL] Use a local shell launcher with the prompt quoted as argument data:
   it removes the large payload from Terminal input while preserving interactive
   stdin and existing CLI arguments, without changing either CLI's prompt format.
-- [DETAIL] Set the dispatched-command budget to 1,024 UTF-8 bytes, a conservative
-  engineering bound rather than a claim about a measured Terminal threshold;
-  refuse unusually long paths instead of sending a larger line.
+- [DETAIL] Include Terminal's terminating newline in the 1,024-byte typed-line
+  budget, leaving at most 1,023 UTF-8 bytes for the dispatched command. Refuse
+  launch-file paths containing newline, carriage return or NUL because they
+  cannot be sent as the required single line.
+- [DETAIL] Retain the 64 KiB limit for the quoted launch-file content, where
+  the full command now lives; quote expansion may make a smaller prompt exceed it.
 - [DETAIL] Retain the prompt-bearing launcher with accepted attempt files so
   asynchronous Terminal execution cannot race cleanup; owner-only permissions
   bound the new local persistence. This follows the existing attempt lifecycle.
