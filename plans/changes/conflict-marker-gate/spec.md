@@ -25,8 +25,8 @@ Verification blocks merge-conflict markers in tracked text files, and the
 supported main-merge helper stops safely on ordinary conflicts (bead
 coding-harness-i76l — conflict-marker gate). Research: `research.md`.
 Authority: the maintainer-approved scope in `decisions.md`, “SKIP · interview”.
-Revised 2026-11-22 after two phase-2a rounds; the eight findings (S-1 to
-S-8) are worked in, each decision recorded under Open decisions.
+Revised 2026-11-22 after three phase-2a rounds; the ten findings (S-1 to
+S-10) are worked in, each decision recorded under Open decisions.
 
 ## Problem
 
@@ -50,9 +50,12 @@ S-8) are worked in, each decision recorded under Open decisions.
   characters. Labels, complete conflict groups and file extensions do not
   affect detection.
 - **Tracked text:** a regular file present in the working tree and listed
-  by Git's index, whose contents contain no NUL byte; non-UTF-8 bytes do
-  not exempt an otherwise textual file. Symlinks and submodule entries are
-  not followed. Deleted paths have no working-tree text to scan.
+  by Git's index that is not binary under Git's own rule: a file is
+  binary when a NUL byte appears in its first 8000 bytes or when the
+  repository's attribute sources — the committed `.gitattributes` or the
+  local `.git/info/attributes` — mark its path binary. Non-UTF-8 bytes do
+  not exempt an otherwise textual file. Symlinks and submodule entries
+  are not followed. Deleted paths have no working-tree text to scan.
 - **Named fixture exception:** an exact repository-relative file path in
   the allowlist constant of `scripts/check_conflict_markers.py`, never a
   directory, wildcard or blanket test exemption. The list starts empty,
@@ -83,19 +86,24 @@ S-8) are worked in, each decision recorded under Open decisions.
    or checking stages, repairs, commits or pushes anything.
 3. While the measured files contain no marker lines, binary files, untracked
    files and exact named fixtures do not cause marker findings.
-   *Refuted by:* clean text is rejected, a binary or untracked marker is
-   scanned, or allowing one fixture also exempts a sibling or prefix match.
+   *Refuted by:* clean text is rejected, an early-NUL or attribute-marked
+   binary file yields a finding, a marker in a file whose first NUL comes
+   after byte 8000 passes as binary, an untracked marker is scanned, or
+   allowing one fixture also exempts a sibling or prefix match.
 4. When Git's whitespace and error check, invoked with a fixed
-   `core.whitespace` rule set and with every attribute source outside the
-   repository neutralised, reports a fault in staged or unstaged changes
-   outside named fixture exceptions, the check fails with its diagnostic;
-   the verdict is identical whatever the invoking user's global and system
-   Git configuration and attribute files outside the repository say, and
-   the committed `.gitattributes` and `.git/info/attributes` still apply.
+   `core.whitespace` rule set and with every attribute source and every
+   global and system configuration neutralised, reports a fault in staged
+   or unstaged changes outside named fixture exceptions, the check fails
+   with its diagnostic; the verdict is identical whatever the invoking
+   user's global and system Git configuration and attribute files outside
+   the repository say, and the committed `.gitattributes`,
+   `.git/info/attributes` and repository configuration still apply.
    *Refuted by:* a trailing-whitespace fault passes in either change layer,
    including a staged faulty blob whose working file has been restored, or
    the verdict changes on a machine whose global or system Git
-   configuration or attribute files disable a whitespace rule.
+   configuration or attribute files disable a whitespace rule or otherwise
+   change what Git compares, such as a global `core.autocrlf` hiding a
+   trailing carriage return.
 5. If required Git inspection or reading a present tracked regular file
    fails, the check exits unsuccessfully and explains what was not measured.
    *Refuted by:* a non-repository root, failed Git command or unreadable
@@ -165,8 +173,8 @@ edits the held gate declaration and generated hosted workflow.
 
 ## Open decisions
 
-None open. The phase-2a findings of 2026-11-22 (S-1 to S-8 in
-`findings.md`, from two review rounds) are decided as `[DETAIL]`s; each is
+None open. The phase-2a findings of 2026-11-22 (S-1 to S-10 in
+`findings.md`, from three review rounds) are decided as `[DETAIL]`s; each is
 worked into the terms and criteria above, and its status stands in
 `findings.md`. The following reversible `[DETAIL]` defaults are recorded
 with their reasons; none changes the maintainer's approved scope:
@@ -211,12 +219,25 @@ with their reasons; none changes the maintainer's approved scope:
   existing supported-local-merge sentence already names `merge-main`; the
   round-1 S-1 status wording that spoke of naming it anew is superseded by
   this, and no doctrine file joins the pull request.
+- Global and system configuration (S-9): every Git invocation of the check
+  runs with `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`, in
+  addition to the S-5/S-7 settings, so no global or system configuration
+  of any kind — `core.autocrlf` and `core.eol` included — reaches the
+  verdict; repository configuration and the committed attribute sources
+  still apply, and configuration planted in the invoking environment is
+  overridden, not inherited.
+- Binary definition (S-10): binary follows Git's own rule — a NUL byte in
+  the first 8000 bytes, or a repository attribute marking the path binary —
+  for the marker scan and the whitespace check alike, so the two never
+  disagree on one file; it supersedes the earlier no-NUL-anywhere wording
+  of Tracked text.
 - Use the marker prefixes exactly as approved, in every tracked text path,
   including fenced blocks: a fence must not hide an accidental conflict.
   The fixture allowlist starts empty because the current tracked prefix
   search at `2d4b1a3d` on 2026-11-05 found no file needing an exception.
-- Define text by absence of NUL and inspect marker prefixes as bytes to
-  avoid silently dropping text solely because UTF-8 decoding fails.
+- Inspect marker prefixes as bytes, so text is never silently skipped
+  because UTF-8 decoding fails; only Git's binary rule (S-10) exempts a
+  file, never a decoder error.
 - Check both staged and unstaged differences with `git diff --check`;
   the full scan catches markers already committed, while diff checking
   avoids turning historical whitespace into unrelated cleanup work.

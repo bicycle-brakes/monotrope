@@ -27,9 +27,11 @@ Starts unless you say stop.
 ```
 
 Implements `spec.md`, criteria 1–9; bounded, no design or ADR due.
-Revised 2026-11-22 after two phase-2a rounds: findings S-1 to S-5 (terms,
-criteria 4, 6, 7, the new criterion 9) and S-6 to S-8 (the Unchanged term,
-criteria 2, 4 and 7, no doctrine edit) are worked into `spec.md`.
+Revised 2026-11-22 after three phase-2a rounds: findings S-1 to S-5
+(terms, criteria 4, 6, 7, the new criterion 9), S-6 to S-8 (the Unchanged
+term, criteria 2, 4 and 7, no doctrine edit) and S-9 to S-10 (every Git
+call isolated from global and system configuration; binary per Git's own
+rule) are worked into `spec.md`.
 Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
 
 ## Files and steps
@@ -42,14 +44,19 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    states. Check multiple paths and line numbers, unchanged HEAD, staged
    entries (`git ls-files -s`) and file bytes — a refreshed index stat
    cache is not a change — staged and unstaged whitespace (also a restored
-   working file), binary/untracked/deleted/symlink/submodule cases, exact
-   fixture matching, an allowlist entry naming an untracked or absent
-   path, and Git/read failures; prove the whitespace verdict cannot be
-   changed by a hostile global or system Git configuration
+   working file), binary cases under Git's own rule (a NUL in the first
+   8000 bytes is skipped, a marker after a later NUL is still found, a
+   repository `binary` attribute is skipped by both checks), untracked,
+   deleted, symlink and submodule cases, exact fixture matching, an
+   allowlist entry naming an untracked or absent path, and Git/read
+   failures; prove the whitespace verdict cannot be changed by hostile
+   global or system Git configuration planted in the invoking environment
    (`GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` pointing at a file that
-   disables a whitespace rule) or by attribute sources outside the
-   repository (`core.attributesFile` naming a file with `*  -whitespace`
-   for every path, and a system attributes file). Construct data in
+   disables a whitespace rule or sets `core.autocrlf=true`, with an
+   unstaged CRLF line added to an LF-committed file that must still fail)
+   or by attribute sources outside the repository
+   (`core.attributesFile` naming a file with `*  -whitespace` for every
+   path, and a system attributes file). Construct data in
    temporary directories, so no marker-bearing fixture file needs
    committing. Execute the CLI for the mutation proof, with a literal
    `scripts/check_conflict_markers.py` path visible to the existing
@@ -58,8 +65,10 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    expose `--root` (default repository root), with no skip flag; enumerate
    tracked modes using NUL-delimited Git output and argument arrays. Scan
    present regular-file bytes for column-one prefixes `<<<<<<<`, `=======`,
-   `>>>>>>>`; NUL means binary, not failed decoding. Never follow symlinks,
-   submodules or parent symlinks outside the root. Use an exact
+   `>>>>>>>`; binary is Git's own rule — a NUL byte in the first 8000
+   bytes, or a repository attribute marking the path binary — never a
+   failed decoding. Never follow symlinks, submodules or parent symlinks
+   outside the root. Use an exact
    relative-path fixture allowlist — a module-level constant, initially
    empty — shared by scanning and diff pathspec exclusions; tests inject a
    named exception without broadening production defaults, and an entry
@@ -69,9 +78,12 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    `core.whitespace` rule set (`-c
    core.whitespace=blank-at-eol,blank-at-eof,space-before-tab`), an empty
    `core.attributesFile` (`-c core.attributesFile=`) and
-   `GIT_ATTR_NOSYSTEM=1` in its environment, so neither global and system
-   configuration nor attribute sources outside the repository can change
-   the verdict, with external diff/textconv disabled. Collect all marker
+   `GIT_ATTR_NOSYSTEM=1` in its environment, and every Git invocation of
+   the check running with `GIT_CONFIG_GLOBAL=/dev/null` and
+   `GIT_CONFIG_NOSYSTEM=1`, so neither global and system configuration —
+   `core.autocrlf` and `core.eol` included — nor attribute sources
+   outside the repository can change the verdict, with external
+   diff/textconv disabled. Collect all marker
    locations, preserve Git diagnostics, and report inspection/read
    failures as failures, never empty success. Use `_verdict` BLOCK/exit 2
    for findings and measurement errors, exit 0 for a measured pass; leave
@@ -145,8 +157,8 @@ make verify
 
 - 1: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers — any approved marker prefix in an otherwise clean committed tree passes
 - 2: not yet written tests/test_check_conflict_markers.py::test_reports_all_marker_locations_without_writes — a path or line number is omitted, or checking changes file bytes, staged entries or refs (a refreshed stat cache is not a change)
-- 3: not yet written tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured — a binary/untracked/exact fixture is rejected or a sibling fixture name bypasses scanning
-- 4: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage; the verdict follows the invoking user's Git configuration or attribute files outside the repository
+- 3: not yet written tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured — an early-NUL or binary-attributed file yields a finding, a marker after a late NUL passes as binary, an untracked marker is scanned, or a sibling fixture name bypasses scanning
+- 4: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage; the verdict follows the invoking user's Git configuration or attribute files outside the repository, a global core.autocrlf included
 - 5: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete — a failed Git command or unreadable tracked file yields success
 - 6: not yet written tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path — the declared command, enforcement, placement, cost class or docs membership differs, or derived commands/workflow omit it
 - 7: tests/test_pr_sync.py::test_other_conflicts_preserve_target — an ordinary conflict succeeds, omits paths or changes the branch, staged entries, generated index, checkout or the branch on origin
@@ -159,3 +171,4 @@ make verify
 
 2026-11-22 15:50:28–15:56:17 UTC, 349 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-22 18:26:29–18:32:00 UTC, 331 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-22 20:47:10–20:51:46 UTC, 276 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
