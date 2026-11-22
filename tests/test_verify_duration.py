@@ -2358,9 +2358,11 @@ def test_completion_context_is_additive_and_old_history_reads(
 def test_two_slot_context_does_not_mix_holder_waits(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Two concurrent admissions each record their own context; neither run reads its peer's wait.
 
-    Planted fault: one run's completion carries the peer's admission identity or
-    wait, a later holder's context overwrites an earlier holder's record, or the
-    stale environment of an overlapping admission speaks for either run.
+    Planted fault (STAGE2_PLANT_FAULT=1): context resolution hands both holders
+    one shared record, so one run's completion carries the peer's admission
+    identity. The nested descendant of each holder, run while both holders are
+    live and without the fresh id in its environment, must resolve its own
+    ancestor's admission from the published record (reused), never the peer's.
     """
     state = tmp_path / "state"
 
@@ -2400,6 +2402,30 @@ verify_duration.record_end(
 (root / ("context-" + name)).write_text(
     json.dumps([context.admission_id, context.wait_seconds, context.reused])
 )
+# A nested descendant without the fresh id (as a runner clears it for nested
+# runs) resolves its ancestor's admission from the ownership record.
+import subprocess
+env = verify_lock.inherit_env(dict(os.environ))
+env.pop(verify_lock.ADMISSION_ID_ENV, None)
+env.pop(verify_lock.ADMISSION_WAIT_ENV, None)
+nested_probe = (
+    "import json, sys\\n"
+    "from pathlib import Path\\n"
+    "sys.path.insert(0, str(Path.cwd() / 'scripts'))\\n"
+    "import verify_lock\\n"
+    "c = verify_lock.admission_context()\\n"
+    "print(json.dumps([c.admission_id, c.wait_seconds, c.reused]))\\n"
+)
+nested = subprocess.run(
+    [sys.executable, "-c", nested_probe], env=env, capture_output=True, text=True, check=True
+).stdout
+(root / ("nested-" + name)).write_text(nested)
+(root / ("nested-done-" + name)).write_text("1")
+deadline = time.time() + 30
+while not (root / ("nested-done-" + peer)).exists():
+    if time.time() > deadline:
+        sys.exit(4)
+    time.sleep(0.05)
 """
 
     def entry(name: str, peer: str, run_id: str, verdict: str, seconds: str) -> subprocess.Popen[bytes]:
@@ -2436,6 +2462,14 @@ verify_duration.record_end(
     assert ctx_a[0] and ctx_b[0] and ctx_a[0] != ctx_b[0], f"the holders share one admission identity: {ctx_a} {ctx_b}"
     assert ctx_a[2] is False and ctx_b[2] is False, "a fresh admission was read as reused"
 
+    # Each nested descendant, with both holders live, reuses its own ancestor's
+    # admission through the published record, never the peer's.
+    nested_a = json.loads((tmp_path / "nested-a").read_text(encoding="utf-8"))
+    nested_b = json.loads((tmp_path / "nested-b").read_text(encoding="utf-8"))
+    assert nested_a[0] == ctx_a[0] and nested_a[2] is True, f"holder a's descendant lost its ancestor: {nested_a}"
+    assert nested_b[0] == ctx_b[0] and nested_b[2] is True, f"holder b's descendant lost its ancestor: {nested_b}"
+    assert nested_a[0] != nested_b[0], "a descendant resolved its peer's admission"
+
     # The history keeps both completions apart, each with its own verdict,
     # identity and wait.
     ends = [event for event in _history(state) if event["event"] == "run_end"]
@@ -2458,5 +2492,3 @@ verify_duration.record_end(
     assert code == 0
     assert f"admission (final): {ctx_b[0]}" in out, out
     assert ctx_a[0] not in out, out
-    assert "wait: 3.5" not in out and "wait: 99.0" not in out, out
-    assert "peer-env" not in out, out

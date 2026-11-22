@@ -1849,6 +1849,10 @@ def test_legacy_exclusive_lock_excludes_both_slots(tmp_path: Path) -> None:
     if os.environ.get("STAGE2_PLANT_FAULT") == "1":
         old_script.write_bytes((REPO_ROOT / "scripts" / "verify_lock.py").read_bytes())
     else:
+        if not (REPO_ROOT / "scripts" / "stage2.py").is_file():
+            # The kit's throwaway copy carries one commit and no runner: the
+            # older checkout lives only in this repository's history.
+            pytest.skip("the older single-slot checkout exists only in this repository's history, not in a kit copy")
         old_revision = subprocess.run(
             ["git", "show", f"{PRE_CHANGE_REVISION}:scripts/verify_lock.py"], cwd=REPO_ROOT, capture_output=True
         )
@@ -1912,8 +1916,6 @@ def test_slot_setting_reaches_local_children_not_foreign_calls(tmp_path: Path, m
     Planted fault (STAGE2_PLANT_FAULT=1): the foreign-model allow-list is
     opened to the setting, which the real check below must refuse.
     """
-    import stage2
-
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.delenv(verify_lock.LOCK_ENV, raising=False)
     monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
@@ -1924,6 +1926,12 @@ def test_slot_setting_reaches_local_children_not_foreign_calls(tmp_path: Path, m
     )
     monkeypatch.delenv(verify_lock.SLOTS_ENV)
     assert verify_lock.SLOTS_ENV not in verify_lock.inherit_env({}), "an unset setting was invented for a child"
+
+    if not (REPO_ROOT / "scripts" / "stage2.py").is_file():
+        # The runner is inventory of this repository; a kit copy has no
+        # foreign-call allow-list to check, only the local-child half above.
+        return
+    import stage2
 
     allow = tuple(stage2.ENV_ALLOW)
     if os.environ.get("STAGE2_PLANT_FAULT") == "1":
