@@ -3,8 +3,8 @@ title: "Spec — ci-caller-rule"
 status: draft
 implementation_status: none
 date: 2026-11-07
-last_reviewed: 2026-11-21
-updated: 2026-11-21
+last_reviewed: 2026-11-22
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-8sxb
@@ -30,14 +30,14 @@ Teach the existing script-caller rule and check it during an implement or repair
 
 ## Terms
 
-- **Added file:** a surviving file under `scripts/` at any depth, absent from the attempt's comparison commit; untracked and staged additions and rename destinations count.
+- **Added file:** a surviving tracked or untracked, non-ignored file under `scripts/` at any depth, absent from the attempt's comparison commit; staged additions and rename destinations count, but Git-ignored files do not.
 - **Caller test:** `tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason`. Its current rule covers non-`test_` `.py` and `.sh` files directly under `scripts/` and accepts a literal script path in the generated CI workflow or local verification runner, or a reason in `ci_gates.OHNE_AUFRUFER`.
 - **Targeted check:** the existing post-run verification for implement and repair; it falls back to full verification when its coverage cannot be established safely.
 
 ## Acceptance criteria
 
-1. When an implementer reads `prompts/04-implement.md`, the English instruction explains the existing caller rule and its caller or reason remedies, including that a CI step requires the orchestrator because its source and generated workflow are held paths.
-   *Refuted by:* omitted or misleading guidance, a changed caller inventory, a direction for the attempt to edit a held path, or failure to name the writable reason entry for an unwired script.
+1. When an implementer reads `prompts/04-implement.md`, the English instruction explains the existing caller rule and its three accepted forms: a CI step through the orchestrator, a literal path in `scripts/verify_all.sh`, or a reason in `ci_gates.OHNE_AUFRUFER`, with the latter two writable by the attempt subject to existing checks.
+   *Refuted by:* omitted or misleading guidance, a changed caller inventory, an omitted accepted form, or a direction for the attempt to edit the held CI source or generated workflow.
    *Basis:* `decisions.md#Q-1`; phase-2a review SR-2.
 2. When an implement or repair attempt adds a file under `scripts/`, the caller test is selected for its cheap check.
    *Refuted by:* an untracked, staged, renamed, nested, non-Python or `test_`-prefixed added file does not select it, or multiple additions cause duplicate execution in the same pytest invocation.
@@ -57,9 +57,9 @@ Teach the existing script-caller rule and check it during an implement or repair
 7. If the new-file coverage guard or an earlier cheap check rejects an attempt with an added file under `scripts/`, the caller test also runs in that check round and any caller failure joins the same retry listing.
    *Refuted by:* an uncovered orphan or an orphan with a lint failure yields only the earlier failure, or either failure permits acceptance.
    *Basis:* phase-2a review SR-3.
-8. When the caller test reports an orphan, its test identifier and offending script path reach the retry prompt even if later output exceeds the ordinary diagnostic tail.
-   *Refuted by:* output longer than 80 lines leaves the retry without either the test identifier or an offending path.
-   *Basis:* phase-2a review SR-5.
+8. When a caller test selected by this change reports an orphan, its test identifier and each offending script's bare name reach the retry prompt even if later output exceeds the ordinary diagnostic tail.
+   *Refuted by:* output longer than 80 lines leaves the retry without the test identifier or without any reported offending name.
+   *Basis:* phase-2a review SR-5 and SR-9–11.
 
 ## Non-goals
 
@@ -67,16 +67,21 @@ Teach the existing script-caller rule and check it during an implement or repair
 - Add a CI gate, model route, standalone caller rule or new permission; change draft or review verification.
 - Require every accepted attempt to run full verification: the existing targeted route and its full fallback remain, with full verification before phase 6.
 - Change the two-hour phase-4 appetite or create an ADR or design for this bounded change.
+- Change full-verification diagnostics for caller failures outside the checks selected by this change.
+
+## Protected areas
+
+The attempt does not edit the held CI source, generated workflow or implement prompt; the orchestrator owns any permitted prompt edit. The local verification runner retains its existing command-list restriction.
 
 ## Definition of Done
 
-- The criterion-ledger regressions and `PYTHON=.venv/bin/python3 make verify` pass after the orchestrator's prompt edit.
+- After an accepted implement attempt, the orchestrator edits the held prompt and runs the criterion-1 regression before phase 6; the criterion-ledger regressions and `PYTHON=.venv/bin/python3 make verify` pass after that edit.
 - The existing caller rule and held-path policy remain intact; the pull request identifies the task and tracker changes.
 
 ## Open decisions
 
 None open.
 
-- [DETAIL] Compare the surviving worktree against the attempt's existing comparison commit, because that includes staged, untracked and renamed additions without changing the caller rule.
-- [DETAIL] Select the existing caller test for both cheap and targeted checks; preserve its identifying failure evidence separately from the ordinary output tail so a retry can name the orphan.
+- [DETAIL] Compare non-ignored, surviving worktree files against the attempt's existing comparison commit, because that includes staged, untracked and renamed additions without treating caches as scripts.
+- [DETAIL] Select the existing caller test for both cheap and targeted checks; preserve its identifier and each printed bare script name outside the ordinary output tail, because both are needed to act on a failure.
 - [DETAIL] Retain the two-hour phase-4 stop from the original draft; the interview did not set an appetite.

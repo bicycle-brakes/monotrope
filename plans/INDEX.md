@@ -599,9 +599,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/ci-caller-rule/decisions.md`](changes/ci-caller-rule/decisions.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
 | [`changes/ci-caller-rule/findings.md`](changes/ci-caller-rule/findings.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
-| [`changes/ci-caller-rule/plan.md`](changes/ci-caller-rule/plan.md) | draft | none | 2026-11-21 | coding-harness-8sxb |
+| [`changes/ci-caller-rule/plan.md`](changes/ci-caller-rule/plan.md) | draft | none | 2026-11-22 | coding-harness-8sxb |
 | [`changes/ci-caller-rule/research.md`](changes/ci-caller-rule/research.md) | draft | none | 2026-11-07 | coding-harness-8sxb |
-| [`changes/ci-caller-rule/spec.md`](changes/ci-caller-rule/spec.md) | draft | none | 2026-11-21 | coding-harness-8sxb |
+| [`changes/ci-caller-rule/spec.md`](changes/ci-caller-rule/spec.md) | draft | none | 2026-11-22 | coding-harness-8sxb |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
