@@ -3261,7 +3261,9 @@ def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
             f"time.sleep({seconds})",
         ],
         cwd=REPO_ROOT,
-        env={**os.environ, "HOLDER_READY": str(ready)},
+        # The holder runs alone (setting 1), so the runner's own check must queue behind it even
+        # where a free second slot would otherwise admit it (verify-two-slots).
+        env={**os.environ, "HOLDER_READY": str(ready), stage2.verify_lock.SLOTS_ENV: "1"},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -27709,14 +27711,14 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
     probe = (
         "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
-        "h = verify_lock.read_holder(); "
+        "h = verify_lock._read_record(verify_lock.state_root() / verify_lock.SLOT_HOLDER_NAMES[0]); "
         "print(json.dumps([h.get('token') if h else None, os.environ.get(verify_lock.TOKEN_ENV), "
         "verify_lock.nested_holder_pid()]))"
     )
     with verify_lock.hold_admission(["make", "verify"]) as owned:
         assert owned is not None
         env = verify_lock.inherit_env(dict(os.environ))
-        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=(owned,))
+        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=tuple(owned))
     assert done.returncode == 0, done.stderr
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
