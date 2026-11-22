@@ -3,14 +3,14 @@ title: "Spec — conflict-marker-gate"
 status: draft
 implementation_status: none
 date: 2026-11-05
-last_reviewed: 2026-11-05
-updated: 2026-11-05
+last_reviewed: 2026-11-22
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-i76l
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-05"}
+produced_by: {kind: llm-session, name: glm, version: "glm-5.3, 2026-11-22"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, gate, merge]
 class: bounded
@@ -25,6 +25,8 @@ Verification blocks merge-conflict markers in tracked text files, and the
 supported main-merge helper stops safely on ordinary conflicts (bead
 coding-harness-i76l — conflict-marker gate). Research: `research.md`.
 Authority: the maintainer-approved scope in `decisions.md`, “SKIP · interview”.
+Revised 2026-11-22 after phase 2a; the five findings (S-1 to S-5) are worked
+in, each decision recorded under Open decisions.
 
 ## Problem
 
@@ -51,8 +53,17 @@ Authority: the maintainer-approved scope in `decisions.md`, “SKIP · interview
   by Git's index, whose contents contain no NUL byte; non-UTF-8 bytes do
   not exempt an otherwise textual file. Symlinks and submodule entries are
   not followed. Deleted paths have no working-tree text to scan.
-- **Named fixture exception:** an exact repository-relative file path in a
-  reviewed allowlist, never a directory, wildcard or blanket test exemption.
+- **Named fixture exception:** an exact repository-relative file path in
+  the allowlist constant of `scripts/check_conflict_markers.py`, never a
+  directory, wildcard or blanket test exemption. The list starts empty,
+  travels with the kit as mechanism, and changes only through a reviewed
+  pull request; a test plants a non-empty list by injecting the constant,
+  never by widening production defaults.
+- **Supported main-merge helper:** `python3 scripts/pr_sync.py merge-main
+  --root .`, the one supported way to merge main into a change branch
+  (`docs/WORKFLOW.md` §3, “Pull requests stay mergeable”). This change
+  reuses it and pins its behaviour with tests; no competing merger is
+  added.
 
 ## Acceptance criteria
 
@@ -68,27 +79,44 @@ Authority: the maintainer-approved scope in `decisions.md`, “SKIP · interview
    files and exact named fixtures do not cause marker findings.
    *Refuted by:* clean text is rejected, a binary or untracked marker is
    scanned, or allowing one fixture also exempts a sibling or prefix match.
-4. When Git's whitespace/error check reports a fault in staged or unstaged
-   changes outside named fixture exceptions, the check fails with its diagnostic.
+4. When Git's whitespace and error check, invoked with a fixed
+   `core.whitespace` rule set on the command line so that a user's global
+   and system Git configuration cannot change the verdict while repository
+   `.gitattributes` still apply, reports a fault in staged or unstaged
+   changes outside named fixture exceptions, the check fails with its
+   diagnostic.
    *Refuted by:* a trailing-whitespace fault passes in either change layer,
-   including a staged faulty blob whose working file has been restored.
+   including a staged faulty blob whose working file has been restored, or
+   the verdict changes on a machine whose Git configuration disables a
+   whitespace rule.
 5. If required Git inspection or reading a present tracked regular file
    fails, the check exits unsuccessfully and explains what was not measured.
    *Refuted by:* a non-repository root, failed Git command or unreadable
    tracked file produces a successful empty report.
 6. When local full verification, its document subset or hosted verification
-   runs, the one gate list supplies this check with blocking enforcement.
+   runs, the one gate list supplies this check — declared command
+   `python3 scripts/check_conflict_markers.py`, cost class `seconds`, so it
+   runs before admission is requested with the other seconds gates — with
+   blocking enforcement.
    *Refuted by:* any of those paths omits the gate, treats its failure as
-   advisory, or runs a command different from the declared one.
+   advisory, runs a command different from the declared one, or declares a
+   cost class that moves the gate inside the admission.
 7. When the supported main-merge helper encounters a conflict outside
    `plans/INDEX.md`, it exits unsuccessfully with the conflicting paths and
-   leaves the target branch, index, working files and remote branch unchanged.
+   leaves the target branch, Git's staging area, `plans/INDEX.md`, the
+   working files and the branch on origin unchanged; its fetch may move
+   local remote-tracking refs.
    *Refuted by:* the helper succeeds, omits a conflicted path, publishes a
-   result or leaves conflict-marker text in the invoking checkout.
+   result, moves the staging area or the generated index, or leaves
+   conflict-marker text in the invoking checkout.
 8. When the workflow kit is assembled, the new gate and its tests travel
    with the gate machinery they depend on.
    *Refuted by:* a kit copy declares the gate but omits its executable or
    tests, or the isolated kit probe fails because of this addition.
+9. If the fixture allowlist names a repository-relative path that Git's
+   index does not track, the check fails naming that path.
+   *Refuted by:* a stale or pre-registered allowlist entry is silently
+   ignored, waiting to exempt a file that does not exist or is not tracked.
 
 ## Non-goals
 
@@ -130,9 +158,36 @@ edits the held gate declaration and generated hosted workflow.
 
 ## Open decisions
 
-None open. I chose the following reversible `[DETAIL]` defaults and recorded
-why; none changes the maintainer's approved scope:
+None open. The phase-2a findings of 2026-11-22 (S-1 to S-5 in
+`findings.md`) are decided as `[DETAIL]`s; each is worked into the terms and
+criteria above, and its status stands in `findings.md`. I chose the
+following reversible `[DETAIL]` defaults and recorded why; none changes the
+maintainer's approved scope:
 
+- Helper (S-1): the existing `merge-main` is the approved helper — reading
+  A in the finding; it is pinned by regression tests and already named in
+  `docs/WORKFLOW.md` §3 as the supported way to merge main into a change
+  branch, not rebuilt.
+- Unchanged-by-merge wording (S-2): “index” means Git's staging area and
+  `plans/INDEX.md`, each unchanged; “remote branch” means the branch on
+  origin, unchanged; local remote-tracking refs may move by the helper's
+  fetch.
+- Allowlist (S-3): a constant in `scripts/check_conflict_markers.py`,
+  starting empty, travelling with the kit as mechanism, naming exact
+  tracked paths only, changed through a reviewed pull request alone. An
+  entry naming no tracked path is itself a finding (criterion 9) — my
+  sub-decision, so a stale or pre-registered entry cannot wait silently to
+  exempt a future file.
+- Gate metadata (S-4): cost class `seconds` — the schema's closed
+  vocabulary, so the gate runs before admission is requested with the other
+  seconds gates; declared command `python3 scripts/check_conflict_markers.py`
+  with an optional `--root` defaulting to the repository root, which
+  criterion 5's non-repository-root refutation exercises.
+- Whitespace verdict (S-5): every `git diff --check` invocation carries a
+  fixed `core.whitespace` rule set on the command line — Git's built-in
+  default `blank-at-eol,blank-at-eof,space-before-tab` — so global and
+  system configuration cannot change the verdict; repository
+  `.gitattributes` still apply.
 - Use the marker prefixes exactly as approved, in every tracked text path,
   including fenced blocks: a fence must not hide an accidental conflict.
   The fixture allowlist starts empty because the current tracked prefix

@@ -3,14 +3,14 @@ title: "Plan — conflict-marker-gate"
 status: draft
 implementation_status: none
 date: 2026-11-05
-last_reviewed: 2026-11-05
-updated: 2026-11-05
+last_reviewed: 2026-11-22
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-i76l
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-11-05"}
+produced_by: {kind: llm-session, name: glm, version: "glm-5.3, 2026-11-22"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, gate, merge]
 ---
@@ -26,7 +26,9 @@ Pre-mortem:  suppose it failed: most likely because checking only a diff misses 
 Starts unless you say stop.
 ```
 
-Implements `spec.md`, criteria 1–8; bounded, no design or ADR due.
+Implements `spec.md`, criteria 1–9; bounded, no design or ADR due.
+Revised 2026-11-22 after phase 2a: findings S-1 to S-5 are worked into
+`spec.md` (terms, criteria 4, 6, 7 and the new criterion 9).
 Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
 
 ## Files and steps
@@ -39,8 +41,12 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    states. Check multiple paths and line numbers, unchanged HEAD/index/file
    bytes, staged and unstaged whitespace (also a restored working file),
    binary/untracked/deleted/symlink/submodule cases, exact fixture matching,
-   and Git/read failures; construct data in temporary directories, so no
-   marker-bearing fixture file needs committing. Execute the CLI for the
+   an allowlist entry naming an untracked or absent path, and Git/read
+   failures; prove the whitespace verdict
+   cannot be changed by a hostile global or system Git configuration
+   (`GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` pointing at a file that
+   disables a whitespace rule). Construct data in temporary directories, so
+   no marker-bearing fixture file needs committing. Execute the CLI for the
    mutation proof, with a literal `scripts/check_conflict_markers.py` path
    visible to the existing mutation-evidence analyzer.
 2. **Implementation attempt — create `scripts/check_conflict_markers.py`:**
@@ -48,19 +54,26 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    tracked modes using NUL-delimited Git output and argument arrays. Scan
    present regular-file bytes for column-one prefixes `<<<<<<<`, `=======`,
    `>>>>>>>`; NUL means binary, not failed decoding. Never follow symlinks,
-   submodules or parent symlinks outside the root. Use an exact relative-path
-   fixture allowlist, initially empty, shared by scanning and diff pathspec
-   exclusions; tests inject a named exception without broadening production
-   defaults. Run `git diff --check` and `git diff --cached --check` from the
-   root over the same exception-filtered paths, with external diff/textconv
-   disabled. Collect all marker locations, preserve Git diagnostics, and
-   report inspection/read failures as failures, never empty success.
-   Use `_verdict` BLOCK/exit 2 for findings and measurement errors, exit 0
-   for a measured pass; do not modify files, the index or refs.
+   submodules or parent symlinks outside the root. Use an exact
+   relative-path fixture allowlist — a module-level constant, initially
+   empty — shared by scanning and diff pathspec exclusions; tests inject a
+   named exception without broadening production defaults, and an entry
+   naming no tracked path is itself a finding. Run `git diff --check` and
+   `git diff --cached --check` from the root over the same
+   exception-filtered paths, each invocation carrying a fixed
+   `core.whitespace` rule set (`-c
+   core.whitespace=blank-at-eol,blank-at-eof,space-before-tab`) so global
+   and system configuration cannot change the verdict, with external
+   diff/textconv disabled. Collect all marker locations, preserve Git
+   diagnostics, and report inspection/read failures as failures, never
+   empty success. Use `_verdict` BLOCK/exit 2 for findings and measurement
+   errors, exit 0 for a measured pass; do not modify files, the index or
+   refs.
 3. **Implementation attempt — change `tests/test_pr_sync.py`:** extend
    `test_other_conflicts_preserve_target` to conflict in two ordinary files
    and assert both paths, nonzero exit, unchanged HEAD, Git index bytes,
-   both working files, generated index and remote branch. Keep using
+   both working files, generated index and the branch on origin, allowing
+   local remote-tracking refs to move by the fetch. Keep using
    `python3 scripts/pr_sync.py merge-main --root .`; production helper code
    already meets the approved requirement. Retain its clean/index-only tests.
 4. **Implementation attempt — change `scripts/kit/manifest.yaml`:** classify
@@ -68,11 +81,14 @@ Explore used Stage 2, GLM 5.3 Flash, on 2026-11-05; no Stage-1 fallback.
    travel with the gate list; no new portability exemption or dependency.
 5. **Orchestrator bootstrap after the accepted attempt — held files:** add
    `conflict-markers` to `decisions/gates.yaml`, command
-   `python3 scripts/check_conflict_markers.py`, job `verify`, enforcement
-   `block`, placement `both`, subset `docs`, `floor: false`, without tracker
-   or history requirements. Regenerate `.github/workflows/ci.yml` with
+   `python3 scripts/check_conflict_markers.py`, job `verify`, cost
+   `seconds`, enforcement `block`, placement `both`, subset `docs`,
+   `floor: false`, without tracker or history requirements. Regenerate
+   `.github/workflows/ci.yml` with
    `python3 scripts/ci_gates.py --generate-ci > .github/workflows/ci.yml`.
-   The attempt must not edit either held path. Do not add a temporary
+   The attempt must not edit either held path. The declared command and
+   cost class are the spec's (criterion 6), so the attempt's wiring test
+   and this entry agree by construction. Do not add a temporary
    caller/mutation exemption to hide the not-yet-registered gate; final
    caller, CI-drift and wiring verification needs the combined bootstrap tree.
 6. **Orchestrator — change `docs/governance/gate-catalog.md`:** replace only
@@ -121,12 +137,15 @@ make verify
 - 1: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers — any approved marker prefix in an otherwise clean committed tree passes
 - 2: not yet written tests/test_check_conflict_markers.py::test_reports_all_marker_locations_without_writes — a path or line number is omitted or checking changes repository state
 - 3: not yet written tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured — a binary/untracked/exact fixture is rejected or a sibling fixture name bypasses scanning
-- 4: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage
+- 4: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault — staged or unstaged whitespace is ignored, including staged-only damage; the verdict follows the invoking user's Git configuration
 - 5: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete — a failed Git command or unreadable tracked file yields success
-- 6: not yet written tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path — the declared command, enforcement, placement or docs membership differs, or derived commands/workflow omit it
-- 7: tests/test_pr_sync.py::test_other_conflicts_preserve_target — an ordinary conflict succeeds, omits paths or changes the branch, index, checkout or remote
+- 6: not yet written tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path — the declared command, enforcement, placement, cost class or docs membership differs, or derived commands/workflow omit it
+- 7: tests/test_pr_sync.py::test_other_conflicts_preserve_target — an ordinary conflict succeeds, omits paths or changes the branch, staging area, generated index, checkout or the branch on origin
 - 7: tests/test_pr_sync.py::test_index_only_conflict_is_regenerated — the existing generated-index exception stops working
 - 8: not yet written tests/test_check_conflict_markers.py::test_gate_and_tests_travel_with_the_kit — either new path is absent from the mechanism copy
 - 8: not a test — python3 scripts/kit/probe.py exercises the isolated copy; a new failure caused by the scanner or its tests refutes portability
+- 9: not yet written tests/test_check_conflict_markers.py::test_gate_goes_red_when_an_allowlist_entry_names_no_tracked_path — a stale or pre-registered allowlist entry is silently ignored
 
 ## Time used
+
+2026-11-22 15:50:28–15:56:17 UTC, 349 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

@@ -599,9 +599,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/conflict-marker-gate/decisions.md`](changes/conflict-marker-gate/decisions.md) | draft | none | 2026-11-05 | coding-harness-i76l |
 | [`changes/conflict-marker-gate/findings.md`](changes/conflict-marker-gate/findings.md) | draft | none | 2026-11-05 | coding-harness-i76l |
-| [`changes/conflict-marker-gate/plan.md`](changes/conflict-marker-gate/plan.md) | draft | none | 2026-11-05 | coding-harness-i76l |
+| [`changes/conflict-marker-gate/plan.md`](changes/conflict-marker-gate/plan.md) | draft | none | 2026-11-22 | coding-harness-i76l |
 | [`changes/conflict-marker-gate/research.md`](changes/conflict-marker-gate/research.md) | draft | none | 2026-11-05 | coding-harness-i76l |
-| [`changes/conflict-marker-gate/spec.md`](changes/conflict-marker-gate/spec.md) | draft | none | 2026-11-05 | coding-harness-i76l |
+| [`changes/conflict-marker-gate/spec.md`](changes/conflict-marker-gate/spec.md) | draft | none | 2026-11-22 | coding-harness-i76l |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
