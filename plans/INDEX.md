@@ -638,6 +638,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/plan-card-what-line/decisions.md`](changes/plan-card-what-line/decisions.md) | draft | none | 2026-11-22 | coding-harness-kg8n |
 | [`changes/plan-card-what-line/research.md`](changes/plan-card-what-line/research.md) | draft | none | 2026-11-22 | coding-harness-kg8n |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
