@@ -32,7 +32,7 @@ At commit `d77bf280`, the ruleset check accepts any active merge queue as the fr
    *Refuted by:* With the strict up-to-date flag off and all other rules satisfied, that queue is rejected.
 2. When any one of the four pinned fields has a different value or an invalid type, that queue does not supply the freshness alternative.
    *Refuted by:* With the strict flag off and no other qualifying queue, a changed method, a group size other than 1, a boolean, a string or a null passes as freshness.
-3. When no freshness alternative qualifies and a queue lacks a pinned field or its parameters object, the check reports a `not measured:` finding naming each missing pinned field.
+3. When no freshness alternative qualifies and a queue lacks a pinned field or its parameters object, the check reports one `not measured:` finding for each missing pinned field.
    *Refuted by:* With the strict flag off and no other qualifying queue, an absent field passes or its name is absent from the failure.
 4. When the queue's other measured parameters change, those parameters alone do not disqualify it as the freshness alternative.
    *Refuted by:* A queue with the four pinned values is rejected solely because `grouping_strategy`, `check_response_timeout_minutes` or `min_entries_to_merge_wait_minutes` differs or is absent.
@@ -45,14 +45,24 @@ At commit `d77bf280`, the ruleset check accepts any active merge queue as the fr
 
 8. When a queue fails the pin, that queue alone does not make its ruleset a supplier for the bypass measurement.
    *Refuted by:* With the strict flag on, an invalid queue in a separate otherwise non-supplying ruleset causes its bypass list to be read or reported.
-9. When no freshness alternative qualifies and a pinned field is present with a wrong value or type, the freshness finding names that field, its expected value and its found value.
+9. When no freshness alternative qualifies and a pinned field is present with a wrong value or type, the check reports one finding for that field naming its expected and found values.
    *Refuted by:* A changed `merge_method` yields only the instruction to activate an already active queue or omits the expected or found value.
 10. When a strict rule supplies freshness alongside an invalid or incomplete queue, that queue does not remove the strict alternative.
     *Refuted by:* With the existing ruleset floor satisfied, a queue with `merge_method: SQUASH` or a missing pinned field makes the strict alternative fail.
 11. When one queue qualifies alongside another invalid or incomplete queue, the invalid queue does not remove the qualifying alternative.
     *Refuted by:* With the strict flag off and the existing floor satisfied, a second queue with `merge_method: SQUASH` or a missing pinned field makes a valid queue fail.
-12. When the live writer-side measurement reads queue parameters, it shows the observed `grouping_strategy`, `check_response_timeout_minutes` and `min_entries_to_merge_wait_minutes`, including an explicit absent marker for a missing field, without treating the display as a finding.
-    *Refuted by:* A successful measurement hides a measured value, displays a missing field as an observed value, or fails solely because one of these fields is absent.
+12. When the live writer-side measurement reads queue parameters, the ruleset gate's pytest output shows the observed `grouping_strategy`, `check_response_timeout_minutes` and `min_entries_to_merge_wait_minutes` for every queue, including a failing queue and an explicit absent marker for a missing field, without adding a failing finding for the display.
+    *Refuted by:* The gate's output on a successful measurement hides a measured value, a failing queue is omitted, a missing field is shown as an observed value, or the check fails solely because an unpinned field is absent.
+13. When no freshness alternative qualifies, the existing generic freshness instruction appears exactly once alongside the individual missing-field and drift findings.
+    *Refuted by:* A queue with one missing field and one changed field yields no generic instruction, duplicates it, or omits either individual finding.
+14. When a pinned field is present with JSON `null`, the check treats it as a wrong value rather than an absent field.
+    *Refuted by:* A null group-size field produces a missing-field `not measured:` finding or omits its expected and found values.
+15. When a pinned field has a wrong value or type, its expected and found values in the finding use JSON rendering that distinguishes strings, numbers, booleans and null.
+    *Refuted by:* The string `"1"` is shown as the number `1`, or a null or boolean is not recognisable as such.
+16. When an API call fails, the live ruleset check includes its existing network and `gh` login hint in the failure message.
+    *Refuted by:* A missing `gh`, timeout or non-zero API exit produces a failure without that hint.
+17. When an API call succeeds but its answer cannot be measured, the live ruleset check omits the network and `gh` login hint from that failure message.
+    *Refuted by:* A missing pinned field, malformed JSON, wrong answer shape, missing bypass list or repository mismatch receives that hint.
 
 ## Non-goals
 
@@ -77,6 +87,8 @@ Leave `decisions/gates.yaml`, `docs/governance/`, `prompts/`, `templates/`, `.gi
 
 [DETAIL] A queue that fails the pin cannot supply freshness, while an independently valid strict up-to-date rule or another qualifying queue can still supply it; this preserves the existing alternatives. Only a qualifying queue supplies freshness and bypass measurement; an invalid queue can still belong to a ruleset that supplies another requirement. When no alternative supplies freshness, identify missing fields as not measured and report wrong values as drift, so the refusal is actionable. A missing field is not a network failure; retain network/login advice only for actual access failures.
 
-[DETAIL] Show the three unpinned values in the live writer-side measurement, with an explicit absent marker, because `decisions.md` says they are read and shown; they never become failing findings.
+[DETAIL] Show the three unpinned values in the live writer-side measurement, with an explicit absent marker, because `decisions.md` says they are read and shown; they never become failing findings. The informational text also accompanies a failure's finding text; it must be visible on success as well, since pytest captures ordinary passing-test output under the existing gate command.
+
+[DETAIL] Diagnose each failing queue field independently and retain the generic freshness instruction once, so multiple errors are visible without repeated instructions. A present null is a wrong value, and JSON rendering distinguishes values of different types. The network/login hint follows failed API calls only, because an unreadable successful answer needs a different repair.
 
 [DETAIL] A two-hour phase-4 stop allows for the tests and repair loop; neither research nor the interview sets an appetite. No maintainer decision is open.
