@@ -29,14 +29,16 @@ On 2026-11-03, the predecessor's phase-6 finding F-10 showed that a qualifying n
 
 **Proof:** the baseline red-first run, the fixed-code run, or either the planted or clean guard-test run; each runs a named test in a private repository.
 
-**Root reference:** `HEAD`, `AUTO_MERGE`, or a direct child of the private Git directory whose name consists solely of uppercase ASCII letters, digits and underscores and ends in `HEAD`. `HEAD` retains its existing logical comparison; the other root references are compared as complete file bytes, including multi-line contents.
+**Root reference:** a direct child of the private Git directory whose name, uppercased, is `HEAD`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, or `MERGE_HEAD`, or consists only of ASCII letters, hyphens and underscores and ends in `_HEAD` after uppercasing. Names come from the directory listing and are compared and reported with their original spelling, case-sensitively. The existing `HEAD` retains its logical comparison; other root-reference entries are compared as complete file bytes, including multi-line contents.
+
+The private repository starts with `HEAD` as its only root reference; setup and source-side reference restoration stay unchanged. In the cases below, an existing non-`HEAD` root reference is planted in the private repository after setup and before the snapshots.
 
 ## Acceptance criteria
 
 1. When a named test creates a previously absent root reference in the private repository, the proof refuses and names that reference.
-   *Refuted by:* A qualifying test creating `ORIG_HEAD` with `git update-ref ORIG_HEAD HEAD`, or creating `AUTO_MERGE` or another matching `*_HEAD` file, is accepted or the changed name is absent from the refusal.
+   *Refuted by:* A qualifying test creating `ORIG_HEAD` with `git update-ref ORIG_HEAD HEAD`, `orig_head`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, `MERGE_HEAD`, or a matching hyphenated `_HEAD` name is accepted or its listed name is absent from the refusal.
 2. When a named test changes a root reference other than `HEAD` in the private repository, the proof refuses and names that reference.
-   *Refuted by:* A qualifying test changes only a later line of an existing multi-line `FETCH_HEAD` and the proof accepts it or omits `FETCH_HEAD` from the refusal.
+   *Refuted by:* A qualifying test changes only a later line of an existing multi-line `FETCH_HEAD`, or changes only the spelling of a listed root-reference name, and the proof accepts it or omits the changed name from the refusal.
 3. When a named test deletes an existing root reference other than `HEAD` from the private repository, the proof refuses and names that reference.
    *Refuted by:* A qualifying test removes a pre-existing private `ORIG_HEAD` and the proof accepts it or omits its name.
 4. When a root reference other than `HEAD` is unchanged in name and complete bytes during the named test, it does not by itself invalidate the proof.
@@ -72,7 +74,8 @@ The source repository's references, index and worktree are read-only during proo
 
 None open.
 
-- [DETAIL] `AUTO_MERGE` is included explicitly: the recorded examples include it although its name does not end in `HEAD`.
+- [DETAIL] The spec-review decisions in `findings.md` F-2 and F-3 clarify and supersede the earlier shorthand in `decisions.md`: include the listed irregular Git names and match case-insensitively while preserving listed spelling, so Git references cannot escape the private comparison through their names.
+- [DETAIL] The spec-review decision in `findings.md` F-1 keeps source setup unchanged: only private proof snapshots gain root-reference measurements, avoiding a new source-copy path.
 - [DETAIL] Keep `HEAD`'s logical comparison and compare the other named root files as bytes: this preserves the established acceptance of equivalent `HEAD` rewrites while measuring all of `FETCH_HEAD` as decided.
 - [DETAIL] Refuse nonregular or unreadable matching entries before reading them: the existing private-ref guard already refuses unsafe entries, and a FIFO must not block a proof.
 - [DETAIL] Leave malformed `packed-refs` handling unchanged: the recorded scope concerns direct children of the Git directory, not a change to packed-ref syntax.

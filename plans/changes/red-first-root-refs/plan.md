@@ -28,8 +28,8 @@ Starts unless you say stop.
 
 ## Files and steps
 
-1. Change `tests/test_stage2.py`: add the ledger's regressions first and demonstrate that the creation and multi-line cases go red on the current code. Parameterize the baseline and fixed proofs, and exercise both guard-test legs through their actual shared path; inject pre-existing private files after clone setup, so change and deletion are measured against the real pre-test snapshots.
-2. Change `scripts/stage2.py`: extend both private snapshots to measure matching direct root entries as complete bytes, without using `rev-parse` for multi-line pseudo-refs; retain the existing logical `HEAD` treatment. Refuse unsafe nonregular or unreadable entries before Git or a byte reader can follow or block on them, and let the shared guard name all differences and clean up on failures.
+1. Change `tests/test_stage2.py`: add the ledger's regressions first and demonstrate that the creation and multi-line cases go red on the current code. Parameterize the baseline and fixed proofs, and exercise both guard-test legs through their actual shared path; inject pre-existing private files after clone setup and before both snapshots, so change and deletion are measured against real pre-test state. Cover every irregular name in criterion 1, a hyphenated `_HEAD`, lower-case and mixed-case names, original spelling in refusals, case-only rename where the filesystem supports it, and unrelated names that must not match.
+2. Change `scripts/stage2.py`: extend both private snapshots to measure matching direct root entries as complete bytes, without using `rev-parse` for multi-line pseudo-refs; match the exact set in the spec using uppercased names but compare and report original directory-entry names case-sensitively. Retain the existing logical `HEAD` treatment. Refuse unsafe nonregular or unreadable entries before Git or a byte reader can follow or block on them, and let the shared guard name all differences and clean up on failures.
 3. Keep `_private_repository`'s source ref restoration independent of the new private-only snapshot data: `_ref_targets` is also used by clone setup, which must not feed arbitrary multi-line root-file bytes to `update-ref` or copy concurrent source pseudo-refs. Continue using `run_git` for Git launches, and preserve the existing comparison, scrubbing, packing and malformed `packed-refs` behavior.
 4. Update `plans/changes/red-first-root-refs/spec.md`, `plans/changes/red-first-root-refs/plan.md` and `plans/changes/red-first-root-refs/findings.md` as the work advances; the orchestrator owns the derived `plans/INDEX.md` if regeneration is required. No living limit text was found in the 2026-11-22 search; leave archived findings and handovers unchanged.
 
@@ -47,8 +47,8 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_proofs_refuse_created_root_refs — creation of ORIG_HEAD, AUTO_MERGE or another matching name is accepted or unnamed.
-- 2: not yet written tests/test_stage2.py::test_proofs_refuse_changed_multiline_fetch_head — changing a later FETCH_HEAD line is accepted or unnamed.
+- 1: not yet written tests/test_stage2.py::test_proofs_refuse_created_root_refs — a matching irregular, hyphenated or differently cased name is accepted or its listed spelling is missing.
+- 2: not yet written tests/test_stage2.py::test_proofs_refuse_changed_multiline_fetch_head — changing a later FETCH_HEAD line or only a root-reference name's case is accepted or unnamed.
 - 3: not yet written tests/test_stage2.py::test_proofs_refuse_deleted_root_refs — deletion of a pre-existing private ORIG_HEAD is accepted or unnamed.
 - 4: not yet written tests/test_stage2.py::test_proofs_accept_unchanged_root_refs — an unchanged multi-line FETCH_HEAD refuses an otherwise qualifying run.
 - 5: not yet written tests/test_stage2.py::test_proofs_refuse_unsafe_root_refs — FIFO, symlink or read failure is followed, blocks, is accepted, or prevents cleanup.
@@ -59,3 +59,4 @@ make verify
 ## Time used
 
 2026-11-22 08:31:48–08:34:17 UTC, 149 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-22 08:39:49–08:41:47 UTC, 118 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
