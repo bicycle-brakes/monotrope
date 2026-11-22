@@ -32146,6 +32146,27 @@ def test_r6_3_row_without_its_leading_pipe_is_unreadable(world: World) -> None:
     assert admission.review_problem is not None, "a row without its leading pipe makes the stored review unreadable"
 
 
+def test_r6r_1_quoted_diagnostic_after_a_block_does_not_spoil_it(world: World) -> None:
+    """R6R-1: a runner-quoted diagnostic of six or more cells after a valid block leaves it qualifying."""
+    quoted = "> tests/test_x.py::t | a | b | c | d | e | f | g"
+    audit = "Stage-2 call, 2026-11-22 · implement · demo"
+    stored = world.text()
+    world.findings.write_text(stored + "\n" + quoted + "\n")
+    block = stage2.spec_review_blocks(world.text())[-1]
+    assert block.table_readable, block.bad_row
+    world.findings.write_text(stored + "\n" + audit + "\n" + "x | y | z | w | v | u | t\n")
+    assert stage2.spec_review_blocks(world.text())[-1].table_readable
+
+
+def test_r6r_2_prose_with_many_pipes_does_not_fail_the_call() -> None:
+    """R6R-2: a prose sentence or fenced code with many pipes beside valid rows is no unparseable table line."""
+    prose = "Run it as a | b | c | d | e | f to see.\n```\nx | y | z | w | v | u\n```"
+    try:
+        assert stage2.readable_review(rows(1) + "\n" + prose)
+    except stage2.CallFailed as error:
+        pytest.fail(f"prose with pipes failed the call: {error}")
+
+
 def test_review_restored_body_is_current(world: World) -> None:
     spec = world.root / "plans/changes/demo/spec.md"
     original = spec.read_text()

@@ -1222,6 +1222,24 @@ def loose_table_line(line: str) -> bool:
     return len(_PIPE.split(stripped)) >= 6
 
 
+def row_like_loose_line(line: str) -> bool:
+    """A loose table line that looks like a finding row: its second cell is a severity or it ends with a pipe.
+
+    Prose that quotes a shell pipeline or a regex alternation has many pipes but no severity cell and no
+    closing pipe; the call-time reader must not take it for a malformed row.
+    """
+    if not loose_table_line(line):
+        return False
+    stripped = line.strip()
+    ends_with_pipe = stripped.endswith("|") and not stripped.endswith("\\|")
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    cells = [cell.strip() for cell in _PIPE.split(stripped)]
+    return ends_with_pipe or (len(cells) > 1 and bool(review_severity(cells[1])))
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table.
 
@@ -3988,7 +4006,8 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], str | None]:
     for line in body_text.splitlines():
         cells = split_row(line)
         if cells is None:
-            if line.strip().startswith("|") or loose_table_line(line):
+            quoted = line.lstrip().startswith(">")
+            if line.strip().startswith("|") or (not quoted and loose_table_line(line)):
                 return [], line.strip()[:80]
             continue
         if _furniture(cells):
@@ -4030,7 +4049,7 @@ def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
             audit = preceding.strip()
         body: list[str] = []
         for following in lines[index + 1 :]:
-            if following.startswith("## "):
+            if following.startswith(("## ", "Stage-2 call, ")):
                 break
             body.append(following)
         body_text = "\n".join(body).strip()
@@ -4433,10 +4452,16 @@ def readable_review(answer: str) -> list[list[str]]:
     answer here and the stored block later, so an answer that is written is an answer that reads
     back: a row whose Severity is anything else, or a table line that is no row, fails the call.
     """
+    in_fence = False
     for line in answer.splitlines():
+        if line.strip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         cells = split_row(line)
         if (line.strip().startswith("|") and (cells is None or len(cells) != 6)) or (
-            cells is None and loose_table_line(line)
+            cells is None and row_like_loose_line(line)
         ):
             raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {line.strip()[:80]}")
     rows, rest = parse_rows(answer, ambiguity=True)
