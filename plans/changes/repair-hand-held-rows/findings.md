@@ -384,3 +384,43 @@ Stage-2 call, 2026-11-22: implement · attempt 3 · route stage-1 · endpoint cl
 > ```
 
 Orchestrator hand finish, 2026-11-22: implement attempt 3 failed its post-run checks for an environment reason (the pinned Pi was not installed in this worktree). After `bash tools/pi/install.sh`, the attempt's tree left in the worktree passed the full suite (6593 passed, 17 skipped, 448 s) and a full `make verify` (VERIFY GREEN, execution 934.5 s, 2026-11-22). The orchestrator committed that tree unchanged apart from frontmatter stamps.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1153 files, 5372 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1153 files, 5372 commits, 12 rules.
