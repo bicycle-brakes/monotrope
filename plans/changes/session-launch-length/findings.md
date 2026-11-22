@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-07
 created: 2026-11-07
 last_reviewed: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-rm8
@@ -20,3 +20,5 @@ tags: [findings, stage-2]
 # Findings — session-launch-length
 
 Stage-2 call, 2026-11-07: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 923 files, 3590 commits, 12 rules.
+
+Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1170 files, 5291 commits, 12 rules.
