@@ -95,3 +95,188 @@ Stage-2 call, 2026-11-22: draft · attempt 2 · route codex-repair · endpoint o
 > the attempt is saved at refs/stage2/attempts/conflict-marker-gate/draft-attempt-2-20261122T204710371923Z (14325cc06d1d); `git diff 0db5abf6d256 refs/stage2/attempts/conflict-marker-gate/draft-attempt-2-20261122T204710371923Z` shows it.
 
 Stage-2 call, 2026-11-22: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1171 files, 5392 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1171 files, 5404 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/check_conflict_markers.py` +230 -0
+> - `scripts/kit/manifest.yaml` +6 -0
+> - `tests/test_check_conflict_markers.py` +462 -0
+> - `tests/test_pr_sync.py` +13 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/check_conflict_markers.py`, `tests/test_pr_sync.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         # A tracked symlink whose target carries the markers — the target itself stays untracked,
+>         # so a scanner that follows the link would scan text Git does not track at that path.
+>         _write(root, "elsewhere.txt", "<<<<<<< target\n")
+>         os.symlink("elsewhere.txt", root / "link")
+>         _git(root, "add", "link")
+>         _git(root, "commit", "--quiet", "-m", "tracks a symlink")
+>         # A gitlink entry in the index without any submodule checkout.
+>         blob = _git(root, "hash-object", "-w", "README.md").strip()
+>         _git(root, "update-index", "--add", "--cacheinfo", f"160000,{blob},sub")
+>         _git(root, "commit", "--quiet", "-m", "registers a submodule without a checkout")
+>         # A tracked path deleted from the worktree, still in the index.
+>         _write(root, "docs/gone.md", "content\n")
+>         _git(root, "add", "docs/gone.md")
+>         _git(root, "commit", "--quiet", "-m", "adds a file that is then deleted")
+>         (root / "docs" / "gone.md").unlink()
+> >       assert _run_gate(root).returncode == 0, "none of the non-text entries may be scanned"
+> E       AssertionError: none of the non-text entries may be scanned
+> E       assert 2 == 0
+> E        +  where 2 = CompletedProcess(args=['/Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3', 'scr...ikypiky/pytest-3242/popen-gw1/test_non_text_and_absent_entri0/entries/docs/gone.md'; it was not measured\n", stderr='').returncode
+> E        +    where CompletedProcess(args=['/Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3', 'scr...ikypiky/pytest-3242/popen-gw1/test_non_text_and_absent_entri0/entries/docs/gone.md'; it was not measured\n", stderr='') = _run_gate(PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3242/popen-gw1/test_non_text_and_absent_entri0/entries'))
+>
+> tests/test_check_conflict_markers.py:270: AssertionError
+> ______________ test_gate_goes_red_when_inspection_cannot_complete ______________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3242/popen-gw3/test_gate_goes_red_when_inspec0')
+>
+>     def test_gate_goes_red_when_inspection_cannot_complete(tmp_path: Path) -> None:
+>         """A non-repository root, a failed Git command and an unreadable tracked
+>         file each fail the check and say what was not measured."""
+>         done = _run_gate(tmp_path / "nowhere")
+>         assert done.returncode == 2, done.stdout + done.stderr
+>         assert "not measured" in done.stdout or "not a Git work tree" in done.stdout, done.stdout
+>     
+>         plain = tmp_path / "plain"
+>         plain.mkdir()
+>         done = _run_gate(plain)
+>         assert done.returncode == 2, done.stdout + done.stderr
+>         assert "not a Git work tree" in done.stdout, done.stdout
+>     
+>         root = _repo(tmp_path, "inspection")
+>         _write(root, "docs/note.md", "readable\n")
+>         _commit(root, "clean base")
+>         assert _run_gate(root).returncode == 0
+>     
+>         real_git = shutil.which("git")
+>         assert real_git, "the shim leg needs a real git to delegate to"
+>         failing = tmp_path / "shim-failing"
+>         failing.mkdir()
+>         shim = failing / "git"
+>         shim.write_text(
+>             f'#!/bin/sh\nif [ "$1" = "ls-files" ]; then echo "shim: ls-files refused" >&2; exit 7; fi\nexec "{real_git}" "$@"\n',
+>             encoding="utf-8",
+>         )
+>         shim.chmod(0o755)
+>         delegating = tmp_path / "shim-ok"
+>         delegating.mkdir()
+>         passing = delegating / "git"
+>         passing.write_text(f'#!/bin/sh\nexec "{real_git}" "$@"\n', encoding="utf-8")
+>         passing.chmod(0o755)
+>         shim_env = {**os.environ, "PATH": f"{failing}{os.pathsep}{os.environ['PATH']}"}
+>         done = _run_gate(root, env=shim_env)
+> >       assert done.returncode == 2, done.stdout + done.stderr
+> E       AssertionError: conflict-markers: measured pass — no marker line in tracked text, no whitespace fault in the changes
+> E         OK — no deviation.
+> E         
+> E       assert 0 == 2
+> E        +  where 0 = CompletedProcess(args=['/Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3', 'scr...: measured pass — no marker line in tracked text, no whitespace fault in the changes\nOK — no deviation.\n', stderr='').returncode
+>
+> tests/test_check_conflict_markers.py:378: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_check_conflict_markers.py::test_reports_all_marker_locations_without_writes
+> FAILED tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[>>>>>>>- topic]
+> FAILED tests/test_check_conflict_markers.py::test_committed_marker_forms_in_every_kind_of_text
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[>>>>>>>-]
+> FAILED tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured
+> FAILED tests/test_check_conflict_markers.py::test_non_text_and_absent_entries_are_not_scanned
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete
+> 8 failed, 13 passed in 1.86s
+> ```
+
+Stage-2 call, 2026-11-22: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1173 files, 5408 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/conflict-marker-gate/plan.md` +8 -8
+> - `scripts/check_conflict_markers.py` +13 -4
+> - `tests/test_check_conflict_markers.py` +94 -17
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_check_conflict_markers.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .............F.......                                                    [100%]
+> =================================== FAILURES ===================================
+> _______________ test_gate_is_blocking_in_every_verification_path _______________
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3244/popen-gw4/test_gate_is_blocking_in_every0')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10904e930>
+>
+>     def test_gate_is_blocking_in_every_verification_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+>         """The declared entry derives blocking on every verification path — the
+>         full local verify job, its docs subset ahead of every minutes gate, and the
+>         hosted workflow without an advisory valve.
+>     
+>         The held gate list belongs to the orchestrator bootstrap (plan step 5),
+>         so the derivation is proven against a gate file that carries the
+>         declaration beside this repository's real list; once the bootstrap has
+>         registered the entry, the real list and the generated workflow must carry
+>         exactly it.
+>         """
+>         real_doc = yaml.safe_load((REPO_ROOT / "decisions" / "gates.yaml").read_text(encoding="utf-8"))
+>         registered = next((entry for entry in real_doc["gates"] if entry["id"] == "conflict-markers"), None)
+>         gates_list = [*real_doc["gates"]]
+>         if registered is None:
+>             gates_list.append(yaml.safe_load(DECLARED_ENTRY))
+>     
+>         root = tmp_path / "gate-list"
+>         (root / "decisions").mkdir(parents=True)
+>         gate_file = root / "decisions" / "gates.yaml"
+>         gate_file.write_text(yaml.safe_dump({**real_doc, "gates": gates_list}, sort_keys=False), encoding="utf-8")
+>         monkeypatch.setattr(ci_gates, "GATE_FILE", gate_file)
+>     
+> >       gate = next((entry for entry in ci_gates.gates() if entry["id"] == "conflict-markers"), None)
+>
+> tests/test_check_conflict_markers.py:451: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> scripts/ci_gates.py:506: in gates
+>     return _gates_aus(GATE_FILE)
+> scripts/ci_gates.py:466: in _gates_aus
+>     fehler = validate_schema(doc)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> doc = {'gates': [{'command': 'python3 -m pytest tests/ -q -n auto', 'cost': 'minutes', 'enforcement': 'block', 'floor': True...'enforcement': 'report', 'floor': False, ...}, ...], 'retired': [], 'schema_version': 3, 'tools': {'python': ['3.12']}}
+>
+>     def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
+>         """Prueft die Gate-Datei gegen ihr Schema. Liefert Fehler, leer = ok."""
+>         if doc is None:
+>             if not GATE_FILE.is_file():
+>                 return [f"Gate-Datei fehlt: {GATE_FILE}"]
+>             doc = yaml.safe_load(GATE_FILE.read_text(encoding="utf-8"))
+>         fehler: list[str] = []
+>         if not isinstance(doc, dict):
+>             return ["die Gate-Datei ist kein Mapping"]
+>         version = doc.get("schema_version")
+>         if type(version) is not int or version != SCHEMA_VERSION:
+>             fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {version!r}")
+>         fehler.extend(_tools_fehler(doc.get("tools")))
+>         gate_liste = doc.get("gates")
+>         if not isinstance(gate_liste, list) or not gate_liste:
+>             fehler.append("'gates' fehlt oder ist leer")
+>             return fehler
+>         bekannt: set[str] = set()
+>         for g in gate_liste:
+> >           gid = g.get("id")
+> E           AttributeError: 'list' object has no attribute 'get'
+>
+> scripts/ci_gates.py:380: AttributeError
+> =========================== short test summary info ============================
+> FAILED tests/test_check_conflict_markers.py::test_gate_is_blocking_in_every_verification_path
+> 1 failed, 20 passed in 1.45s
+> ```
+
+Stage-2 call, 2026-11-22: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1173 files, 5408 commits, 12 rules.
