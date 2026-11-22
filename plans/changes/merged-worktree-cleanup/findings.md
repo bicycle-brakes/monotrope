@@ -57,3 +57,5 @@ Stage-2 call, 2026-11-22: spec-review · endpoint claude-code-plan · model clau
 | S-11 | MINOR | SPEC | base | Definition of Done | Gap: research.md names `scripts/kit/manifest.yaml` as a decision the change must make ("a new script must be added there or deliberately left out"). The spec does not settle whether the new entry point ships to new repositories through the kit, so the implementer would decide it silently. | Opus | in spec — [DETAIL] decided by the orchestrator: the new script is left out of the kit manifest for now, with the reason that worktree housekeeping is this repository's lane model. Reason: smallest slice; a later bead can ship it | — |
 
 Stage-2 call, 2026-11-22: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1171 files, 5324 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1171 files, 5328 commits, 12 rules.
