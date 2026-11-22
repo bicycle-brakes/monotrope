@@ -485,3 +485,13 @@ Stage-2 call, 2026-11-22: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Orchestrator hand finish, 2026-11-22: the Sonnet repair attempt of loop rows L1-1..L1-3 (stage-1 route, Codex usage-limited) failed its post-run checks only on its own L1-3 test: the fixture tracked no directory, and the test's case-sensitive `Path.is_dir` stand-in called itself. The orchestrator (Opus 5.5) fixed the test (a tracked `templates/held.md` in the fixture, the stand-in calls the real `is_dir`); the runner code of the attempt is unchanged. Full `make verify` green on 2026-11-22 (execution 1005 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).
+
+Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1153 files, 5402 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1153 files, 5402 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1153 files, 5403 commits, 12 rules.
+
+Loop attempt: 2026-11-22 — no round was written; the review-loop calls above consumed no stage; audit calls: 3
+
+Address notice: opencode-go/gemini-4-argon: wire api "google-generative-ai" has no recorded base; the record declares anthropic-messages, openai-completions, openai-responses; running on with the definition's own base
