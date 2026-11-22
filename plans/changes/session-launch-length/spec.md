@@ -56,7 +56,7 @@ as the existing session contract requires.
    being split into arguments, changing text, or being refused solely for its length.
 3. If the assembled prompt contains NUL or exceeds 32 KiB, the launch-file
    content exceeds 64 KiB, the short command exceeds 1,023 UTF-8 bytes, or the
-   launch-file path contains a newline, carriage return or NUL, the runner
+   launch-file path contains a control byte below 0x20 or 0x7F, the runner
    refuses before Terminal dispatch with exit 2 and a reason identifying the
    invalid input or exceeded bound.
    *Refuted by:* dispatch after any such input, refusal at an inclusive byte
@@ -66,11 +66,11 @@ as the existing session contract requires.
    syntax, their contents remain data throughout launch-file execution.
    *Refuted by:* quotes, substitutions, Unicode or newlines changing the
    recorded prompt/environment or executing an extra command in a stand-in.
-5. When launch files are prepared, the prompt-bearing file is confined to a
+5. When launch files are prepared, the prompt-bearing file has mode 0700 in a
    fresh owner-only attempt directory under `.stage2-sessions/`, retained on
    accepted dispatch and removed on refusal or failed dispatch without removing
    existing user files.
-   *Refuted by:* group/other access to the directory or prompt-bearing file,
+   *Refuted by:* a launcher mode other than 0700, group/other access to the directory,
    a failed write followed by dispatch, a failed attempt leaving its files, or
    cleanup deleting a pre-existing sibling file.
 6. When the new launch route runs, it preserves the session's existing checks
@@ -92,6 +92,11 @@ as the existing session contract requires.
    *Refuted by:* either description omitting or misstating any of those facts,
    claiming launch files contain no prompt, or promising CLI startup from
    dispatch acceptance.
+9. When the dispatched command runs, it verifies the launch file's SHA-256
+   digest recorded at preparation and refuses to execute a file whose digest
+   differs or cannot be verified.
+   *Refuted by:* a modified or unreadable launcher starting the CLI, or an
+   unchanged launcher being rejected because of a mismatched recorded digest.
 
 ## Non-goals
 
@@ -136,12 +141,17 @@ None open. The agent chose the following reversible details and recorded why:
   stdin and existing CLI arguments, without changing either CLI's prompt format.
 - [DETAIL] Include Terminal's terminating newline in the 1,024-byte typed-line
   budget, leaving at most 1,023 UTF-8 bytes for the dispatched command. Refuse
-  launch-file paths containing newline, carriage return or NUL because they
-  cannot be sent as the required single line.
+  launch-file paths containing control bytes below 0x20 or 0x7F because the
+  terminal line editor can interpret them instead of passing them as data.
 - [DETAIL] Retain the 64 KiB limit for the quoted launch-file content, where
   the full command now lives; quote expansion may make a smaller prompt exceed it.
 - [DETAIL] Retain the prompt-bearing launcher with accepted attempt files so
   asynchronous Terminal execution cannot race cleanup; owner-only permissions
   bound the new local persistence. This follows the existing attempt lifecycle.
+- [DETAIL] Set the launcher to mode 0700 and verify its recorded SHA-256 digest
+  before execution, so changes made after preparation are detected at the check;
+  owner-only permissions alone do not exclude another process of the same user.
+  Boundary: this check does not prevent a same-user process changing the file
+  between digest verification and execution.
 - [DETAIL] Set phase 4's appetite to two hours including repair; stop and report
   remaining work at that limit. Neither research nor the answer sets an appetite.
