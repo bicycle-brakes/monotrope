@@ -597,7 +597,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
+| [`changes/draft-known-red/decisions.md`](changes/draft-known-red/decisions.md) | draft | none | 2026-11-22 | coding-harness-83e |
+| [`changes/draft-known-red/findings.md`](changes/draft-known-red/findings.md) | draft | none | 2026-11-22 | coding-harness-83e |
+| [`changes/draft-known-red/plan.md`](changes/draft-known-red/plan.md) | draft | none | 2026-11-22 | coding-harness-83e |
 | [`changes/draft-known-red/research.md`](changes/draft-known-red/research.md) | draft | none | 2026-11-22 | coding-harness-83e |
+| [`changes/draft-known-red/spec.md`](changes/draft-known-red/spec.md) | draft | none | 2026-11-22 | coding-harness-83e |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
