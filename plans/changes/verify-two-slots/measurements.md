@@ -41,13 +41,15 @@ any of them missing would be invalid.
 | Ratios | each simultaneous run's wall time over the serial run's, at most 1.6 | pair A 1.289, pair B 1.289 — both at most 1.6 |
 | Load | background processes/lanes; start and end 1-, 5- and 15-minute load averages | start `{ 3.81 5.83 5.29 }`, end `{ 2.40 6.51 8.17 }` (1/5/15-minute); background: other lanes idle (Codex usage-limited), no stage2 or pytest job outside the trial |
 | Memory | starting and minimum available memory percentage; an external sampler reading `verify_lock.read_available_memory()` every five seconds, gaps over 15 seconds invalidate | start 69 %, minimum 62 %; sampler read `verify_lock.read_available_memory()` every 5 s for the whole trial, largest gap 5.1 s |
-| Admission observation | every protected admission seen in each run, with intervals; no extra admission over the serial run, no third admission over the pair | holder records sampled every 5 s: never more than two (`verify.holder.1.json`, `verify.holder.2.json`) and only during the pair; one during each single run; no third admission |
+| Admission observation | every protected admission seen in each run, with intervals; no extra admission over the serial run, no third admission over the pair | holder records sampled every 5 s: never more than two (`verify.holder.1.json`, `verify.holder.2.json`) and only during the pair; one during each single run; no third admission seen. **Limit (phase 6, O6-5):** this is a 5-second sample of holder records, not per-admission intervals, and the queue directory `verify.queue/` was not sampled, so an admission shorter than 5 s or a contending third waiter would not show; the trial is recorded with this limit, not rerun |
 | Failure attribution | a failed parallel test rerun serially on the same revision: serial pass = parallelism-caused, serial failure = content failure; stop and report on any trial failure | no test failed in the recorded trial, so none needed classification |
 
 ## Scope notes
 
 - One paired trial demonstrates zero observed failures, not a statistical
   absence of flakes; no long-run claim is made from it.
+- Later commits, all outside `scripts/` (checked with `git diff 127e5fa5..<commit> -- scripts/`, empty): `6655dbbf` and `bec58b9c` (this record), `60d3931d` (phase-6 verdict). A repair of the phase-6 rows that touches `scripts/` invalidates the trial and requires it again.
+- The raw report and run logs stay in the orchestrator's session scratchpad and are not committed; the table above is the record.
 - A later change to `scripts/` after a recorded trial invalidates it and
   requires the complete trial again, within the four-hour appetite.
   Documentation-only, test-only or plans changes after the trial are
