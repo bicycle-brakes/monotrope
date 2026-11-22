@@ -28,12 +28,13 @@ def test_gate_schema_gate_goes_red_when_an_entry_has_no_command() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 2,
+        "schema_version": 3,
         "gates": [
             {
                 "id": "kaputt",
                 "title": "weder Kommando noch Action",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -58,13 +59,14 @@ def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 2,
+        "schema_version": 3,
         "gates": [
             {
                 "id": "kaputt",
                 "title": "needs_tracker als Text",
                 "command": "python3 -c 'print(1)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -83,13 +85,14 @@ def test_gate_schema_gate_rejects_an_unknown_placement() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 2,
+        "schema_version": 3,
         "gates": [
             {
                 "id": "kaputt",
                 "title": "placement als Freitext",
                 "command": "python3 -c 'print(1)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "manchmal",
@@ -107,13 +110,14 @@ def test_gate_schema_gate_requires_a_placement() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 2,
+        "schema_version": 3,
         "gates": [
             {
                 "id": "kaputt",
                 "title": "ohne placement",
                 "command": "python3 -c 'print(1)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "reason": "a seed that demonstrates the schema error",
@@ -132,7 +136,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
     import ci_gates
 
     doc = {
-        "schema_version": 2,
+        "schema_version": 3,
         "tools": {"python": ["3.11", "3.12"]},
         "gates": [
             {
@@ -140,6 +144,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
                 "title": "misst ueberall",
                 "command": "python3 -c 'print(1)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -150,6 +155,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
                 "title": "misst nur an der Schreibmaschine",
                 "command": "python3 -c 'print(2)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "writer",
@@ -176,7 +182,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
     import ci_gates
 
     doc = {
-        "schema_version": 2,
+        "schema_version": 3,
         "tools": {"python": ["3.11", "3.12"]},
         "gates": [
             {
@@ -184,6 +190,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
                 "title": "misst ueberall",
                 "command": "python3 -c 'print(1)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -194,6 +201,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
                 "title": "misst nur in der gehosteten CI",
                 "command": "python3 -c 'print(2)'",
                 "job": "verify",
+                "cost": "seconds",
                 "enforcement": "block",
                 "floor": True,
                 "placement": "hosted",
@@ -553,7 +561,7 @@ def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -
 
     def doc(placement: str) -> dict:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "tools": {"python": ["3.11", "3.12"]},
             "gates": [
                 {
@@ -561,6 +569,7 @@ def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -
                     "title": "Marketplace-Action ohne lokale Entsprechung",
                     "action": "example/no-local-equivalent@v1",
                     "job": "verify",
+                    "cost": "seconds",
                     "enforcement": "advisory",
                     "floor": False,
                     "placement": placement,

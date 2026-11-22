@@ -164,6 +164,42 @@ def test_the_working_tree_does_not_count(tmp_path: Path) -> None:
     assert _run(repo) == before
 
 
+def test_worktree_links_include_new_content_and_preserve_committed_snapshot(tmp_path: Path) -> None:
+    """The working-tree adapter sees uncommitted links; the committed snapshot and the command line do not.
+
+    Planted fault: the adapter reads committed objects (an edited or untracked file adds no link), or
+    the committed snapshot and the command line start reading the disk.
+    """
+    repo = _fixture(
+        tmp_path,
+        {"scripts/a_module.py": "V = 1\n", "scripts/b_module.py": "V = 1\n", "tests/test_a.py": "import a_module\n"},
+        {"scripts/a_module.py": "V = 2\n"},
+    )
+    before = _run(repo)
+    committed = tm.links(tm.Snapshot(str(repo), "HEAD"))
+    # Uncommitted: an edit that adds a link, a new untracked test and module, a deleted tracked file
+    # and a tracked path replaced by a link to a file outside the worktree.
+    (repo / "tests" / "test_a.py").write_text("import a_module\nimport b_module\n", encoding="utf-8")
+    (repo / "scripts" / "c_module.py").write_text("V = 1\n", encoding="utf-8")
+    (repo / "tests" / "test_c.py").write_text("import c_module\n", encoding="utf-8")
+    outside = tmp_path / "outside.py"
+    outside.write_text("import a_module\n", encoding="utf-8")
+    (repo / "scripts" / "b_module.py").unlink()
+    (repo / "scripts" / "b_module.py").symlink_to(outside)
+    worktree = tm.links(tm.WorktreeSnapshot(str(repo)))
+    assert ("tests/test_a.py", "scripts/b_module.py", "tests") in worktree
+    assert ("tests/test_c.py", "scripts/c_module.py", "tests") in worktree
+    assert ("tests/test_a.py", "scripts/a_module.py", "tests") in worktree
+    assert not [link for link in worktree if link[0] == "scripts/b_module.py"], "a link was read through"
+    # The deleted file has no path in the working tree, so nothing links to it any more.
+    (repo / "scripts" / "a_module.py").unlink()
+    assert not [link for link in tm.links(tm.WorktreeSnapshot(str(repo))) if link[1] == "scripts/a_module.py"]
+    # The committed snapshot and the command line stay on git objects.
+    assert tm.links(tm.Snapshot(str(repo), "HEAD")) == committed
+    assert ("tests/test_c.py", "scripts/c_module.py", "tests") not in committed
+    assert _run(repo) == before
+
+
 def test_two_runs_give_the_same_bytes(tmp_path: Path) -> None:
     """Criterion 1: the same two commits give the same bytes, whatever the hash seed."""
     base = {f"scripts/mod_{i}.py": "V = 1\n" for i in range(8)}

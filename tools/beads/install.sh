@@ -36,12 +36,18 @@ SUMS_FILE="$REPO_ROOT/tools/beads/checksums/${TARBALL}.sha256"
 }
 
 DEST="${HOME}/.local/bin/bd-${VERSION}"
-if [ -x "$DEST" ] && "$DEST" version 2>/dev/null | grep -q "$VERSION"; then
+# Skip the download only when the binary already there reports exactly
+# "bd version <pin>" on its first line: 1.3.40, 11.3.4 or a release candidate
+# merely contain the pin. The skip trusts that binary without re-hashing it —
+# the archive checksum cannot be applied to an extracted binary (spec of change
+# bd-1-3-4, "Boundary").
+EXACT="^bd version ${VERSION//./\\.}([[:space:]]|\$)"
+if [ -x "$DEST" ] && "$DEST" version 2>/dev/null | head -1 | grep -qE "$EXACT"; then
   echo "bd $VERSION already installed at $DEST — skipping the download."
   exit 0
 fi
 
-URL="https://github.com/steveyegge/beads/releases/download/v${VERSION}/${TARBALL}"
+URL="https://github.com/gastownhall/beads/releases/download/v${VERSION}/${TARBALL}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

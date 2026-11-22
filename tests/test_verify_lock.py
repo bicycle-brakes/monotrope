@@ -1160,3 +1160,118 @@ def test_a_descendant_in_its_own_session_nests_after_the_holder_died(
         assert done.stdout.strip() == str(gone.pid), "a descendant of the published session queued again"
     finally:
         os.close(descriptor)
+
+
+# ---------------------------------------------------------------------------
+# The measured admission context (bead coding-harness-1um6)
+# ---------------------------------------------------------------------------
+
+
+CONTEXT_PROBE = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_lock
+context = verify_lock.admission_context()
+holder = verify_lock.read_holder()
+print(json.dumps({
+    "id": context.admission_id,
+    "wait": context.wait_seconds,
+    "reused": context.reused,
+    "holder_id": holder.get("admission_id") if holder else None,
+    "holder_wait": holder.get("admission_wait") if holder else None,
+}))
+"""
+
+
+def test_admission_measurement_survives_cli_and_inherited_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The measured queue-plus-memory wait reaches the record fresh or inherited, whichever applies.
+
+    Fault this pins: the memory wait omitted from the measured admission wait,
+    an inherited context losing its identity, a nested entry measuring or
+    re-counting its ancestor's wait, or a fresh context passing itself off as
+    a nested child's own.
+    """
+    state = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    for name in (
+        verify_lock.LOCK_ENV,
+        verify_lock.TOKEN_ENV,
+        verify_lock.FLOOR_ENV,
+        verify_lock.ADMISSION_ID_ENV,
+        verify_lock.ADMISSION_WAIT_ENV,
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    # A fresh admission under fake clocks: entry at 0, the queue turn logged at
+    # 30, one low-memory recheck at 60, the wait measured at 60 — so the wait
+    # is 60 s only if the memory rechecks are counted into it.
+    ticks = iter([0.0, 30.0, 60.0, 60.0])
+    monkeypatch.setattr(verify_lock, "_now", lambda: next(ticks))
+    monkeypatch.setattr(verify_lock, "_sleep", lambda _seconds: None)
+    readings = iter([10.0, 30.0])
+    monkeypatch.setattr(verify_lock, "read_available_memory", lambda _platform=None: next(readings))
+
+    with verify_lock.hold_admission(["measured", "wait"]) as owned:
+        assert owned is not None, "an independent admission must own the lock"
+        active = verify_lock._ACTIVE
+        assert active is not None
+        assert active.wait_seconds == 60.0, "the memory recheck was not counted into the measured wait"
+        assert re.fullmatch(r"[0-9a-f]{32}", active.admission_id), active.admission_id
+        context = verify_lock.admission_context()
+        assert context == verify_lock.AdmissionContext(active.admission_id, 60.0, False)
+        holder = verify_lock.read_holder()
+        assert holder is not None
+        assert holder["admission_id"] == active.admission_id
+        assert holder["admission_wait"] == 60.0
+        # A fresh context travels to a local check as the child's own measurement.
+        env = verify_lock.inherit_env({"PATH": "/usr/bin:/bin"})
+        assert env[verify_lock.ADMISSION_ID_ENV] == active.admission_id
+        assert float(env[verify_lock.ADMISSION_WAIT_ENV]) == 60.0
+    assert verify_lock._ACTIVE is None, "the released admission stayed active"
+
+    # An inherited admission resolves its context from the published ownership:
+    # an old-shape record (published before the field existed) reads unknowns.
+    monkeypatch.setenv(verify_lock.LOCK_ENV, str(os.getpid()))
+    monkeypatch.setenv(verify_lock.TOKEN_ENV, TEST_TOKEN)
+    with fake_holder(state, pid=os.getpid()):
+        context = verify_lock.admission_context()
+        assert context == verify_lock.AdmissionContext(None, None, True)
+        root = state / "coding-harness"
+        record = json.loads((root / verify_lock.HOLDER_NAME).read_text(encoding="utf-8"))
+        record["admission_id"] = "inherited-admission-id"
+        record["admission_wait"] = 7.5
+        (root / verify_lock.HOLDER_NAME).write_text(json.dumps(record), encoding="utf-8")
+        context = verify_lock.admission_context()
+        assert context == verify_lock.AdmissionContext("inherited-admission-id", 7.5, True)
+        # An unusable published wait stays unknown — never a guess, never zero.
+        record["admission_wait"] = "not-a-number"
+        (root / verify_lock.HOLDER_NAME).write_text(json.dumps(record), encoding="utf-8")
+        context = verify_lock.admission_context()
+        assert context == verify_lock.AdmissionContext("inherited-admission-id", None, True)
+        # An inherited context does not travel as a fresh measurement.
+        env = verify_lock.inherit_env({verify_lock.ADMISSION_ID_ENV: "should-not-travel"})
+        assert verify_lock.ADMISSION_ID_ENV not in env
+        assert verify_lock.ADMISSION_WAIT_ENV not in env
+        assert env[verify_lock.LOCK_ENV] == str(os.getpid())
+
+    # The same fresh resolution through the supervisor's CLI: the protected
+    # command reads its context and the published record, and they agree.
+    monkeypatch.delenv(verify_lock.LOCK_ENV)
+    monkeypatch.delenv(verify_lock.TOKEN_ENV)
+    done = subprocess.run(
+        [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", CONTEXT_PROBE],
+        cwd=REPO_ROOT,
+        env=_env(state),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    seen = json.loads(done.stdout)
+    assert seen["reused"] is False, seen
+    assert re.fullmatch(r"[0-9a-f]{32}", seen["id"] or ""), seen
+    assert seen["wait"] is not None and seen["wait"] >= 0, seen
+    assert seen["id"] == seen["holder_id"] and seen["wait"] == seen["holder_wait"], seen

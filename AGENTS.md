@@ -21,7 +21,7 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each runner repair and before phase 6; a targeted check after an orchestrator hand repair |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
@@ -40,65 +40,52 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 
 ## House rules
 
-1. **The repository is English** — documents, code, identifiers, comments,
-   messages, tests, commit messages and PR bodies. German is the language of
-   the conversation with the maintainer and of the texts the maintainer's
-   display shows at run time (`tools/claude-code/`), nothing else. German
-   that is still in the tree (2026-09-29: mainly `scripts/`, `tests/` and
-   `docs/governance/`) is translated in pull requests of its own, never in
-   passing inside an unrelated change (bead coding-harness-yim).
-2. **Beads only.** The tracker is the Dolt database under `.beads/`,
-   transported via `refs/dolt/data` on origin. No rendered copy is committed:
-   the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every
-   reader goes through `scripts/bead_render.py`. A fresh clone needs
-   `tools/beads/install.sh && tools/bd bootstrap --yes` before any
-   tracker-reading gate can measure.
-3. **Use `tools/bd`, never bare `bd`.** The wrapper pins the version and
-   refuses `init`, `migrate`, `upgrade` — the three verbs that can change the
-   shared database for everyone. The prefix (`coding-harness-`) was fixed at
-   init and cannot be corrected afterwards.
-4. **One writer per tracker, and one exception.** While more than one
-   writing session runs in a repository, the session that started first
-   writes the tracker: it hands out beads, runs `tools/bd ready`, creates
-   follow-up work as `discovered-from`, closes, reprioritises and links.
-   Every other writing session works in a worktree of its own and writes
-   exactly two things: the claim of the one bead it works on
-   (`tools/bd update <id> --claim`) and its handover comment on that bead —
-   nothing more (ADR 0006, lakeswitch-ai D-60). At most
-   `writing_sessions_per_repository` writing sessions (default 2) run in one
-   repository. Until the D-60 write guard exists, this is stated, not
-   enforced: the start hook and the status line show a second session, and
-   a session that is not first checks before any tracker write. After the
-   writes run `tools/bd dolt push`. The push order is tracker first, git
-   second: CI renders the gate from `refs/dolt/data`, so a git push that
-   outruns the tracker push merges against a stand the commits claim to
-   include — and goes red on exactly that gap (bead coding-harness-4t8).
-   Auto-export is off, and no rendered copy is committed (bead
-   coding-harness-1jg.3): a local reader renders fresh through
-   `scripts/bead_render.py`. Because the diff no longer shows tracker
-   changes, a pull request names in its body every bead it opens, changes
-   or closes (maintainer, 2026-09-23).
-5. **The handover is the file, not the chat.** Session end → a file under
-   `docs/journal/handover/`. A number without its commit or date reads as a
-   historical one — every count carries its cut-off.
-6. **The customer instance is out of bounds.** What is needed from the
-   customer instance (private, never named) travels as a *requirement*, never
-   as an expression — no filename, field name, entity or layer name from there
+1. **The repository is English** — documents, code, identifiers, comments, messages, tests, commit messages and PR
+   bodies. German is the language of the conversation with the maintainer and of the texts the maintainer's display
+   shows at run time (`tools/claude-code/`), nothing else. German that is still in the tree (2026-09-29: mainly
+   `scripts/`, `tests/` and `docs/governance/`) is translated in pull requests of its own, never in passing inside an
+   unrelated change (bead coding-harness-yim).
+2. **Beads only.** The tracker is the Dolt database under `.beads/`, transported via `refs/dolt/data` on origin. No
+   rendered copy is committed: the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every reader goes
+   through `scripts/bead_render.py`. A fresh clone needs `tools/beads/install.sh && tools/bd bootstrap --yes` before
+   any tracker-reading gate can measure.
+3. **Use `tools/bd`, never bare `bd`.** The wrapper pins the version and refuses `init`, `migrate`, `upgrade` — the
+   three verbs that can change the shared database for everyone. The prefix (`coding-harness-`) was fixed at init and
+   cannot be corrected afterwards.
+4. **One writer per tracker, and one exception.** While more than one writing session runs in a repository, the
+   session that started first writes the tracker: it hands out beads, runs `tools/bd ready`, creates follow-up work as
+   `discovered-from`, closes, reprioritises and links. Every other writing session works in a worktree of its own and
+   writes exactly two things: the claim of the one bead it works on (`tools/bd update <id> --claim`) and its handover
+   comment on that bead — nothing more (ADR 0006, lakeswitch-ai D-60). At most `writing_sessions_per_repository`
+   writing sessions (default 2) run in one repository. Until the D-60 write guard exists, this is stated, not
+   enforced: the start hook and the status line show a second session, and a session that is not first checks before
+   any tracker write. After the writes run `tools/bd dolt push`. The push order is tracker first, git second: CI
+   renders the gate from `refs/dolt/data`, so a git push that outruns the tracker push merges against a stand the
+   commits claim to include — and goes red on exactly that gap (bead coding-harness-4t8). Auto-export is off, and no
+   rendered copy is committed (bead coding-harness-1jg.3): a local reader renders fresh through
+   `scripts/bead_render.py`. Because the diff no longer shows tracker changes, a pull request names in its body every
+   bead it opens, changes or closes (maintainer, 2026-09-23).
+5. **The handover is the file, not the chat.** Session end → a file under `docs/journal/handover/`. A number without
+   its commit or date reads as a historical one — every count carries its cut-off.
+6. **The customer instance is out of bounds.** What is needed from the customer instance (private, never named)
+   travels as a *requirement*, never as an expression — no filename, field name, entity or layer name from there
    appears in a framework artifact.
-7. **Texts carry their own meaning.** A reader without this session must
-   understand every sentence; bead ids and file names go in parentheses as a
-   suffix, never as the carrier of a sentence.
-8. **A decision takes effect when the maintainer merges its pull request**
-   (ADR 0008). A pull request touching a file `provenance.yaml` reserves for
-   `human-decided` is a decision PR: title `decide(<scope>): …`, label
-   `decision`, body from the decision template
-   (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as
-   the maintainer stated it (`python3 scripts/harness.py
-   decide adr … --stated-in …`), never one of your own. Merge only when the
-   maintainer asks in the conversation, after restating the decision block
-   (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
-   every merge command it recognises — a brake, not a lock: another spelling
-   passes (`docs/WORKFLOW.md`).
+7. **Texts carry their own meaning.** A reader without this session must understand every sentence; bead ids and file
+   names go in parentheses as a suffix, never as the carrier of a sentence.
+8. **A decision takes effect when the maintainer merges its pull request** (ADR 0008). A pull request touching a file
+   `provenance.yaml` reserves for `human-decided` is a decision PR: title `decide(<scope>): …`, label `decision`, body
+   from the decision template (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as the
+   maintainer stated it (`python3 scripts/harness.py decide adr … --stated-in …`), never one of your own. Merge only
+   when the maintainer asks in the conversation, after restating the decision block (`prompts/07-commit.md`, "The
+   merge"); `.claude/settings.json` asks before every merge command it recognises — a brake, not a lock: another
+   spelling passes (`docs/WORKFLOW.md`).
+9. **One entry point and one writer per action — no side routes.** Every recurring action (starting a model, writing
+   an artifact header, running a check, merging) has one entry point and one writer, carried by code at one choke
+   point. Variants the maintainer decided (fallback models, routing by class, the text-only verify skip) are declared
+   parameters inside that path, never a second route beside it; no caller reaches around it, and nothing a tool
+   produces is written by hand instead. An existing side route becomes a bead and is folded in by its own change,
+   never in passing. A rule of this kind takes hold through a check that goes red, not through prose. The kit carries
+   it (`templates/agents-working-pace.md`) (maintainer, 2026-11-16).
 
 ## Communication and session continuity
 
@@ -115,7 +102,7 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   "The question protocol").
 - Say what behavior changed and why it matters; mark proposed, implemented and
   tested work apart. Ask one decision at a time, with a recommendation and its
-  consequence; do not re-ask settled decisions or existing permission.
+  consequence; do not re-ask settled decisions or existing permission. An open question for the maintainer is written at once, with its context and recommendation, into the notes of the bead it concerns (`tools/bd update <id> --append-notes`, then `tools/bd dolt push`), never only into chat or a session scratchpad; the handover gathers them under "Needed from the maintainer" (maintainer, 2026-11-06).
 - An orchestrating session shows a sub-agent's plan card to the maintainer
   unchanged; the veto stays the maintainer's (`prompts/03-plan.md`).
 - At session start or after a break, read the latest relevant handover and its addenda;
@@ -129,6 +116,17 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
 - A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
+- **Night runs stay plain** (maintainer, 2026-10-12): `ROADMAP.md` is the one map and the
+  morning handover the one report; no Kanban board, canvas or dashboard (Grafana included)
+  is proposed or built for the night run until the maintainer states that the plain form
+  has carried. Collecting data is not covered: a structured event log (JSONL with
+  OpenTelemetry GenAI field names, bead coding-harness-oebl) is allowed; a service that
+  shows it is not. Reason: everything is built for an ADHD reader, no feature creep.
+- **P1 means planned for the next two weeks, at most 10 beads** (maintainer, 2026-11-12).
+  Epics do not count; a bead whose pull request is queued for merge counts until it
+  closes. A bead enters P1 only when another leaves it; the morning handover states the
+  count with its cut-off. Reason: on 2026-11-12, 67 of 242 open beads were P1, so P1 no
+  longer told what comes next; lowering them once without a cap lets them pile up again.
 
 ## Tracker quick reference
 
@@ -148,24 +146,15 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
-  A worktree lives under `.claude/worktrees/<name>`, is branched from a
-  freshly fetched `origin/main`, and is removed after the merge. Sibling
-  directories are retired (D-5). `tools/bd` finds the main checkout's tracker
-  from there, and concurrent writers lose nothing
-  (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
-  still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  A worktree lives under `.claude/worktrees/<name>`, is branched from a freshly fetched `origin/main`,
+  and is removed after the merge; tracker access, claims and sibling directories: `docs/WORKFLOW.md` §3.
+  Each new checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
   (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
-- **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Its tools that write, run, spawn or change
-  state are denied by name in `.claude/settings.json`; the one that may send
-  task text to a routing judge (`sys_advise_models`) is asked each time. Its
-  Omnigent default policy (`tools/omnigent/`) is a second layer the maintainer
-  installs; nothing depends on it alone. The one list and details:
-  `docs/WORKFLOW.md` §3, "Worktrees".
+- **Omnigent starts inside the worktree** (ADR 0006). Its default policy (`tools/omnigent/`) is a second layer;
+  nothing depends on it alone. Which tools are denied or asked, and why: `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none"** — an unopened file
   and an empty query say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
@@ -175,21 +164,25 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   chat or rendered page is a view of it: it names the source path and commit,
   and a finding is never first written there. Personal reasons to care stay
   outside the repository.
-- **The maintainer's Claude Code display** (status line, session entry,
-  handover safety net, `/handover`) lives, documented, in `tools/claude-code/`;
-  change it there and reinstall with `tools/claude-code/install.sh`, never
-  only in `~/.claude`.
+- **The maintainer's Claude Code display** (status line, session entry, handover safety net, `/handover`) lives
+  in `tools/claude-code/`; change it there and reinstall with `tools/claude-code/install.sh`, never only in `~/.claude`.
 - **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
-  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04).
+  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
   days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without asking; style rows
   are accepted limits named in the PR. A second finding of one mechanism ends case repair; a mechanism no choke point closes gets a `Boundary` in its spec; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
+- **An exhausted review ladder goes to phase 6** (maintainer, 2026-11-20): when
+  `review-loop` refuses because every stage of its run is consumed and the last
+  round was not clean, and every taken row of that round is repaired, the lane
+  goes to the phase-6 review instead of a new loop run; phase 6 checks that last
+  repair. Reason: a run's history cannot be reset, and asking each time stopped
+  lanes overnight.
 
 ## Sibling repositories
 
