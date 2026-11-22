@@ -19,7 +19,7 @@ tags: [decisions, stage2, draft]
 
 # draft-known-red — Decisions
 
-Class: bounded (bead coding-harness-83e proposed `feature` on 2026-10-27, "to confirm"; after the research below only the route part is left, which is bounded).
+Class: feature (bead coding-harness-83e; the maintainer's answer B on 2026-11-22 amends ADR 0016, so the change carries an ADR addendum).
 
 ## What the research changed (orchestrator, 2026-11-22)
 
@@ -35,6 +35,21 @@ reason: The bead states what is wanted (a Sonnet fallback for the draft when GLM
 ## [DETAIL] items decided by the orchestrator
 
 - **Scope narrows to the route.** Part (1) is recorded as already done, with the evidence above; this change adds no gate selection.
-- **`--stage2-off [REASON]` is accepted for `draft`,** with the same Stage-1 route, record line and reason as explore, implement and repair. Reason: one pattern for all writing verbs; the bead names the refusal as the gap.
+- **`--stage2-off [REASON]` is accepted for `draft`,** with the same record line and reason as explore, implement and repair; the model is Opus 5.5 at effort `xhigh` (Q-1, superseding the earlier Sonnet reading). Reason: one pattern for all writing verbs; the bead names the refusal as the gap.
 - **The automatic fallback:** after the GLM 5.3 attempt fails (call failure or red document check), the draft does not fall through to Sonnet on its own; the runner's final message names `--stage2-off` as the next step. Reason: `docs/WORKFLOW.md` §3 says a failed model process stops instead of silently changing route, and the relaxation for writing attempts belongs to coding-harness-s9r / coding-harness-6ie, whose maintainer decision of 2026-10-16 is not yet implemented.
 - **A failed draft keeps its work visible:** unchanged; the attempt refs under `refs/stage2/attempts/` already hold it, and the final message names them.
+
+## Q-1 · The draft's Stage-1 route against ADR 0016 decision 9
+
+asked: 2026-11-22
+answer: B — amend ADR 0016: `--stage2-off` is accepted for `draft`, and the Stage-1 draft runs on Opus 5.5 at effort `xhigh`, as `docs/WORKFLOW.md` §3 assigns phases 2, 2b and 3 — not on Sonnet. The amendment is an ADR addendum to decision 9.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the draft gets a Stage-1 route, and on which model.
+  Intention: spec-review round 1 found that accepted ADR 0016 (human-decided), decision 9, says "Where Stage 2 is off, Opus 5.5 drafts by hand as §3 says; draft has no Stage-1 route", while this change adds exactly that route (F-1), and that §3 gives phases 2, 2b and 3 to Opus at effort xhigh, not to Sonnet (F-2).
+  Today: the draft's route list ends at GLM 5.3; --stage2-off is refused for draft; the orchestrator drafts by hand when every route fails.
+  Repository change: Options: A close the bead as done (part 1 merged, part 2 conflicts with the ADR); B amend ADR 0016 and add a Stage-1 draft route on Opus xhigh; C keep the Sonnet route as drafted.
+  Architecture change: ADR 0016 decision 9 amended by an addendum.
+
+In the context of a draft whose every route failed, facing a hand draft or a runner route, we decided to amend ADR 0016 so that --stage2-off runs the draft on Opus 5.5 at effort xhigh, to achieve night runs that draft without the orchestrator's hand, accepting more load on the runner account's Opus limits and an ADR addendum. — 2026-11-22
