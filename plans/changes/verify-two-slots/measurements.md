@@ -24,8 +24,8 @@ tags: [measurements, verification]
 ## Trial — two simultaneous `make verify` against one serial run
 
 Required by spec criterion 12 (`spec.md`); the 1.6 threshold is carried by
-the 2026-11-17 handover. Every field below is pending; a trial recorded with
-any of them missing is invalid.
+the 2026-11-17 handover. Every field below is recorded; a trial recorded with
+any of them missing would be invalid.
 
 | Field | Requirement | Recorded |
 | --- | --- | --- |
