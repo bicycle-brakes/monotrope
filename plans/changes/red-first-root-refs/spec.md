@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-dk0h
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-11-22"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-11-22", model: "glm-5.3"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, red-first, refs]
 class: bounded
@@ -29,14 +29,14 @@ On 2026-11-03, the predecessor's phase-6 finding F-10 showed that a qualifying n
 
 **Proof:** the baseline red-first run, the fixed-code run, or either the planted or clean guard-test run; each runs a named test in a private repository.
 
-**Root reference:** a direct child of the private Git directory whose name, uppercased, is `HEAD`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, or `MERGE_HEAD`, or consists only of ASCII letters, hyphens and underscores and ends in `_HEAD` after uppercasing. Names come from the directory listing and are compared and reported with their original spelling, case-sensitively. The existing `HEAD` retains its logical comparison; other root-reference entries are compared as complete file bytes, including multi-line contents.
+**Root reference:** a direct child of the private Git directory whose name is ASCII-only and, uppercased, is one of `HEAD`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, `MERGE_HEAD`, or consists only of ASCII letters, hyphens and underscores and ends in `_HEAD` after uppercasing. A name holding any non-ASCII character never matches, whatever its uppercasing suggests. Names come from the directory listing and are compared and reported with their original spelling, case-sensitively. The entry spelled exactly `HEAD` keeps the existing logical comparison; every other root-reference entry — including one whose name merely uppercases to `HEAD`, such as `head` or `Head` — is compared as complete file bytes, including multi-line contents.
 
-The private repository starts with `HEAD` as its only root reference; setup and source-side reference restoration stay unchanged. In the cases below, an existing non-`HEAD` root reference is planted in the private repository after setup and before the snapshots.
+The private repository starts with `HEAD` as its only root reference: proof setup reads no root reference of the source repository, and source-side reference restoration stays unchanged (criterion 9). In the cases below, an existing non-`HEAD` root reference is planted in the private repository after setup and before the snapshots.
 
 ## Acceptance criteria
 
 1. When a named test creates a previously absent root reference in the private repository, the proof refuses and names that reference.
-   *Refuted by:* A qualifying test creating `ORIG_HEAD` with `git update-ref ORIG_HEAD HEAD`, `orig_head`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, `MERGE_HEAD`, or a matching hyphenated `_HEAD` name is accepted or its listed name is absent from the refusal.
+   *Refuted by:* A qualifying test creating `ORIG_HEAD` with `git update-ref ORIG_HEAD HEAD`, `orig_head`, `head`, `AUTO_MERGE`, `BISECT_EXPECTED_REV`, `NOTES_MERGE_PARTIAL`, `NOTES_MERGE_REF`, `MERGE_AUTOSTASH`, `FETCH_HEAD`, `MERGE_HEAD`, or a matching hyphenated `_HEAD` name is accepted, its listed spelling is absent from the refusal, or a non-ASCII look-alike such as `BIſECT_EXPECTED_REV` is refused as though it were a root reference.
 2. When a named test changes a root reference other than `HEAD` in the private repository, the proof refuses and names that reference.
    *Refuted by:* A qualifying test changes only a later line of an existing multi-line `FETCH_HEAD`, or changes only the spelling of a listed root-reference name, and the proof accepts it or omits the changed name from the refusal.
 3. When a named test deletes an existing root reference other than `HEAD` from the private repository, the proof refuses and names that reference.
@@ -51,6 +51,8 @@ The private repository starts with `HEAD` as its only root reference; setup and 
    *Refuted by:* `git pack-refs --all` alone refuses a proof whose logical references remain unchanged.
 8. When the root-reference comparison runs, both pre-existing private-reference snapshots include the root references defined above.
    *Refuted by:* Either snapshot misses a created `ORIG_HEAD` or a complete multi-line `FETCH_HEAD` change.
+9. When proof setup reads the source repository, it reads no root reference there: a source holding `ORIG_HEAD` and a multi-line `FETCH_HEAD` — a linked worktree whose `.git` is a file included — sets up unchanged, and the private repository starts with `HEAD` as its only root reference.
+   *Refuted by:* Setup copies a source `ORIG_HEAD` or `FETCH_HEAD` into the private store, refuses or fails on either, or the private store holds any root reference other than `HEAD` right after setup.
 
 ## Non-goals
 
@@ -76,6 +78,9 @@ None open.
 
 - [DETAIL] The spec-review decisions in `findings.md` F-2 and F-3 clarify and supersede the earlier shorthand in `decisions.md`: include the listed irregular Git names and match case-insensitively while preserving listed spelling, so Git references cannot escape the private comparison through their names.
 - [DETAIL] The spec-review decision in `findings.md` F-1 keeps source setup unchanged: only private proof snapshots gain root-reference measurements, avoiding a new source-copy path.
+- [DETAIL] The spec-review decision in `findings.md` F-4 adds criterion 9: proof setup never reads the source's root references — a source with `ORIG_HEAD` and a multi-line `FETCH_HEAD`, a linked worktree included, sets up unchanged and the private store starts without them. Reason: the F-1 decision must be able to go red.
+- [DETAIL] The spec-review decision in `findings.md` F-5 keeps the logical comparison for the entry spelled exactly `HEAD` and compares any other entry that merely uppercases to `HEAD` (`head`, `Head`) as complete file bytes. Reason: a lower-case copy is a stray file the test created.
+- [DETAIL] The spec-review decision in `findings.md` F-6 requires every candidate name, the enumerated irregular ones included, to be ASCII before uppercasing; a non-ASCII name never matches. Reason: one rule for the whole set, so no reference escapes the comparison through Unicode case folding.
 - [DETAIL] Keep `HEAD`'s logical comparison and compare the other named root files as bytes: this preserves the established acceptance of equivalent `HEAD` rewrites while measuring all of `FETCH_HEAD` as decided.
 - [DETAIL] Refuse nonregular or unreadable matching entries before reading them: the existing private-ref guard already refuses unsafe entries, and a FIFO must not block a proof.
 - [DETAIL] Leave malformed `packed-refs` handling unchanged: the recorded scope concerns direct children of the Git directory, not a change to packed-ref syntax.
