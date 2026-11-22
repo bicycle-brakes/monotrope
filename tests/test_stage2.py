@@ -8995,7 +8995,7 @@ def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
 
 @pytest.mark.parametrize(
     ("rounds", "edits", "admitted"),
-    [(3, 1, False), (3, 2, False), (2, 1, False)],
+    [(3, 1, True), (3, 2, False), (2, 1, False)],
     ids=["three-rounds-one-final-draft", "three-rounds-later-edit", "two-rounds"],
 )
 def test_stale_legacy_blocks_still_count_as_rounds(
@@ -30971,7 +30971,7 @@ def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: p
     ]
     monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
     assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
-    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") is None
+    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 1
 
 
 def test_implement_targeted_check_writes_no_slip_history(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31056,9 +31056,48 @@ def test_review_refuses_missing_or_unknown_commit(world: World, stamp: str) -> N
     block = block.replace(
         f"Spec review commit: {head}", "" if stamp == "missing" else f"Spec review commit: {'0' * 40}"
     )
+    # The fingerprint is in no commit and not the disk body, so the commit stamp cannot rescue it.
+    block = re.sub(r"Spec fingerprint: sha256:[0-9a-f]{64}", "Spec fingerprint: sha256:" + "0" * 64, block)
     world.write_findings(block)
     problem = stage2.review_admission(world.root, "demo").review_problem
     assert problem is not None and "commit the spec" in problem and "spec-review" in problem
+
+
+@pytest.mark.parametrize("stamp", ["missing", "unknown"])
+def test_r6_2_review_of_the_disk_body_survives_a_lost_commit(world: World, stamp: str) -> None:
+    """R6-2: a fingerprint equal to the disk body admits even when its commit is no ancestor (a rebase)."""
+    block = opus_review_block(world)
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    block = block.replace(
+        f"Spec review commit: {head}", "" if stamp == "missing" else f"Spec review commit: {'0' * 40}"
+    )
+    world.write_findings(block)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None, admission.review_problem
+
+
+def test_r6_2_final_draft_found_by_fingerprint_after_a_rebase(world: World) -> None:
+    """R6-2: after three rounds the reviewed body is searched in history when its commit is gone."""
+    blocks = [opus_review_block(world).replace(git(world.root, "rev-parse", "HEAD").strip(), "0" * 40)] * 3
+    world.write_findings(*blocks)
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nThe final draft.\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "final draft")
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nA later edit.\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "stale" in problem
+
+
+def test_r6_3_row_without_its_leading_pipe_is_unreadable(world: World) -> None:
+    """R6-3: one valid row plus an ambiguity row lacking its leading pipe is no readable review."""
+    loose = "R-2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved | Opus 5.5 | open | — |"
+    with pytest.raises(stage2.CallFailed, match="R-2"):
+        stage2.readable_review(rows(1) + "\n" + loose)
+    world.findings.write_text(world.text() + "\n" + loose + "\n")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is not None, "a row without its leading pipe makes the stored review unreadable"
 
 
 def test_review_restored_body_is_current(world: World) -> None:

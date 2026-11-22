@@ -1189,6 +1189,20 @@ def split_row(line: str) -> list[str] | None:
     return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
 
 
+def loose_table_line(line: str) -> bool:
+    """Whether a line is a table line missing an edge pipe: six or more cells once optional edge pipes are removed.
+
+    `split_row` needs both edge pipes; a row that lost one would read as prose and could hide an open
+    ambiguity, so the spec-review readers treat such a line as unreadable.
+    """
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    return len(_PIPE.split(stripped)) >= 6
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table.
 
@@ -3851,7 +3865,7 @@ def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], str | None]:
     for line in body_text.splitlines():
         cells = split_row(line)
         if cells is None:
-            if line.strip().startswith("|"):
+            if line.strip().startswith("|") or loose_table_line(line):
                 return [], line.strip()[:80]
             continue
         if _furniture(cells):
@@ -3986,27 +4000,68 @@ def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
 
 
 def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, disk: bytes) -> int | None:
-    """Count body changes after the reviewed commit, including an uncommitted final draft."""
-    if block.commit is None:
-        return None
+    """Count body changes after the review, including an uncommitted final draft, or None when unmeasurable.
+
+    A fingerprinted review equal to the disk body has no edits, whatever its commit (a rebase or a
+    squash merge may have dropped the commit). Otherwise the reviewed commit is the base when it is
+    an ancestor of HEAD and holds the fingerprinted body; if not, the newest committed version in
+    history with that fingerprint is. A legacy review (no fingerprint) counts the committed body
+    versions after the first whose UTC committer day follows its heading day, plus an uncommitted
+    body change.
+    """
     path = f"plans/changes/{change}/spec.md"
+
+    def digest(body: bytes) -> str:
+        return "sha256:" + hashlib.sha256(body).hexdigest()
+
     try:
-        ancestor = run_git(root, "merge-base", "--is-ancestor", block.commit, "HEAD", allow={1: ""})
-        if ancestor.returncode != 0:
-            return None
-        body = spec_body_of(_git_bytes(root, "show", f"{block.commit}:{path}"))
-        if block.fingerprint and "sha256:" + hashlib.sha256(body).hexdigest() != block.fingerprint:
-            return None
-        if block.fingerprint and body == disk:
+        if block.fingerprint is None:
+            day = block.heading_day
+            written = dt.date.fromisoformat(day) if day else None
+            if written is None:
+                return None
+            versions = spec_body_versions(root, change)
+            if not versions:
+                return None
+            after = sum(dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written for stamp, _body in versions[1:])
+            return after + (versions[-1][1] != disk)
+        # An unchanged body needs no ancestry, but it must stand in committed history: a spec never
+        # committed stays refused with "commit the spec" (L4-1).
+        if block.fingerprint == digest(disk) and spec_body_versions(root, change):
             return 0
-        commits = _git_output(root, "rev-list", "--reverse", f"{block.commit}..HEAD", "--", path).splitlines()
+        body: bytes | None = None
+        commits: list[str] = []
+        if block.commit is not None:
+            # A commit that is not an object here (rebased away, or never real) falls through to
+            # the history search below instead of ending the count (R6-2).
+            try:
+                ancestor = run_git(root, "merge-base", "--is-ancestor", block.commit, "HEAD", allow={1: ""})
+            except Refused:
+                ancestor = None
+            if ancestor is not None and ancestor.returncode == 0:
+                shown = spec_body_of(_git_bytes(root, "show", f"{block.commit}:{path}"))
+                if digest(shown) == block.fingerprint:
+                    body = shown
+                    commits = _git_output(
+                        root, "rev-list", "--reverse", f"{block.commit}..HEAD", "--", path
+                    ).splitlines()
+        if body is None:
+            history = _git_output(root, "log", "--reverse", "--format=%H", "--", path).splitlines()
+            for index in range(len(history) - 1, -1, -1):
+                candidate = spec_body_of(_git_bytes(root, "show", f"{history[index]}:{path}"))
+                if digest(candidate) == block.fingerprint:
+                    body = candidate
+                    commits = history[index + 1 :]
+                    break
+        if body is None:
+            return None
         edits = 0
         for commit in commits:
             next_body = spec_body_of(_git_bytes(root, "show", f"{commit}:{path}"))
             edits += next_body != body
             body = next_body
         return edits + (body != disk)
-    except Refused:
+    except (Refused, ValueError):
         return None
 
 
@@ -4164,7 +4219,7 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
     newest = kept[-1]
     rounds = review_rounds(kept)
     stale = review_staleness(root, change, newest, current)
-    edits = body_edits_after_review(root, change, newest, disk) if newest.fingerprint else None
+    edits = body_edits_after_review(root, change, newest, disk)
     if newest.fingerprint is not None and edits is None:
         return ReviewAdmission(
             klass=klass,
@@ -4219,11 +4274,12 @@ def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
     if stale is not None:
         edits = edits if rounds >= 3 else None
         if edits is None or edits > 1:
-            if edits is None and rounds >= 3 and newest.fingerprint is not None:
+            if edits is None and rounds >= 3:
                 remedy = (
                     f"the reviewed fingerprint is in no commit for plans/changes/{change}/spec.md; "
-                    "commit the spec, then rerun spec-review."
-                )
+                    if newest.fingerprint is not None
+                    else "the committed spec body versions after the review cannot be counted; "
+                ) + "commit the spec, then rerun spec-review."
             elif can_run:
                 remedy = (
                     f"Run `python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
@@ -4256,7 +4312,9 @@ def readable_review(answer: str) -> list[list[str]]:
     """
     for line in answer.splitlines():
         cells = split_row(line)
-        if line.strip().startswith("|") and (cells is None or len(cells) != 6):
+        if (line.strip().startswith("|") and (cells is None or len(cells) != 6)) or (
+            cells is None and loose_table_line(line)
+        ):
             raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {line.strip()[:80]}")
     rows, rest = parse_rows(answer, ambiguity=True)
     loose = [line for line in rest.splitlines() if split_row(line) is not None]

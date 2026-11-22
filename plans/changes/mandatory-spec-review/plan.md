@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-19
-updated: 2026-11-21
+updated: 2026-11-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-ttic
@@ -81,6 +81,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-22
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile.
+
 ## Time used
 
 2026-11-17 22:27:44–22:29:55 UTC, 131 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -114,3 +118,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-21 13:55:32–14:16:05 UTC, 1233 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-21 22:26:35–22:39:50 UTC, 795 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-21 22:39:59–22:58:34 UTC, 1115 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-22 20:47:27–20:49:00 UTC, 94 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
