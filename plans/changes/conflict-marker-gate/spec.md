@@ -25,8 +25,8 @@ Verification blocks merge-conflict markers in tracked text files, and the
 supported main-merge helper stops safely on ordinary conflicts (bead
 coding-harness-i76l — conflict-marker gate). Research: `research.md`.
 Authority: the maintainer-approved scope in `decisions.md`, “SKIP · interview”.
-Revised 2026-11-22 after phase 2a; the five findings (S-1 to S-5) are worked
-in, each decision recorded under Open decisions.
+Revised 2026-11-22 after two phase-2a rounds; the eight findings (S-1 to
+S-8) are worked in, each decision recorded under Open decisions.
 
 ## Problem
 
@@ -59,6 +59,11 @@ in, each decision recorded under Open decisions.
   travels with the kit as mechanism, and changes only through a reviewed
   pull request; a test plants a non-empty list by injecting the constant,
   never by widening production defaults.
+- **Unchanged:** the same file bytes, staged entries — as `git ls-files -s`
+  shows them — and refs before and after; Git rewriting `.git/index` to
+  refresh its stat cache without changing an entry is not a change.
+  Criterion 7 additionally allows the helper's fetch to move local
+  remote-tracking refs.
 - **Supported main-merge helper:** `python3 scripts/pr_sync.py merge-main
   --root .`, the one supported way to merge main into a change branch
   (`docs/WORKFLOW.md` §3, “Pull requests stay mergeable”). This change
@@ -72,7 +77,8 @@ in, each decision recorded under Open decisions.
    *Refuted by:* a committed marker passes in a document, source file or
    plans file, including a marker inside a fenced example or a non-UTF-8 file.
 2. When marker lines are found, the check reports every affected path and
-   its one-based line numbers without changing repository content or refs.
+   its one-based line numbers without changing file bytes, staged entries
+   or refs.
    *Refuted by:* a second affected file is omitted, locations are wrong,
    or checking stages, repairs, commits or pushes anything.
 3. While the measured files contain no marker lines, binary files, untracked
@@ -80,15 +86,16 @@ in, each decision recorded under Open decisions.
    *Refuted by:* clean text is rejected, a binary or untracked marker is
    scanned, or allowing one fixture also exempts a sibling or prefix match.
 4. When Git's whitespace and error check, invoked with a fixed
-   `core.whitespace` rule set on the command line so that a user's global
-   and system Git configuration cannot change the verdict while repository
-   `.gitattributes` still apply, reports a fault in staged or unstaged
-   changes outside named fixture exceptions, the check fails with its
-   diagnostic.
+   `core.whitespace` rule set and with every attribute source outside the
+   repository neutralised, reports a fault in staged or unstaged changes
+   outside named fixture exceptions, the check fails with its diagnostic;
+   the verdict is identical whatever the invoking user's global and system
+   Git configuration and attribute files outside the repository say, and
+   the committed `.gitattributes` and `.git/info/attributes` still apply.
    *Refuted by:* a trailing-whitespace fault passes in either change layer,
    including a staged faulty blob whose working file has been restored, or
-   the verdict changes on a machine whose Git configuration disables a
-   whitespace rule.
+   the verdict changes on a machine whose global or system Git
+   configuration or attribute files disable a whitespace rule.
 5. If required Git inspection or reading a present tracked regular file
    fails, the check exits unsuccessfully and explains what was not measured.
    *Refuted by:* a non-repository root, failed Git command or unreadable
@@ -103,11 +110,11 @@ in, each decision recorded under Open decisions.
    cost class that moves the gate inside the admission.
 7. When the supported main-merge helper encounters a conflict outside
    `plans/INDEX.md`, it exits unsuccessfully with the conflicting paths and
-   leaves the target branch, Git's staging area, `plans/INDEX.md`, the
+   leaves the target branch, the staged entries, `plans/INDEX.md`, the
    working files and the branch on origin unchanged; its fetch may move
    local remote-tracking refs.
    *Refuted by:* the helper succeeds, omits a conflicted path, publishes a
-   result, moves the staging area or the generated index, or leaves
+   result, changes the staged entries or the generated index, or leaves
    conflict-marker text in the invoking checkout.
 8. When the workflow kit is assembled, the new gate and its tests travel
    with the gate machinery they depend on.
@@ -158,11 +165,11 @@ edits the held gate declaration and generated hosted workflow.
 
 ## Open decisions
 
-None open. The phase-2a findings of 2026-11-22 (S-1 to S-5 in
-`findings.md`) are decided as `[DETAIL]`s; each is worked into the terms and
-criteria above, and its status stands in `findings.md`. I chose the
-following reversible `[DETAIL]` defaults and recorded why; none changes the
-maintainer's approved scope:
+None open. The phase-2a findings of 2026-11-22 (S-1 to S-8 in
+`findings.md`, from two review rounds) are decided as `[DETAIL]`s; each is
+worked into the terms and criteria above, and its status stands in
+`findings.md`. The following reversible `[DETAIL]` defaults are recorded
+with their reasons; none changes the maintainer's approved scope:
 
 - Helper (S-1): the existing `merge-main` is the approved helper — reading
   A in the finding; it is pinned by regression tests and already named in
@@ -188,6 +195,22 @@ maintainer's approved scope:
   default `blank-at-eol,blank-at-eof,space-before-tab` — so global and
   system configuration cannot change the verdict; repository
   `.gitattributes` still apply.
+- Staged entries, not index bytes (S-6): “unchanged” compares the staged
+  entries — `git ls-files -s` before and after — not the bytes of
+  `.git/index`; Git may legitimately rewrite the index to refresh its stat
+  cache, and the byte-identical reading would force an edit of the
+  protected `scripts/pr_sync.py`. The term “Unchanged” carries this for
+  criteria 2 and 7.
+- Attribute sources outside the repository (S-7): besides the fixed
+  `core.whitespace` rule set, the check neutralises every attribute source
+  outside the repository — `core.attributesFile` set empty on the command
+  line, the system attributes file disabled through `GIT_ATTR_NOSYSTEM=1`
+  — so a global `* -whitespace` line cannot silence a fault; the committed
+  `.gitattributes` and `.git/info/attributes` still apply.
+- Doctrine (S-8): no workflow-document edit — `docs/WORKFLOW.md` §3's
+  existing supported-local-merge sentence already names `merge-main`; the
+  round-1 S-1 status wording that spoke of naming it anew is superseded by
+  this, and no doctrine file joins the pull request.
 - Use the marker prefixes exactly as approved, in every tracked text path,
   including fenced blocks: a fence must not hide an accidental conflict.
   The fixture allowlist starts empty because the current tracked prefix
