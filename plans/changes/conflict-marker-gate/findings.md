@@ -46,3 +46,5 @@ Stage-2 call, 2026-11-22: draft · attempt 2 · route codex-repair · endpoint o
 > the attempt is saved at refs/stage2/attempts/conflict-marker-gate/draft-attempt-2-20261122T155028524517Z (00f073258976); `git diff 5e44bc0455b8 refs/stage2/attempts/conflict-marker-gate/draft-attempt-2-20261122T155028524517Z` shows it.
 
 Stage-2 call, 2026-11-22: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1171 files, 5384 commits, 12 rules.
+
+Stage-2 call, 2026-11-22: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1171 files, 5386 commits, 12 rules.
