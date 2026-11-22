@@ -60,3 +60,5 @@ Stage-2 call, 2026-11-22: spec-review · endpoint claude-code-plan · model clau
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
 > Six-cell rows for `plans/changes/phase6-english/findings.md`, round 2, all dimension SPEC:
+
+Stage-2 call, 2026-11-22: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1171 files, 5339 commits, 12 rules.
