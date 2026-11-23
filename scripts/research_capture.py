@@ -49,6 +49,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import venv_guard  # noqa: F401
 import yaml
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -828,6 +829,7 @@ def collect_catalog(runner, server: MockServer, hardening) -> tuple[dict, list[s
         {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         list(FIXED_MODELS),
         expected_version=runner.PI_VERSION,
+        measured_wire_apis=tuple(CAPTURE_ADDRESS["apis"]),
         address=capture_policy(),
         paid=entry["modelle"],
         exclusion=lambda model: stage2_swarm.exclusion_problem(declaration, model, "public-web"),

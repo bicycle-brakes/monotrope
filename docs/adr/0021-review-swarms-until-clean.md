@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-10-22
+updated: 2026-11-20
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
@@ -264,3 +264,38 @@ are released after a new phase-6 verdict, as before.
 Cost consequence: a restart pays for a second full run, including the
 availability probes. The command and its tests are their own change (bead
 coding-harness-0xjr); until it exists, no loop is restarted by hand.
+
+## Consumed-ladder amendment — the next step after the last stage, 2026-11-20
+
+The maintainer decided on 2026-11-20, in the conversation of that day's run,
+that a consumed ladder no longer stops the lane for a question. Decision 7
+said that exhausting the eligible stages with accepted findings stops and
+reports to the maintainer. In the night runs of 2026-11-19 and 2026-11-20
+that stop held two lanes (slip-counter, findings-per-model) until the
+orchestrator applied the maintainer's answer by hand; a run's history cannot
+be reset, so a new loop run was never an option.
+
+Decision 7 now reads, for this case: when every eligible stage of a run is
+consumed, at least one review round completed in that run, and the last
+round was not clean, the loop ends without a further round and names the
+next step. While a taken row of that round is open, the next step is the
+repair of those rows; once every taken row is fixed, the next step is the
+phase-6 review, which checks that last repair through its full `make verify`
+and the reviewer's read of the whole diff. This holds also when the loop's
+diff was cut at the line bound, because phase 6 reads the complete diff in
+the worktree (`decisions.md` Q-5). When zero review rounds completed in the
+run (total stage outage), the loop still stops and reports to the maintainer
+instead of skipping phase 4b (`decisions.md` Q-4). No final-model repeat
+follows, as before.
+
+Unchanged: the repair brake of decision 7 (two consecutive rounds each with
+accepted findings all caused by repairs, Origin `fix-r`, stop and go to the
+maintainer) and every other stop of this ADR. The amendment changes where a
+consumed ladder leads, not when the loop stops.
+
+The runner carries the rule (house rule 9): `review-loop` ends such a run
+with exit 0 and one line on standard output, `next: repair <change>` or
+`next: review <change>`, and does not start either verb itself (bead
+coding-harness-hwll, change `ladder-next-step`, its `decisions.md` Q-2).
+Until that change merges, the orchestrator applies this amendment by hand,
+as `AGENTS.md` states.

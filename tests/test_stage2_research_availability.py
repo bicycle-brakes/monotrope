@@ -21,6 +21,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import atomic_test_log  # noqa: E402
 import stage2  # noqa: E402
 import stage2_availability as availability  # noqa: E402
 import stage2_swarm as swarm  # noqa: E402
@@ -30,6 +31,9 @@ from test_stage2 import git as run_git  # noqa: E402
 from test_stage2 import world as stage2_world  # noqa: E402
 
 world = stage2_world
+
+# The stand-ins embed the shared log protocol at their render marker (flaky-swarm-leak-test).
+ATOMIC_LOG_SOURCE = atomic_test_log.embedded_source()
 
 GO = "opencode-go"
 CLAUDE = "claude-code-plan"
@@ -41,6 +45,10 @@ CANARY = "CANARY-PRIVATE-7731"
 STAND_IN = """#!@PYTHON@
 import json, os, sys
 from pathlib import Path
+
+# The shared log protocol of these suites, embedded verbatim at render time
+# (tests/atomic_test_log.py).
+@ATOMIC_LOG@
 
 here = Path(__file__).resolve().parent
 name = "pi" if Path(sys.argv[0]).name == "pin-pi" else Path(sys.argv[0]).name
@@ -69,8 +77,7 @@ record = {
     if os.path.isdir(os.environ.get("PI_CODING_AGENT_DIR", ""))
     else None,
 }
-with (here / "calls.jsonl").open("a") as handle:
-    handle.write(json.dumps(record) + "\\n")
+append_record(here / "calls.jsonl", record)
 step = scenario.get(model, {})
 key = os.environ.get("OPENCODE_API_KEY", "")
 sys.stdout.write(step.get("stdout", "OK").replace("@KEY@", key))
@@ -199,9 +206,10 @@ class Fixture:
         monkeypatch.setattr(availability, "catalog_bridge", bridge)
         for name in ("pin-pi", "claude"):
             program = w.bin / name
-            program.write_text(
-                STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
-            )
+            rendered = STAND_IN.replace("@PYTHON@", sys.executable)
+            rendered = rendered.replace("@PI@", stage2.PI_VERSION)
+            rendered = rendered.replace(atomic_test_log.MARKER, ATOMIC_LOG_SOURCE)
+            program.write_text(rendered, encoding="utf-8")
             program.chmod(0o755)
         self.edit_declaration(lambda _data: None)
         self.script()
@@ -358,6 +366,69 @@ def test_pool_requires_tool_support_and_a_measured_wire_api(fx: Fixture) -> None
         if item["id"] == "qwen3.8-flash":
             item["api"] = "anthropic-messages"
     assert fx.prepare() == 1
+
+
+def test_newly_measured_native_apis_admit_only_eligible_seat_models(fx: Fixture) -> None:
+    """A newly measured native model fills a seat; an otherwise identical unmeasured peer stays out.
+
+    go-wire-apis, criterion 5: two tool-capable, terms-admitted catalog rows on
+    native wire APIs — Responses and Messages — differ only in which API the
+    declaration measures. Before the measurement both sit outside the pool;
+    after the Responses measurement the Responses row substitutes into a seat
+    and is probed, while the Messages row keeps its wire-only exclusion.
+    """
+    fx.catalog.pi.append(pi_model("responses-model", api="openai-responses"))
+    fx.catalog.tools["responses-model"] = {"id": "responses-model", "tool_call": True}
+
+    def declare_responses_terms(data):
+        go = next(e for e in data["endpunkte"] if e["name"] == GO)
+        go["modelle_terms"]["responses-model"] = terms_record(3400)
+
+    fx.edit_declaration(declare_responses_terms)
+    fx.script(**{"qwen3.8-flash": {"exit": 1, "stderr": "down"}})
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    pool = [item["model"] for item in state["pool"]]
+    assert "responses-model" not in pool and "anthropic-model" not in pool, "an unmeasured API entered the pool"
+    assert state["models"][f"{GO}/responses-model"]["reason"].startswith("wire-api-not-measured")
+    assert state["models"][f"{GO}/anthropic-model"]["reason"].startswith("wire-api-not-measured")
+    assert seats(state, "online")[2] == (GO, "longcat-2.0", "substitute for 3")
+    assert "responses-model" not in fx.probed(), "an unmeasured candidate was probed for a seat"
+
+    # The measurement lands: the declaration widens to the Responses API, and the
+    # record gains the mapping a measured API carries (criterion 4) — Messages stays unmeasured and unmapped.
+    def measure_responses(data):
+        declare_responses_terms(data)
+        go = next(e for e in data["endpunkte"] if e["name"] == GO)
+        go["adresse"]["apis"]["openai-responses"] = {
+            "basis": "https://opencode.ai/zen/go/v1",
+            "quelle": "the synthetic native record (go-wire-apis)",
+            "gelesen": "2026-10-18",
+        }
+        data["research_swarm"]["availability_preflight"]["measured_wire_apis"] = [
+            "openai-completions",
+            "openai-responses",
+        ]
+
+    fx.edit_declaration(measure_responses)
+    fx.script(
+        **{
+            "qwen3.8-flash": {"exit": 1, "stderr": "down"},
+            "longcat-2.0": {"exit": 1, "stderr": "down"},
+            "glm-5.3-flash": {"exit": 1, "stderr": "down"},
+            "zz-tie-model": {"exit": 1, "stderr": "down"},
+        }
+    )
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    pool = [item["model"] for item in state["pool"]]
+    assert "responses-model" in pool, "the newly measured native model stayed excluded"
+    assert "anthropic-model" not in pool, "the unmeasured peer was admitted with the measurement"
+    # The measured Responses row is the cheapest eligible unused pool model for online seat 3:
+    # the cheaper-positioned Messages row is still excluded for its unmeasured wire API.
+    assert seats(state, "online")[2] == (GO, "responses-model", "substitute for 3")
+    assert "responses-model" in fx.probed(), "the seat launch never probed the newly measured native model"
+    assert "anthropic-model" not in fx.probed(), "the unmeasured peer was probed"
 
 
 def test_a_model_without_admitted_terms_or_cost_is_never_used(fx: Fixture) -> None:

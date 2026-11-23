@@ -42,6 +42,7 @@ import leakcheck
 import stage2_go
 import stage2_research_map
 import stage2_swarm
+import venv_guard  # noqa: F401
 import yaml
 
 GO = "opencode-go"

@@ -53,6 +53,7 @@ import uuid
 from pathlib import Path
 
 import stage2_go
+import venv_guard  # noqa: F401
 import yaml
 
 SESSION_ROOT = ".stage2-sessions"

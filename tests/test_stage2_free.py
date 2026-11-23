@@ -76,6 +76,7 @@ def research_select(catalog: Catalog, policy: dict | None = None, **more) -> dic
         policy or {"provider": GO, "suffix": "-free", "include": [], "exclude": []},
         [],
         expected_version=stage2.PI_VERSION,
+        measured_wire_apis=("openai-completions",),
         address=ADDRESS,
         **({"paid": (), "exclusion": None} | more),
     )
@@ -358,7 +359,7 @@ def test_recorded_maintainer_adr_answer_is_reflected_in_change_contract():
         "design.md": "No maintainer ADR answer has been recorded by this draft",
     }
     for name, denial in obsolete.items():
-        text = (root / "plans/changes/research-free-paid" / name).read_text()
+        text = (root / "plans/changes/archive/2026-11-16-research-free-paid" / name).read_text()
         assert denial not in text, f"{name} denies the existing maintainer answer"
         assert 'The maintainer answered "no"' in text, f"{name} omits the maintainer's answer"
         assert "2026-11-06" in text and "Q-M2" in text and "0baba58f" in text

@@ -1247,6 +1247,33 @@ def test_the_schema_rejects_a_malformed_interpreter_list(
     assert "tools.python" in seen.err + seen.out
 
 
+def test_repository_gate_schema_is_v3() -> None:
+    """Final activation test of verify-cheap-first (criteria 1 and 10 of its spec).
+
+    The real gate list declares schema 3 with a cost on every gate: pytest and
+    the kit probe are the minutes class, every other current gate seconds. The
+    obsolete claim that pytest must run first locally is gone — the declared
+    cost order replaced it. And once schema 3 is active, a version-2 list is
+    rejected, not accepted.
+    """
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert doc["schema_version"] == 3, doc.get("schema_version")
+    kosten = {g["id"]: g.get("cost") for g in doc["gates"]}
+    assert set(kosten.values()) == {"seconds", "minutes"}, kosten
+    assert kosten["pytest"] == "minutes", "pytest is the minutes class of the duration baseline (2026-11-05)"
+    assert kosten["leerprobe"] == "minutes", "the kit probe is the minutes class"
+    uebrig = {gid: cost for gid, cost in kosten.items() if gid not in ("pytest", "leerprobe")}
+    assert set(uebrig.values()) == {"seconds"}, uebrig
+    pytest_gate = next(g for g in doc["gates"] if g["id"] == "pytest")
+    assert "runs it first" not in pytest_gate["reason"], "the obsolete pytest-order claim must go with schema 3"
+
+    v2 = copy.deepcopy(doc)
+    v2["schema_version"] = 2
+    for g in v2["gates"]:
+        g.pop("cost", None)
+    assert ci_gates.validate_schema(v2), "with schema 3 active, a version-2 list must be rejected, not accepted"
+
+
 # --------------------------------------------------------------------------
 # 2 · The local runner holds no list of its own
 # --------------------------------------------------------------------------
@@ -1257,14 +1284,14 @@ def test_runner_holds_no_command_list_of_its_own() -> None:
 
     This is pinned negatively: the script must contain no call of the checked
     scripts — with exactly two exceptions, the call of `ci_gates.py`, through
-    which it obtains the list, and the measurement helper `verify_duration.py`,
-    which holds no gate command and reads no gate list; it only takes
-    monotonic readings around what the runner already executes.
+    which it obtains the list, and the shared scheduler `verify_run.py`, which
+    holds no gate command and reads no list of its own; it executes what the
+    one reader selected, in two phases.
     """
     text = RUNNER.read_text(encoding="utf-8")
     aufrufe = set(re.findall(r"scripts/([a-z_]+\.py)", text))
-    assert aufrufe <= {"ci_gates.py", "verify_duration.py"}, (
-        f"verify_all.sh calls scripts directly: {sorted(aufrufe - {'ci_gates.py', 'verify_duration.py'})}. "
+    assert aufrufe <= {"ci_gates.py", "verify_run.py"}, (
+        f"verify_all.sh calls scripts directly: {sorted(aufrufe - {'ci_gates.py', 'verify_run.py'})}. "
         "That way it holds a second list — exactly the drift it is written against."
     )
 
@@ -1290,27 +1317,53 @@ def test_runner_reports_what_it_cannot_run() -> None:
 # (bead coding-harness-ei0).
 
 
+def _git_in(root: Path, *args: str) -> None:
+    """One git call in a copied tree, with a fixed identity — the tree measurement needs a commit."""
+    env = dict(os.environ)
+    env.update(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.com",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.com",
+        }
+    )
+    subprocess.run(["git", *args], cwd=root, env=env, check=True, capture_output=True, text=True)
+
+
 def _runner_tree_files(tree: Path) -> Path:
-    """The copied runner, its gate reader, its admission module and its duration helper — no gates yet."""
+    """The copied runner, its gate reader, its scheduler, admission module and duration helper — one commit, no gates yet.
+
+    The tree is a real git checkout with a commit: the scheduler measures the
+    tree it runs in, and a checkout without a commit has no measurable tree.
+    """
     (tree / "scripts").mkdir(parents=True)
     (tree / "decisions").mkdir()
     shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
     shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
+    shutil.copy(REPO_ROOT / "scripts" / "verify_run.py", tree / "scripts" / "verify_run.py")
+    shutil.copy(REPO_ROOT / "scripts" / "venv_guard.py", tree / "scripts" / "venv_guard.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_lock.py", tree / "scripts" / "verify_lock.py")
     shutil.copy(REPO_ROOT / "scripts" / "verify_duration.py", tree / "scripts" / "verify_duration.py")
+    _git_in(tree, "init")
+    _git_in(tree, "add", ".")
+    _git_in(tree, "commit", "--quiet", "-m", "mechanism")
     return tree
 
 
 def _write_gate_file(tree: Path, gate_list: list[dict]) -> None:
     gate_file = {
-        "schema_version": 2,
+        "schema_version": 3,
         "tools": {"python": ["3.11", "3.12"]},
         "gates": gate_list,
     }
     (tree / "decisions" / "gates.yaml").write_text(yaml.safe_dump(gate_file, sort_keys=False), encoding="utf-8")
 
 
-def _runner_tree(base: Path, gate_command: str) -> Path:
+def _runner_tree(base: Path, gate_command: str, *, cost: str = "seconds") -> Path:
     tree = _runner_tree_files(base / "tree")
     _write_gate_file(
         tree,
@@ -1320,6 +1373,7 @@ def _runner_tree(base: Path, gate_command: str) -> Path:
                 "title": "The one gate of the runner tree",
                 "command": gate_command,
                 "job": "verify",
+                "cost": cost,
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
@@ -1346,10 +1400,13 @@ def _runner_env(tree: Path, home: Path, path_dirs: list[Path], extra: dict[str, 
     # Each fake runner queues against its own state root under a floor of zero,
     # so no copied runner ever reaches the machine lock of the run that started
     # this suite — it would queue behind its own ancestor and hang.
+    (tree.parent / "tmp").mkdir(parents=True, exist_ok=True)
     env = {
         "HOME": str(home),
         "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"]),
         "XDG_STATE_HOME": str(tree.parent / "state"),
+        "PYTEST_DEBUG_TEMPROOT": str(tree.parent / "temproot"),
+        "TMPDIR": str(tree.parent / "tmp"),
         verify_lock.FLOOR_ENV: "0",
     }
     env.update(extra or {})
@@ -1700,12 +1757,14 @@ def test_runner_worker_detection_degrades_without_failure(
 
 def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
     """Criterion 5: with the default applied the run behaves as before — every
-    gate inherits it, an advisory failure reports without blocking, a blocking
-    failure turns the run red, and the gates after it still run."""
+    gate inherits it, an advisory failure reports without blocking, and a
+    blocking failure turns the run red and stops before the later gates
+    (cheap-first, bead coding-harness-bxxt.1)."""
     tools = _fake_resource_tools(tmp_path / "tools", system="Darwin", cores="8", memory="8589934592")
     order = tmp_path / "order.txt"
+    gelaufen: list[str] = []
 
-    def gate(gid: str, enforcement: str, ending: str) -> dict:
+    def gate(gid: str, enforcement: str, ending: str, cost: str = "seconds") -> dict:
         return {
             "id": gid,
             "title": f"The {gid} gate",
@@ -1714,31 +1773,43 @@ def test_runner_worker_default_preserves_gate_verdicts(tmp_path: Path) -> None:
                 f'echo {gid} >> "{order}"; {ending}'
             ),
             "job": "verify",
+            "cost": cost,
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",
             "reason": "a verdict seed for the worker-default test",
         }
 
-    for scenario, beta_enforcement, verdict, marker in (
-        ("advisory", "advisory", 0, "rot, aber nur advisory"),
-        ("blocking", "block", 1, "RED (block)"),
+    # gamma is minutes-class in both scenarios: in the advisory run it is the
+    # protected work that follows the cheap failures; in the blocking run it is
+    # the gate the stop must reach first (cheap-first, bead
+    # coding-harness-bxxt.1).
+    for scenario, beta_enforcement, verdict, banner, walked in (
+        ("advisory", "advisory", 0, "rot, aber nur advisory", ("alpha", "beta", "gamma")),
+        ("blocking", "block", 1, "RED (block)", ("alpha", "beta")),
     ):
         base = tmp_path / f"{scenario}-run"
         tree = _runner_tree_files(base / "tree")
         _write_gate_file(
             tree,
-            [gate("alpha", "block", "true"), gate("beta", beta_enforcement, "exit 1"), gate("gamma", "block", "true")],
+            [
+                gate("alpha", "block", "true"),
+                gate("beta", beta_enforcement, "exit 1"),
+                gate("gamma", "block", "true", cost="minutes"),
+            ],
         )
         _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
         done = _run_runner(tree, tmp_path / "home", [tools])
         assert done.returncode == verdict, f"{scenario}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-        assert marker in done.stdout, done.stdout
-        for gid in ("alpha", "beta", "gamma"):
+        assert banner in done.stdout, done.stdout
+        for gid in walked:
             assert (tmp_path / f"{gid}.inherited").read_text(encoding="utf-8") == "4", scenario
-    # Both runs walked their gates in list order: gamma started after beta's
-    # failure in each — an advisory and even a blocking failure stop nothing.
-    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n" * 2
+        gelaufen.extend(walked)
+        if scenario == "blocking":
+            assert "──   [gamma] not run" in done.stdout, "the stop did not name the gate it did not run"
+    # The advisory run walked its gates in list order — an advisory failure
+    # stops nothing. The blocking run stopped at beta: gamma did not start.
+    assert order.read_text(encoding="utf-8") == "".join(f"{gid}\n" for gid in gelaufen)
 
 
 # Generated per run: a literal token here reads as a key assignment to the leak check and blocks every review prompt
@@ -1800,9 +1871,11 @@ def test_guarded_runner_preserves_gate_verdicts_and_ci_selection(tmp_path: Path)
     assert "RED (block)" in done.stdout, done.stdout
 
     # `--ci` selects the CI placement, but buys no bypass: while a holder owns
-    # the admission, the run waits and starts no gate of its own.
+    # the admission, the run waits and starts no gate of its own. The gate is
+    # minutes-class, so it belongs to the protected work that admission guards
+    # — a seconds-only selection would run without any admission at all.
     gate_ran = tmp_path / "ci-gate-ran"
-    ci_tree = _runner_tree(tmp_path / "ci", f"touch {gate_ran}")
+    ci_tree = _runner_tree(tmp_path / "ci", f"touch {gate_ran}", cost="minutes")
     _interpreter_wrapper(ci_tree / ".venv" / "bin" / "python3", "venv", log)
     with _held_holder(ci_tree.parent / "state"):
         bash = shutil.which("bash") or "/bin/bash"
@@ -1863,6 +1936,7 @@ def _report_gate(
     job: str,
     enforcement: str,
     *,
+    cost: str = "seconds",
     subsets: list[str] | None = None,
     placement: str = "both",
     action: str | None = None,
@@ -1878,6 +1952,7 @@ def _report_gate(
         "id": gid,
         "title": f"The {gid} gate",
         "job": job,
+        "cost": cost,
         "enforcement": enforcement,
         "floor": True,
         "placement": placement,
@@ -1924,19 +1999,29 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
         ]
 
     def fake_git(base: Path, *, answers: str = "all") -> Path:
-        """A git on PATH ahead of the system's: all known answers, HEAD only, or none."""
+        """A git on PATH ahead of the system's: all known answers, HEAD only, or none.
+
+        Only the two report readings are special-cased; every other call — the
+        tree measurement's `ls-files` among them — reaches the real git, so the
+        run's refusal behavior is measured, not a stub's.
+        """
+        real = shutil.which("git") or "/usr/bin/git"
         bin_dir = base / "bin"
         bin_dir.mkdir(parents=True)
         shim = bin_dir / "git"
         body = "#!/bin/sh\n"
-        if answers in ("all", "head-only"):
-            body += f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
         if answers == "all":
+            body += f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
             body += (
                 f'if [ "$1" = merge-base ] && [ "$2" = origin/main ] && [ "$3" = HEAD ]; '
                 f"then echo {known_base}; exit 0; fi\n"
             )
-        body += "exit 1\n"
+        elif answers == "head-only":
+            body += f'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then echo {known_head}; exit 0; fi\n'
+        else:
+            body += 'if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then exit 1; fi\n'
+            body += 'if [ "$1" = merge-base ] && [ "$2" = origin/main ]; then exit 1; fi\n'
+        body += f'exec "{real}" "$@"\n'
         shim.write_text(body, encoding="utf-8")
         shim.chmod(0o755)
         return bin_dir
@@ -1971,17 +2056,22 @@ def test_runner_report_matches_selected_job(tmp_path: Path) -> None:
             "the membership count is not the count of locally executed commands"
         )
 
-    # A git that cannot answer keeps the field meanings: nulls, never another checkout's refs.
+    # An unmeasurable tree repeats cheap gates under admission before protected work.
     base = tmp_path / "git-unavailable"
     tree = _runner_tree_files(base / "tree")
-    _write_gate_file(tree, fixture(base))
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "plain-verify", "verify", "block", cost="minutes") if g["id"] == "plain-verify" else g
+            for g in fixture(base)
+        ],
+    )
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
     done = _run_runner(tree, home, [fake_git(base, answers="none")])
-    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
-    report = _runner_report(done.stdout)
-    assert report["candidate"] is None and report["base"] is None, report
-    assert report["job"] == "verify", report
-    assert report["gates_job"] == memberships["verify"] and report["gates_total"] == 4, report
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert "cannot be measured" in done.stderr, done.stderr
+    assert done.stdout.count("── [docs-local] $") == 2, done.stdout
+    assert (base / "plain-verify.ran").exists()
 
     # Per reference: a git that knows HEAD but has no merge base (no origin/main)
     # keeps the candidate and leaves only the base null.
@@ -2001,37 +2091,49 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
 
     Ledger criterion 4 of docs-job-report-header, measured on a docs selection —
     the subset whose report used to name verify: an unselected gate stays out even
-    when it would fail, a blocking failure turns the run red without abandoning a
-    later gate, and solely advisory or report failures speak up without blocking.
+    when it would fail, a blocking failure turns the run red and stops before a
+    later gate (cheap-first, bead coding-harness-bxxt.1), and solely advisory or
+    report failures speak up without blocking.
     """
     home = tmp_path / "home"
     gitless = tmp_path / "bin"
     gitless.mkdir()
     shim = gitless / "git"
-    shim.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    # The merge-base reading fails — the base stays null, never another
+    # checkout's ref — while the tree measurement reaches the real git behind
+    # the shim: a git that cannot name the HEAD would refuse the whole run
+    # (no measurable tree), which is the report test's scenario, not this one.
+    real_git = shutil.which("git") or "/usr/bin/git"
+    shim.write_text(
+        f'#!/bin/sh\nif [ "$1" = merge-base ] && [ "$2" = origin/main ]; then exit 1; fi\nexec "{real_git}" "$@"\n',
+        encoding="utf-8",
+    )
     shim.chmod(0o755)
 
-    selected_pass = [("docs-a", "block", "pass"), ("docs-b", "block", "pass")]
+    # (gid, enforcement, outcome, cost) — the gate after a blocking failure is
+    # minutes-class, because the cheap class runs to its last diagnostic even
+    # past a blocking red; only the protected phase stops.
+    selected_pass = [("docs-a", "block", "pass", "seconds"), ("docs-b", "block", "pass", "seconds")]
     blocking = [
-        ("docs-a", "block", "pass"),
-        ("docs-b", "block", "fail"),
-        ("docs-c", "block", "pass"),
+        ("docs-a", "block", "pass", "seconds"),
+        ("docs-b", "block", "fail", "seconds"),
+        ("docs-c", "block", "pass", "minutes"),
     ]
     nonblocking = [
-        ("docs-a", "advisory", "fail"),
-        ("docs-b", "report", "fail"),
-        ("docs-c", "block", "pass"),
+        ("docs-a", "advisory", "fail", "seconds"),
+        ("docs-b", "report", "fail", "seconds"),
+        ("docs-c", "block", "pass", "minutes"),
     ]
     # (label, expected exit, expected banner, expected execution order, gate shapes)
     scenarios = [
         ("selected-pass", 0, "VERIFY GREEN", ["docs-a", "docs-b"], selected_pass),
-        ("blocking-failure", 1, "VERIFY RED", ["docs-a", "docs-b", "docs-c"], blocking),
+        ("blocking-failure", 1, "VERIFY RED", ["docs-a", "docs-b"], blocking),
         ("nonblocking-failures", 0, "VERIFY GREEN", ["docs-a", "docs-b", "docs-c"], nonblocking),
     ]
     for label, verdict, banner, ordered, listed in scenarios:
         base = tmp_path / label
         gates = []
-        for gid, enforcement, outcome in listed:
+        for gid, enforcement, outcome, cost in listed:
             ending = "exit 1" if outcome == "fail" else "true"
             gates.append(
                 _report_gate(
@@ -2039,6 +2141,7 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
                     gid,
                     "verify",
                     enforcement,
+                    cost=cost,
                     subsets=["docs"],
                     command=f"touch {base / f'{gid}.ran'}; echo {gid} >> {base / 'order.txt'}; {ending}",
                 )
@@ -2076,6 +2179,9 @@ def test_runner_report_keeps_gate_verdict(tmp_path: Path) -> None:
             assert (base / f"{gid}.ran").exists(), f"{label}: {gid} left no marker"
         assert not (base / "verify-other.ran").exists(), f"{label}: an unselected gate executed"
         assert _runner_report(done.stdout)["job"] == "docs", f"{label}: the report did not name the docs selection"
+        if label == "blocking-failure":
+            assert not (base / "docs-c.ran").exists(), "a blocking failure did not stop the docs selection"
+            assert "──   [docs-c] not run" in done.stdout, "the stop did not name the gate it did not run"
         if label == "nonblocking-failures":
             assert "rot, aber nur advisory" in done.stdout and "rot, aber nur report" in done.stdout, done.stdout
 
@@ -2102,18 +2208,22 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
 
     Fault this pins: an advisory failure reported without a duration or
     labelled passed, an unexecuted gate presented as measured, or a gate record
-    losing its raw exit status in history.
+    losing its raw exit status in history. A blocking failure in the cheap
+    class stops the run before the protected work — delta is minutes-class, is
+    named as not run and leaves no history event (cheap-first, bead
+    coding-harness-bxxt.1).
     """
     base = tmp_path / "durations"
     order = base / "order.txt"
     tree = _runner_tree_files(base / "tree")
 
-    def gate(gid: str, enforcement: str, ending: str) -> dict:
+    def gate(gid: str, enforcement: str, ending: str, cost: str = "seconds") -> dict:
         return {
             "id": gid,
             "title": f"The {gid} gate",
             "command": f'echo {gid} >> "{order}"; {ending}',
             "job": "verify",
+            "cost": cost,
             "enforcement": enforcement,
             "floor": True,
             "placement": "both",
@@ -2126,7 +2236,7 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
             gate("alpha", "block", "true"),
             gate("beta", "advisory", "exit 1"),
             gate("gamma", "block", "exit 1"),
-            gate("delta", "block", "true"),
+            gate("delta", "block", "true", cost="minutes"),
         ],
     )
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
@@ -2136,19 +2246,21 @@ def test_runner_reports_each_gate_duration_and_raw_result(tmp_path: Path) -> Non
     assert "── [beta] rot, aber nur advisory" in done.stdout, done.stdout
     assert "── [gamma] RED (block)" in done.stdout, done.stdout
     # Every executed gate — passing, advisory-failing and blocking-failing
-    # alike — shows its measured seconds beside its verdict.
-    for gid in ("alpha", "beta", "gamma", "delta"):
+    # alike — shows its measured seconds beside its verdict. delta is not
+    # executed: gamma's blocking failure stopped the run before it.
+    for gid in ("alpha", "beta", "gamma"):
         assert re.search(rf"── \[{gid}\] [0-9]+\.[0-9]+s", done.stdout), done.stdout
-    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\ndelta\n"
+    assert order.read_text(encoding="utf-8") == "alpha\nbeta\ngamma\n"
+    assert "──   [delta] not run" in done.stdout, "the stop did not name the gate it did not run"
 
     events = _tree_history(tree)
     starts = [e for e in events if e["event"] == "run_start"]
     assert len(starts) == 1 and starts[0]["job"] == "verify" and starts[0]["placement"] == "local"
     run_id = starts[0]["run_id"]
     gate_events = [e for e in events if e["event"] == "gate"]
-    assert len(gate_events) == 4, gate_events
+    assert len(gate_events) == 3, gate_events
     gate_rows = {e["gate"]: e for e in gate_events}
-    assert set(gate_rows) == {"alpha", "beta", "gamma", "delta"}, gate_rows
+    assert set(gate_rows) == {"alpha", "beta", "gamma"}, gate_rows
     assert all(row["run_id"] == run_id for row in gate_rows.values())
     assert gate_rows["beta"]["exit"] == 1 and gate_rows["beta"]["enforcement"] == "advisory", gate_rows["beta"]
     assert gate_rows["gamma"]["exit"] == 1
@@ -2185,6 +2297,51 @@ def test_runner_list_does_not_record_or_duplicate_runs(tmp_path: Path) -> None:
     assert ends[0]["verdict"] == "green"
 
 
+def test_runner_start_record_carries_the_full_run_comparison_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real shell's start record captures the runner-owned context, and the reader pairs it.
+
+    Fault this pins (loop row L2-4, bead coding-harness-bxxt.7): the copied
+    `verify_all.sh` — not a stub of `make` — drops the comparison variables
+    `full_verify` hands it, through an environment filter, the admission
+    re-exec or another `--job`/`--placement` spelling, so every full run is
+    stored as a legacy row and a real slip reads as not countable.
+    """
+    base = tmp_path / "pairing"
+    tree = _runner_tree(base, "exit 1")
+    # A run belongs to a repository only through its common Git directory (spec
+    # Term "Repository", decisions Q-5): the copied tree must be a Git repository.
+    subprocess.run(["git", "init", "-q", str(tree)], check=True, capture_output=True)
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tree.parent / "state"))
+    receipt = verify_duration.begin_targeted_run(tree, "demo", "tree-x")
+    assert receipt.run_id is not None, receipt.notes
+    assert verify_duration.finish_targeted_run(receipt, "tree-x", "green") == []
+
+    context = verify_duration.full_run_context("tree-x", "demo")
+    done = _run_runner(tree, tmp_path / "home", [], extra_env=context)
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+
+    starts = [e for e in _tree_history(tree) if e["event"] == "run_start" and e.get("check_kind") != "targeted"]
+    assert len(starts) == 1, starts
+    assert (starts[0]["job"], starts[0]["placement"]) == ("verify", "local"), starts[0]
+    assert (starts[0]["check_kind"], starts[0]["change"], starts[0]["tree_id"]) == ("full", "demo", "tree-x")
+    assert starts[0]["comparison_version"] == verify_duration.COMPARISON_VERSION
+    # The targeted check sits in its own history, never among the full-run durations.
+    assert all(e.get("check_kind") != "targeted" for e in _tree_history(tree))
+
+    read = subprocess.run(
+        [sys.executable, str(tree / "scripts" / "verify_duration.py"), "slips"],
+        cwd=tree,
+        env=_runner_env(tree, tmp_path / "home", []),
+        capture_output=True,
+        text=True,
+    )
+    assert read.returncode == 0, f"exit {read.returncode}\n{read.stdout}\n{read.stderr}"
+    assert "slips: 1; incomplete/not countable runs: 0" in read.stdout, read.stdout
+
+
 def test_duration_storage_failure_warns_without_changing_verdict(tmp_path: Path) -> None:
     """Criterion 7: unusable measurement storage warns, and gates and verdicts continue unchanged.
 
@@ -2217,8 +2374,10 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     """Criterion 8: timing changes no selection, no enforcement, no worker forwarding, no admission.
 
     Fault this pins: a docs selection running verify gates, a later gate
-    dropped after a failure, a forwarded worker override rewritten, or a
-    nested run queueing behind its own ancestor or inventing a fresh wait.
+    running after a local blocking failure (cheap-first, bead
+    coding-harness-bxxt.1), a forwarded worker override rewritten, a
+    seconds-only selection waiting for the machine slot, or a nested run
+    queueing behind its own ancestor or inventing a fresh wait.
     """
     # Check the classification boundary itself as well as the copied runners
     # below: deleting or inverting it must fail even when no gates need a wait.
@@ -2251,19 +2410,23 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     home = tmp_path / "home"
     order = tmp_path / "sel-order.txt"
 
-    def subset_gate(base: Path, gid: str, enforcement: str, *, docs: bool, ending: str = "true") -> dict:
+    def subset_gate(
+        base: Path, gid: str, enforcement: str, *, docs: bool, ending: str = "true", cost: str = "seconds"
+    ) -> dict:
         return _report_gate(
             base,
             gid,
             "verify",
             enforcement,
+            cost=cost,
             subsets=["docs"] if docs else None,
             command=f"echo {gid} >> {order}; touch {base / f'{gid}.ran'}; {ending}",
         )
 
-    # (A) A docs selection with a forwarded worker override: only the docs
-    # subset runs, the advisory failure speaks up without blocking, and the
-    # record carries the worker setting verbatim.
+    # (A) A seconds-only docs selection with a forwarded worker override: only
+    # the docs subset runs, the advisory failure speaks up without blocking,
+    # the record carries the worker setting verbatim — and no admission is
+    # requested at all, in the record and in words.
     base = tmp_path / "selection"
     tree = _runner_tree_files(base / "tree")
     _write_gate_file(
@@ -2285,32 +2448,41 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     starts = [e for e in events if e["event"] == "run_start"]
     assert len(starts) == 1 and starts[0]["job"] == "docs" and starts[0]["placement"] == "local"
     assert starts[0]["workers"] == "3", f"the forwarded worker override was not recorded verbatim: {starts[0]}"
-    assert isinstance(starts[0]["admission_id"], str) and starts[0]["admission_id"]
-    assert starts[0]["admission_wait_seconds"] >= 0
-    assert starts[0]["admission_reused"] is False, starts[0]
+    assert starts[0]["admission_id"] is None and starts[0]["admission_wait_seconds"] is None, starts[0]
+    # The start record is written before any admission (bead coding-harness-bxxt.6): no context exists yet,
+    # so it reads as the unknown it is; the completion record carries the final context.
+    assert starts[0]["admission_reused"] is None, starts[0]
     gate_rows = sorted((e["gate"], e["exit"], e["enforcement"]) for e in events if e["event"] == "gate")
     assert gate_rows == [("docs-adv", 1, "advisory"), ("docs-pass", 0, "block")], gate_rows
     ends = [e for e in events if e["event"] == "run_end"]
     assert len(ends) == 1 and ends[0]["verdict"] == "green"
+    assert ends[0]["admission_requested"] is False, ends[0]
+    assert ends[0]["admission_id"] is None and ends[0]["admission_reused"] is None, ends[0]
+    assert "no admission was requested" in done.stdout, done.stdout
 
-    # (B) A blocking failure under the same timing: the run is red and the
-    # gate after it still runs.
+    # (B) A blocking failure under the same timing: the run is red and stops
+    # before the gate after it, naming it as not run (cheap-first, bead
+    # coding-harness-bxxt.1). Since bead coding-harness-bxxt.6 the cheap phase
+    # before admission runs through every seconds gate, so the stop is proved
+    # where it still holds: among the protected (minutes) gates.
     order.unlink()
     base = tmp_path / "blocking"
     tree = _runner_tree_files(base / "tree")
     _write_gate_file(
         tree,
         [
-            subset_gate(base, "docs-a", "block", docs=True),
-            subset_gate(base, "docs-b", "block", docs=True, ending="exit 1"),
-            subset_gate(base, "docs-c", "block", docs=True),
+            subset_gate(base, "docs-a", "block", docs=True, cost="minutes"),
+            subset_gate(base, "docs-b", "block", docs=True, ending="exit 1", cost="minutes"),
+            subset_gate(base, "docs-c", "block", docs=True, cost="minutes"),
         ],
     )
     _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
     done = _run_runner(tree, home, [], "--job", "docs")
     assert done.returncode == 1, f"blocking: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
     assert "VERIFY RED" in done.stdout and "RED (block)" in done.stdout, done.stdout
-    assert order.read_text(encoding="utf-8") == "docs-a\ndocs-b\ndocs-c\n", "a failure stopped the later gates"
+    assert order.read_text(encoding="utf-8") == "docs-a\ndocs-b\n", "the run did not stop at the blocking failure"
+    assert not (base / "docs-c.ran").exists(), "the gate after the blocking failure executed anyway"
+    assert "──   [docs-c] not run" in done.stdout, "the stop did not name the gate it did not run"
     ends = [e for e in _tree_history(tree) if e["event"] == "run_end"]
     assert len(ends) == 1 and ends[0]["verdict"] == "red"
 
@@ -2355,6 +2527,740 @@ def test_timing_preserves_job_selection_enforcement_and_nested_admission(tmp_pat
     assert starts[0]["admission_reused"] is True, starts[0]
     assert starts[0]["admission_id"] is None and starts[0]["admission_wait_seconds"] is None, starts[0]
     assert len([e for e in events if e["event"] == "run_end"]) == 1
+
+
+# --------------------------------------------------------------------------
+# 2e · The runner-owned temporary area (bead coding-harness-bxxt.3)
+#
+# Every test here copies the runner as in 2/2c/2d and gives the run its own
+# `PYTEST_DEBUG_TEMPROOT`, so the managed parent and its areas live inside the
+# test's tree — no probe ever touches the machine's real temporary root. A
+# live sibling area in these probes is named after this very test process:
+# alive by construction, untouched by the runner's process-id rule.
+# --------------------------------------------------------------------------
+
+
+def _tmp_runner_tree(base: Path, gate: str) -> tuple[Path, Path]:
+    """A runner tree with one block gate, its interpreter, and an isolated temporary root.
+
+    The temporary root is what the probe hands the run as `PYTEST_DEBUG_TEMPROOT`: the runner
+    builds its managed parent under it, so areas never leave this test's own tree.
+    """
+    tree = _runner_tree(base / "tree", gate)
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    return tree, base / "temproot"
+
+
+def _managed_parent(temproot: Path) -> Path:
+    """Where the runner puts its private per-user parent for one temporary root."""
+    return temproot / f"verify-runs-{os.geteuid()}"
+
+
+def _tmp_run(
+    tree: Path, temproot: Path, tmp_path: Path, *args: str, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    """One runner run with the temporary root isolated to this test."""
+    return _run_runner(
+        tree,
+        tmp_path / "home",
+        [],
+        *args,
+        extra_env={**(extra_env or {}), "PYTEST_DEBUG_TEMPROOT": str(temproot)},
+    )
+
+
+def _marker_env(tree: Path, temproot: Path, tmp_path: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """A copied runner's environment with a valid inherited admission, so it runs inline."""
+    return _runner_env(
+        tree,
+        tmp_path / "home",
+        [],
+        {
+            **(extra or {}),
+            "PYTEST_DEBUG_TEMPROOT": str(temproot),
+            verify_lock.LOCK_ENV: str(os.getpid()),
+            verify_lock.TOKEN_ENV: HOLDER_TOKEN,
+        },
+    )
+
+
+def _start_runner(tree: Path, env: dict[str, str], *args: str) -> subprocess.Popen[bytes]:
+    """The runner as its own session leader, so a hard kill can take its whole group."""
+    bash = shutil.which("bash") or "/bin/bash"
+    return subprocess.Popen(
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args],
+        cwd=tree,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _await_marker(marker: Path, deadline_seconds: float = 10.0) -> None:
+    """Wait until a gate's marker appears — bounded, so a broken run fails fast."""
+    deadline = time.monotonic() + deadline_seconds
+    while time.monotonic() < deadline:
+        if marker.exists():
+            return
+        time.sleep(0.05)
+    pytest.fail(f"the gate never wrote its marker {marker}")
+
+
+def _reaped_pid() -> int:
+    """A pid that exists no more: a child, spawned and waited for.
+
+    A concurrently spawning process could take the freed pid back in between;
+    when that happened the caller would inject a live process's number, so the
+    helper checks and, on an instant reuse, hands out another one.
+    """
+    child = subprocess.Popen(["true"])
+    child.wait()
+    try:
+        os.kill(child.pid, 0)
+    except ProcessLookupError:
+        return child.pid
+    except PermissionError:
+        pass  # The pid was reused by a live process owned by another user.
+    return _reaped_pid()
+
+
+def test_verify_runner_owns_distinct_pid_areas(tmp_path: Path) -> None:
+    """Criterion 1: every admitted run allocates its own process-id-named area, nested included.
+
+    Fault this pins: two live runs sharing one area, a nested run losing the pid naming, or a
+    nested run deleting its parent's area while the parent still runs. The nested run inherits a
+    valid admission from a holder this test keeps alive, so it runs inline exactly as a nested
+    verification would — and carries the managed parent through the inherited environment.
+    """
+    base = tmp_path / "areas"
+    temproot = base / "temproot"
+    outer_recorded = base / "outer-area.txt"
+    nested_recorded = base / "nested-area.txt"
+    parent_area_alive = base / "parent-area-alive"
+    nested_gate = (
+        f'test -d "$OUTER_AREA" && touch "{parent_area_alive}"; '
+        f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{nested_recorded}"'
+    )
+    nested_tree, _ = _tmp_runner_tree(base / "nested", nested_gate)
+    outer_gate = (
+        f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{outer_recorded}"; '
+        f'OUTER_AREA="$PYTEST_DEBUG_TEMPROOT" bash "{nested_tree / "scripts" / "verify_all.sh"}"'
+    )
+    tree, _ = _tmp_runner_tree(base / "outer", outer_gate)
+    _write_gate_file(tree, [_report_gate(base, "probe", "verify", "block", command=outer_gate)])
+    with _held_holder(tree.parent / "state", pid=os.getpid()):
+        done = _tmp_run(
+            tree,
+            temproot,
+            tmp_path,
+            extra_env={verify_lock.LOCK_ENV: str(os.getpid()), verify_lock.TOKEN_ENV: HOLDER_TOKEN},
+        )
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert parent_area_alive.exists(), "the nested run deleted its parent's area while the parent still ran"
+    outer_area = Path(outer_recorded.read_text(encoding="utf-8"))
+    nested_area = Path(nested_recorded.read_text(encoding="utf-8"))
+    assert outer_area.name.isdigit(), f"the outer run's area is not pid-named: {outer_area}"
+    assert nested_area.name.isdigit(), f"the nested run's area is not pid-named: {nested_area}"
+    assert outer_area != nested_area, "two live runs shared one area"
+    assert outer_area.parent == nested_area.parent == _managed_parent(temproot), "areas left the managed parent"
+    assert not any(_managed_parent(temproot).iterdir()), "a green run left its area behind"
+
+
+def test_verify_runner_contains_pytest_sessions_and_workers(tmp_path: Path) -> None:
+    """Criterion 2: real pytest sessions and xdist workers keep their roots inside the run area.
+
+    Fault this pins: a serial session, a parallel one, or a second session in the same run
+    reporting a temporary path outside the area, or a second session erasing the first one's root.
+    """
+    base = tmp_path / "sessions"
+    temproot = base / "temproot"
+    area_recorded = base / "area.txt"
+    serial_first = base / "serial-first.txt"
+    serial_second = base / "serial-second.txt"
+    worker_recorded = base / "worker.txt"
+    tree, _ = _tmp_runner_tree(base / "outer", "true")
+    serial_probe = f'''\
+from pathlib import Path
+
+def test_probe(tmp_path):
+    sentinel = tmp_path / "sentinel"
+    sentinel.write_text("keep me", encoding="utf-8")
+    marker = Path("{serial_first}")
+    if marker.exists():
+        previous = Path(marker.read_text(encoding="utf-8"))
+        assert previous.exists(), f"a second session erased an earlier session's sentinel {{previous}}"
+        assert previous.read_text(encoding="utf-8") == "keep me"
+    marker.write_text(str(sentinel), encoding="utf-8")
+    with open({str(serial_second)!r}, "a", encoding="utf-8") as handle:
+        handle.write(f"{{tmp_path}}\\n")
+'''
+    worker_probe = f"""\
+def test_worker(tmp_path):
+    with open({str(worker_recorded)!r}, "a", encoding="utf-8") as handle:
+        handle.write(f"{{tmp_path}}\\n")
+"""
+    (tree / "test_serial_probe.py").write_text(serial_probe, encoding="utf-8")
+    (tree / "test_worker_probe.py").write_text(worker_probe, encoding="utf-8")
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(
+                base,
+                "serial-a",
+                "verify",
+                "block",
+                command=(
+                    f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; python3 -m pytest -q test_serial_probe.py'
+                ),
+            ),
+            _report_gate(base, "serial-b", "verify", "block", command="python3 -m pytest -q test_serial_probe.py"),
+            _report_gate(base, "xdist", "verify", "block", command="python3 -m pytest -q -n 2 test_worker_probe.py"),
+        ],
+    )
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    area = Path(area_recorded.read_text(encoding="utf-8"))
+    assert area.name.isdigit() and area.parent == _managed_parent(temproot), f"no pid-named area: {area}"
+    serial_lines = serial_second.read_text(encoding="utf-8").splitlines()
+    assert len(serial_lines) == 2 and serial_lines[0] != serial_lines[1], serial_lines
+    worker_lines = worker_recorded.read_text(encoding="utf-8").splitlines()
+    assert worker_lines, "the xdist worker never ran its test"
+    area_resolved = str(area.resolve())
+    for recorded in [*serial_lines, *worker_lines]:
+        assert Path(recorded).resolve().is_relative_to(area_resolved), (
+            f"a pytest temporary path escaped the run area: {recorded}"
+        )
+        assert "pytest-of-" in recorded, recorded
+    for recorded in worker_lines:
+        assert "popen-gw" in recorded, f"the xdist worker did not report its own directory: {recorded}"
+    assert not any(_managed_parent(temproot).iterdir()), "the run left its area behind"
+
+
+def test_verify_runner_cleans_normal_exit(tmp_path: Path) -> None:
+    """Criteria 3 and 6: green and red runs remove their area before returning the verdict, and a
+    successful run removes it even when retention was requested."""
+    for label, ending, keep, expected in (
+        ("green", "true", {}, 0),
+        ("red", "exit 1", {}, 1),
+        ("green-keep", "true", {"HARNESS_VERIFY_KEEP_TMP": "1"}, 0),
+    ):
+        base = tmp_path / label
+        temproot = base / "temproot"
+        area_recorded = base / "area.txt"
+        tree = _runner_tree(base / "tree", f'printf %s "$PYTEST_DEBUG_TEMPROOT" > "{area_recorded}"; {ending}')
+        _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+        done = _tmp_run(tree, temproot, tmp_path, extra_env=keep)
+        assert done.returncode == expected, f"{label}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        if expected == 1:
+            assert "VERIFY RED" in done.stdout, done.stdout
+        area = Path(area_recorded.read_text(encoding="utf-8"))
+        assert area.parent == _managed_parent(temproot), label
+        assert not any(_managed_parent(temproot).iterdir()), f"{label}: the run left its area behind"
+
+
+@pytest.mark.parametrize(("name", "number"), [("SIGINT", 2), ("SIGTERM", 15), ("SIGHUP", 1), ("SIGQUIT", 3)])
+def test_verify_runner_cleans_on_interrupt(tmp_path: Path, name: str, number: int) -> None:
+    """Criterion 4: a handled signal still removes the unretained area before the runner exits,
+    with the supervisor's 128-plus-signal status — and the run does not continue afterwards."""
+    base = tmp_path / "interrupt"
+    temproot = base / "temproot"
+    started = base / "first-gate-ran"
+    second_started = base / "second-gate-started"
+    second_done = base / "second-gate-ran"
+    third_never = base / "third-gate-ran"
+    tree = _runner_tree_files(base / "tree")
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "first", "verify", "block", command=f"touch {started}"),
+            _report_gate(
+                base,
+                "second",
+                "verify",
+                "block",
+                command=f"touch {second_started}; sleep 1; touch {second_done}",
+            ),
+            _report_gate(base, "third", "verify", "block", command=f"touch {third_never}"),
+        ],
+    )
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", base / "log")
+    with _held_holder(base / "state", pid=os.getpid()):
+        runner = _start_runner(tree, _marker_env(tree, temproot, tmp_path))
+        try:
+            _await_marker(started)
+            parent = _managed_parent(temproot)
+            live = list(parent.iterdir())
+            assert len(live) == 1 and live[0].name.isdigit(), (
+                f"the run allocated no pid area: {sorted(entry.name for entry in live)}"
+            )
+            # Signal only once the second gate is inside its sleep, so the arrival is
+            # deterministic — during a gate, never in the gap between gates. The
+            # wrapper forwards it to the scheduler, which kills the live gate group
+            # (bead coding-harness-bxxt.6) before the trap removes the area.
+            _await_marker(second_started)
+            runner.send_signal(number)
+            assert runner.wait(timeout=30) == 128 + number, f"{name}: exit {runner.returncode}"
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+        assert not second_done.exists(), f"{name}: the interrupted gate group was not killed"
+        assert not third_never.exists(), f"{name}: the run continued after a handled signal"
+        assert not any(parent.iterdir()), f"{name}: the interrupted run left its area behind"
+
+
+def test_verify_runner_retains_only_on_explicit_request(tmp_path: Path) -> None:
+    """Criterion 5: exactly HARNESS_VERIFY_KEEP_TMP=1 keeps a failed or interrupted run's area,
+    reports its absolute path, and no later start sweeps that evidence; another value removes."""
+    base = tmp_path / "retain"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    kept_tree, _ = _tmp_runner_tree(base / "kept", 'touch "$PYTEST_DEBUG_TEMPROOT/payload"; exit 1')
+    done = _tmp_run(kept_tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_KEEP_TMP": "1"})
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    kept = list(parent.iterdir())
+    assert len(kept) == 1, f"the requested evidence did not survive: {kept}"
+    kept_area = kept[0]
+    assert not kept_area.name.isdigit(), "a kept area must not carry a name a sweep would take"
+    assert (kept_area / "payload").exists(), "the kept area lost its payload"
+    assert str(kept_area.resolve()) in done.stderr, "the runner did not report the kept area's absolute path"
+
+    # The next start under the same parent must leave the requested evidence alone.
+    later_tree, _ = _tmp_runner_tree(base / "later", "true")
+    done = _tmp_run(later_tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert kept_area.is_dir() and (kept_area / "payload").exists(), "a later run swept the requested evidence"
+    assert [entry.name for entry in parent.iterdir()] == [kept_area.name], "the later run left its own area behind"
+
+    # Any value other than exactly 1 removes normally.
+    other_tree, _ = _tmp_runner_tree(base / "other", 'touch "$PYTEST_DEBUG_TEMPROOT/payload"; exit 1')
+    done = _tmp_run(other_tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_KEEP_TMP": "yes"})
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert [entry.name for entry in parent.iterdir()] == [kept_area.name], "a value other than 1 retained an area"
+
+    # An interrupted run keeps its area on request too — the signal path, not the exit path.
+    signal_started = base / "signal-started"
+    signal_second = base / "signal-second-started"
+    signal_tree = _runner_tree_files(base / "signal" / "tree")
+    _write_gate_file(
+        signal_tree,
+        [
+            _report_gate(base, "first", "verify", "block", command=f"touch {signal_started}"),
+            _report_gate(base, "second", "verify", "block", command=f"touch {signal_second}; sleep 1; true"),
+        ],
+    )
+    _interpreter_wrapper(signal_tree / ".venv" / "bin" / "python3", "venv", base / "log-signal")
+    with _held_holder(base / "signal" / "state", pid=os.getpid()):
+        runner = _start_runner(
+            signal_tree,
+            _marker_env(signal_tree, temproot, tmp_path, {"HARNESS_VERIFY_KEEP_TMP": "1"}),
+        )
+        try:
+            _await_marker(signal_started)
+            _await_marker(signal_second)
+            runner.send_signal(15)
+            assert runner.wait(timeout=30) == 143, f"exit {runner.returncode}"
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+    remaining = list(parent.iterdir())
+    assert len(remaining) == 2 and all(not entry.name.isdigit() for entry in remaining), remaining
+    assert kept_area.name in {entry.name for entry in remaining}, "the earlier kept evidence disappeared"
+
+
+def test_verify_runner_reclaims_dead_pid_areas(tmp_path: Path) -> None:
+    """Criterion 7: a later start removes unretained areas whose process is gone — including one
+    left by a hard-killed and reaped runner — and never touches a live process's area."""
+    base = tmp_path / "reclaim"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True)
+    live_area = parent / str(os.getpid())
+    live_area.mkdir()
+    (live_area / "payload").write_text("a live sibling stays", encoding="utf-8")
+    # Invalid numeric-looking names must refuse with a path and reason, never a traceback.
+    validation_tree, _ = _tmp_runner_tree(base / "validation", "true")
+    for name in ("²", "99999999999", "0"):
+        invalid = parent / name
+        invalid.mkdir()
+        done = _tmp_run(validation_tree, temproot, tmp_path)
+        assert done.returncode == 2, f"{name}: {done.stdout}\n{done.stderr}"
+        assert str(invalid) in done.stderr and "pid" in done.stderr.lower(), done.stderr
+        assert "Traceback" not in done.stderr, done.stderr
+        invalid.rmdir()
+    killed_started = base / "killed-started"
+    killed_tree, _ = _tmp_runner_tree(base / "killed", f"touch {killed_started}; sleep 30")
+    with _held_holder(killed_tree.parent / "state", pid=os.getpid()):
+        runner = _start_runner(killed_tree, _marker_env(killed_tree, temproot, tmp_path))
+        try:
+            _await_marker(killed_started)
+            os.killpg(runner.pid, 9)
+            runner.wait(timeout=10)
+        finally:
+            if runner.poll() is None:
+                runner.kill()
+                runner.wait(timeout=10)
+    assert runner.returncode == -9, "the hard kill did not reach the runner"
+    dead = [entry for entry in parent.iterdir() if entry.name != str(os.getpid())]
+    assert len(dead) == 1 and dead[0].name.isdigit(), f"the killed runner left no reclaimable area: {dead}"
+    sweeper_tree, _ = _tmp_runner_tree(base / "sweeper", "true")
+    dead_area = dead[0]
+    # With inherited admission the Popen pid is the allocating shell's pid.
+    # Retry an actual collision rather than predicting that a pid stays dead.
+    with _held_holder(sweeper_tree.parent / "state", pid=os.getpid()):
+        for _ in range(10):
+            sweeper = subprocess.Popen(
+                ["bash", str(sweeper_tree / "scripts" / "verify_all.sh")],
+                cwd=sweeper_tree,
+                env=_marker_env(sweeper_tree, temproot, tmp_path),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                stdout, stderr = sweeper.communicate(timeout=20)
+            finally:
+                if sweeper.poll() is None:
+                    sweeper.kill()
+                    sweeper.communicate(timeout=10)
+            if str(sweeper.pid) != dead_area.name:
+                assert sweeper.returncode == 0, f"exit {sweeper.returncode}\n{stdout}\n{stderr}"
+                break
+        else:
+            pytest.fail("the sweeper repeatedly reused the dead runner's pid")
+    assert not dead_area.exists(), "the next start did not reclaim the hard-killed runner's area"
+    assert (live_area / "payload").read_text(encoding="utf-8") == "a live sibling stays", (
+        "a live pid's area was touched"
+    )
+    assert [entry.name for entry in parent.iterdir()] == [str(os.getpid())], "the sweeping run left its own area behind"
+
+
+def test_verify_runner_preserves_unrelated_paths(tmp_path: Path) -> None:
+    """Criterion 8: while managing run areas, verification changes no unrelated path — the
+    caller's own temporary root, non-managed entries, a live sibling — and refuses, before any
+    gate and without touching anything, when a symlink substitutes a run area."""
+    base = tmp_path / "unrelated"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True)
+    sentinel = temproot / "caller-sentinel"
+    sentinel.write_text("the caller's own file", encoding="utf-8")
+    historical = parent / "pytest-of-historical"
+    historical.mkdir()
+    (historical / "root").write_text("history", encoding="utf-8")
+    kept = parent / "keep-4711"
+    kept.mkdir()
+    (kept / "evidence").write_text("requested evidence", encoding="utf-8")
+    loose = parent / "notes.txt"
+    loose.write_text("not an area", encoding="utf-8")
+    live_area = parent / str(os.getpid())
+    live_area.mkdir()
+    (live_area / "payload").write_text("live sibling", encoding="utf-8")
+
+    tree, _ = _tmp_runner_tree(base / "tree", "true")
+    caller_parent = base / "caller-parent"
+    caller_parent.mkdir()
+    unrelated_numeric = caller_parent / str(_reaped_pid())
+    unrelated_numeric.mkdir()
+    done = _tmp_run(tree, temproot, tmp_path, extra_env={"HARNESS_VERIFY_TMP_PARENT": str(caller_parent)})
+    assert unrelated_numeric.is_dir(), "a caller-named parent was swept"
+    assert done.returncode == 2 and str(caller_parent) in done.stderr, done.stderr
+    assert "managed parent" in done.stderr, done.stderr
+
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert parent.stat().st_mode & 0o777 == 0o700, "the existing managed parent must be private"
+    assert sentinel.read_text(encoding="utf-8") == "the caller's own file", "the caller's root was changed"
+    assert (historical / "root").read_text(encoding="utf-8") == "history", "a non-managed entry was changed"
+    assert (kept / "evidence").read_text(encoding="utf-8") == "requested evidence", "a kept entry was changed"
+    assert loose.read_text(encoding="utf-8") == "not an area", "an unrelated file was changed"
+    assert (live_area / "payload").read_text(encoding="utf-8") == "live sibling", "a live sibling was changed"
+    assert {entry.name for entry in parent.iterdir()} == {
+        "pytest-of-historical",
+        "keep-4711",
+        "notes.txt",
+        str(os.getpid()),
+    }, "the sweep removed something it must skip"
+
+    # A symlink named like an area is refused before any gate, target untouched.
+    victim = temproot / "victim"
+    victim.mkdir()
+    (victim / "payload").write_text("do not delete", encoding="utf-8")
+    substituted = parent / str(_reaped_pid())
+    substituted.symlink_to(victim)
+    refusing_tree, _ = _tmp_runner_tree(base / "refusing", f"touch {base / 'gate-ran'}")
+    done = _tmp_run(refusing_tree, temproot, tmp_path)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not (base / "gate-ran").exists(), "gates started although an area entry was unsafe"
+    assert str(substituted) in done.stderr and "symlink" in done.stderr, done.stderr
+    assert (victim / "payload").exists(), "the sweep followed the substituted symlink"
+    assert substituted.is_symlink(), "the sweep removed the substituted entry itself"
+
+
+def test_verify_runner_makes_existing_parent_private(tmp_path: Path) -> None:
+    """An existing 0755 managed parent must become private before gates run."""
+    tree, temproot = _tmp_runner_tree(tmp_path / "privacy", "true")
+    parent = _managed_parent(temproot)
+    parent.mkdir(parents=True, mode=0o755)
+    parent.chmod(0o755)
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert parent.stat().st_mode & 0o777 == 0o700, "the managed parent remains accessible to other users"
+
+
+def test_verify_runner_reports_temp_storage_failures(tmp_path: Path) -> None:
+    """Criterion 9: an allocation or sweep failure reports the path and the reason and returns
+    unsuccessful before any gate, and a failed end-of-run cleanup never reads as green."""
+    if os.geteuid() == 0:
+        pytest.skip("the failure injections of this change need an unprivileged user")
+    base = tmp_path / "storage"
+
+    # (A) Parent allocation fails beneath an unwritable directory, before any gate starts.
+    readonly_base = base / "readonly-base"
+    readonly_base.mkdir(parents=True)
+    readonly_base.chmod(0o555)
+    readonly_parent = _managed_parent(readonly_base)
+    allocation_gate_ran = base / "allocation-gate-ran"
+    tree_a, _ = _tmp_runner_tree(base / "allocation", f"touch {allocation_gate_ran}")
+    done = _tmp_run(
+        tree_a,
+        base / "unused-temproot",
+        tmp_path,
+        extra_env={"HARNESS_VERIFY_TMP_PARENT": str(readonly_parent)},
+    )
+    readonly_base.chmod(0o755)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not allocation_gate_ran.exists(), "gates started after a failed allocation"
+    assert str(readonly_parent) in done.stderr and "Permission denied" in done.stderr, done.stderr
+
+    # (B) Sweep failure: a dead sibling that cannot be removed stops the run before any gate.
+    temproot_b = base / "sweep-temproot"
+    parent_b = _managed_parent(temproot_b)
+    parent_b.mkdir(parents=True)
+    stuck = parent_b / str(_reaped_pid())
+    stuck.mkdir()
+    (stuck / "locked").mkdir()
+    (stuck / "locked" / "payload").write_text("undeletable", encoding="utf-8")
+    (stuck / "locked").chmod(0o000)
+    sweep_gate_ran = base / "sweep-gate-ran"
+    tree_b, _ = _tmp_runner_tree(base / "sweep", f"touch {sweep_gate_ran}")
+    done = _tmp_run(tree_b, temproot_b, tmp_path)
+    assert stuck.is_dir() and (stuck / "locked").is_dir(), (
+        f"the start-up sweep removed the unreadable dead area instead of refusing it — exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    )
+    (stuck / "locked").chmod(0o755)
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert not sweep_gate_ran.exists(), "gates started although the sweep could not reclaim a dead area"
+    assert str(stuck) in done.stderr, done.stderr
+
+    # (C) A green run whose area cannot be removed reports the failure and returns 2, not green.
+    temproot_c = base / "cleanup-temproot"
+    lock_the_area = (
+        'mkdir "$PYTEST_DEBUG_TEMPROOT/locked"; '
+        'touch "$PYTEST_DEBUG_TEMPROOT/locked/payload"; '
+        'chmod 000 "$PYTEST_DEBUG_TEMPROOT/locked"'
+    )
+    tree_c, _ = _tmp_runner_tree(base / "cleanup", f"{lock_the_area}; true")
+    done = _tmp_run(tree_c, temproot_c, tmp_path)
+    assert done.returncode == 2, f"a failed cleanup came out {done.returncode}: {done.stdout}\n{done.stderr}"
+    assert "could not remove the run area" in done.stderr and "Permission denied" in done.stderr, done.stderr
+    leftovers = list(_managed_parent(temproot_c).iterdir())
+    assert len(leftovers) == 1, (
+        f"expected exactly the unremovable run area, found {leftovers}: {done.stdout}\n{done.stderr}"
+    )
+    assert (leftovers[0] / "locked").is_dir(), (
+        f"the leftover run area lost its locked subtree: {sorted(entry.name for entry in leftovers[0].iterdir())}"
+    )
+    leftovers[0].joinpath("locked").chmod(0o755)
+
+    # (D) A red run keeps its red verdict when the cleanup also fails.
+    temproot_d = base / "cleanup-red-temproot"
+    tree_d, _ = _tmp_runner_tree(base / "cleanup-red", f"{lock_the_area}; exit 1")
+    done = _tmp_run(tree_d, temproot_d, tmp_path)
+    assert done.returncode == 1, f"a red run's verdict changed to {done.returncode}: {done.stdout}\n{done.stderr}"
+    assert "VERIFY RED" in done.stdout and "could not remove the run area" in done.stderr, done.stderr
+    leftovers = list(_managed_parent(temproot_d).iterdir())
+    assert len(leftovers) == 1, (
+        f"expected exactly the unremovable run area, found {leftovers}: {done.stdout}\n{done.stderr}"
+    )
+    assert (leftovers[0] / "locked").is_dir(), (
+        f"the leftover run area lost its locked subtree: {sorted(entry.name for entry in leftovers[0].iterdir())}"
+    )
+    leftovers[0].joinpath("locked").chmod(0o755)
+
+
+def test_verify_runner_preserves_entry_contracts(tmp_path: Path) -> None:
+    """Criterion 10: with run-area management active, `--list` allocates nothing and enters no
+    admission, job and CI selection stay exact, a nested run reuses its ancestor's admission
+    instead of queueing behind it, and worker forwarding and duration ownership keep their
+    contracts."""
+    base = tmp_path / "contracts"
+    temproot = base / "temproot"
+    bash = shutil.which("bash") or "/bin/bash"
+
+    # --list: no managed parent, no area.
+    list_tree, _ = _tmp_runner_tree(base / "list", "true")
+    done = _tmp_run(list_tree, temproot, tmp_path, "--list")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "probe" in done.stdout, done.stdout
+    assert not temproot.exists(), "--list created the temporary infrastructure"
+
+    # Job selection still decides what runs.
+    selection_base = base / "selection"
+    selection_tree = _runner_tree_files(selection_base / "tree")
+    _write_gate_file(
+        selection_tree,
+        [
+            _report_gate(selection_base, "docs-only", "verify", "block", subsets=["docs"]),
+            _report_gate(selection_base, "verify-only", "verify", "block"),
+        ],
+    )
+    _interpreter_wrapper(selection_tree / ".venv" / "bin" / "python3", "venv", selection_base / "log")
+    done = _tmp_run(selection_tree, temproot, tmp_path, "--job", "docs")
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert (selection_base / "docs-only.ran").exists(), "the docs selection did not run its own gate"
+    assert not (selection_base / "verify-only.ran").exists(), "an unselected gate executed"
+
+    # `--ci` stays exhaustive: a blocking failure reports but stops nothing.
+    ci_base = base / "ci"
+    ci_tree = _runner_tree_files(ci_base / "tree")
+    _write_gate_file(
+        ci_tree,
+        [
+            _report_gate(ci_base, "alpha", "verify", "block"),
+            _report_gate(ci_base, "beta", "verify", "block", command=f"touch {ci_base / 'beta.ran'}; exit 1"),
+            _report_gate(ci_base, "gamma", "verify", "block"),
+        ],
+    )
+    _interpreter_wrapper(ci_tree / ".venv" / "bin" / "python3", "venv", ci_base / "log")
+    done = _tmp_run(ci_tree, temproot, tmp_path, "--ci")
+    assert done.returncode == 1, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert all((ci_base / f"{gid}.ran").exists() for gid in ("alpha", "beta", "gamma")), "--ci stopped early"
+
+    # A nested run reuses its ancestor's admission instead of queueing behind it.
+    nested_base = base / "nested"
+    nested_tree, _ = _tmp_runner_tree(nested_base, "true")
+    with _held_holder(nested_tree.parent / "state", pid=os.getpid()):
+        done = subprocess.run(
+            [bash, str(nested_tree / "scripts" / "verify_all.sh")],
+            cwd=nested_tree,
+            env=_marker_env(nested_tree, temproot, tmp_path),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    assert done.returncode == 0, f"a nested run queued behind its own ancestor: {done.stdout}\n{done.stderr}"
+
+    # The forwarded worker override reaches the gate verbatim, and the run keeps its duration history.
+    worker_base = base / "worker"
+    worker_seen = worker_base / "workers.txt"
+    worker_tree, _ = _tmp_runner_tree(worker_base, f'printf %s "$PYTEST_XDIST_AUTO_NUM_WORKERS" > "{worker_seen}"')
+    done = _tmp_run(worker_tree, temproot, tmp_path, extra_env={"PYTEST_XDIST_AUTO_NUM_WORKERS": "3"})
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert worker_seen.read_text(encoding="utf-8") == "3", "the worker override was rewritten"
+    events = _tree_history(worker_tree)
+    assert len([e for e in events if e["event"] == "run_start"]) == 1, events
+    assert len([e for e in events if e["event"] == "gate"]) == 1, events
+    assert len([e for e in events if e["event"] == "run_end"]) == 1, events
+
+
+@pytest.mark.parametrize(
+    ("addopts", "reason"),
+    [
+        ("--basetemp={outside}", "value form"),
+        ("--basetemp {outside}", "separate value"),
+        ("--basetem {outside}", "abbreviated option"),
+        ("--base={outside}", "short prefix"),
+        ("-o addopts=--basetemp={outside}", "ini override"),
+        ("-oaddopts=--basetemp={outside}", "attached ini override"),
+        ("-o=addopts=--basetemp={outside}", "equals ini override"),
+        ("--override-ini='addopts=--basetemp {outside}'", "long ini override"),
+        ("@{args_file}", "argument file"),
+        ("'unbalanced", "malformed quoting"),
+        ("-q -x", "ordinary run"),
+    ],
+)
+def test_verify_runner_refuses_conflicting_pytest_options(tmp_path: Path, addopts: str, reason: str) -> None:
+    """Ask real pytest to resolve all option sources, refusing an escape before tests run."""
+    base = tmp_path / "addopts"
+    temproot = base / "temproot"
+    test_ran = base / "test-ran"
+    outside = base / "outside"
+    outside.mkdir(parents=True)
+    sentinel = outside / "sentinel"
+    sentinel.write_text("untouched", encoding="utf-8")
+    args_file = base / "args.txt"
+    args_file.write_text(f"--basetemp={outside}\n", encoding="utf-8")
+    tree, _ = _tmp_runner_tree(base / "tree", "python3 -m pytest -q test_probe.py")
+    (tree / "test_probe.py").write_text(
+        f"from pathlib import Path\ndef test_probe(tmp_path):\n    Path({str(test_ran)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    # A test-free gate before the pytest gate measures the moment of refusal (decision Q-7):
+    # the guard lives in pytest's own configuration, so a gate that starts no pytest runs,
+    # and pytest is refused before any test runs or any temporary test folder is created.
+    test_free_ran = base / "test-free.ran"
+    _write_gate_file(
+        tree,
+        [
+            _report_gate(base, "test-free", "verify", "block", subsets=["docs"]),
+            _report_gate(base, "pytest", "verify", "block", command="python3 -m pytest -q test_probe.py"),
+        ],
+    )
+    options = addopts.format(outside=outside, args_file=args_file)
+    docs = _tmp_run(tree, temproot, tmp_path, "--job", "docs", extra_env={"PYTEST_ADDOPTS": options})
+    assert docs.returncode == 0, f"a run that starts no pytest was refused: {docs.stdout}\n{docs.stderr}"
+    assert test_free_ran.exists(), "the test-free gate did not run"
+    assert not test_ran.exists(), "the docs selection started pytest"
+    test_free_ran.unlink()
+    done = _tmp_run(tree, temproot, tmp_path, extra_env={"PYTEST_ADDOPTS": options})
+    assert test_free_ran.exists(), "the options were refused before the test-free gate ran"
+    if reason == "ordinary run":
+        assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+        assert test_ran.exists(), "an ordinary pytest run was blocked"
+    else:
+        assert done.returncode != 0, f"{reason}: exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+        assert not test_ran.exists(), f"{reason}: tests ran despite the conflicting option"
+        assert any(text in done.stderr for text in ("basetemp", "quotation", "unrecognized arguments")), done.stderr
+        assert sentinel.read_text(encoding="utf-8") == "untouched", "pytest touched the escaped root"
+        assert list(outside.iterdir()) == [sentinel], f"{reason}: pytest created a temporary test folder"
+    parent = _managed_parent(temproot)
+    assert not parent.exists() or not list(parent.iterdir()), "the run left its area behind"
+
+
+@pytest.mark.parametrize("ending", ["true", "kill -TERM $$"])
+@pytest.mark.parametrize("replacement", ["symlink", "directory"])
+def test_verify_runner_refuses_substituted_cleanup_parent(tmp_path: Path, ending: str, replacement: str) -> None:
+    """Both cleanup handlers must leave a substituted parent's unrelated child intact."""
+    base = tmp_path / "substitution"
+    temproot = base / "temproot"
+    parent = _managed_parent(temproot)
+    moved = base / "original-parent"
+    victim = base / "victim"
+    victim.mkdir(parents=True)
+    record = base / "area-name"
+    gate = (
+        f'area_name=$(basename "$PYTEST_DEBUG_TEMPROOT"); printf %s "$area_name" > "{record}"; '
+        f'mv "{parent}" "{moved}"; '
+        + (f'ln -s "{victim}" "{parent}"; ' if replacement == "symlink" else f'mkdir "{parent}"; ')
+        + f'mkdir "{parent}/$area_name"; echo untouched > "{parent}/$area_name/sentinel"; '
+        + ending
+    )
+    tree, _ = _tmp_runner_tree(base / "tree", gate)
+    # $$ in a gate names the gate shell: signal the runner itself via the PID area name.
+    if ending != "true":
+        gate = gate.replace("kill -TERM $$", 'kill -TERM "$area_name"')
+        _write_gate_file(tree, [_report_gate(base, "swap", "verify", "block", command=gate)])
+    done = _tmp_run(tree, temproot, tmp_path)
+    assert done.returncode != 0, f"unsafe cleanup reported success: {done.stdout}\n{done.stderr}"
+    name = record.read_text(encoding="utf-8")
+    assert (parent / name / "sentinel").is_file(), "cleanup followed the substituted parent"
+    assert (moved / name).is_dir(), "cleanup changed the original area after substitution"
+    assert str(parent) in done.stderr and "parent" in done.stderr, done.stderr
+    assert "changed" in done.stderr or "symlink" in done.stderr, done.stderr
 
 
 def test_no_second_verification_workflow() -> None:

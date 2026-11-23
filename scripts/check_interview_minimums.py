@@ -62,6 +62,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import venv_guard  # noqa: F401
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -229,18 +230,25 @@ def _unfenced(text: str) -> str:
     return "\n".join(lines)
 
 
+def _blocks(text: str) -> list[tuple[str, dict[str, str]]]:
+    """Every `## ` block outside a fence as (heading, fields), in document order."""
+    found: list[tuple[str, dict[str, str]]] = []
+    for block in re.split(r"^## ", _unfenced(text), flags=re.M)[1:]:
+        heading = block.split("\n", 1)[0]
+        fields: dict[str, str] = {}
+        for line in block[len(heading) :].splitlines():
+            match = _FIELD_LINE.match(line)
+            if match:
+                fields[match.group("name")] = match.group("value").strip()
+        found.append((heading, fields))
+    return found
+
+
 def _parse_records(text: str) -> tuple[list[tuple[str, dict[str, str]]], list[dict[str, str]]]:
     """Interview records as (id, fields) in document order, and skip records; fenced examples are not read."""
     records: list[tuple[str, dict[str, str]]] = []
     skips: list[dict[str, str]] = []
-    for block in re.split(r"^## ", _unfenced(text), flags=re.M)[1:]:
-        heading = block.split("\n", 1)[0]
-        body = block[len(heading) :]
-        fields: dict[str, str] = {}
-        for line in body.splitlines():
-            match = _FIELD_LINE.match(line)
-            if match:
-                fields[match.group("name")] = match.group("value").strip()
+    for heading, fields in _blocks(text):
         record = _RECORD.match(heading)
         if record:
             records.append((record.group(1), fields))
@@ -249,12 +257,13 @@ def _parse_records(text: str) -> tuple[list[tuple[str, dict[str, str]]], list[di
     return records, skips
 
 
-def _counted(records: list[tuple[str, dict[str, str]]]) -> int:
-    """Distinct maintainer answers: first counted occurrence of an id wins
-    (Q-5; loop row L1-1). A block without a stated question and answer is not
-    an interview record, whatever its other fields claim (phase-6 row F-12)."""
+def _counted_indices(records: list[tuple[str, dict[str, str]]]) -> list[int]:
+    """The positions of the records the minimum counts: distinct maintainer answers, the first
+    counted occurrence of an id winning (Q-5; loop row L1-1). A block without a stated question
+    and answer is not an interview record, whatever its other fields claim (phase-6 row F-12)."""
     seen: set[str] = set()
-    for record_id, fields in records:
+    kept: list[int] = []
+    for index, (record_id, fields) in enumerate(records):
         if fields.get("status") != "answered":
             continue
         if fields.get("answered_by") != "maintainer":
@@ -264,7 +273,31 @@ def _counted(records: list[tuple[str, dict[str, str]]]) -> int:
         if record_id in seen:
             continue
         seen.add(record_id)
-    return len(seen)
+        kept.append(index)
+    return kept
+
+
+def _counted(records: list[tuple[str, dict[str, str]]]) -> int:
+    """Distinct maintainer answers, as `_counted_indices` selects them."""
+    return len(_counted_indices(records))
+
+
+def maintainer_answers(text: str) -> list[dict[str, str]]:
+    """The interview records the maintainer answered, exactly as the minimum counts them, with their titles.
+
+    Each entry holds `id`, `title` (the heading text after the `·`) and the record's fields. The
+    reading is `_parse_records`' and the selection `_counted_indices`': answered, by the maintainer,
+    with a stated question and answer, the first occurrence of an id only; a fenced example is no
+    record. Callers that need a decision of a given kind (the runner's fourth spec-review round)
+    read it here, never by searching text.
+    """
+    titled = [(record, fields) for heading, fields in _blocks(text) if (record := _RECORD.match(heading))]
+    records = [(record.group(1), fields) for record, fields in titled]
+    found: list[dict[str, str]] = []
+    for index in _counted_indices(records):
+        record, fields = titled[index]
+        found.append({**fields, "id": record.group(1), "title": record.group(2).strip()})
+    return found
 
 
 def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:

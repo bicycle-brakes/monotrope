@@ -1,6 +1,6 @@
 # Phase 2 · Spec
 
-**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), started by
+**Model:** gpt-6.1-terra — Codex (`gpt-6.1-terra`) at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), started by
 `python3 scripts/stage2.py draft <change>`: one call writes spec, design and
 plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; the highest
 reasoning demand, little output. Where Stage 2 is off, Opus 5.5 at effort
@@ -87,6 +87,7 @@ Options:               each named after what it does, with its consequence
 Recommendation:        <one option> — because <one sentence>
 If you say "ok":       <exactly what will then be built>
 What is lost:          <what the other option would have given>
+Downside you accept:   <per option, the downside that comes with choosing it>
 ```
 
 The five context lines come first, in the maintainer's language, before any
@@ -94,6 +95,14 @@ option; identifiers are explained at first use, and the actual question
 stands last, on its own line. When the answer is recorded, the context shown
 here goes into the record's own `context` field
 (`docs/WORKFLOW.md`, "The question protocol").
+
+The question asks which downside the maintainer accepts with the choice, as
+the interview does (`prompts/01a-interview.md`, "How you ask"): every option
+names its downside, an answer accepts only a downside that was shown or that
+the maintainer stated, and where it is not settled the record stays `open` —
+you never invent it. The answered record carries the complete decision
+statement with its `accepting` clause and the date of the day it is
+recorded; `draft` refuses a change whose answered record has none.
 
 Answers are: **ok** · **option N** · **change criterion N to "…"** · **no,
 because …**. That is the decision record (MADR) in question form. Shorthand
@@ -123,7 +132,20 @@ each of them into `spec.md` itself: a hole is closed, a criterion that cannot
 go red gets its refuting case. A row you do not take over gets its reason in
 `findings.md`. An `[AMBIGUITY]` goes to the person, and their answer goes into
 the spec. Each 2a row then says `in spec` or `rejected — <reason>`; none stays
-open. The revised `spec.md` is the one yardstick from here on: plan, code and
+open.
+
+A spec you changed this way is reviewed again: draft and review repeat until a
+current review, one that read the spec body as it now stands, leaves only
+settled rows that need no further spec edit, or until the third review round
+has run. After the third round one final draft works the last rows in without
+a new review; rows still open that are no BLOCKER become named limits in
+`plan.md`. A BLOCKER, or an `[AMBIGUITY]` whose answer changes the spec, goes
+to the maintainer, who either authorizes a fourth round, with a question of the
+change in `decisions.md` headed `Q-<n> · Fourth spec-review round` and answered
+`authorized`, or has the change re-sliced. A `spike` needs no spec review.
+
+The revised `spec.md` is the one yardstick from here on: plan, code and
 the phase 6 review measure against it, not against the 2a rows. On the runner
 path (`docs/WORKFLOW.md` §4) a second `draft <change>` does this, after the
-maintainer has answered every `[AMBIGUITY]` a row raised.
+maintainer has answered every `[AMBIGUITY]` a row raised, and
+`spec-review <change>` then reviews the changed spec.
