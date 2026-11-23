@@ -27,7 +27,9 @@ Starts unless you say stop.
 ```
 
 **Prerequisite:** resolve the open exception-budget decision in `spec.md` and
-review the revised spec before phase 4; reconcile the stale branch-local ADR
+apply the third-round ambiguity rule before phase 4: if a maintainer answer
+changes the spec, obtain a recorded authorization for a fourth review or
+re-slice; reconcile the stale branch-local ADR
 0027 before a decision PR
 is complete. This draft attempt cannot edit that already tracked outside path;
 the orchestrator owns the reconciliation. The central configuration skeleton is not a prerequisite (Q-16). Reuse the
@@ -57,7 +59,13 @@ redraw from eligible substitutes, wait durably, and report stopped after five
 hours (S2-18). Report weekly deferred row IDs (S2-19). Other MINORs require
 repair unless classified as maintainability, style or taste (S2-20). Record
 mechanism, trigger and invariant separately (S2-21); use the target merge base
-locally and in CI (S2-22).
+locally and in CI (S2-22). Round 3 provisional choices: define policy data and
+references, use only the singleton trigger, retain non-admitted rows outside
+triage, report expired-term substitution, exclude OpenAI-family free seats,
+self-check each physical call, report no one-seat trigger, allow the night
+exception beyond zero ordinary re-checks, derive round order, refresh the free
+roster at round start, date the fixed-seat comparison, pin approved question
+texts and classify MINORs by defect nature (S3-1–13).
 
 ## Implementation and ownership
 
@@ -70,20 +78,23 @@ remain the only action entry points; legacy snapshots retain frozen settings und
 
 1. Create `scripts/stage2_review_policy.py` and
    `tests/test_stage2_review_policy.py`: validate one central declaration,
-   model-family mapping, initial Q-13 questions and sourced additions,
+   model-family mapping including implementers, exact initial Q-13 questions and
+   sourced additions, per-lens and free-round substitutes, seat date and citation, live references,
    configurable lenses/seats/rounds/cap/early-end/limits, independent round-2
    roster, shadow/live mode and resolvable calibration approval. Verify an
    edited setting changes actual scheduling. Unknown keys, duplicates,
    missing evidence and invalid family or endpoint references refuse.
 2. Create `scripts/stage2_review_lenses.py` and
    `tests/test_stage2_review_lenses.py`: persist frozen policy, revision,
-   availability receipt, seeded challenger draw, independent seat results,
-   complete chunk coverage, failures and declared substitutions; use union
-   triage with source row IDs and the spec's semantic grouping contract.
+   availability receipts (including a fresh one at free-round start), seeded draws,
+   independent seat results,
+   complete chunk coverage, per-physical-call self-checks, failures and declared
+   substitutions; retain non-admitted rows outside union triage with source row IDs and the spec's semantic grouping contract.
    Compute the per-seat-count diagnostics in the spec, including two-seat
    `S=f1+f2`, jackknife `S+f1/2` and Chao where defined; never apply a
    three-seat estimate to two seats. Preserve zero and unknown explicitly. Measure accepted share by
-   model and lens, challenger comparisons using accepted/triaged rows and sample counts,
+   model and lens, challenger comparisons since the fixed-seat date using deduplicated
+   released findings, accepted/triaged rows and sample counts,
    token/time availability and verify
    execution and lock wait separately. Persist phase-6 launch reservations,
    night evidence, mechanism links and maintainer authorizations.
@@ -91,7 +102,8 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    `tests/test_stage2.py` and `tests/test_stage2_availability.py`: use the
    existing preparation/launch/resume and security paths. Initially every
    full or bounded lens has fixed DeepSeek Flash plus a seeded random eligible
-   reachable challenger; text-only skips the loop. At most one implementer
+   reachable challenger; expired terms are reported and seat 1 falls back to an
+   eligible per-lens substitute; text-only skips the loop. At most one implementer
    family sits on a lens; substitutes are distinct and eligible. Resume
    successful seats without replay and complete oversized input by checked
    chunks; retry once, then substitute in order or redraw an eligible
@@ -99,8 +111,11 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    five-hour stop. Shadow runs the free round unless the accepted first-round
    rows are nonempty, all MINOR and all required repairs are complete;
    bounded changes skip it. Initial free seats are three seeded, independently
-   drawn distinct families excluding Codex. Collect one final
-   repair, then fresh phase 6 with the configured budget and exceptions.
+   drawn distinct families excluding the OpenAI family and Codex endpoint.
+   One-seat observations have no share or positive trigger; a family-ineligible
+   sole fixed seat uses an eligible different-family substitute or waits. Collect one final
+   repair, then fresh phase 6 with the configured budget and exceptions; a night exception can add one re-check
+   beyond a zero ordinary budget, subject to the unresolved overall limit.
 4. Create `scripts/check_review_formalities.py` and
    `tests/test_check_review_formalities.py`; change `scripts/ci_gates.py`
    and `tests/test_ci.py`: gate new formalities and Markdownlint on lines
@@ -143,7 +158,7 @@ remain the only action entry points; legacy snapshots retain frozen settings und
 - 4: not yet written tests/test_stage2_review_policy.py::test_changed_configuration_drives_scheduling — changing a policy value does not affect runtime
 - 5: not yet written tests/test_stage2_review_policy.py::test_invalid_policy_blocks_before_calls — bad keys, references or live approval reach a call
 - 6: not yet written tests/test_stage2_review_lenses.py::test_resume_pins_snapshot_and_completed_seats — policy drift or restart replays a successful seat
-- 7: not yet written tests/test_stage2_review_lenses.py::test_union_triage_preserves_rows_and_group_ids — a singleton or its provenance disappears
+- 7: not yet written tests/test_stage2_review_lenses.py::test_union_triage_preserves_rows_and_group_ids — a raw, non-admitted or triaged row or its provenance disappears
 - 8: not yet written tests/test_stage2_review_lenses.py::test_two_seat_overlap_diagnostics — incorrect f1/f2 or undefined ratio is reported as valid
 - 9: not yet written tests/test_stage2_review_lenses.py::test_shadow_round_and_repaired_minor_early_end — signal alone skips a required round or repaired minors run one
 - 10: not yet written tests/test_stage2_review_lenses.py::test_calibration_counts_only_complete_full_changes — duplicate, early-ended or bounded change enters the ten
@@ -164,9 +179,9 @@ remain the only action entry points; legacy snapshots retain frozen settings und
 - 24: not yet written tests/test_stage2_review_policy.py::test_interim_policy_single_source — a second authoritative policy or mandatory skeleton is accepted
 - 25: not yet written tests/test_stage2_review_lenses.py::test_free_round_initial_mixed_family_roster — wrong roster or shared outputs passes
 - 26: not yet written tests/test_stage2_review_lenses.py::test_bounded_change_skips_free_round — a bounded change receives a second loop round
-- 27: not yet written tests/test_stage2_review_lenses.py::test_findings_require_file_and_line — a locationless row is accepted
+- 27: not yet written tests/test_stage2_review_lenses.py::test_findings_require_file_and_line — a locationless row enters triage or disappears from the report
 - 28: not yet written tests/test_stage2_review_lenses.py::test_cap_exempts_major_and_blocker — an excess MINOR passes or an excess MAJOR is dropped
-- 29: not yet written tests/test_stage2_review_lenses.py::test_prompt_requires_self_check — reviewer instruction omits the evidence self-check
+- 29: not yet written tests/test_stage2_review_lenses.py::test_prompt_requires_self_check — a physical call omits the evidence self-check
 - 30: not yet written tests/test_stage2_review_lenses.py::test_text_only_skips_loop — a text-only change calls a loop reviewer
 
 ## Verification
@@ -207,3 +222,4 @@ last two runs had report-format failures (research.md; follow-up
 2026-11-23 15:45:43–15:48:34 UTC, 171 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 16:03:56–16:10:02 UTC, 365 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 16:17:24–16:21:50 UTC, 266 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 16:29:48–16:33:17 UTC, 210 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

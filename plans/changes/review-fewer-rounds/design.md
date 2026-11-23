@@ -40,7 +40,9 @@ The merge of the decision PR decides this proposal.
 - The orchestrator maintains the validated `review_loop` section in the
   existing central `model-endpoints.yaml` (Q-16); preparation consumes it and
   reports the policy-bound availability receipt, fixed seat, eligible pool,
-  random draw and seed. The pool is constrained by admission, reachability,
+  random draw and seed; the free round uses a fresh receipt and draw at its start.
+  Expired terms remove a model from seating and are reported; an expired fixed
+  seat uses the first eligible lens substitute. The pool is constrained by admission, reachability,
   distinct IDs and the implementer-family rule. Missing eligible seats pause.
 - The runner invokes independent read-only reviewers through its existing
   admission and per-call leak checks. Every seat receives all diff chunks on
@@ -54,7 +56,8 @@ The merge of the decision PR decides this proposal.
 - Eligible full changes have one independent free second round in shadow,
   except after a nonempty accepted MINOR-only first round whose required
   repairs are complete. Initial free seating draws three distinct families
-  with a recorded seed from the reachable pool, excluding Codex.
+  with a recorded seed from the reachable pool, excluding the OpenAI family
+  and the Codex endpoint.
   A bounded change goes from the first round and repair to phase 6.
 - Phase 6 enforces a durable launch budget, a recorded night exception and the
   repair-specific maintainer authorizations. The total exception budget is
@@ -66,21 +69,22 @@ The merge of the decision PR decides this proposal.
 
 ## Data model
 
-- Policy: version, lenses/questions and source, round order, seat rules, fixed
-  model and dated precision citation, challenger pool, substitutes, families,
-  finding cap, early-end rule, diagnostics, shadow/live mode, threshold and
-  phase-6 limits. The orchestrator edits this single validated declaration.
+- Policy: version, lenses/questions and source, per-lens and free-round substitutes, seat rules,
+  fixed model, effective date and dated precision citation, challenger pool, families,
+  finding cap, early-end rule, diagnostics, shadow/live mode, threshold, live decision and calibration references, and
+  phase-6 limits. Round order derives from the round count. The orchestrator edits this single validated declaration.
 - Run: policy snapshot, change class, implementation revision and model
   family, availability receipt, each draw/seed, seat attempts, chunk coverage,
   successful outputs and failures. The runner persists it under the existing
   run lock and refuses mismatched resume input.
-- Triage: raw row and source seat, accepted/rejected disposition, canonical
+- Triage: every raw row and source seat, admission and accepted/rejected disposition, canonical
   defect and mechanism IDs, separately recorded mechanism, trigger and invariant,
   reporting and primary lenses, and repair origin.
-  The orchestrator assigns these; the runner does not pretend to decide
+  Non-admitted rows remain in evidence but do not reach triage. The orchestrator
+  assigns the nature of each MINOR and these fields; the runner does not pretend to decide
   semantic identity. The record is released to `findings.md` after verdict.
 - Observation: per-lens f1, f2, S, singleton share, seat-count-aware jackknife and
-  Chao where defined; per-model/per-lens accepted share and call/verify
+  Chao where defined (no share with one seat); per-model/per-lens accepted share and call/verify
   measurements. The runner labels unavailable values and preserves failed
   attempts. It uses the observed number of seats, never a three-seat formula
   for a two-seat run.

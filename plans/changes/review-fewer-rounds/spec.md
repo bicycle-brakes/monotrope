@@ -76,8 +76,9 @@ This is a proposal until its decision pull request merges.
 
 2. When round 1 runs under the initial policy, each lens receives two
    independent read-only calls, including for bounded changes: fixed
-   `deepseek-v4.1-flash` and one randomly drawn reachable challenger.
-   *Refuted by:* a missing seat, duplicate models, a challenger outside the
+   `deepseek-v4.1-flash` and one randomly drawn reachable challenger, subject
+   to the reported admission or family substitutions in the policy contract.
+   *Refuted by:* an unreported substitution, a missing seat, duplicate models, a challenger outside the
    configured reachable pool, an unrecorded independent per-lens draw and seed, shared answers, or
    any phase-4b call for a text-only change.
    *Basis:* decisions.md#Q-19, decisions.md#Q-24, decisions.md#Q-30.
@@ -89,7 +90,7 @@ This is a proposal until its decision pull request merges.
    *Basis:* decisions.md#Q-8.
 
 4. When review policy changes, one validated central declaration supplies
-   lenses, seats, round count/order, trigger/mode/threshold, finding cap,
+   lenses, seats, round count, trigger/mode/threshold, finding cap,
    minor-only early end and phase-6 limit.
    *Refuted by:* a second authoritative settings file, a code edit needed to
    change those values, or a prompt/test/doc independently fixing those values.
@@ -107,17 +108,17 @@ This is a proposal until its decision pull request merges.
    completed seat, mixing revisions within a round, or release resetting it.
    *Basis:* decisions.md#Q-4, decisions.md#Q-3.
 
-7. When reviewer rows are triaged, their union retains every source row,
-   seat and lens, disposition, and an orchestrator-assigned defect group with
+7. When reviewer answers are processed, the evidence retains every source row,
+   its seat and lens, admission and triage disposition, and an orchestrator-assigned defect group for each triaged defect with
    separately recorded mechanism, trigger and violated invariant.
    *Refuted by:* majority voting dropping a singleton, a rejected row counted
-   as a capture, a missing source row, or unrelated defects grouped merely
+   as a capture, a missing source row including a non-admitted row, or unrelated defects grouped merely
    because they share a location or category.
    *Basis:* decisions.md#Q-3, decisions.md#Q-11.
 
 8. When a lens's round-1 results are complete and triaged, its observation
-   states accepted-defect counts and singleton share, and applicable
-   diagnostics for the actual number of independent seats.
+   states accepted-defect counts and applicable diagnostics, including singleton
+   share when defined, for the actual number of independent seats.
    *Refuted by:* for two seats, S differing from f1+f2, share differing from
    f1/S, jackknife total differing from S+f1/2, Chao total differing from
    S+f1*f1/(2*f2), a fabricated ratio for S=0, or Chao for f2=0.
@@ -155,11 +156,11 @@ This is a proposal until its decision pull request merges.
     task replacing a repair except for a defect in code outside this change.
     *Basis:* decisions.md#Q-6.
 
-13. When triage finds MINOR issues, logic, state, tests, security and false
+13. When triage finds MINOR issues, the orchestrator classifies each by the nature of the defect, not its reporting lens or reviewer label: logic, state, tests, security and false
     statements and any MINOR outside the deferred categories require repair;
     maintainability and clear style go to weekly clean-up unless fixed in an
     already required repair; taste is a PR limit.
-    *Refuted by:* leaving a logic MINOR unrepaired, maintainability alone
+    *Refuted by:* leaving a logic MINOR unrepaired even if reported under the maintainability lens, maintainability alone
     requiring a repair, or treating a security defect as style.
     *Basis:* decisions.md#Q-6, decisions.md#Q-7, decisions.md#Q-28.
 
@@ -170,10 +171,11 @@ This is a proposal until its decision pull request merges.
     blocking, or local and CI comparisons using different bases.
     *Basis:* decisions.md#Q-8, decisions.md#Q-29.
 
-15. When phase 6 reaches its configured first review and one re-check, it
+15. When phase 6 reaches its first review and configured ordinary re-check limit, it
     stops with unresolved rows and a concrete proposal, subject to the
     documented night exception or a maintainer-authorized repair re-check;
-    the total number of exceptions remains an open decision below.
+    the total number of exceptions remains an open decision below; with zero ordinary
+    re-checks the night exception permits one re-check beyond that limit.
     *Refuted by:* an ordinary third review without either authorization, a
     night exception without one evidenced repaired mechanism, replaying an
     authorization, loss or release resetting the budget, or a stopped run
@@ -245,8 +247,8 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-4, decisions.md#Q-16.
 
 25. When the free second round runs under the initial policy, three distinct
-    models from three families independently read the whole diff, drawn with
-    a recorded seed from the reachable configured pool, excluding Codex and
+    models from three families independently read the whole diff, drawn at round start with
+    a recorded seed from a fresh reachable configured pool, excluding the OpenAI family and the Codex endpoint and
     permitting at most one member of the implementer’s family.
     *Refuted by:* a missing seat, an ineligible or unrecorded draw, shared
     answers, duplicate families, or two implementer-family members.
@@ -257,8 +259,8 @@ This is a proposal until its decision pull request merges.
     *Refuted by:* scheduling a second loop round for a bounded change.
     *Basis:* decisions.md#Q-19.
 
-27. When a phase-4b reviewer reports findings, each accepted row has a file
-    and line as evidence, with line 0 for an absent item.
+27. When a phase-4b reviewer reports findings, each admitted row has a file
+    and line as evidence, with line 0 for an absent item; non-admitted rows remain in the report.
     *Refuted by:* accepting a row without either location component, or
     losing valid rows because another row lacks a location.
     *Basis:* decisions.md#Q-21.
@@ -270,7 +272,7 @@ This is a proposal until its decision pull request merges.
     rejecting a sixth MAJOR solely because of the cap.
     *Basis:* decisions.md#Q-21, decisions.md#Q-24.
 
-29. When a phase-4b reviewer prepares its response, it performs one self-check against
+29. When a phase-4b reviewer prepares its response, each physical call performs one self-check against
     the code and drops findings it cannot evidence.
     *Refuted by:* a reviewer instruction omitting the check or asking it to
     retain a finding it cannot substantiate.
@@ -284,7 +286,7 @@ This is a proposal until its decision pull request merges.
 ## Policy contract
 
 The central `review_loop` declaration has the following independently
-validated settings. Changing a valid value changes scheduling or the named
+validated settings; its nested records admit only the fields named below. Changing a valid value changes scheduling or the named
 behavior without editing code; invalid, unknown, duplicated, contradictory or
 unresolvable values fail before any model call. This initial contract supports
 one focused round and at most one free round; increasing these ranges is a
@@ -292,42 +294,64 @@ separate change, not a silently accepted setting.
 
 | Key | Type and allowed values | Initial value and effect |
 |---|---|---|
-| `lenses` | non-empty ordered list of distinct declared lens IDs, with sourced questions | the five approved lenses; each gets a focused group |
+| `lenses` | non-empty ordered list of records with distinct `id`, `questions` (each `text` and `source`), and ordered `substitutes` model IDs | the five approved lenses and exact Q-13 texts; each gets a focused group |
+| `model_families` | map of every referenced or implementer model ID to its weight-origin family | includes implementer IDs even if absent from all pools |
 | `lens_seats` | integer 1–3 | 2; one fixed seat and remaining independently drawn distinct challengers |
 | `rounds` | integer 1–2 | 2; 1 omits the free round; 2 permits it under class, trigger and early-end rules |
-| `round_order` | ordered list `focused` or `focused, free`, containing at least `rounds` entries | `focused, free`; the first `rounds` entries run; invalid sequences fail |
 | `free_seats` | integer 1–3 | 3; independent free-round seats with distinct families, at most one implementer-family seat and none when only one seat |
-| `fixed_model` | admitted model ID with declared family and dated precision source | `deepseek-v4.1-flash`; fixed focused seat |
+| `seat1_model` | model ID with declared family and admission record | `deepseek-v4.1-flash`; fixed focused seat |
+| `seat1_since` | ISO date | date this fixed seat was set; start of its comparison window |
+| `seat1_citation` | resolvable dated precision source | the 2026-11-08 aggregate measurement |
 | `challenger_pool` | non-empty list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set; filter by the availability report and draw independently per lens, excluding selected IDs |
-| `free_pool` | non-empty list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set excluding Codex; filter by availability and draw distinct models and families |
-| `substitutes` | ordered list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set in its declared order; filter by availability and eligibility |
+| `free_pool` | non-empty list of distinct model IDs with known families, excluding the OpenAI family and `openai-codex` endpoint | the eligible `opencode-go` `modelle` set; filter by valid terms and fresh availability and draw distinct models and families |
+| `free_substitutes` | ordered list of distinct model IDs with known families, excluding the OpenAI family and `openai-codex` endpoint | eligible `opencode-go` `modelle` in declared order for free-round replacements |
 | `finding_cap` | integer 1–20 | 5 MINORs per consolidated seat answer |
 | `minor_early_end` | boolean | true; apply criterion 9; false disables this exception |
-| `mode` | `shadow` or `live` | `shadow`; `live` additionally requires a resolvable maintainer decision and calibration report |
+| `mode` | `shadow` or `live` | `shadow`; `live` additionally requires the resolvable references below |
+| `live_decision` | null or repository reference to a dated maintainer decision | null initially; required and resolved in live mode |
+| `calibration_report` | null or repository reference to a calibration report | null initially; required and resolved in live mode |
 | `trigger` | `singleton_share` | singleton share; compare using the explicitly approved comparison and threshold in live mode |
 | `comparison` | `gt` or `ge` | `gt`; compares share to threshold, never jackknife completeness |
 | `threshold` | number 0–1 | 0.5 as shadow candidate only; live use needs explicit maintainer approval |
 | `phase6_rechecks` | integer 0–1 | 1 ordinary re-check after the initial review; exceptional checks follow criterion 15 |
 
+Round order is derived from `rounds`: focused first, then free if enabled.
 The validator checks all model references, families, source citations, and
 whether the settings can provide the requested distinct seats; runtime checks
 current reachability and waits if a complete roster is unavailable. Tests must
 change each key to a valid alternative and observe its effect at the policy
 boundary; where a key has only one supported value, test rejection of another
-value. For one seat no overlap estimator is reported; for two use criterion 8;
+value. A valid metadata or reference edit is checked at the policy boundary,
+not required to change scheduling. For one seat no overlap estimator or
+singleton share is reported and no positive live trigger is inferred; for two use criterion 8;
 for three use the same `S`, `f1`, `f2`, singleton share and first-order
 jackknife `S + 2*f1/3`, with Chao diagnostic only when `f2 > 0`. Missing or
 zero-denominator observations are explicit, not fabricated.
 
+At preparation, terms validity is checked for each model: an expired model is
+skipped and reported. If seat 1 is expired, its lens uses the first eligible
+substitute and reports the substitution. If the configured sole seat shares
+the implementer family, the first eligible substitute of a different family
+takes it; absent one the run waits. Pool references are validated structurally;
+valid terms and reachability are evaluated per preparation, not frozen as
+permanent admission. The free roster is prepared from fresh reachability at
+round start, with its own receipt, seed and picks persisted before calls.
+
 A failed seat retries the same model once. A failed challenger is redrawn
-from remaining eligible reachable members of both the challenger pool and the
-declared substitute list; other seats try eligible substitutes in declared order. Attempts, draw seeds and order are recorded.
+from remaining eligible reachable members of both the challenger pool and its
+lens substitute list; other focused seats try eligible lens substitutes in
+declared order, and free seats use the eligible `free_substitutes` in order.
+Attempts, draw seeds and order are recorded.
 When no candidate succeeds, the run persists a waiting state, resumes on the
 next invocation without replaying successful seats and is reported stopped
 after five hours; stopping does not count an incomplete run as clean.
 
-Phase-4b answer validation drops and reports only offending locationless or
-excess MINOR rows; valid rows and the successful seat remain. An absent item
+Phase-4b answer validation marks locationless and excess MINOR rows not
+admitted, retains and reports each raw row and reason, and does not send those
+rows to triage; valid rows and the successful seat remain. The cap applies in
+consolidated answer order after severity ordering, before triage; MAJOR and
+BLOCKER are exempt. Non-admitted rows are excluded from accepted/triaged
+shares and captures, and a locationless BLOCKER is reported as not admitted. An absent item
 uses its expected path and line `0`. These answer-form rules do not change
 phase 6. CI uses the merge base of HEAD with the pull request's base commit;
 locally it uses `git merge-base HEAD origin/main` after fetching that base.
@@ -460,8 +484,9 @@ be changed before implementation:
   aggregate is still the best per-lens value. The report compares observed
   per-model and per-lens shares as accepted rows divided by all triaged rows,
   with sample counts and undefined for zero rows; the maintainer changes the
-  seat (Q-30). Compare cumulative observations on the same lens since the
-  fixed seat was set; flag an overtake only when both models have at least
+  seat (Q-30). Compare cumulative observations on the same lens since `seat1_since`,
+  using released per-run row evidence in changes’ `findings.md` and deduplicating
+  by run and source row; flag an overtake only when both models have at least
   20 triaged rows on that lens and the challenger share is higher.
 - `[DETAIL]` Model family means weight origin, declared per model ID; an
   unknown implementer or reviewer family refuses seating. This distinguishes
@@ -478,9 +503,9 @@ be changed before implementation:
 - `[DETAIL]` Complete review input may be split into bounded chunks, with
   coverage and revision recorded for each seat; all chunks must succeed. A
   seat is one logical review even when it needs several physical model calls;
-  physical calls and cost are measured individually. The MINOR cap and
-  self-check apply to the consolidated seat answer.
-- `[DETAIL]` Undefined S=0 yields no positive live trigger and is reported
+  physical calls and cost are measured individually. Each physical call self-checks its own rows; the MINOR cap applies to
+  the merged seat answer, without an additional consolidation model call.
+- `[DETAIL]` A one-seat observation has no singleton share; undefined S=0 likewise yields no positive live trigger and is reported
   as weak evidence; an incomplete seat is not a completed observation and
   must be substituted or retried before the round can proceed.
 - `[DETAIL]` Shadow records `singleton_share > 0.5` as a provisional
@@ -501,13 +526,17 @@ be changed before implementation:
   report, so no unchosen live threshold is presented as approved.
 - `[DETAIL]` The maintainer's post-shadow mode edit must cite a dated,
   repository-held decision and calibration report; a reference is resolved,
-  not merely checked for nonempty text. The decision sets the winning rule,
-  threshold and comparison; no present record approves live mode. Prepare
+  not merely checked for nonempty text. The decision may approve the implemented singleton-share rule,
+  threshold and comparison; adopting another winning estimator requires a
+  later change. No present record approves live mode. Prepare
   those references and settings before the maintainer switches mode with one
   central value (Q-26).
 - `[DETAIL]` The orchestrator derives a question addition from an uncovered
   phase-6 finding, records its source row and discloses it in that change's
-  PR. The initial list cites Q-13; additions apply to newly prepared runs
+  PR. The initial question texts must match Q-13 exactly; a changed or new
+  question must cite a resolving phase-6 finding in a merged change, including
+  questions in a newly added lens. A citation alone does not approve a rewritten
+  Q-13 question. Additions apply to newly prepared runs
   after merge, preserving each in-progress run's frozen policy.
 - `[DETAIL]` A night run is explicitly marked at run start in durable run
   evidence, rather than inferred from a clock. The orchestrator links all
