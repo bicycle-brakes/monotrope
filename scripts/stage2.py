@@ -9730,35 +9730,69 @@ def hand_step_listing(hand: list[tuple[str, list[str], list[str]]], day: str) ->
         "row's `Where` names a path the runner does not commit. The runner left every Status and "
         "`Broke a test` cell of these rows unchanged.\n\n"
         f"{bullets}\n\n"
-        "Book each row from your own evidence as `fixed — tests/<path>::<function>` or "
-        "`fixed — guard test — tests/<path>::<function>`, setting its `Broke a test` mark. When no "
-        "test fits, retake the row as `taken — not a test — <reason>` first; only then book it as "
+        "Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its "
+        "`Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row "
+        "taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test "
+        "fits, retake the row as `taken — not a test — <reason>` first; only then book it as "
         "`fixed — not a test — orchestrator hand edit <sha>`."
     )
 
 
-def without_held_answer_lines(answer: str, held_ids: list[str]) -> str:
-    """The answer without its lines for handed-off rows: ignored, never booked (spec, criterion 17).
+_HAND_BULLET = re.compile(rf"^- (\S+) — (.+) — {re.escape(HAND_STEP_REASON)}$")
 
-    The line shape is the answer parser's own - an optional list marker, then `<ID>:`. A held row's
-    fixed line neither fails the attempt nor marks the row; the orchestrator books it by hand from
-    the listing.
+
+def listed_hand_steps(text: str) -> set[tuple[str, tuple[str, ...]]]:
+    """The (row id, held paths) pairs earlier hand-step blocks of a findings text already list.
+
+    Only bullets below a `Hand steps for the orchestrator` heading count, up to the next level-two
+    heading; the runner reads its own listing, never a table row (spec, criterion 13).
     """
-    held = set(held_ids)
-    if not held:
-        return answer
-    kept: list[str] = []
-    for line in answer.splitlines():
-        body = re.sub(r"^[-*+]\s+", "", line.strip())
-        ident, sep, _rest = body.partition(":")
-        left = ident.strip().strip("*`").strip()
-        # An annotated mention (`L1-1 (held)`, `L1-1 — held`) names the held row as well: the filter
-        # matches the id as its first token, the way the parser reads a fixed claim.
-        lead = re.match(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", left)
-        if sep and lead and lead.group(0) in held and not re.match(r"[\w.]", left[lead.end() :]):
+    listed: set[tuple[str, tuple[str, ...]]] = set()
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.startswith(HAND_STEP_HEADING)
             continue
-        kept.append(line)
-    return "\n".join(kept)
+        match = _HAND_BULLET.match(line) if inside else None
+        if match:
+            listed.add((match[1], tuple(re.findall(r"`([^`]+)`", match[2]))))
+    return listed
+
+
+def _names_id(left: str, ident: str) -> bool:
+    """Whether the text before an answer line's first colon names `ident` as a whole token."""
+    return re.search(rf"(?<![\w-]){re.escape(ident)}(?![\w-])", left) is not None
+
+
+def without_held_answer_lines(
+    answer: str, held_ids: list[str], eligible_ids: Sequence[str] = ()
+) -> tuple[str, list[str]]:
+    """The answer without its lines for handed-off rows, and the problems of lines that mix ids.
+
+    A line whose ids before its first colon are all held is ignored, never booked, whatever words
+    surround them (spec, criterion 17): a held row's claim neither fails the attempt nor marks the
+    row, and the orchestrator books it by hand from the listing. A line naming a held id together
+    with an eligible one cannot be split, so it is a problem that names both.
+    """
+    if not held_ids:
+        return answer, []
+    kept: list[str] = []
+    problems: list[str] = []
+    for line in answer.splitlines():
+        left, sep, _rest = line.partition(":")
+        named_held = [ident for ident in held_ids if _names_id(left, ident)] if sep else []
+        if not named_held:
+            kept.append(line)
+            continue
+        named_eligible = [ident for ident in eligible_ids if _names_id(left, ident)]
+        if named_eligible:
+            problems.append(
+                f"an answer line names handed-off row(s) {', '.join(named_held)} together with taken row(s) "
+                f"{', '.join(named_eligible)}; answer each taken row on its own `<ID>: fixed — …` line and "
+                "leave the handed-off rows out"
+            )
+            kept.append(line)
+    return "\n".join(kept), problems
 
 
 def triage_status(decision: str, reason: str) -> str:
@@ -11460,6 +11494,60 @@ def document_gates() -> list[dict]:
     ]
 
 
+def document_gate_env(root: Path, change: str) -> dict[str, str]:
+    """The environment of a document check: the runner's, without any verify-admission marker.
+
+    Shared by the draft's check and the repair hand-off's check. The one tolerance of a draft is the
+    gate's own, set by this runner alone: with `TOLERATE_ENV` `adr-answers` reports this change's
+    missing answer and passes, so the exit code decides and no output is read (spec, criterion 13;
+    F-9, F-10). Nothing a document check starts carries or claims the verify admission: its
+    ownership, token and context variables are stripped, and `run_gates` enters no admission.
+    """
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+                check_adr_answers.TOLERATE_ENV: change,
+            }
+        ),
+        root,
+    )
+    return {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
+
+
+def hand_step_gate_problems(root: Path, change: str, key: str | None = None) -> tuple[list[str], str]:
+    """The document gates over a held-only hand-off before its commit: (blocking problems, scope line).
+
+    The hand-off makes a repository commit but runs no model and no test, so the document subset
+    of the one gate list is its only check; a red gate blocks the commit (L3-2). The scope line
+    says plainly that nothing was repaired.
+    """
+    try:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], ""
+    gates = [gate for gate in gates if not gate["admission"]]
+    if not gates:
+        return ["no locally runnable document gates were selected; the hand-off check cannot run"], ""
+    problems, notes = run_gates(root, document_gate_env(root, change), key, gates)
+    scope = "hand-off only, no model call, nothing repaired; " + document_scope_text(
+        gates, "red" if problems else "green", notes
+    )
+    return problems, scope
+
+
 def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
     """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
     named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
@@ -11492,33 +11580,7 @@ def verify_draft(
     tampered = tool_problem(root, tools)
     if tampered:
         return [tampered], owed, not_completed
-    env = runner_env(
-        foreign_env(
-            {
-                "GIT_CONFIG_COUNT": "1",
-                "GIT_CONFIG_KEY_0": "commit.gpgsign",
-                "GIT_CONFIG_VALUE_0": "false",
-                # The one tolerance of a draft is the gate's own, set by this runner alone: with this
-                # variable `adr-answers` reports this change's missing answer and passes, so the
-                # exit code of the document check decides and no output is read (spec, criterion 13; F-9, F-10).
-                check_adr_answers.TOLERATE_ENV: ctx.change,
-            }
-        ),
-        root,
-    )
-    # Nothing a document check starts carries or claims the verify admission: its ownership,
-    # token and context variables are stripped here, and `run_gates` enters no admission.
-    env = {
-        name: value
-        for name, value in env.items()
-        if name
-        not in (
-            verify_lock.LOCK_ENV,
-            verify_lock.TOKEN_ENV,
-            verify_lock.ADMISSION_ID_ENV,
-            verify_lock.ADMISSION_WAIT_ENV,
-        )
-    }
+    env = document_gate_env(root, ctx.change)
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation, owed, not_completed
@@ -11832,22 +11894,73 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     ignored_before = ignored_snapshot(root)
 
-    def write_hand_listing(producer: str) -> None:
-        # One dated listing, appended once before the attempt snapshot: a retry and a checkpoint
-        # rollback put findings.md back to bytes that already carry it, so neither duplicates nor
-        # loses it (spec, criteria 5 and 10).
-        if not ctx.findings.exists():
-            ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
-        append(ctx.findings, hand_step_listing(hand, today()))
+    # A row already listed with the same held paths in an earlier block of this findings.md is
+    # reported again but never listed again, so a retry adds no duplicate block (L3-5).
+    listed = listed_hand_steps(current)
+    fresh = [item for item in hand if (item[1][0], tuple(item[2])) not in listed]
+
+    def report_hand_steps() -> None:
         for _, row, held_paths in hand:
             print(f"repair: hand step {row[0]} — held path {', '.join(held_paths)} — {HAND_STEP_REASON}")
 
+    def write_hand_listing(producer: str) -> None:
+        # One dated listing of the rows not yet listed, appended once before the attempt snapshot:
+        # a retry and a checkpoint rollback put findings.md back to bytes that already carry it, so
+        # neither duplicates nor loses it (spec, criteria 5 and 10).
+        if fresh:
+            if not ctx.findings.exists():
+                ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+            append(ctx.findings, hand_step_listing(fresh, today()))
+        report_hand_steps()
+
     if hand and not eligible:
-        # Every selected row is held: no model call and no attempt, so no time heading is needed.
-        # The existing checkpoint commits the listing after preflight, with its existing allowances
-        # for this change's findings and derived leftovers and its refusal of other dirty work
-        # (spec, criteria 4, 11 and 16), and the run exits 0.
-        write_hand_listing("stage2-runner")
+        # Every selected row is held: no model call and no attempt. The listing is checked by the
+        # document gates before the one commit, and its time line is written when the plan carries a
+        # `## Time used` heading (L3-2). The existing checkpoint commits it after preflight, with its
+        # existing allowances for this change's findings and derived leftovers and its refusal of
+        # other dirty work (spec, criteria 4, 11 and 16), and the run exits 0.
+        if not fresh:
+            report_hand_steps()
+            print("repair: every held row is already listed in findings.md · nothing new committed, no model call")
+            return
+        findings_before = ctx.findings.read_bytes() if ctx.findings.exists() else None
+        started_wall, started_mono = utc_now(), monotonic_now()
+        try:
+            write_hand_listing("stage2-runner")
+            problems, scope = hand_step_gate_problems(root, change)
+            if problems:
+                raise CallFailed(
+                    "the hand-step listing failed the document gates; nothing was committed and no row was "
+                    "repaired:\n" + "\n".join(problems)
+                )
+            plan_text = ctx.plan.read_text(encoding="utf-8") if ctx.plan.is_file() else ""
+            if TIME_HEADING.search(plan_text):
+                persist_time_entry(
+                    root,
+                    ctx.plan,
+                    time_entry(
+                        "repair",
+                        1,
+                        "hand-off",
+                        "none",
+                        True,
+                        started_wall,
+                        utc_now(),
+                        max(0, round(monotonic_now() - started_mono)),
+                        [scope],
+                    ),
+                    plan_text,
+                    {},
+                    accepted=True,
+                    retry=False,
+                )
+        except (CallFailed, Refused):
+            # A red gate or a failed time write leaves no listing behind: the next run lists afresh.
+            if findings_before is None:
+                ctx.findings.unlink(missing_ok=True)
+            else:
+                restore_work_input(root, ctx.findings, findings_before)
+            raise
         checkpoint(
             root,
             change,
@@ -11857,7 +11970,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
             keep=allowed,
         )
-        print("repair: hand steps committed for the orchestrator · no model call")
+        print("repair: hand steps committed for the orchestrator · no model call · nothing repaired")
         return
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
@@ -11888,9 +12001,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         # Answer lines for handed-off rows are ignored: they neither fail the attempt nor book the
         # row - the orchestrator books it from the listing (spec, criterion 17).
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
+        kept_answer, mixed = without_held_answer_lines(answer, hand_ids, ids)
         found, proven, problems = check_repair_answer(
             ctx,
-            without_held_answer_lines(answer, hand_ids),
+            kept_answer,
             eligible,
             baseline,
             key,
@@ -11899,6 +12013,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             standing["text"],
             tools,
         )
+        problems = [*mixed, *problems]
         if not problems:
             fixes.clear()
             fixes.update(found)

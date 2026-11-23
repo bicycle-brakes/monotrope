@@ -533,3 +533,102 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 > Found 1 error.
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T060607437338Z-54692eec.md
 > ```
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5424 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +27 -15
+> - `scripts/stage2.py` +176 -61
+> - `tests/test_stage2.py` +88 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             phase6_block([[*phase, "—"]]),
+>         )
+>         write_cells_record(
+>             world,
+>             [
+>                 record_cells("L1-1", "taken — test_a", where="AGENTS.md"),
+>                 record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+>             ],
+>         )
+>         assert world.run("repair") == 0
+> >       assert world.calls() == [], "an all-held batch must make no model call"
+> E       AssertionError: an all-held batch must make no model call
+> E       assert [{'agent_list...ne, ...}, ...] == []
+> E         
+> E         Left contains 11 more items, first extra item: {'agent_listing': None, 'agent_settings': None, 'argv': ['-c', '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn...est_repair_hands_off_all_held0/repo/.venv/bin/python3 scripts/plans_registry.py --check'], 'config_listing': None, ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:11688: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> repair: hand step L1-1 — held path AGENTS.md — runner-held path
+> repair: hand step L1-2 — held path model-endpoints.yaml — runner-held path
+> repair: hand step L1-3 — held path AGENTS.md — runner-held path
+> repair: hand step F-1 — held path templates/keep.md — runner-held path
+> repair: hand steps committed for the orchestrator · no model call · nothing repaired
+> _______________ test_repair_handoff_is_not_resolved_as_a_finding _______________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-hand-held-rows/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3259/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3259/popen-gw2/test_repair_handoff_is_not_res0/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x108d3d8b0>
+>
+>     def test_repair_handoff_is_not_resolved_as_a_finding(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+>         """Criterion 13. Planted fault: a later resolution treats a listing bullet as a finding — a
+>         previously listed identifier causes a duplicate-row refusal or becomes a repair target."""
+>         world.script(codex=[codex_ok("TR1", "must not run")])
+>         seed_tests(world)
+>         write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+>         assert world.run("repair") == 0
+>         capsys.readouterr()
+>         assert world.run("repair") == 0, "the second handoff must resolve the listing as no finding"
+>         error = capsys.readouterr().err
+>         for refusal in ("several rows", "carries this id", "duplicate"):
+>             assert refusal not in error, refusal
+> >       assert world.calls() == []
+> E       AssertionError: assert [{'agent_list...ne, ...}, ...] == []
+> E         
+> E         Left contains 11 more items, first extra item: {'agent_listing': None, 'agent_settings': None, 'argv': ['-c', '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn...est_repair_handoff_is_not_res0/repo/.venv/bin/python3 scripts/plans_registry.py --check'], 'config_listing': None, ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:11890: AssertionError
+> ______________ test_repair_does_not_list_the_same_hand_step_twice ______________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-hand-held-rows/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3259/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3259/popen-gw1/test_repair_does_not_list_the_0/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x10b4d2b10>
+>
+>     def test_repair_does_not_list_the_same_hand_step_twice(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+>         """L3-5. Planted fault: a repeated repair appends and commits another block for rows already listed."""
+>         world.script(codex=[codex_ok("TR1", "must not run")])
+>         seed_tests(world)
+>         write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+>         assert world.run("repair") == 0
+>         listed = git(world.root, "rev-parse", "HEAD")
+>         capsys.readouterr()
+>         assert world.run("repair") == 0
+>         assert git(world.root, "rev-parse", "HEAD") == listed, "no second commit for an already listed row"
+>         assert world.text().count(stage2.HAND_STEP_HEADING) == 1
+>         out = capsys.readouterr().out
+>         assert "already listed" in out and "L1-1" in out
+> >       assert world.calls() == []
+> E       AssertionError: assert [{'agent_list...ne, ...}, ...] == []
+> E         
+> E         Left contains 11 more items, first extra item: {'agent_listing': None, 'agent_settings': None, 'argv': ['-c', '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn...est_repair_does_not_list_the_0/repo/.venv/bin/python3 scripts/plans_registry.py --check'], 'config_listing': None, ...}
+> E         Use -v to get more diff
+>
+> tests/test_stage2.py:12082: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_hands_off_all_held_without_model_call
+> FAILED tests/test_stage2.py::test_repair_handoff_is_not_resolved_as_a_finding
+> FAILED tests/test_stage2.py::test_repair_does_not_list_the_same_hand_step_twice
+> 3 failed, 26 passed in 15.40s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T061327395068Z-45b6e065.md
+> ```
+
+Orchestrator hand finish, 2026-11-23: the second Sonnet repair attempt of loop rows L3-1..L3-5 failed its post-run checks only on four existing held-only tests that asserted no subprocess at all (`world.calls() == []`); with L3-2 the held-only run now runs the document gates, so those subprocesses are expected. The orchestrator changed the four assertions to "no model call" (codex, claude, pi), which is what the tests' messages state; the attempt's runner code is unchanged. 481 targeted tests green, full `make verify` green on 2026-11-23 (execution 948 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).

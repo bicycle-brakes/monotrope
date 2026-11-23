@@ -11685,7 +11685,9 @@ def test_repair_hands_off_all_held_without_model_call(world: World, capsys: pyte
         ],
     )
     assert world.run("repair") == 0
-    assert world.calls() == [], "an all-held batch must make no model call"
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == [], (
+        "an all-held batch must make no model call"
+    )
     out = capsys.readouterr().out
     fragments = (
         "L1-1",
@@ -11836,8 +11838,10 @@ def test_repair_all_held_commits_only_handoff(world: World, capsys: pytest.Captu
     baseline = git(world.root, "rev-parse", "HEAD")
     assert world.run("repair") == 0
     assert git(world.root, "rev-parse", "HEAD") != baseline
+    # The commit carries the listing and the runner's own time line for the hand-off (L3-2).
     assert git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines() == [
-        "plans/changes/demo/findings.md"
+        "plans/changes/demo/findings.md",
+        "plans/changes/demo/plan.md",
     ]
     assert git(world.root, "status", "--porcelain") == ""
     assert "no model call" in capsys.readouterr().out
@@ -11885,7 +11889,7 @@ def test_repair_handoff_is_not_resolved_as_a_finding(world: World, capsys: pytes
     error = capsys.readouterr().err
     for refusal in ("several rows", "carries this id", "duplicate"):
         assert refusal not in error, refusal
-    assert world.calls() == []
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
 
 
 def test_repair_mixed_commit_distinguishes_held_rows(world: World) -> None:
@@ -11953,7 +11957,17 @@ def test_repair_ignores_answer_lines_for_held_rows(world: World) -> None:
     assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
 
 
-@pytest.mark.parametrize("annotation", ["L1-1 (held)", "L1-1 — held", "`L1-1` held note", "- **L1-1** (hand step)"])
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        "L1-1 (held)",
+        "L1-1 — held",
+        "`L1-1` held note",
+        "- **L1-1** (hand step)",
+        "Held row L1-1",
+        "Skipping L1-1 (runner-held)",
+    ],
+)
 def test_repair_ignores_annotated_answer_lines_for_held_rows(world: World, annotation: str) -> None:
     """Criterion 17, L2-1. Planted fault: an annotated mention of a held row fails the attempt."""
     held_world(
@@ -11992,8 +12006,82 @@ def test_repair_held_only_run_needs_no_time_used_heading(world: World) -> None:
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "plan without a time heading")
     assert world.run("repair") == 0
-    assert world.calls() == []
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
     assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
+def test_repair_held_only_runs_document_gates_and_writes_time_line(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L3-2. Planted fault: the held-only hand-off commits without the document gates or without
+    its measured time line, or a red gate still commits."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    selected: list[list[str]] = []
+    real = stage2.run_gates
+
+    def gates(root: Path, env: dict, key: str | None, chosen: list[dict]) -> tuple[list[str], list[str]]:
+        selected.append([gate["id"] for gate in chosen])
+        return real(root, env, key, chosen)
+
+    monkeypatch.setattr(stage2, "run_gates", gates)
+    assert world.run("repair") == 0
+    assert selected and selected[0], "the document gates ran before the commit"
+    plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "repair · attempt 1 · route hand-off" in plan and "measured by the runner" in plan
+    assert "nothing repaired" in plan
+    assert "nothing repaired" in capsys.readouterr().out
+    # A red gate stops the hand-off: no commit, no listing left behind.
+    after = git(world.root, "rev-parse", "HEAD")
+    write_cells_record(world, [record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml")])
+    monkeypatch.setattr(stage2, "run_gates", lambda *_args, **_kwargs: (["gate `docs-all` (block) exited 1"], []))
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == after
+    assert "L1-2" not in world.text(), "a refused hand-off leaves no listing"
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "failed the document gates" in capsys.readouterr().err
+
+
+def test_repair_handoff_hint_conditions_the_guard_form(world: World) -> None:
+    """L3-3. Planted fault: the hint offers the guard status without saying it needs a row taken
+    as `taken — guard test — <reason>`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    words = " ".join(hand_steps_of(world).split())
+    guard = "`fixed — guard test — tests/<path>::<function>` only for a row taken as "
+    guard += "`taken — guard test — <reason>`"
+    assert guard in words
+
+
+def test_repair_answer_filter_drops_all_held_lines_and_names_mixed_ones() -> None:
+    """L3-4. Planted fault: a held line with a leading word survives the filter, or a line naming
+    held and eligible ids together is dropped or reported without both."""
+    answer = "Held row L1-1: fixed — tests/a.py::t\nL1-2: fixed — tests/b.py::t"
+    kept, problems = stage2.without_held_answer_lines(answer, ["L1-1"], ["L1-2"])
+    assert kept == "L1-2: fixed — tests/b.py::t" and problems == []
+    kept, problems = stage2.without_held_answer_lines("L1-1 and L1-2: fixed — tests/a.py::t", ["L1-1"], ["L1-2"])
+    assert len(problems) == 1 and "L1-1" in problems[0] and "L1-2" in problems[0]
+    kept, problems = stage2.without_held_answer_lines("See L1-10: fixed — tests/a.py::t", ["L1-1"], ["L1-10"])
+    assert kept == "See L1-10: fixed — tests/a.py::t" and problems == [], "an id inside a longer id is another id"
+
+
+def test_repair_does_not_list_the_same_hand_step_twice(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L3-5. Planted fault: a repeated repair appends and commits another block for rows already listed."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    listed = git(world.root, "rev-parse", "HEAD")
+    capsys.readouterr()
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") == listed, "no second commit for an already listed row"
+    assert world.text().count(stage2.HAND_STEP_HEADING) == 1
+    out = capsys.readouterr().out
+    assert "already listed" in out and "L1-1" in out
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
 
 
 def test_repair_prompt_excludes_handed_off_rows(world: World) -> None:
