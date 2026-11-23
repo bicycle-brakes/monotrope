@@ -35,3 +35,12 @@ context: |
   Architecture change: none.
 
 In the context of documents that drift behind the code, facing manual checks, a blocking gate or in-PR repairs, we decided on an automatic reporting script that names possibly stale documents and opens beads, to achieve a check that runs at every handover without blocking, accepting false alarms because it detects an area changed without its document, not whether the document is wrong. — 2026-11-22
+
+## [DETAIL] items decided by the orchestrator (after the research of 2026-11-23)
+
+- **Placement:** the lines go into the handover's `## Needed from the maintainer` section under a sub-heading "Possibly stale documents"; with no finding the sub-heading says "none". Reason: the maintainer reads that section first.
+- **The mapping** is a constant table in `scripts/doc_currency.py`, starting with the three pairs of answer D; a pair is added by a reviewed pull request. Reason: one place, visible in review.
+- **"Since the last handover"** means since the `target_ref` commit of the newest handover file on `origin/main` (by filename date, then the file's commit time). Reason: every handover carries `target_ref:`.
+- **Beads:** the script prints one `tools/bd create` command per possibly stale document with the title "Possibly stale: <doc>" and runs it only with `--write`, after reading open beads with that exact title (`tools/bd list --json`); the handover routine calls it with `--write`. Reason: the `make archive` dry-run discipline; no duplicate beads.
+- **Callers:** the handover routine only; the script gets an `OHNE_AUFRUFER` entry with that reason, no CI gate. Reason: answer D — it reports at the handover and never blocks.
+- **The vault** is out of scope: answer D names repository documents only.
