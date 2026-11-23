@@ -575,3 +575,94 @@ Beyond the headline architecture, security, modularization, verify-speed, onboar
    - `tests/test_pi_contract.py:279-365, 630-1922, 1988-2041` leaves non-daemon `StandIn` threads sleeping 30 s after timeouts, omits `pi_network_guard.mjs` preload across multiple Node launches, and only guards `socket.connect` in `offline_world`; `tests/pi_contract_driver.mjs:120-150` uses unbounded TCP connect timeouts to `192.0.2.1` without closing sockets.
    - `tests/test_verify_lock.py:803-953` delivers in-process `os.kill(os.getpid(), SIGTERM)` which can kill the pytest worker on regression; `tests/test_stage2.py:8037-8063` uses unsafe multiprocessing `fork` with `capsys`; `tests/test_machine_facts.py:476-543` races on shared `REPO_ROOT/scripts/__pycache__` under `-n auto` and asserts `'none matched'` incorrectly via list membership.
    - `tests/runner_clock_guard.py:285-346` misses bound clock references inside properties, decorated functions, and `functools.partial` arguments; `tests/stand_in_log_guard.py:45-164` uses an unsynchronized global suspend flag and leaves `io.FileIO` unwrapped; the three Node test drivers (`stage2_research_tools_driver.mjs`, `stage2_session_policy_driver.mjs`, `stage2_repository_pathlock_driver.mjs`) lack top-level handler error traps or bypass `extension.default(host)`.
+
+---
+
+## 10. Structural contradictions and target architecture optimization
+
+**Cut-off and synthesis scope:** Synthesized from the read-only line-by-line baseline at commit `24632499` (`2026-11-22`, completed `2026-11-23`; live worktree count `155` measured `2026-11-23`). Rather than treating Sections 3–9 as isolated bugs, this section surfaces ten architectural contradictions inherent in the current design and maps them onto a coherent three-layer target architecture for daily velocity, provable security, and greenfield/brownfield portability.
+
+### 10.1 Ten verified structural and logical contradictions (`C-1` to `C-10`)
+
+1. **C-1 · Inverted data-governance trust model (unread free models vs. strict paid models):**
+   `model-endpoints.yaml` declares a default-deny posture and hard-blocks paid models one day after their `valid_until` terms reading expires (ADR 0022). Simultaneously, `free_stage` (`model-endpoints.yaml:490-544`) auto-admits newly appearing `-free` models from the live `pi.dev` catalog by suffix denylist with **explicitly unread retention and training terms** (`L541-542`) and sends them up to 2,000 lines of real source diff. Compounding this contradiction, `model-endpoints.yaml:583-586` states that `prepare-loop` checks reachability *"without tools or repository content"*, yet `stage2_availability.py:1432,1465` invokes the free-swarm diff prompt *during `prepare-loop`* before operator approval — the exact flaw that leaked code to training-enabled `iceman-contributor-free` on `2026-11-06` (`model-endpoints.yaml:509-519`).
+
+2. **C-2 · Heavy in-process security engineering beside wide-open external doors:**
+   Approximately 2,500 lines enforce `.venv/` SHA-256 digests (`tool_state`), 128-bit `STAGE2_RED_TOKEN` proofs, isolated temporary clones, and `stage2_repository_pathlock.mjs`. Yet immediately adjacent boundaries stay open: paid review-loop Pi invocations pass `--no-extensions` (`scripts/stage2.py:3280`) disabling pathlock altogether; `tool_state()` omits `tools/pi/node_modules/` (`stage2.py:4971-5009`); `STAGE2_RED_TOKEN` and distinguishable `stage2-red-` / `stage2-fixed-` report paths sit in child `os.environ` (`stage2.py:543-603, 7891, 8061`); `scripts/leakcheck.py:324` ignores all gitignored paths (`.env*`, `.beads/`, `.claude/worktrees/` holding **155** stale worktrees on `2026-11-23`) that foreign CLI processes in the checkout can read; `.claude/settings.local.json:4-25` pre-allows `gh pr *`, `git push *`, `git merge *`, and `codex exec:*` (active even under `night.py`); and global hooks run unverified `$root/tools/bd` automatically (`tools/claude-code/statusline.sh:148-163`, `handover.sh:141-155`).
+
+3. **C-3 · Highest-risk change class (`architectural`) has the lowest mandatory interview floor (`0`):**
+   `scripts/check_interview_minimums.py:82` defines `MINIMUMS = {"feature": 3, "spike": 3, "bounded": 1, "architectural": 0}`. Under `L15-17` and `L454-470`, an `architectural` change owes five interview records only if its diff modifies a file under `docs/adr/` *and* claims that file under `adr_files`, while `scripts/check_adr_answers.py:2-7` only checks `feature` specs. Labeling a major architectural change `architectural` while omitting an ADR satisfies both gates with **zero** maintainer interview answers — less oversight than a `bounded` fix (`1`) or a `spike` (`3`).
+
+4. **C-4 · Four-way breakdown of "The One List / local green = CI green":**
+   While `README.md:176-184` and `decisions/gates.yaml:1-8` promise identical local and CI verdicts: (1) `ruleset` (`decisions/gates.yaml:269-277`, `placement: writer`, `enforcement: block`) requires admin API scope on `bicycle-brakes/monotrope`, causing local `make verify` to fail for every external cloner; (2) `interview-minimums` (`L185-195`) runs `git rev-parse HEAD^` and `merge-base` (`check_interview_minimums.py:133-146`) without declaring `needs_history: true`, passing in CI only by sharing the job with `frontmatter-current` (`L137`); (3) `Makefile` (`L21-134`) runs bare `python3` rather than `.venv/bin/python3` on every target except `verify`; and (4) `docs-links` (`decisions/gates.yaml:117-126`) sits permanently at `enforcement: report` referencing an outdated 35-finding target (`bt8`) while silently decaying to **199 findings** (including a broken anchor from `docs/orchestration.md:29` into `README.md`).
+
+5. **C-5 · Self-defeating quality ratchets (`criterion-ledger` + `test_stage2.py` + `leerprobe`):**
+   `criterion-ledger` (`decisions/gates.yaml:207-216`) locks **1,546 test functions (51.9%)** across 103 plans (95 archived) forever with no syntax for retirement or consolidation, forcing append-only suite bloat (`~3 min` -> `24-26 min`). As `tests/test_stage2.py` grew to 28,466 lines, `scripts/stage2.py:6911-6912` disabled ADR 0025 targeted verification whenever `test_stage2.py` is linked, driving **median 7 full runs/change** and **77.3 h** of lock contention wait. Immediately after `pytest`, `leerprobe` (`scripts/kit/probe.py:356`) serially re-executes 784 already-passing `mechanismus` tests, and even `--job docs` forces full Dolt tracker hydration via `plans-registry` and `dangling-beads`.
+
+6. **C-6 · Markdown treated simultaneously as human prose and mutable machine database:**
+   Mutable orchestration state (`Loop state: {...}`, `Record digest:`, `Rounds run:`, `Phase 6 verdict:`, finding rows, ledger statuses, time logs) lives inline inside editable Markdown (`loop.md`, `findings.md`, `plan.md`, `research.md`) and is re-parsed via **50+ fragile regexes** and **18 bespoke frontmatter parsers**. Meanwhile, `plans/INDEX.md` and `docs/governance/gate-catalog.md` already demonstrate the clean inverse inside the same repository: *validated structured source -> deterministically rendered Markdown view*.
+
+7. **C-7 · "Portable kit" shipping broken imports while leaving its execution core behind:**
+   `scripts/kit/manifest.yaml` and `scripts/export/manifest.yaml` contradict each other: `export/manifest.yaml:22-23` ships `check_bead_export.py` and `check_dangling_bead_ids.py` while omitting `bead_render.py`, which both import; `kit/manifest.yaml` duplicates `.github/workflows/ci.yml` (`L157`, `L331`), carries `research-swarm-limits.yaml` *"with the runner"* (`L334-336`) while dropping `stage2.py` and `stage2_research_limits.py` (`L365`), ships hardcoded `scripts/check_decision_continuity.py` (`L28-56`) as a `floor: true` BLOCK (guaranteed exit `3` failure in every other repository), ships 7 German Databricks agents under `.claude/agents/` (`L178-180`) while `.claude/` sits unresolved on D3 (`L398-400`), and hides test breakage behind `DECKEL = 44`. Concurrently, docs promise unbuilt `validate_change_artefacts.py` and a Red-Tree Stop hook while `docs/testing.md:80-83` still marks built ADR-0023 guards as open work.
+
+8. **C-8 · Low-cognitive-load ADHD principle vs. operational complexity:**
+   [`AGENTS.md`](../../AGENTS.md) mandates plain structure and low cognitive load, yet contributors face a 2,213-line `docs/WORKFLOW.md`, an 11,487-line `scripts/stage2.py`, 24 gates across four policy dimensions plus booleans, four stacked Claude settings overlays, and **155** unpruned worktrees.
+
+9. **C-9 · Multi-vendor LLM overhead without an empirical defect-yield loop:**
+   `stage_merge` in `scripts/stage2_research_run.py` pays for an Opus 5.5 LLM merge only to assert equivalence with a deterministic Python set union; research swarms run 39–90 serial full-repo/history `leakcheck` scans over an unchanged tree; and no quantitative benchmark measures incremental defect yield of Stage 2 over Stage 1 (`README.md:268-276`).
+
+10. **C-10 · Licensing and personal-subscription tension vs. project-transfer goals:**
+    `COMMERCIAL.md` places the entire repository — including process templates and Stage-1 deterministic gates — under `PolyForm Noncommercial 1.0.0` without separating an OSI-licensed core, which alongside personal-subscription endpoint profiles (`model-endpoints.yaml:735-755`) blocks commercial/brownfield teams from adopting even Stage 1 cleanly.
+
+### 10.2 Optimized three-layer microkernel target architecture
+
+All ten contradictions collapse when Monotrope is refactored around **five mutually reinforcing architectural shifts** arranged as a clean three-layer microkernel (`Kernel / Ports / Optional Stage 2`):
+
+```mermaid
+flowchart TD
+    CFG["Project Contract: monotrope.yaml + decisions/adoption.yaml"]
+
+    subgraph LA["Layer A · monotrope-core (stdlib + PyYAML only)"]
+        PRIM["Shared Primitives: _yaml_strict, _fs_atomic, _git_exec, _verdict"]
+        GATES["Deterministic Stage-1 Gates + validate_change_artefacts.py"]
+        VRUN["Parallel Python Verify Runner + Content-Hash Cache + Local BEAD_RENDER"]
+        CLI["Kit CLI: init / upgrade / doctor / verify-pin / prune-worktrees"]
+    end
+
+    subgraph LB["Layer B · Pluggable Ports (Polyglot & Brownfield Transfer)"]
+        TP["ToolchainPort (pytest / vitest / go test / cargo test -> JSON/JUnit/TAP)"]
+        TRK["TrackerPort (none / beads / github-issues / linear -> ADR 0004 JSONL)"]
+        CIP["CIPort (generate-full Greenfield / additive Brownfield)"]
+        HRP["HarnessPort (canonical AGENTS.md -> Claude / Codex / Cursor / Copilot shims)"]
+    end
+
+    subgraph LC["Layer C · Optional monotrope-stage2 (Acyclic stage2_*.py)"]
+        STATE["State-First Persistence: Atomic loop.state.json + OTel JSONL -> Rendered MD"]
+        SWARM["Acyclic Engine: Auth/Admission, Commit-Cached Leakcheck, Swarm, AttemptEngine"]
+        SBX["OS-First Security: sandbox-exec / bwrap + Allowlist-Only Model Admission"]
+    end
+
+    CFG --> LA
+    LA --> LB
+    LA -. "opt-in L3" .-> LC
+    LC --> TP
+    LC --> TRK
+```
+
+**The five architectural levers resolved by this design:**
+
+1. **Single declarative contract (`monotrope.yaml`) & `DECKEL = 0` kit boundary:** Parameterize default branch, project identity, tracker mode, toolchain commands, CI mode, and `adoption.yaml` cut-off in one schema-validated file; extract repo-specific gates (`check_decision_continuity.py`, domain agents) out of the shared core; merge `kit` and `export` manifests into one manifest; and verify `scripts/kit/probe.py` against **both** a greenfield Python fixture and a non-Python brownfield fixture with `DECKEL = 0`.
+2. **State-First persistence (`JSON/JSONL -> rendered Markdown`):** Store mutable machine state atomically in schema-validated JSON (`loop.state.json`, OTel JSONL stream for `coding-harness-oebl`) and render `loop.md`, released `findings.md` blocks, and `plans/INDEX.md` deterministically — retiring 50+ regexes and 17 redundant frontmatter/YAML parsers.
+3. **OS-first security & strict allowlist-only model admission:** Retire suffix-based unread `-free` auto-admission (`free_stage`), restore strictly tool-free/diff-free `prepare-loop` probes, confine all foreign model and untrusted red-first executions inside host OS sandboxes (`sandbox-exec` / `bwrap`) with out-of-process proof file descriptors, digest `tools/pi/node_modules/` inside `tool_state()`, and consolidate hook/overlay permissions (`settings.local.json`, `night.py`, `$root/tools/bd` trust check).
+4. **Bounded lifecycle governance replacing append-only ratchets:** Add `superseded_by` / `retired` and expiring `@pytest.mark.transition` support to `criterion-ledger`, set `MINIMUMS["architectural"] = 5` plus mandatory ADR presence checks, require `promote_by` / `sunset_by` valves on every `enforcement: report` gate, isolate `test_stage2.py` slices to re-enable ADR 0025 targeted checks, run `seconds` gates and `leerprobe` in parallel with single `BEAD_RENDER` export and non-admin `ruleset` handling, and evaluate Stage-2 changes continuously against a 10–15 historical-bug offline defect benchmark.
+5. **Four-tier L0–L3 onboarding funnel (plus evaluated Open-Core boundary):** Enable risk-free Day-1 adoption at **L0** (prose & templates, 15 min) and **L1** (`monotrope init --brownfield`, `tracker: none`, `ci.mode: additive`, `adoption.yaml = today`, Day-1 green), progressing cleanly to **L2** (polyglot red-first + scoped leakcheck) and **L3** (optional Stage 2), backed by an explicit maintainer decision on separating an OSI-licensed Stage-1 core from commercial multi-vendor orchestration.
+
+### 10.3 Four-stage implementation sequencing and companion drafts
+
+| Stage | Objective and scope | Companion drafts in this PR |
+| --- | --- | --- |
+| **Stage 0 · Stop the bleeding** | Triage `2026-11-30` cliff; plug `free_stage`/`prepare-loop`, `--no-extensions`, `tool_state`, `settings.local.json`, global hook & red-probe leaks; fix `MINIMUMS["architectural"] = 5` + `needs_history`; prune 155 worktrees; quick `make verify` wins | Draft Epic `DRAFT-E1` + `DRAFT-E2.1` ([draft-beads-backlog-from-audit.md](./2026-11-23-draft-beads-backlog-from-audit.md)) |
+| **Stage 1 · De-monolith & state hygiene** | Split `scripts/stage2.py` and `tests/test_stage2.py` into acyclic slices; extract shared primitives; adopt `loop.state.json`; consolidate `kit`/`export` manifests (`DECKEL -> 0`); expire stale `report` gates | Draft Epics `DRAFT-E2`, `DRAFT-E3`, `DRAFT-E4` ([draft-beads-backlog-from-audit.md](./2026-11-23-draft-beads-backlog-from-audit.md)) |
+| **Stage 2 · Transfer foundation** | Promote target-architecture ADR draft; introduce `monotrope.yaml`, `tracker: none`, `ci: additive`, `monotrope init/upgrade/doctor`, `criterion-ledger` retirement/adoption, `validate_change_artefacts.py`, dual `probe.py`, refreshed entry docs | [draft-adr-target-architecture-and-transferability.md](./2026-11-23-draft-adr-target-architecture-and-transferability.md) + `DRAFT-E5`, `DRAFT-E6` |
+| **Stage 3 · Polyglot, OS sandbox & evidence** | Deliver `ToolchainPort` (JUnit/JSON/TAP), `sandbox-exec`/`bwrap` confinement, external tracker ports, OTel JSONL + appetite stops, `pyright`/`hypothesis`, and offline defect-yield benchmark | Draft Epics `DRAFT-E7`, `DRAFT-E8` ([draft-beads-backlog-from-audit.md](./2026-11-23-draft-beads-backlog-from-audit.md)) |
+
