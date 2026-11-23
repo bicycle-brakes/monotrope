@@ -729,6 +729,26 @@ research_swarm:
     exclude: [iceman-contributor-free, longcat-2.5-free]
 
 # ---------------------------------------------------------------------------
+# The spec review's call settings (phase 2a, `stage2.py spec-review`)
+# ---------------------------------------------------------------------------
+# One place for the call limit, the pause before the single Opus retry and the
+# fallback reviewer (bead coding-harness-ttic, decisions Q-6 and S-23 of
+# plans/changes/mandatory-spec-review). After a failed Opus call (a nonzero
+# exit, the call limit, an empty or unreadable answer) the runner waits
+# `pause_seconds` and retries Opus once; a second failure runs the fallback
+# model through the runner's Pi on `fallback_endpoint`, after the leak check.
+# The fallback must be a model the endpoint's `modelle` admits with a current
+# terms reading. Switching the fallback model is one value: an existing
+# fallback block keeps the model it records, so a switch never voids a written
+# review. `fallback_endpoint` itself admits only `opencode-go` today; the runner
+# refuses any other endpoint.
+spec_review:
+  call_limit_minutes: 30
+  pause_seconds: 30
+  fallback_endpoint: opencode-go
+  fallback_model: deepseek-v4.1-flash
+
+# ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft
 # ---------------------------------------------------------------------------
 #
