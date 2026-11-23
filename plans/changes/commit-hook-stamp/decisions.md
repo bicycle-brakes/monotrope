@@ -35,3 +35,17 @@ context: |
   Architecture change: none.
 
 In the context of a stale document date that cost three model attempts, facing a choice between two bounded layers, one note in bead coding-harness-7ftj, or the hook layer alone, we decided on two bounded P1 changes, of which this is one, to achieve a fix that holds for every harness and saves model calls, accepting two small changes instead of one larger feature — 2026-11-23
+
+## Provisional agent decisions on the spec review (2026-11-23, night run 2026-11-23-a)
+
+Decided by the orchestrator by its recommendation, marked provisional; the plan card lists them for the maintainer.
+
+- [DETAIL] **S-1 (provisional agent decision):** 'stampable' means the gate's existing STAMPABLE set (MISSING, UNREADABLE, STALE, FUTURE) — one definition, imported, not copied.
+- [DETAIL] **S-2 (provisional agent decision):** a staged held document with no frontmatter or two updated: lines is not stamped; the hook refuses the commit and names the file and the gate's fix.
+- [DETAIL] **S-3 (provisional agent decision):** the hook stamps every commit, the runner's checkpoint commits included; the runner already stamps derived fields, so a stamp there is a no-op, and a test shows a checkpoint commit stays unchanged when it is current.
+- [DETAIL] **S-4 (provisional agent decision):** the local date is the one check_frontmatter_current.py uses today (date.today() on the host); no second source.
+- [DETAIL] **S-5 (provisional agent decision):** when the measurement itself refuses (shallow clone, empty held set), the hook lets the commit through unchanged and prints the reason on stderr; it never blocks a commit for its own inability to measure.
+- [DETAIL] **S-6 (provisional agent decision):** a refused commit leaves the index exactly as the user staged it: the hook stamps into a temporary copy and re-stages only when every stamp succeeded.
+- [DETAIL] **S-7 (provisional agent decision):** the stamping step lives in a tracked script (scripts/hooks/stamp_staged.py) that the tracked pre-commit entry calls; the bd-generated hook gets one call line through the repository's hook installer, so a regenerated bd hook keeps it (tested).
+- [DETAIL] **S-8 (provisional agent decision):** 'future' uses the gate's own FUTURE threshold (later than tomorrow UTC); one definition.
+- [DETAIL] **S-9 (provisional agent decision):** the hook script travels into kit copies through scripts/kit/manifest.yaml beside check_frontmatter_current.py; the Definition of Done names the manifest entry.
