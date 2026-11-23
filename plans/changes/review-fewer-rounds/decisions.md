@@ -643,6 +643,24 @@ Under the maintainer's answer A of 2026-11-23 the orchestrator decides the rows 
 - [DETAIL] **S2-21 (provisional agent decision):** The reconciler records mechanism, trigger and violated invariant as separate fields, and the grouping check compares them.
 - [DETAIL] **S2-22 (provisional agent decision):** Locally the base is `git merge-base HEAD origin/main` after a fetch; in CI it is the PR base commit.
 
+## Provisional agent decisions on spec review round 3 (2026-11-23)
+
+Third and last spec review round (AGENTS.md phase 2a: the final draft after round three needs no new review). Decided by the orchestrator under the maintainer's answer A, marked provisional, listed on the plan card.
+
+- [DETAIL] **S3-1 (provisional agent decision):** Every datum the validator checks gets a key: `model_families` (model id -> family), `substitutes` per lens, `seat1_model` with `seat1_since` (date) and `seat1_citation`; unknown keys still refuse before any call.
+- [DETAIL] **S3-2 (provisional agent decision):** Reading A — this change builds only the `singleton_share` trigger; another trigger kind is a later change; the maintainer's end-of-shadow decision sets the mode, not a new rule.
+- [DETAIL] **S3-3 (provisional agent decision):** A dropped row (no location, MINOR over the cap) is "not admitted": it never reaches triage and is listed in the report; "accepted" stays the orchestrator's triage term.
+- [DETAIL] **S3-4 (provisional agent decision):** Pools contain only models whose data terms are valid on the day of run preparation; an expired model is skipped and named in the report; seat 1 with expired terms falls back to the first substitute and the report says so.
+- [DETAIL] **S3-5 (provisional agent decision):** The free pool excludes the endpoint `openai-codex` and every model of the OpenAI family; families come from `model_families`.
+- [DETAIL] **S3-6 (provisional agent decision):** Each physical call self-checks its own rows; the cap applies to the consolidated seat answer after merging the calls.
+- [DETAIL] **S3-7 (provisional agent decision):** Reading A — with one seat per lens no share exists, so no positive trigger; the round-2 decision then follows only the early-end and minor rules; the report says the estimator is off.
+- [DETAIL] **S3-8 (provisional agent decision):** Reading A — the night exception adds one check beyond the configured limit; with `phase6_rechecks: 0` phase 6 runs once and the night exception allows one re-check.
+- [DETAIL] **S3-9 (provisional agent decision):** `round_order` is derived from `rounds` and is no key of its own; the contract drops it.
+- [DETAIL] **S3-10 (provisional agent decision):** Reading B — the free round's three models are drawn when the free round starts, from the models reachable then; seed and picks are recorded.
+- [DETAIL] **S3-11 (provisional agent decision):** `seat1_since` (see S3-1) records when the fixed seat was set; the overtake window starts there.
+- [DETAIL] **S3-12 (provisional agent decision):** A check question is valid when it cites Q-13's approved list by its exact text or a phase-6 row id that resolves in a merged change; a reworded question needs a new citation.
+- [DETAIL] **S3-13 (provisional agent decision):** "Maintainability" is the nature of the defect, assigned by the orchestrator in triage, not the reporting lens.
+
 ## Decided by the agent — the ADR number
 
 [DETAIL] **The ADR draft of this change is ADR 0027**
