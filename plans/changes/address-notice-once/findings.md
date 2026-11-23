@@ -149,3 +149,5 @@ Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoi
 Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5550 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5556 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5560 commits, 12 rules.
