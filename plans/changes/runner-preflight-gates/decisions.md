@@ -42,3 +42,5 @@ Decided by the orchestrator by its recommendation, marked provisional; the plan 
 
 - [DETAIL] **S-1 (provisional agent decision):** Reading B — the preflight refuses only for a blocking document gate whose failing file the attempt may not change (decisions.md, research.md, files outside the change folder, as the runner's draft_keep/held rules define); a gate the attempt can fix does not refuse.
 - [DETAIL] **S-2 (provisional agent decision):** drop 'non-admitted' from the criterion; the selection is every gate with subsets [docs] that ci_gates.declared_cheap admits, and the criterion is refuted by a gate in that set that does not run.
+
+- [DETAIL] **R-1 (provisional agent decision, night run 2026-11-23-a):** Reading B, as S-1 decided: the preflight refuses only for a red blocking document gate whose failing file the verb may not write (decisions.md, research.md and paths outside the change folder under the runner's keep/held rules); a fault the verb or the runner's own `prepare_derived` fixes (this change's findings.md, plans/INDEX.md) does not refuse. AC 2 and its refutation are rewritten to that reading; the spec's [DECISION] block is removed.
