@@ -60,3 +60,28 @@ Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5555 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5560 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again · leak check clean over 1188 files, 5566 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/drift-lane-branches/plan.md` +14 -14
+> - `scripts/plans_registry.py` +152 -13
+> - `tests/test_gate_machinery.py` +109 -0
+> - `tests/test_plans_registry_branches.py` +355 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_plans_registry_branches.py:207:70: ARG001 Unused function argument: `lab`
+>     |
+> 207 | def test_git_read_failure_in_a_non_repository_blocks(tmp_path: Path, lab: Lab, monkeypatch) -> None:
+>     |                                                                      ^^^ ARG001
+> 208 |     plain = tmp_path / "plain"
+> 209 |     plain.mkdir()
+>     |
+>
+> Found 1 error.
+> ```

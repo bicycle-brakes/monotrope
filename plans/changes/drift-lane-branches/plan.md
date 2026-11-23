@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-l54q
@@ -46,23 +46,28 @@ After merge, the tracker writer handles stale claims, records the first schedule
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_plans_registry_branches.py::test_branch_only_artefact_satisfies_running_bead — a branch-only bead is reported missing.
-- 2: not yet written tests/test_plans_registry_branches.py::test_missing_artefact_remains_drift — a missing bead is suppressed or its existing message changes.
-- 3: not yet written tests/test_plans_registry_branches.py::test_branch_summary_counts_distinct_branch_only_beads — duplicate or tree matches inflate the count or the missing count is wrong.
-- 4: not yet written tests/test_plans_registry_branches.py::test_no_remote_refs_preserves_tree_only_check — missing drift is suppressed or the INFO explanation is absent.
-- 5: not yet written tests/test_gate_machinery.py::test_strict_drift_gate_fetches_all_branches_before_registry — local or generated command lacks pruning, the refspec, branch flag or correct order.
-- 6: not yet written tests/test_plans_registry_branches.py::test_git_read_failure_blocks_incomplete_search — missing Git, non-repository root or failed enumeration or blob reading does not BLOCK, a completed match is lost, an unresolved bead is reported missing, or a complete summary appears.
-- 7: not yet written tests/test_gate_machinery.py::test_failed_branch_fetch_prevents_strict_registry — the local or generated command invokes the check or succeeds after a failed fetch.
-- 8: not yet written tests/test_plans_registry_branches.py::test_branch_scan_preserves_checkout_and_worktree — the check switches the branch or changes files.
-- 9: not yet written tests/test_plans_registry_branches.py::test_default_check_never_searches_branches — ordinary checks change their verdict or invoke Git for branches.
-- 10: not yet written tests/test_plans_registry_branches.py::test_malformed_branch_frontmatter_is_counted_as_info — malformed metadata satisfies a bead, is not counted per branch and path, or BLOCKs.
-- 11: not yet written tests/test_plans_registry_branches.py::test_branch_sample_is_sorted_and_bounded — the sample differs from the first three sorted per-bead selections, drops repeated names, or selects a later branch for a bead.
-- 12: not yet written tests/test_plans_registry_branches.py::test_branch_scan_excludes_head_and_includes_main — HEAD is counted or main is ignored.
-- 13: not yet written tests/test_plans_registry_branches.py::test_branch_artefacts_use_tree_frontmatter_semantics — a YAML alias, merge key, escaped or quoted value is missed, body-only text matches, an excluded file matches, or an archive file is ignored.
-- 14: not yet written tests/test_plans_registry_branches.py::test_search_skipped_when_nothing_unresolved — a tracker-unavailable, no-running-beads, or fully resolved run reads refs or emits branch messages.
+- 1: tests/test_plans_registry_branches.py::test_branch_only_artefact_satisfies_running_bead — a branch-only bead is reported missing.
+- 2: tests/test_plans_registry_branches.py::test_missing_artefact_remains_drift — a missing bead is suppressed or its existing message changes.
+- 3: tests/test_plans_registry_branches.py::test_branch_summary_counts_distinct_branch_only_beads — duplicate or tree matches inflate the count or the missing count is wrong.
+- 4: tests/test_plans_registry_branches.py::test_no_remote_refs_preserves_tree_only_check — missing drift is suppressed or the INFO explanation is absent.
+- 5: tests/test_gate_machinery.py::test_strict_drift_gate_fetches_all_branches_before_registry — local or generated command lacks pruning, the refspec, branch flag or correct order.
+- 6: tests/test_plans_registry_branches.py::test_git_read_failure_blocks_incomplete_search — missing Git, non-repository root or failed enumeration or blob reading does not BLOCK, a completed match is lost, an unresolved bead is reported missing, or a complete summary appears.
+- 7: tests/test_gate_machinery.py::test_failed_branch_fetch_prevents_strict_registry — the local or generated command invokes the check or succeeds after a failed fetch.
+- 8: tests/test_plans_registry_branches.py::test_branch_scan_preserves_checkout_and_worktree — the check switches the branch or changes files.
+- 9: tests/test_plans_registry_branches.py::test_default_check_never_searches_branches — ordinary checks change their verdict or invoke Git for branches.
+- 10: tests/test_plans_registry_branches.py::test_malformed_branch_frontmatter_is_counted_as_info — malformed metadata satisfies a bead, is not counted per branch and path, or BLOCKs.
+- 11: tests/test_plans_registry_branches.py::test_branch_sample_is_sorted_and_bounded — the sample differs from the first three sorted per-bead selections, drops repeated names, or selects a later branch for a bead.
+- 12: tests/test_plans_registry_branches.py::test_branch_scan_excludes_head_and_includes_main — HEAD is counted or main is ignored.
+- 13: tests/test_plans_registry_branches.py::test_branch_artefacts_use_tree_frontmatter_semantics — a YAML alias, merge key, escaped or quoted value is missed, body-only text matches, an excluded file matches, or an archive file is ignored.
+- 14: tests/test_plans_registry_branches.py::test_search_skipped_when_nothing_unresolved — a tracker-unavailable, no-running-beads, or fully resolved run reads refs or emits branch messages.
+
+## Runner route — 2026-11-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again.
 
 ## Time used
 
 2026-11-21 15:23:58–15:26:10 UTC, 132 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:30:13–15:32:57 UTC, 165 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:37:05–15:39:43 UTC, 157 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 20:49:17–20:53:21 UTC, 243 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
