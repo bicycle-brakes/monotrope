@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-oag7
@@ -43,7 +43,7 @@ make verify
 ## Criterion ledger
 
 - 1: tests/test_stage2.py::test_a_signal_during_process_creation_leaves_no_child — either worker signal case lacks a controlled pre-fix failure exposing the evidenced cause; the orchestrator records both baseline traces and commits.
-- 2: not yet written tests/test_stage2.py::test_cancellation_during_timed_launch_stops_and_reaps_the_child — cancellation fails to end and reap the child before natural exit or timeout, or the worker exceeds two seconds after `Popen` returns following cancellation.
+- 2: tests/test_stage2.py::test_cancellation_during_timed_launch_stops_and_reaps_the_child — cancellation fails to end and reap the child before natural exit or timeout, or the worker exceeds two seconds after `Popen` returns following cancellation.
 - 3: tests/test_stage2.py::test_a_launch_after_the_interrupt_starts_no_program — a late launch writes its marker.
 - 4: tests/test_stage2.py::test_an_interrupt_on_the_main_thread_kills_the_launched_group — the descendant survives or the leader is not reaped.
 - 5: not a test — the phase-6 review checks each recorded sibling failure's assessment against its evidence; a missing or unsupported assessment fails.
@@ -58,3 +58,4 @@ make verify
 2026-11-21 15:35:02–15:37:19 UTC, 137 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:42:17–15:44:36 UTC, 140 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 15:49:37–15:52:51 UTC, 194 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 16:34:30–17:24:46 UTC, 3016 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

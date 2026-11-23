@@ -587,12 +587,13 @@ def _install_run_handlers() -> dict[int, object]:
         return previous
 
     def interrupted(signum: int, _frame: object) -> None:
+        # `signal_group`, not a plain killpg: the pending signal is delivered right after a gate's
+        # registration, while its leader may still be between fork and setsid, and the missed
+        # killpg would leave the fresh gate running through the stop (bead coding-harness-oag7).
         for group in list(_LIVE_GROUPS):
-            with contextlib.suppress(OSError):
-                os.killpg(group, signal.SIGTERM)
+            verify_lock.signal_group(group, signal.SIGTERM)
         for group in list(_LIVE_GROUPS):
-            with contextlib.suppress(OSError):
-                os.killpg(group, signal.SIGKILL)
+            verify_lock.signal_group(group, signal.SIGKILL)
         raise GateInterrupted(signum)
 
     for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT):

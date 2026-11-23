@@ -26058,6 +26058,30 @@ def _child_alive(pid: int) -> bool:
     return state != "Z"
 
 
+def _child_stopped(pid: int) -> bool:
+    """Observed state of this process's own child: dead as a zombie, reaped, or no longer ours.
+
+    Unlike `_child_alive` this waits through this process's own child table, so a recycled pid can
+    never stand in for the child a launch created (the hazard `_reaped_pid` in tests/test_ci.py
+    records: a concurrently spawning process can take a freed pid back).
+    """
+    try:
+        waited, _status = os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        return True  # already reaped, or the pid was never this process's child
+    return waited == pid
+
+
+def _abandon(pid: int) -> None:
+    """Best-effort teardown of a launch child: its group through the production route, then its
+    exit status. Never raises: the 2026-10-31 runs turned this cleanup's own `PermissionError`
+    into a red test (plans/changes/archive/2026-11-06-go-access-point/findings.md)."""
+    with contextlib.suppress(OSError):
+        verify_lock.signal_group(pid)
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(pid, 0)
+
+
 def _interrupting_verb(tmp: Path, interrupt):
     """A stand-in verb: start a long program through `launch` in a thread, then interrupt the runner."""
     pidfile = tmp / "child.pid"
@@ -29519,61 +29543,180 @@ def test_catalog_allowlist_fails_closed_when_pi_rejects_the_overlay(
     assert store == original, "retrieval evidence was changed"
 
 
+class SignalDuringCreation:
+    """Instruments a timed launch so the real cancellation lands between fork/exec and Popen's return.
+
+    The `_fork_exec` hook records the child's pid the moment the fork returns it, delivers the real
+    signal to this process, and - for a worker launch - holds `Popen` until the runner's
+    cancellation has begun: `kill_live` has been entered and already sits blocked on the launch
+    lock, so the group is registered before the kill's snapshot. That is the ordering the CI log
+    of run 44591912821 recorded ("1 running program group(s) killed.", child alive), and the lock
+    discipline of `launch` makes it deterministic. The bounded wait is the independent release
+    path that never depends on the interrupted main thread.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, signum: str, worker: bool) -> None:
+        self.children: list[int] = []
+        self.popen_returned: float | None = None
+        self.launch_ended: list[float] = []
+        self.cancel_seen = threading.Event()
+        self._forked: int | None = None
+        real_fork_exec = subprocess._fork_exec
+        real_popen_init = subprocess.Popen.__init__
+        real_kill_live = stage2.kill_live
+        instrument = self
+
+        def fork_exec(*args, **kwargs):
+            pid = real_fork_exec(*args, **kwargs)
+            instrument.children.append(pid)
+            instrument._forked = pid
+            os.kill(os.getpid(), getattr(signal, signum))
+            if worker:
+                # Watchdog only: bounds a wedged release, never a verdict; the interrupted main
+                # thread reaches kill_live from its own park in `thread.join`, well inside 10 s.
+                instrument.cancel_seen.wait(10)
+            return pid
+
+        def popen_init(popened, *args, **kwargs):
+            real_popen_init(popened, *args, **kwargs)
+            if instrument._forked == popened.pid:
+                instrument.popen_returned = time.monotonic()
+                instrument._forked = None
+
+        def kill_live():
+            instrument.cancel_seen.set()
+            return real_kill_live()
+
+        monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)
+        monkeypatch.setattr(subprocess.Popen, "__init__", popen_init)
+        monkeypatch.setattr(stage2, "kill_live", kill_live)
+
+    def timed_launch(self, tmp_path: Path) -> None:
+        """One timed launch of a 30 s child, recording when the launch ended, however it ended.
+
+        The child's natural lifetime and the launch timeout both outlast every assertion below,
+        so neither can supply a verdict.
+        """
+        try:
+            with contextlib.suppress(stage2.NotStarted):
+                stage2.launch(["/bin/sleep", "30"], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=60)
+        finally:
+            self.launch_ended.append(time.monotonic())
+
+    def run(self, world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, worker: bool) -> int:
+        """One runner run whose explore verb starts the timed launch; a worker is joined before
+        its child is judged."""
+        threads: list[threading.Thread] = []
+
+        def verb(*_args):
+            if worker:
+                thread = threading.Thread(target=self.timed_launch, args=(tmp_path,))
+                threads.append(thread)
+                thread.start()
+                thread.join(timeout=10)
+            else:
+                self.timed_launch(tmp_path)
+
+        monkeypatch.setattr(stage2, "explore", verb)
+        try:
+            return world.run("explore")
+        finally:
+            for thread in threads:
+                thread.join(timeout=30)
+                assert not thread.is_alive(), "the cancelled launch never finished"
+
+    def stopped_children(self, limit: float = 10.0) -> None:
+        """Every created child is stopped: a zombie of ours, reaped, or no longer our child."""
+        assert self.children, "the signal never landed during process creation"
+        deadline = time.monotonic() + limit  # watchdog only: bounds a wedged reap, never a verdict
+        for pid in self.children:
+            while not _child_stopped(pid) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert _child_stopped(pid), "a child survived cancellation during Popen"
+
+    def reaped_children(self) -> None:
+        """Every created child was reaped by its launch's cleanup, not left a zombie behind."""
+        for pid in self.children:
+            with pytest.raises(ChildProcessError):
+                os.waitpid(pid, os.WNOHANG)
+
+    def cleanup(self) -> None:
+        """Best-effort teardown that never raises into the verdict's own failure."""
+        for pid in self.children:
+            _abandon(pid)
+
+
 @pytest.mark.parametrize("signum", ["SIGTERM", "SIGINT"])
 @pytest.mark.parametrize("worker", [False, True])
 def test_a_signal_during_process_creation_leaves_no_child(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, signum: str, worker: bool
 ) -> None:
-    """F6-8: deliver the real signal after fork/exec but before Popen can return its child."""
-    import signal
-
-    real_fork_exec = subprocess._fork_exec
-    children = []
-    threads = []
-
-    def fork_exec(*args, **kwargs):
-        pid = real_fork_exec(*args, **kwargs)
-        children.append(pid)
-        os.kill(os.getpid(), getattr(signal, signum))
-        return pid
-
-    def start():
-        with contextlib.suppress(stage2.NotStarted):
-            stage2.launch(["/bin/sleep", "30"], tmp_path, {"PATH": "/usr/bin:/bin"}, timeout=60)
-
-    def verb(*_args):
-        if worker:
-            thread = threading.Thread(target=start)
-            threads.append(thread)
-            thread.start()
-            thread.join(timeout=10)
-        else:
-            start()
-
-    monkeypatch.setattr(subprocess, "_fork_exec", fork_exec)
-    monkeypatch.setattr(stage2, "explore", verb)
+    """F6-8, controlled: the real signal lands between fork/exec and Popen's return - in a worker
+    the launch is held until kill_live has begun, so the registered group is the one the kill
+    sees. The verdict is the child's own state, never a sleep, a retry or a wider watchdog."""
+    instrument = SignalDuringCreation(monkeypatch, signum, worker)
     try:
         if signum == "SIGINT":
             with pytest.raises(KeyboardInterrupt):
-                world.run("explore")
+                instrument.run(world, monkeypatch, tmp_path, worker)
         else:
-            assert world.run("explore") == 143
-        assert children
-        deadline = time.monotonic() + 5  # watchdog only: bounds a wedged reap, never a verdict
-        while any(_child_alive(pid) for pid in children) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert not any(_child_alive(pid) for pid in children), "a child survived cancellation during Popen"
+            assert instrument.run(world, monkeypatch, tmp_path, worker) == 143
+        instrument.stopped_children()
     finally:
-        for pid in children:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(pid, signal.SIGKILL)
-            # The interrupted constructor may not even have reached setsid yet.
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(pid, signal.SIGKILL)
-            with contextlib.suppress(ChildProcessError):
-                os.waitpid(pid, 0)
-        for thread in threads:
-            thread.join(timeout=5)
+        instrument.cleanup()
+
+
+def test_a_cancellation_kills_a_registered_leader_that_leads_no_group_yet() -> None:
+    """The recorded flakes' cause, held open deterministically: between fork and the child's own
+    setsid no process group of its pid exists, so the killpg a cancellation sends misses. A plain
+    child that never setsids keeps that window open for the whole assertion - the kill boundary
+    must fall back to the leader's pid; the verdict is its observed state, not a race. Red on the
+    pre-fix boundary, whose swallowed ProcessLookupError left exactly this child running."""
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        # The window itself, as a fact: the child leads no group of its own, so the killpg the old
+        # boundary swallowed was a ProcessLookupError.
+        with pytest.raises(ProcessLookupError):
+            os.killpg(child.pid, 0)
+        with stage2._LIVE_LOCK:
+            expected = len(stage2._LIVE_GROUPS) + 1
+            stage2._LIVE_GROUPS.add(child.pid)
+        assert stage2.kill_live() == expected
+        deadline = time.monotonic() + 10  # watchdog only: bounds the reap, never a verdict
+        while not _child_stopped(child.pid) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert _child_stopped(child.pid), "a registered leader without its setsid survived kill_live"
+    finally:
+        with stage2._LIVE_LOCK:
+            stage2._LIVE_GROUPS.discard(child.pid)
+        _abandon(child.pid)
+
+
+@pytest.mark.parametrize("signum", ["SIGTERM", "SIGINT"])
+@pytest.mark.parametrize("worker", [False, True])
+def test_cancellation_during_timed_launch_stops_and_reaps_the_child(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, signum: str, worker: bool
+) -> None:
+    """The cancelled launch ends and reaps its child before it raises, before the child's 30 s
+    natural exit and before its 60 s launch timeout; in a worker within two seconds of Popen
+    returning after the cancellation (criterion 2, bead coding-harness-oag7)."""
+    instrument = SignalDuringCreation(monkeypatch, signum, worker)
+    try:
+        if signum == "SIGINT":
+            with pytest.raises(KeyboardInterrupt):
+                instrument.run(world, monkeypatch, tmp_path, worker)
+        else:
+            assert instrument.run(world, monkeypatch, tmp_path, worker) == 143
+        instrument.stopped_children()
+        instrument.reaped_children()
+        if worker:
+            assert instrument.popen_returned is not None, "Popen never returned during the launch"
+            assert instrument.launch_ended, "the worker never recorded its launch's end"
+            # The launch raises only after its cleanup reaped, so this bound covers stop and reap.
+            bound = instrument.launch_ended[0] - instrument.popen_returned
+            assert bound <= 2.0, f"the launch finished {bound:.3f}s after Popen returned, over the 2s bound"
+    finally:
+        instrument.cleanup()
 
 
 @pytest.mark.parametrize("fault", [None, "samplingParams", "headers", "missing-model", "changed-id"])
