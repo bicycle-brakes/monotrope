@@ -342,3 +342,53 @@ Stage-2 call, 2026-11-23: draft · attempt 3 · route glm · endpoint glm-coding
 >      ... next start. The maintainer added: "es müssen sich andere harness ... 
 >                                          ^)
 > ```
+
+Stage-2 call, 2026-11-23: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1186 files, 5510 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 20 characters left out …]
+> - Runner targeted checks: gate `frontmatter-current` (block) exited 1
+> plans/changes/isolated-attempts/decisions.md: stale — updated 2026-11-22 is older than its last change 2026-11-23 (6184443f)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> - plans/changes/isolated-attempts/spec.md is missing after the draft.
+> - plans/changes/isolated-attempts/plan.md is missing after the draft.
+> ```
+
+Stage-2 call, 2026-11-23: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason the first draft attempt failed · leak check clean over 1186 files, 5510 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 20 characters left out …]
+> - Runner targeted checks: gate `frontmatter-current` (block) exited 1
+> plans/changes/isolated-attempts/decisions.md: stale — updated 2026-11-22 is older than its last change 2026-11-23 (6184443f)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> - plans/changes/isolated-attempts/spec.md is missing after the draft.
+> - plans/changes/isolated-attempts/plan.md is missing after the draft.
+> ```
+
+Stage-2 call, 2026-11-23: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1186 files, 5510 commits, 12 rules.
+
+> Attempt 3 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/adr/0026-isolated-writing-attempts.md` +163 -0
+> - `plans/changes/isolated-attempts/design.md` +189 -0
+> - `plans/changes/isolated-attempts/plan.md` +120 -0
+> - `plans/changes/isolated-attempts/spec.md` +291 -0
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 20 characters left out …]
+> - Runner targeted checks: gate `frontmatter-current` (block) exited 1
+> plans/changes/isolated-attempts/decisions.md: stale — updated 2026-11-22 is older than its last change 2026-11-23 (6184443f)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ```
