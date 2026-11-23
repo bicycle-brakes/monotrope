@@ -509,6 +509,27 @@ context: |
 
 In the context of a loop shape that will be tuned, we decided that rounds, reviewers per round and lenses are central, validated settings, to achieve a change by one edited value, accepting a validator and tests for each setting — 2026-11-23
 
+## Q-30 · Two reviewers per lens: a fixed best and a random challenger
+
+asked: 2026-11-23
+answer: Every lens always seats exactly two reviewer models, on every change (small changes included). Seat 1 is the fixed best model, today `deepseek-v4.1-flash`. Seat 2 is drawn at random, at run preparation, from the other models the availability report lists as reachable at that time; the draw and its seed are recorded in the run. The runner measures, per model and per lens, the share of its rows the orchestrator accepted (with bead coding-harness-qut1's per-model measure), and the run report says when a challenger has overtaken the fixed seat. The switch itself stays a maintainer edit of the central setting (as S-3 and Q-26). Both seats, the model of seat 1 and the challenger pool are settings of Q-24.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the seating of each lens.
+  Intention: keep the best known reviewer and keep measuring whether another model becomes better.
+  Today: Q-2 seated one reviewer per lens on a small change and three (best, cheapest, Codex) otherwise; Codex no longer sits in a lens.
+  Repository change: seating, random draw with recorded seed, per-model accepted share in the run report; the substitute list of Q-25 still covers a failed seat.
+  Architecture change: replaces the seating of Q-2 and the round-1 Codex seat; phase 6 is unchanged.
+
+In the context of the seating of each lens, facing a best reviewer known
+today and models that change over time, we decided on two seats per lens —
+the fixed best model and a random reachable challenger — with a per-model
+accepted share in every run report, to achieve a stable review and a
+running measurement of a possible new best model, accepting that a weak
+challenger sometimes takes the second seat and that the switch waits for
+the maintainer — 2026-11-23
+
 ## Q-25 · A seat fails (S-7)
 
 asked: 2026-11-23
