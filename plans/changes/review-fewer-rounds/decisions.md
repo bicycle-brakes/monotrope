@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-10
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -366,6 +366,43 @@ reviewer per lens and therefore no overlap to measure, we decided that a
 small change always gets exactly one free second round, to achieve a rule
 that does not pretend to a measurement, accepting that its three calls are
 spent even when round 1 found nothing — 2026-11-10
+
+## Q-16 · Decoupled from the central configuration
+
+asked: 2026-11-23
+answer: A — this change no longer waits for bead coding-harness-twvx. The values Q-4 names (lenses, seats, round count and order, the second-round trigger and its threshold, the phase-6 re-check limit) live in one validated section of an existing central file and move into the central configuration unchanged when it lands, as the verify slots did (bead coding-harness-u1ha). This replaces the "no interim file" clause of Q-4; the rest of Q-4 holds (one place, no constant repeats it).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the dependency of this change on bead coding-harness-twvx.
+  Intention: the maintainer wants this change soon and fewer verify runs per lane; twvx has not started and is large.
+  Today: Q-4 made the implementation wait for the central configuration's skeleton.
+  Repository change: one validated section in an existing central file; the spec names which file. Orchestrator's proposal, for the plan card: `model-endpoints.yaml`, which already holds the paid ladder.
+  Architecture change: none beyond Q-4; the move into twvx later is a relocation, not a redesign.
+
+In the context of the home of the review set-up, facing a central
+configuration that has not started, we decided that this change keeps Q-4's
+single place in a validated section of an existing central file and moves it
+into the central configuration unchanged later, to achieve the shorter review
+loop soon, accepting one later relocation of that section — 2026-11-23
+
+## Q-17 · The two-round house rule meanwhile
+
+asked: 2026-11-23
+answer: Until this change lands, the orchestrator runs at most two review-loop rounds per lane; taken rows of round two are repaired and phase 6 checks that repair (AGENTS.md, PR #436). This change makes the runner enforce the shape instead.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the review loop's length before this change lands.
+  Intention: fewer verify runs per lane now.
+  Today: "rounds until a clean round" (ADR 0021), narrowed by the house rule of 2026-11-23.
+  Repository change: none here; the spec's round shape replaces the house rule when it merges.
+  Architecture change: none.
+
+In the context of the review loop before this change lands, facing rounds
+three to five that each cost a repair and a full verify, we decided that the
+orchestrator stops at two rounds and goes to phase 6, to achieve fewer verify
+runs now, accepting that late findings move to phase 6 — 2026-11-23
 
 ## Decided by the agent — the ADR number
 
