@@ -632,3 +632,7 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Orchestrator hand finish, 2026-11-23: the second Sonnet repair attempt of loop rows L3-1..L3-5 failed its post-run checks only on four existing held-only tests that asserted no subprocess at all (`world.calls() == []`); with L3-2 the held-only run now runs the document gates, so those subprocesses are expected. The orchestrator changed the four assertions to "no model call" (codex, claude, pi), which is what the tests' messages state; the attempt's runner code is unchanged. 481 targeted tests green, full `make verify` green on 2026-11-23 (execution 948 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).
+
+Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1177 files, 5431 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1177 files, 5431 commits, 12 rules.
