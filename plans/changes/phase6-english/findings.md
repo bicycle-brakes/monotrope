@@ -95,3 +95,99 @@ Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoi
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5556 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5560 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again · leak check clean over 1188 files, 5566 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +22 -0
+> - `plans/changes/phase6-english/plan.md` +16 -16
+> - `scripts/stage2.py` +146 -12
+> - `tests/test_stage2.py` +340 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3463/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_phase6_first_answer_is_retained_as_protected_evidence(world: World) -> None:
+>         """Criterion 10. Planted fault: the notice names no retrievable file, or the first answer is quoted."""
+> >       assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER)]) == 0
+>
+> tests/test_stage2.py:10782: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2.py:10716: in run_language_review
+>     return world.run("review")
+> tests/test_stage2.py:419: in run
+>     return stage2.main([*argv, *options, "--root", str(self.root)])
+> scripts/stage2.py:13954: in main
+>     return _run(args)
+> scripts/stage2.py:14082: in _run
+>     review(Path(args.root), args.change)
+> scripts/stage2.py:5098: in review
+>     answer, rows, thread, replaced_thread = language_replacement(ctx, answer, rows, thread, notices)
+> scripts/stage2.py:4918: in language_replacement
+>     saved = save_answer_evidence(ctx.root, ctx.change, f"phase6-language-{time.time_ns()}", 1, answer, None)
+> tests/runner_clock_guard.py:165: in wrapper
+>     _judge(sys._getframe(1), f"time.{name}")
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> frame = <frame at 0x11b9d15a0, file '/Users/mikypiky/coding-harness/.claude/worktrees/phase6-english/scripts/stage2.py', line 4919, code language_replacement>
+> api = 'time.time_ns'
+>
+>     def _judge(frame: types.FrameType, api: str) -> None:
+>         code = frame.f_code
+>         if not is_guarded(code.co_filename) or code.co_qualname == BOUNDARY_QUALNAME:
+>             return
+>         read = Read(api, code.co_filename, frame.f_lineno, code.co_qualname, _state["in_test"])
+>         READS.append(read)
+> >       raise RunnerClockRead(f"runner clock read outside clock_now: {read}")
+> E       runner_clock_guard.RunnerClockRead: runner clock read outside clock_now: time.time_ns read in language_replacement at /Users/mikypiky/coding-harness/.claude/worktrees/phase6-english/scripts/stage2.py:4918
+>
+> tests/runner_clock_guard.py:160: RunnerClockRead
+> ----------------------------- Captured stdout call -----------------------------
+> review: full `make verify` green on 7325cf6d1094 before the reviewer starts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_phase6_language_retry_is_audited_and_leak_checked
+> FAILED tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[malformed-other-thread]
+> FAILED tests/test_stage2.py::test_phase6_german_verdict_retries_once_on_same_thread
+> FAILED tests/test_stage2.py::test_phase6_english_replacement_has_no_language_notice
+> FAILED tests/test_stage2.py::test_phase6_saves_first_answer_before_retry_even_when_blocked
+> FAILED tests/test_stage2.py::test_phase6_retry_leak_block_stops_without_fallback
+> FAILED tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[no-thread]
+> FAILED tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[| E1 | MAJOR | SPEC | base | scripts/x.py:1 | If worktree A was superseded by B, then later supersedes a record from C, A\u2019s release before its first new round can find B\u2019s older archive first. It returns success and may append `Loop rows: superseded by \u2026` instead of refusing without changing findings. [Criterion 10] |]
+> FAILED tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[| X1 | MAJOR | SPEC | base | scripts/x.py:1 | Changed finding text. |]
+> FAILED tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[malformed]
+> FAILED tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[exit]
+> FAILED tests/test_stage2.py::test_phase6_language_retry_requests_same_findings_in_english
+> FAILED tests/test_stage2.py::test_phase6_second_german_verdict_is_kept_with_notice
+> FAILED tests/test_stage2.py::test_phase6_retry_new_thread_is_recorded_and_used_for_marks
+> FAILED tests/test_stage2.py::test_phase6_evidence_save_failure_keeps_first_verdict
+> FAILED tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[No finding.]
+> FAILED tests/test_stage2.py::test_phase6_first_answer_is_retained_as_protected_evidence
+> ERROR tests/test_stage2.py::test_phase6_language_retry_is_audited_and_leak_checked
+> ERROR tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[malformed-other-thread]
+> ERROR tests/test_stage2.py::test_phase6_german_verdict_retries_once_on_same_thread
+> ERROR tests/test_stage2.py::test_phase6_english_replacement_has_no_language_notice
+> ERROR tests/test_stage2.py::test_phase6_saves_first_answer_before_retry_even_when_blocked
+> ERROR tests/test_stage2.py::test_phase6_retry_leak_block_stops_without_fallback
+> ERROR tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[no-thread]
+> ERROR tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[| E1 | MAJOR | SPEC | base | scripts/x.py:1 | If worktree A was superseded by B, then later supersedes a record from C, A\u2019s release before its first new round can find B\u2019s older archive first. It returns success and may append `Loop rows: superseded by \u2026` instead of refusing without changing findings. [Criterion 10] |]
+> ERROR tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[| X1 | MAJOR | SPEC | base | scripts/x.py:1 | Changed finding text. |]
+> ERROR tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[malformed]
+> ERROR tests/test_stage2.py::test_phase6_failed_replacement_keeps_first_verdict_with_reason[exit]
+> ERROR tests/test_stage2.py::test_phase6_language_retry_requests_same_findings_in_english
+> ERROR tests/test_stage2.py::test_phase6_second_german_verdict_is_kept_with_notice
+> ERROR tests/test_stage2.py::test_phase6_retry_new_thread_is_recorded_and_used_for_marks
+> ERROR tests/test_stage2.py::test_phase6_evidence_save_failure_keeps_first_verdict
+> ERROR tests/test_stage2.py::test_phase6_valid_replacement_is_recorded_unchanged[No finding.]
+> ERROR tests/test_stage2.py::test_phase6_first_answer_is_retained_as_protected_evidence
+> 17 failed, 7 passed, 17 errors in 16.89s
+> ```
