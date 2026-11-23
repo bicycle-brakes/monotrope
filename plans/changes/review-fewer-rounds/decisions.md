@@ -404,6 +404,111 @@ three to five that each cost a repair and a full verify, we decided that the
 orchestrator stops at two rounds and goes to phase 6, to achieve fewer verify
 runs now, accepting that late findings move to phase 6 — 2026-11-23
 
+## Q-18 · This change absorbs the review-loop redesign (mwzv.3)
+
+asked: 2026-11-23
+answer: A — this change is the one review-loop redesign; bead coding-harness-mwzv.3 is superseded by it. The redraft decides the beads mwzv.3 named: fctf (Q-19), 1gzo and pwdi (Q-20), vi3a (Q-21), py5 (Q-22), r3b6 (Q-23).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: two beads redesigned the loop's shape.
+  Intention: one ADR 0021 amendment instead of two.
+  Today: mwzv.3 open, not started; this change has a drafted spec.
+  Repository change: none beyond this change.
+  Architecture change: one amendment of ADR 0021.
+
+In the context of two overlapping redesigns of the review loop, we decided that this change is the only one, to achieve one coherent shape and one amendment, accepting a broader redraft — 2026-11-23
+
+## Q-19 · How much review a small change gets (fctf)
+
+asked: 2026-11-23
+answer: A — a text-only change skips the review loop and gets phase 6 only; a bounded change gets round 1 with one reviewer per lens, one repair, then phase 6, without the free second round. This replaces Q-15 (a small change always gets one free second round).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: review for small changes.
+  Intention: fewer verify runs.
+  Today: every change runs the whole loop; Q-15 gave small changes a free second round.
+  Repository change: the runner skips phase 4b for text-only changes.
+  Architecture change: part of the ADR 0021 amendment.
+
+In the context of small changes, facing review rounds that cost more than they find, we decided that text-only changes get phase 6 only and bounded changes one round, to achieve fewer verify runs, accepting that a defect in a small code change may first show in phase 6 — 2026-11-23
+
+## Q-20 · What ends the loop early (1gzo, pwdi)
+
+asked: 2026-11-23
+answer: A — the second round also does not run when round 1 brought only MINOR rows and all are repaired; the lane goes to phase 6. 1gzo (a clean free round ends the loop) is closed: the shape has no free pre-round any more.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: early end of the loop.
+  Intention: no round that brings nothing.
+  Today: rounds until a clean round; Q-11's overlap trigger decides the second round.
+  Repository change: one more condition next to the Q-11 trigger.
+  Architecture change: part of the ADR 0021 amendment.
+
+In the context of the second-round trigger, facing a round with only minor, repaired rows, we decided that such a round goes straight to phase 6, to achieve one verify run less, accepting that a minor-only round gets no independent second look before phase 6 — 2026-11-23
+
+## Q-21 · A cap on findings per reviewer (vi3a)
+
+asked: 2026-11-23
+answer: A — each reviewer reports at most five findings, ranked by severity, each with file and line as evidence; BLOCKER and MAJOR rows may exceed the cap. The cap is a setting in the central place (Q-24).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: findings per reviewer.
+  Intention: few strong findings, less triage and repair.
+  Today: no cap; about four rows per reviewer in round 1, 26% about change-folder formalities (2026-11-07).
+  Repository change: reviewer prompts, the runner checks the answer form.
+  Architecture change: none.
+
+In the context of reviewer answers, facing long lists of small rows, we decided on at most five rows by severity with BLOCKER and MAJOR exempt, to achieve a focused repair, accepting that a sixth minor row may go unreported — 2026-11-23
+
+## Q-22 · Reviewers check their own findings (py5)
+
+asked: 2026-11-23
+answer: A — each reviewer checks its findings once against the code in its own context before it answers and drops what it cannot evidence. One pass, not the two py5 proposed.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: self-check of reviewer findings.
+  Intention: better findings per call, not more rounds.
+  Today: one pass per reviewer.
+  Repository change: reviewer prompt text; the runner is unchanged.
+  Architecture change: none.
+
+In the context of reviewer precision, facing false findings that cost triage, we decided on one self-check pass per reviewer, to achieve fewer false rows at moderate cost, accepting about twice the compute per reviewer call — 2026-11-23
+
+## Q-23 · The tapering ladder (r3b6)
+
+asked: 2026-11-23
+answer: A — r3b6 is closed, superseded by this change: a tapering seating can be set later without a code change, because rounds and seats per round are central settings (Q-24).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: shrinking reviewer count per round.
+  Intention: settings, not code, decide the seating.
+  Today: r3b6 drafted for the old ladder of up to six rounds.
+  Repository change: none.
+  Architecture change: none.
+
+In the context of the per-round seating, facing a draft for the old ladder, we decided to close it, to achieve one shape whose seating is a setting, accepting no tapering default — 2026-11-23
+
+## Q-24 · Rounds, reviewers and lenses are easy to change later
+
+asked: 2026-11-23
+answer: Requirement of the maintainer (2026-11-23): the number of review rounds, the number of reviewers per round and the lenses (perspectives) must be easy to change afterwards — one edited value in the central place of Q-4/Q-16, validated, no code change, no constant repeating it; the finding cap (Q-21) and the early-end condition (Q-20) are settings there too.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: changeability of the loop's shape.
+  Intention: tune the loop by measurement without a new change.
+  Today: Q-4 and Q-16 already put seats and rounds in one place.
+  Repository change: the spec lists every such setting with its validator and a test that a changed value takes effect.
+  Architecture change: none beyond Q-4.
+
+In the context of a loop shape that will be tuned, we decided that rounds, reviewers per round and lenses are central, validated settings, to achieve a change by one edited value, accepting a validator and tests for each setting — 2026-11-23
+
 ## Decided by the agent — the ADR number
 
 [DETAIL] **The ADR draft of this change is ADR 0027**
