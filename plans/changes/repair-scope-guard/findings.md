@@ -525,3 +525,5 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 > ````
 
 Orchestrator hand finish, 2026-11-23: the Sonnet repair of loop rows L2-1..L2-14 (taken with one decided fix for the Where theme after repair-hand-held-rows merged: the scope reads Where cells through the shared classifier) failed its full `make verify` on one test only, `test_work_verbs_skip_escaped_scan_parent[repair-True]`: its grant was the bare directory word `src/deep`, which the decided rule no longer counts. The orchestrator wrote `src/deep/` in the test (a directory grants its tree only with its trailing slash); the runner code of the attempt is unchanged. 528 targeted tests green, full `make verify` green on 2026-11-23 (execution 969 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).
+
+Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1188 files, 5465 commits, 12 rules.
