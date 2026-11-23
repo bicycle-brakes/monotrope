@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-0n4s
@@ -44,12 +44,12 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — any deadline, close or publication read bypasses the seam.
+- 1: tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — any deadline, close or publication read bypasses the seam.
 - 2: tests/test_close_merged_beads.py::test_startup_budget_reserves_publication — a count other than three, missing exhaustion or publication before closures passes.
 - 3: tests/test_beads_start.py::test_startup_budget_reaches_publication_before_prime — a count other than three, missing exhaustion or publication after prime passes.
 - 4: tests/test_close_merged_beads.py::test_subsecond_startup_remainder_refuses_closures — a close starts below one second or publication is omitted.
-- 4: not yet written tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — a publication timeout violates the existing bounds.
-- 5: not yet written tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — the default fails to delegate to the current monotonic clock or budget calculations differ from the existing policy.
+- 4: tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — a publication timeout violates the existing bounds.
+- 5: tests/test_close_merged_beads.py::test_budget_clock_seam_preserves_calculations — the default fails to delegate to the current monotonic clock or budget calculations differ from the existing policy.
 - 5: tests/test_close_merged_beads.py::test_startup_budget_reserves_publication — equivalent readings change the diagnostic, timeout or exit status.
 
 - 6: tests/test_close_merged_beads.py::test_startup_budget_reserves_publication — the reconciler or local imports escape the disposable copy or tracker calls reach the real wrapper.
@@ -58,8 +58,13 @@ make verify
 - 7: tests/test_beads_start.py::test_startup_budget_reaches_publication_before_prime — a simulated timeout reaches a real delegate or the controlled slow delegate changes the result.
 - 8: tests/test_beads_start.py::test_startup_budget_reaches_publication_before_prime — the hook's budget argument is missing, changed or ignored.
 
+## Runner route — 2026-11-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again.
+
 ## Time used
 
 2026-11-21 17:16:22–17:18:42 UTC, 140 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 17:22:44–17:25:45 UTC, 180 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 17:29:53–17:32:13 UTC, 139 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 20:49:17–20:53:40 UTC, 263 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_beads_start.py`, `tests/test_close_merged_beads.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
