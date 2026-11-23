@@ -701,3 +701,21 @@ Reviewer: Opus 5.5 through Claude Code's read-only `reviewer` agent at HEAD `858
 Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5480 commits, 12 rules.
 
 Runner restoration, 2026-11-23: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5496 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-23
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-6 | MAJOR | SPEC | base | scripts/stage2.py:10765 | On a case-sensitive filesystem, a Where cell naming `src/new.py` also permits the distinct new file `src/NEW.py`; likewise, `TESTS/stray.py` is treated as a descendant of `tests/`. Case-folding both grants and candidates lets unrelated files pass the guard and be committed. [Criteria 3, 4 and 8] | Codex | open | — |
+| P6-7 | MAJOR | SPEC | fix of P6-3 | scripts/stage2.py:6941 | A new, non-ignored and untracked `src/__pycache__/stray.pyc` is exempted as a derived leftover and can be committed outside the repair scope. The earlier fix covers indexed bytecode; this is a different case because the file is still untracked when the guard checks it. [Criterion 3] | Codex | open | — |
+| P6-8 | MINOR | SPEC | fix of P6-2 | scripts/stage2.py:6818 | If the repository sets `core.excludesFile` locally, and a repair changes a tracked `.gitignore` while creating a cache ignored by that configured file, the temporary repository does not inherit the local configuration. It classifies the cache as non-ignored under the original rules and can refuse the repair. [Criterion 9] | Codex | open | — |
+| P6-9 | MINOR | SPEC | base | scripts/stage2.py:13029 | When a draft writes `docs/journal/note.md`, the runner restores the journal file but can verify and commit the draft successfully. The held-path rule never refuses the attempt because the draft restores the file before the checkpoint sees it. [Criterion 1] | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list — catches without switch: no for the draft cases, because draft restoration removes the journal change before the held-path check; yes for the implement and repair cases if the list itself regresses.
+
+Phase 6 verdict: codex 01a20938-782d-7d12-ad4e-1b8a5d038339, 2026-11-23
+Reviewer session: codex 01a20938-782d-7d12-ad4e-1b8a5d038339 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
