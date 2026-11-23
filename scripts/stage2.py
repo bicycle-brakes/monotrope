@@ -232,7 +232,7 @@ SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 # entry, retries included: the `codex-repair` route label names a retry of draft and repair and
 # picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
 # `run_codex` takes the effort from the caller's verb instead.
-CODEX_EFFORTS = {"draft": "xhigh", "repair": "high", "review": "xhigh"}
+CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
 CODEX = ("openai-codex", "gpt-6.1-terra", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
@@ -3851,7 +3851,9 @@ def legacy_completed(status: str) -> bool:
 # The day the fingerprint rule took hold, fixed in code: an undigested block (one without a
 # `Spec fingerprint:` line) qualifies only when its heading day lies strictly before this day,
 # and only while it is current against the last committed spec change (spec criteria 11 and 12).
-LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 19)
+# It is the day the fingerprinting runner reached main (PR #432, merged 2026-11-23): reviews the
+# runner wrote before that day could not carry a fingerprint (bead coding-harness-8b0u).
+LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 23)
 # A spec's body bytes: everything after the front matter header. The fingerprint and the legacy
 # currency compare exactly these bytes, so a front-matter-only edit never invalidates a review
 # and a body edit always does.
@@ -10551,6 +10553,255 @@ def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
     return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
 
 
+# The findings.md block a repair run appends for the rows handed to the orchestrator, and the reason
+# every hand step names (bead coding-harness-0zhf).
+HAND_STEP_HEADING = "## Hand steps for the orchestrator"
+HAND_STEP_REASON = "runner-held path"
+
+# A Where token's location suffix: `:line`, `:line-line`, `#L<line>` or `#L<line>-L<line>`, en dash included.
+_WHERE_LOCATION = re.compile(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$")
+# A Markdown link; its text and its target can each name a repository path (spec, Terms).
+_WHERE_LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+# Trailing punctuation prose leaves on a token: an unmatched closing quote or bracket, and punctuation.
+_WHERE_TRAILING = "\"'`>)}].,:;!?*"
+_WHERE_URL = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+
+@dataclass(frozen=True)
+class WhereTracking:
+    """The tracked names one `Where` reading shares: exact spellings, spellings by casefold, tracked directories."""
+
+    exact: frozenset[str]
+    spellings: dict[str, str]
+    directories: dict[str, str]
+
+
+def where_tracking(root: Path) -> WhereTracking:
+    """Read `git ls-files` once: every tracked path, and the tracked directories above it."""
+    tracked = [path for path in _git_output(root, "ls-files", "-z").split("\0") if path]
+    directories: dict[str, str] = {}
+    for path in tracked:
+        parts = path.split("/")
+        for index in range(1, len(parts)):
+            prefix = "/".join(parts[:index])
+            directories.setdefault(prefix.casefold(), prefix + "/")
+    return WhereTracking(frozenset(tracked), {path.casefold(): path for path in tracked}, directories)
+
+
+def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | None:
+    """One Where token's normalized repository path, or None when it names none (spec, Terms).
+
+    Matched wrappers come off whole, trailing punctuation and a location suffix come off the end, an
+    initial `./` goes, an absolute path inside the checkout becomes relative to the root, and `.` and
+    `..` collapse while the path stays inside that root. An exact or case-insensitive tracked match
+    answers with its tracked spelling; a token naming an existing directory that holds a tracked file
+    answers with that directory and its slash. Everything else - an external URL, an absolute path
+    outside the checkout, a path escaping the root, an untracked bare word - stays literal or names
+    nothing, and never refuses: classification must not raise where the strict `where_locations` does.
+    """
+    wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">", "[": "]"}
+    # Whole-token wrappers come off first; then prose punctuation after a wrapper (`AGENTS.md`. or
+    # "AGENTS.md",) is dropped and the unwrapping tried again, so the opening wrapper cannot survive.
+    while True:  # each pass shortens the token or breaks, so this ends
+        if len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+            continue
+        if token in tracking.exact:
+            break
+        trimmed = token.rstrip(".,;:!?")
+        if trimmed != token and len(trimmed) >= 2 and trimmed[0] in wrappers and trimmed[-1] == wrappers[trimmed[0]]:
+            token = trimmed[1:-1]
+            continue
+        break
+    # An opening wrapper whose closing partner sits on a later token (`(AGENTS.md, rule 9)` splits
+    # into `(AGENTS.md`, `rule`, `9)`) comes off alone, unless the whole token is an indexed name.
+    if token not in tracking.exact:
+        token = token.lstrip("`\"'([<")
+    if not token or _WHERE_URL.match(token):
+        return None
+    # Check the whole name first: punctuation may itself belong to an indexed filename.
+    if token in tracking.exact:
+        return token
+    folded = token.casefold()
+    if folded in tracking.spellings:
+        return tracking.spellings[folded]
+    stripped = _WHERE_LOCATION.sub("", token.rstrip(_WHERE_TRAILING))
+    if stripped.startswith("./"):
+        stripped = stripped[2:]
+    if stripped.startswith("/"):
+        try:
+            stripped = Path(stripped).resolve().relative_to(root.resolve()).as_posix()
+        except (ValueError, OSError):
+            return None  # an absolute path outside the checkout names no repository path
+    parts: list[str] = []
+    for part in stripped.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not parts:
+                return None  # the path escapes the repository root
+            parts.pop()
+        else:
+            parts.append(part)
+    collapsed = "/".join(parts)
+    if not collapsed:
+        return None
+    if collapsed in tracking.exact:
+        return collapsed
+    folded = collapsed.casefold()
+    if folded in tracking.spellings:
+        return tracking.spellings[folded]
+    directory = tracking.directories.get(folded)
+    # The canonical tracked spelling is checked on disk, so a case-variant token still answers with
+    # the tracked directory and its slash on a case-sensitive checkout.
+    if directory is not None and (root / directory.rstrip("/")).is_dir():
+        return directory
+    return collapsed
+
+
+def where_named_paths(cell: str, root: Path = REPO_ROOT, tracking: WhereTracking | None = None) -> list[str]:
+    """Every repository path a `Where` cell names, normalized; it refuses nothing (spec, Terms).
+
+    Unlike the strict `where_locations`, this reads the cell the way repair classification needs: a
+    Markdown link contributes its text and its target, prose punctuation around a token is stripped,
+    a tracked file is not required, and an unknown token stays literal instead of refusing. A cell
+    naming only an external URL, an outside path or bare prose names nothing.
+    """
+    tracking = where_tracking(root) if tracking is None else tracking
+    named: list[str] = []
+    for token in _WHERE_TOKEN_SPLIT.split(_WHERE_LINK.sub(lambda match: f" {match[1]} {match[2]} ", cell)):
+        path = _where_token_path(token, root, tracking)
+        if path is not None and path not in named:
+            named.append(path)
+    return named
+
+
+def repair_hand_rows(
+    root: Path, change: str, taken: list[tuple[str, list[str]]]
+) -> list[tuple[str, list[str], list[str]]]:
+    """The taken rows whose `Where` names a held path, each with its normalized held paths (spec, criterion 1).
+
+    The classification reads the checkpoint's own committed prefix map with its case-insensitive
+    prefix semantics and the change-folder exception - there is no second held list (plan, scope 1).
+    A row naming a committable path beside a held one is wholly held; a row naming no held path keeps
+    its eligibility, whatever else the cell says (spec, criterion 2).
+    """
+    held = _held_prefixes(root)
+    folder = f"plans/changes/{change}/".casefold()
+    tracking = where_tracking(root)
+    hand: list[tuple[str, list[str], list[str]]] = []
+    for place, row in taken:
+        held_paths: list[str] = []
+        for named in where_named_paths(row[4], root, tracking):
+            folded = named.casefold()
+            if folded.startswith(folder):
+                continue  # the checkpoint commits the change's own folder (its existing exception)
+            # A bare directory token names the prefix that ends in a slash, whether or not the
+            # directory holds a tracked file (L5-2).
+            spellings = (folded,) if folded.endswith("/") else (folded, folded + "/")
+            if not any(spelling.startswith(prefix) for prefix in held for spelling in spellings):
+                continue
+            if named not in held_paths:
+                held_paths.append(named)
+        if held_paths:
+            hand.append((place, row, held_paths))
+    return hand
+
+
+def hand_step_listing(
+    hand: list[tuple[str, list[str], list[str]]], day: str, record_path: str = "the loop record"
+) -> str:
+    """The dated bullet block the runner appends to findings.md once per invocation (spec, criteria 5, 12 and 15).
+
+    One bullet per row with its identifier, its normalized held paths and the reason. The booking
+    hint keeps the existing valid forms and opens `fixed — not a test — orchestrator hand edit <sha>`
+    only behind a retake as `taken — not a test`; no bare hand-edit form exists. It names the file
+    each row's Status is edited in: `findings.md`, or the loop record at `record_path` (P6-2).
+    """
+    in_record = [row[0] for place, row, _ in hand if place == "record"]
+    in_findings = [row[0] for place, row, _ in hand if place != "record"]
+    places = []
+    if in_findings:
+        places.append(f"{', '.join(in_findings)} in findings.md")
+    if in_record:
+        places.append(f"{', '.join(in_record)} in the loop record `{record_path}`")
+    bullets = "\n".join(
+        f"- {row[0]} — {', '.join(f'`{path}`' for path in held_paths)} — {HAND_STEP_REASON}"
+        for _, row, held_paths in hand
+    )
+    return (
+        f"{HAND_STEP_HEADING} — {day}\n\n"
+        "The runner handed the taken rows below to the orchestrator before any model call: each "
+        "row's `Where` names a path the runner does not commit. The runner left every Status and "
+        "`Broke a test` cell of these rows unchanged.\n\n"
+        f"{bullets}\n\n"
+        f"Each row's Status and `Broke a test` cells live in: {'; '.join(places)}.\n\n"
+        "Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its "
+        "`Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row "
+        "taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test "
+        "fits, retake the row as `taken — not a test — <reason>` by editing its Status in "
+        "the file named above by hand (correct its `Where` cell there first when `triage` refuses it); "
+        "only then book it as `fixed — not a test — orchestrator hand edit <sha>`."
+    )
+
+
+_HAND_BULLET = re.compile(rf"^- (\S+) — (.+) — {re.escape(HAND_STEP_REASON)}$")
+
+
+def listed_hand_steps(text: str) -> set[tuple[str, tuple[str, ...]]]:
+    """The (row id, held paths) pairs earlier hand-step blocks of a findings text already list.
+
+    Only bullets below a `Hand steps for the orchestrator` heading count, up to the next level-two
+    heading; the runner reads its own listing, never a table row (spec, criterion 13).
+    """
+    listed: set[tuple[str, tuple[str, ...]]] = set()
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.startswith(HAND_STEP_HEADING)
+            continue
+        match = _HAND_BULLET.match(line) if inside else None
+        if match:
+            listed.add((match[1], tuple(re.findall(r"`([^`]+)`", match[2]))))
+    return listed
+
+
+def _names_id(left: str, ident: str) -> bool:
+    """Whether the text before an answer line's first colon names `ident` as a whole token."""
+    return re.search(rf"(?<![\w-]){re.escape(ident)}(?![\w-])", left) is not None
+
+
+def without_held_answer_lines(
+    answer: str, held_ids: list[str], eligible_ids: Sequence[str] = ()
+) -> tuple[str, list[str]]:
+    """The answer without its lines for handed-off rows, and the problems of lines that mix ids.
+
+    A line whose ids before its first colon are all held is ignored, never booked, whatever words
+    surround them (spec, criterion 17): a held row's claim neither fails the attempt nor marks the
+    row, and the orchestrator books it by hand from the listing. A line naming a held id together
+    with an eligible one cannot be split, so it is a problem that names both.
+    """
+    if not held_ids:
+        return answer, []
+    kept: list[str] = []
+    problems: list[str] = []
+    for line in answer.splitlines():
+        left, sep, _rest = line.partition(":")
+        named_held = [ident for ident in held_ids if _names_id(left, ident)] if sep else []
+        if not named_held:
+            kept.append(line)
+            continue
+        named_eligible = [ident for ident in eligible_ids if _names_id(left, ident)]
+        if named_eligible:
+            problems.append(
+                f"an answer line names handed-off row(s) {', '.join(named_held)} together with taken row(s) "
+                f"{', '.join(named_eligible)}; answer each taken row on its own `<ID>: fixed — …` line and "
+                "leave the handed-off rows out"
+            )
+            kept.append(line)
+    return "\n".join(kept), problems
+
+
 def triage_status(decision: str, reason: str) -> str:
     """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
     escaped = reason.replace("\\|", "|").replace("|", "\\|")
@@ -12257,6 +12508,60 @@ def document_gates() -> list[dict]:
     ]
 
 
+def document_gate_env(root: Path, change: str) -> dict[str, str]:
+    """The environment of a document check: the runner's, without any verify-admission marker.
+
+    Shared by the draft's check and the repair hand-off's check. The one tolerance of a draft is the
+    gate's own, set by this runner alone: with `TOLERATE_ENV` `adr-answers` reports this change's
+    missing answer and passes, so the exit code decides and no output is read (spec, criterion 13;
+    F-9, F-10). Nothing a document check starts carries or claims the verify admission: its
+    ownership, token and context variables are stripped, and `run_gates` enters no admission.
+    """
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+                check_adr_answers.TOLERATE_ENV: change,
+            }
+        ),
+        root,
+    )
+    return {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
+
+
+def hand_step_gate_problems(root: Path, change: str, key: str | None = None) -> tuple[list[str], str]:
+    """The document gates over a held-only hand-off before its commit: (blocking problems, scope line).
+
+    The hand-off makes a repository commit but runs no model and no test, so the document subset
+    of the one gate list is its only check; a red gate blocks the commit (L3-2). The scope line
+    says plainly that nothing was repaired.
+    """
+    try:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], ""
+    gates = [gate for gate in gates if not gate["admission"]]
+    if not gates:
+        return ["no locally runnable document gates were selected; the hand-off check cannot run"], ""
+    problems, notes = run_gates(root, document_gate_env(root, change), key, gates)
+    scope = "hand-off only, no model call, nothing repaired; " + document_scope_text(
+        gates, "red" if problems else "green", notes
+    )
+    return problems, scope
+
+
 def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
     """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
     named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
@@ -12289,33 +12594,7 @@ def verify_draft(
     tampered = tool_problem(root, tools)
     if tampered:
         return [tampered], owed, not_completed
-    env = runner_env(
-        foreign_env(
-            {
-                "GIT_CONFIG_COUNT": "1",
-                "GIT_CONFIG_KEY_0": "commit.gpgsign",
-                "GIT_CONFIG_VALUE_0": "false",
-                # The one tolerance of a draft is the gate's own, set by this runner alone: with this
-                # variable `adr-answers` reports this change's missing answer and passes, so the
-                # exit code of the document check decides and no output is read (spec, criterion 13; F-9, F-10).
-                check_adr_answers.TOLERATE_ENV: ctx.change,
-            }
-        ),
-        root,
-    )
-    # Nothing a document check starts carries or claims the verify admission: its ownership,
-    # token and context variables are stripped here, and `run_gates` enters no admission.
-    env = {
-        name: value
-        for name, value in env.items()
-        if name
-        not in (
-            verify_lock.LOCK_ENV,
-            verify_lock.TOKEN_ENV,
-            verify_lock.ADMISSION_ID_ENV,
-            verify_lock.ADMISSION_WAIT_ENV,
-        )
-    }
+    env = document_gate_env(root, ctx.change)
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation, owed, not_completed
@@ -12531,6 +12810,7 @@ def repair_prompt(
     diagnostics: list[str],
     endpoint: tuple[str, str, str | None] = CODEX,
     inputs: dict[Path, bytes] | None = None,
+    held_rows: list[tuple[str, list[str], list[str]]] | None = None,
 ) -> str:
     """The implement contract with the repair block: the format, the must-runs, the baseline, the rows."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
@@ -12552,6 +12832,16 @@ def repair_prompt(
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
     ]
+    if held_rows:
+        # The model is told the held rows are not its work (spec, criterion 18); the rows stay
+        # readable in the findings record it already receives.
+        ids = ", ".join(row[0] for _, row, _ in held_rows)
+        extra.append(
+            "## Held rows — not your work\n\n"
+            f"The runner handed {ids} to the orchestrator before your call: each row's `Where` names "
+            "a path the runner does not commit. They are not your work: do not repair, answer or "
+            "book them, and answer only the taken rows above."
+        )
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
@@ -12568,6 +12858,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     or write, an older block's selected row included (bead coding-harness-3h96). A taken Status that
     already names a fix in the old hand-written form (`; fixed by`, `; fixed:`, `; repaired by`)
     refuses before any call.
+
+    A selected row whose `Where` names a path the checkpoint cannot commit is handed to the
+    orchestrator before any model call: the runner reports it with the reason `runner-held path`,
+    appends the dated hand-step listing to findings.md once, and leaves the row's Status and
+    `Broke a test` cells unchanged (bead coding-harness-0zhf). Every row held, the existing
+    checkpoint commits that listing and the run exits 0 with no model call; a mixed batch dispatches
+    only the committable rows, names the held ones in the commit body, and ignores answer lines that
+    mention them.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -12589,7 +12887,6 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
-    ids = [row[0] for _, row in taken]
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
@@ -12601,9 +12898,113 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
             "of marking it fixed."
         )
+    # The waiting, origin and legacy refusals above bind every selected row before any row is
+    # classified or handed off (spec, criterion 9).
+    hand = repair_hand_rows(root, change, taken)
+    hand_ids = [row[0] for _, row, _ in hand]
+    handed = set(hand_ids)
+    eligible = [(place, row) for place, row in taken if row[0] not in handed]
+    ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+
+    # A row already listed with the same held paths in an earlier block of this findings.md is
+    # reported again but never listed again, so a retry adds no duplicate block (L3-5).
+    listed = listed_hand_steps(current)
+    fresh = [item for item in hand if (item[1][0], tuple(item[2])) not in listed]
+    # "Already listed" for a held-only run is judged against the committed findings.md: a listing a
+    # failed mixed run left uncommitted in the tree still has to be committed by the next run (P6-1).
+    try:
+        committed = _git_output(root, "show", f"HEAD:{ctx.findings.relative_to(root).as_posix()}")
+    except Refused:
+        committed = ""
+    committed_listed = listed_hand_steps(committed)
+    fresh_committed = [item for item in hand if (item[1][0], tuple(item[2])) not in committed_listed]
+
+    def report_hand_steps() -> None:
+        for _, row, held_paths in hand:
+            print(f"repair: hand step {row[0]} — held path {', '.join(held_paths)} — {HAND_STEP_REASON}")
+
+    def write_hand_listing(producer: str) -> None:
+        # One dated listing of the rows not yet listed, appended once before the attempt snapshot:
+        # a retry and a checkpoint rollback put findings.md back to bytes that already carry it, so
+        # neither duplicates nor loses it (spec, criteria 5 and 10).
+        if fresh:
+            if not ctx.findings.exists():
+                ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+            append(
+                ctx.findings,
+                hand_step_listing(fresh, today(), str(record_dir(change, root) / "loop.md")),
+            )
+        report_hand_steps()
+
+    if hand and not eligible:
+        # Every selected row is held: no model call and no attempt. The listing is checked by the
+        # document gates before the one commit, and its time line is written when the plan carries a
+        # `## Time used` heading (L3-2). The existing checkpoint commits it after preflight, with its
+        # existing allowances for this change's findings and derived leftovers and its refusal of
+        # other dirty work (spec, criteria 4, 11 and 16), and the run exits 0.
+        if not fresh_committed:
+            report_hand_steps()
+            print("repair: every held row is already listed in findings.md · nothing new committed, no model call")
+            return
+        findings_before = ctx.findings.read_bytes() if ctx.findings.exists() else None
+        plan_before = ctx.plan.read_bytes() if ctx.plan.is_file() else None
+        started_wall, started_mono = utc_now(), monotonic_now()
+        try:
+            write_hand_listing("stage2-runner")
+            problems, scope = hand_step_gate_problems(root, change)
+            if problems:
+                raise CallFailed(
+                    "the hand-step listing failed the document gates; nothing was committed and no row was "
+                    "repaired:\n" + "\n".join(problems)
+                )
+            plan_text = ctx.plan.read_text(encoding="utf-8") if ctx.plan.is_file() else ""
+            if TIME_HEADING.search(plan_text):
+                persist_time_entry(
+                    root,
+                    ctx.plan,
+                    time_entry(
+                        "repair",
+                        1,
+                        "hand-off",
+                        "none",
+                        True,
+                        started_wall,
+                        utc_now(),
+                        max(0, round(monotonic_now() - started_mono)),
+                        [scope],
+                    ),
+                    plan_text,
+                    {},
+                    accepted=True,
+                    retry=False,
+                )
+            checkpoint(
+                root,
+                change,
+                baseline,
+                None,
+                ignored_before,
+                message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
+                keep=allowed,
+            )
+        except (CallFailed, Refused):
+            # A red gate, a failed time write or a failed checkpoint leaves no uncommitted listing
+            # behind: findings.md and the plan's time line return to their state before the run, so
+            # the next repair is not refused on them and lists and commits afresh (L5-1). Nothing is
+            # restored once a commit has landed.
+            if _git_output(root, "rev-parse", "HEAD").strip() == baseline:
+                if findings_before is None:
+                    ctx.findings.unlink(missing_ok=True)
+                else:
+                    restore_work_input(root, ctx.findings, findings_before)
+                if plan_before is not None:
+                    restore_work_input(root, ctx.plan, plan_before)
+            raise
+        print("repair: hand steps committed for the orchestrator · no model call · nothing repaired")
+        return
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
     key = None
     if stage2_off is None:
@@ -12614,6 +13015,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ]
     else:
         routes = [(SONNET, None, "stage-1", stage2_off)]
+    if hand:
+        write_hand_listing(producer_for(routes[0][0]))
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
     rows_before = findings_rows(current)
@@ -12627,10 +13030,22 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
 
     def check(answer: str) -> list[str]:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
+        # Answer lines for handed-off rows are ignored: they neither fail the attempt nor book the
+        # row - the orchestrator books it from the listing (spec, criterion 17).
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
+        kept_answer, mixed = without_held_answer_lines(answer, hand_ids, ids)
         found, proven, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"], tools
+            ctx,
+            kept_answer,
+            eligible,
+            baseline,
+            key,
+            rows_before,
+            audits[-1] if audits else None,
+            standing["text"],
+            tools,
         )
+        problems = [*mixed, *problems]
         if not problems:
             fixes.clear()
             fixes.update(found)
@@ -12639,25 +13054,37 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         return problems
 
     def before_commit() -> None:
+        # Held rows keep the unchanged-cell guarantee: an attempt that edits one is refused.
         require_unchanged_repair_rows(ctx, taken, resolved)
-        mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+        mark_repaired_findings(ctx, eligible, fixes, resolved=resolved)
 
+    commit_message = f"fix({change}): repair taken findings {', '.join(ids)}"
+    if hand:
+        # The subject names only the repaired rows; the body names the held ones as hand steps
+        # (spec, criterion 14).
+        commit_message += "\n\nHand steps for the orchestrator: " + "; ".join(
+            f"{row[0]} — {HAND_STEP_REASON} {', '.join(held_paths)}" for _, row, held_paths in hand
+        )
     run_attempts(
         ctx,
         "repair",
         routes,
-        lambda diagnostics, endpoint, inputs: repair_prompt(ctx, baseline, taken, diagnostics, endpoint, inputs),
+        lambda diagnostics, endpoint, inputs: repair_prompt(
+            ctx, baseline, eligible, diagnostics, endpoint, inputs, held_rows=hand or None
+        ),
         baseline,
         key,
         ignored_before,
-        commit_message=f"fix({change}): repair taken findings {', '.join(ids)}",
+        commit_message=commit_message,
         closing=(
             "repair post-run checks failed after the allowed attempts; why each attempt failed and "
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
         before_commit=before_commit,
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
+        after_commit=lambda: mark_repaired_record(
+            change, eligible, fixes, root, marks, lock_held=True, resolved=resolved
+        ),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,

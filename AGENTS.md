@@ -187,6 +187,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   goes to the phase-6 review instead of a new loop run; phase 6 checks that last
   repair. Reason: a run's history cannot be reset, and asking each time stopped
   lanes overnight.
+- **At most two review-loop rounds** (maintainer, 2026-11-23): taken rows of round two are repaired, then phase 6 checks that repair instead of a third round; this narrows phase 4b until the runner enforces it (coding-harness-3rtn).
 
 ## Sibling repositories
 

@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-22
+updated: 2026-11-23
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1959,6 +1959,52 @@ When the live record shadows a released copy in `findings.md`, repair fixes
 only the live row and prints a notice. The released copy stays unchanged: an
 outstanding status there remains outstanding after a successful repair until
 the next `release-loop` rewrites the released block from the record.
+
+Before any model call, repair classifies every selected row by the repository
+paths its `Where` cell names, read the way the checkpoint's own protection
+reads them — case-insensitive prefixes from the committed provenance map and
+the runner-held paths, with the change's own folder exempt. A token counts
+whether it stands bare, in backticks or as the text or target of a Markdown
+link, without a trailing line location, and a directory counts with its
+trailing slash: a bare word that equals a held directory prefix names it,
+whether or not the directory holds a tracked file. An opening bracket, quote
+or backtick whose partner sits on a later token (`(AGENTS.md, rule 9)`) is
+stripped alone. External URLs and paths outside the checkout name
+nothing, an unknown location is never a refusal, and prose names a path only
+by accident: a bare word equal to a tracked directory name does name that
+directory (`prompts`, `templates` and `docs/adr` each resolve to the directory
+with its slash), so `see prompts.` is a held row. A row that names any
+held path is handed to the orchestrator before the call: the runner prints
+the row with its normalized held paths and the reason `runner-held path`,
+appends one dated `Hand steps for the orchestrator` listing — one bullet per
+row with its ID, held paths and reason — to `findings.md` before the attempt
+snapshot, and leaves the row's Status and `Broke a test` cells untouched. A
+row already listed there with the same held paths is reported again but not
+listed again. A held-only run judges "already listed" against the committed
+`findings.md` (`HEAD`), not the working tree: a listing a failed mixed run left
+uncommitted is committed by the next held-only run, and only a run whose held
+rows are all listed in `HEAD` commits nothing new and says so. The listing
+names the file each row's Status is edited in: `findings.md` or the loop
+record with its path. The listing is not a findings table: no later resolution
+reads its bullets as rows. When every selected row is held, the run makes no
+model call and repairs nothing; it runs the document gates over the listing,
+writes its own measured time line when the plan has a `## Time used` heading,
+and exits 0 after the existing checkpoint commits the listing under
+`docs(<change>): hand steps for the orchestrator <ids>`. A red document gate
+exits 1, commits nothing, adds no listing and returns `findings.md` to its
+state before the run. That commit is a
+hand-off record, never a repair: no test ran, and exit 0 does not say a row
+is fixed. A mixed batch dispatches only the committable rows, tells the model
+the held rows are not its work, ignores an answer line whose ids before its
+first colon are all held rows, whatever words surround them, fails a line that
+names a held row together with a taken one (the message names both), and names
+the held rows as hand steps in the commit body while the subject carries only
+the repaired IDs. The orchestrator books each handed row itself from the
+listing: `fixed — tests/<path>::<function>` with its `Broke a test` mark when
+a test shows the repair, `fixed — guard test — tests/<path>::<function>` only
+for a row taken as `taken — guard test — <reason>`, and only a row taken as
+`taken — not a test` may be booked `fixed — not a test — orchestrator hand
+edit <sha>`.
 
 After the model call, verification and answer check, repair checks every
 selected row against its resolved contents and location on disk. If a selected
