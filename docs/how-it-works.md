@@ -161,9 +161,10 @@ These are operator details; you can skip them on a first read.
   the loop record until the final review releases it into `findings.md`.
 - The `session` verb opens a macOS Terminal window through `osascript`, so it
   needs a graphical login. Every other verb runs in a plain shell.
-- One admission per machine, for protected work only: a run's cheap gates —
+- One admission per machine, for protected work only, two slots since
+  the two-slot change (bead coding-harness-u1ha) — `HARNESS_VERIFY_SLOTS`, default `2`; a run's cheap gates —
   every unmarked `seconds` gate — execute before any wait, so a lint failure
-  appears in seconds even while another check holds the slot; the queue and
+  appears in seconds even while another check holds a slot; the queue and
   the memory floor (`scripts/verify_lock.py`) are entered once, by the
   shared scheduler (`scripts/verify_run.py`), only when no cheap gate failed
   blocking, for the `minutes` gates and the `seconds` gates marked
@@ -340,8 +341,9 @@ What is particular to this repository:
   2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
   4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
   test workers from the machine (half the cores, at most one per 2 GiB of
-  memory), and all lanes share one verification slot for protected work,
-  enforced by one admission per machine ([lanes](orchestration.md)).
+  memory), and the lanes share two verification slots for protected work
+  since the two-slot change (one before), enforced by machine-wide admission
+  ([lanes](orchestration.md)).
 
 ## Follow one completed change
 
