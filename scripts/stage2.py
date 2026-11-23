@@ -232,7 +232,7 @@ SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 # entry, retries included: the `codex-repair` route label names a retry of draft and repair and
 # picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
 # `run_codex` takes the effort from the caller's verb instead.
-CODEX_EFFORTS = {"draft": "xhigh", "repair": "high", "review": "xhigh"}
+CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
 CODEX = ("openai-codex", "gpt-6.1-terra", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
