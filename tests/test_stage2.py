@@ -12924,13 +12924,14 @@ def test_repair_reports_and_records_each_held_path(world: World, capsys: pytest.
             record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
         ],
     )
+    created = not world.findings.exists()  # the fixture may seed a spec review into findings.md
     assert world.run("repair") == 0
     out = capsys.readouterr().out
     fragments = ("L1-1", "AGENTS.md", "templates/keep.md", "L1-2", "model-endpoints.yaml", "runner-held path")
     for fragment in fragments:
         assert fragment in out, fragment
     text = world.text()
-    assert text.startswith("---\n"), "the runner-created findings file carries its registry header"
+    assert not created or text.startswith("---\n"), "the runner-created findings file carries its registry header"
     block = hand_steps_of(world)
     bullets = (
         "- L1-1 — `AGENTS.md`, `templates/keep.md` — runner-held path",
