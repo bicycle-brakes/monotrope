@@ -151,3 +151,138 @@ Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5556 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash answers unrecognized_model since 2026-11-23 18:16 UTC (bead coding-harness-363r.4); maintainer: Sonnet is back · leak check clean over 1188 files, 5560 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5578 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/address-notice-once/plan.md` +13 -13
+> - `scripts/stage2.py` +23 -6
+> - `scripts/stage2_availability.py` +34 -1
+> - `scripts/stage2_go.py` +166 -0
+> - `tests/test_stage2_go_access.py` +496 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>     def mkdir(self, mode=0o777, parents=False, exist_ok=False):
+>         """
+>         Create a new directory at this given path.
+>         """
+>         try:
+> >           os.mkdir(self, mode)
+> E           FileExistsError: [Errno 17] File exists: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw1/test_address_notice_audits_sur0/repo/plans/changes/demo'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1311: FileExistsError
+> __________ ERROR at setup of test_assessment_only_notices_stay_silent __________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw5/test_assessment_only_notices_s0')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1089431a0>
+>
+>     @pytest.fixture
+>     def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
+>         """A repository, its dedicated worktree, three stand-ins and an environment that belong to the test."""
+>         root = tmp_path / "repo"
+>         tree = root / ".claude" / "worktrees" / "demo"
+> >       (root / "plans" / "changes" / "demo").mkdir(parents=True)
+>
+> tests/test_stage2_session.py:259: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> self = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw5/test_assessment_only_notices_s0/repo/plans/changes/demo')
+> mode = 511, parents = True, exist_ok = False
+>
+>     def mkdir(self, mode=0o777, parents=False, exist_ok=False):
+>         """
+>         Create a new directory at this given path.
+>         """
+>         try:
+> >           os.mkdir(self, mode)
+> E           FileExistsError: [Errno 17] File exists: '/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw5/test_assessment_only_notices_s0/repo/plans/changes/demo'
+>
+> /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1311: FileExistsError
+> =================================== FAILURES ===================================
+> ______________ test_probe_and_install_audits_keep_address_notices ______________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107212540>
+> capsys = <_pytest.capture.CaptureFixture object at 0x1071fb2f0>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3482/popen-gw1/test_probe_and_install_audits_0')
+>
+>     def test_probe_and_install_audits_keep_address_notices(world, monkeypatch, capsys, tmp_path):
+>         """Ledger 10: the probe audit and the installation notes keep their lines.
+>     
+>         Fault: the boundary's printed set filtered the audit list or the
+>         installation notes of a notice announced earlier in the call.
+>         """
+>         moved = TEST_LADDER[0]
+>         notice = notice_of(world, moved, baseUrl=MOVED_BASE)
+>         store = go_store(row(moved, baseUrl=MOVED_BASE))
+>         harness = Harness(world, monkeypatch)
+>         agent = tmp_path / "agent"
+>         agent.mkdir()
+>         policy = stage2_go.load_address_policy(world.root)
+>         with stage2_go.console_notice_scope():
+>             stage2_go.announce_address_notice(notice, stream=sys.stderr)
+>             capsys.readouterr()
+>             probe_call, audit = harness.probe(moved, store)
+>             probe_call()
+>             notes = availability.install_measured_models(None, agent, store, model=moved, address=policy)
+>         captured = capsys.readouterr()
+> >       assert (captured.out + captured.err).count(notice) == 1, "an audit path printed the notice again"
+> E       AssertionError: an audit path printed the notice again
+> E       assert 0 == 1
+> E        +  where 0 = <built-in method count of str object at 0x10184b1e8>('opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move')
+> E        +    where <built-in method count of str object at 0x10184b1e8> = ('' + '').count
+> E        +      where '' = CaptureResult(out='', err='').out
+> E        +      and   '' = CaptureResult(out='', err='').err
+>
+> tests/test_stage2_go_access.py:1762: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_go_access.py::test_probe_and_install_audits_keep_address_notices
+> ERROR tests/test_stage2_go_access.py::test_address_notice_audits_survive_console_deduplication
+> ERROR tests/test_stage2_go_access.py::test_assessment_only_notices_stay_silent
+> 1 failed, 10 passed, 2 errors in 13.20s
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1188 files, 5579 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/address-notice-once/plan.md` +13 -13
+> - `scripts/stage2_go.py` +36 -38
+> - `tests/test_stage2_go_access.py` +20 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2_go_access.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> EE...........                                                            [100%]
+> ==================================== ERRORS ====================================
+> __ ERROR at setup of test_address_notice_audits_survive_console_deduplication __
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/.venv/bin/python3
+> Fixture "world" called directly. Fixtures are not meant to be called directly,
+> but are created automatically when test functions request them as parameters.
+> See https://docs.pytest.org/en/stable/explanation/fixtures.html for more information about fixtures, and
+> https://docs.pytest.org/en/stable/deprecations.html#calling-fixtures-directly about how to update your code.
+> __________ ERROR at setup of test_assessment_only_notices_stay_silent __________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/.venv/bin/python3
+> Fixture "world" called directly. Fixtures are not meant to be called directly,
+> but are created automatically when test functions request them as parameters.
+> See https://docs.pytest.org/en/stable/explanation/fixtures.html for more information about fixtures, and
+> https://docs.pytest.org/en/stable/deprecations.html#calling-fixtures-directly about how to update your code.
+> =========================== short test summary info ============================
+> ERROR tests/test_stage2_go_access.py::test_address_notice_audits_survive_console_deduplication
+> ERROR tests/test_stage2_go_access.py::test_assessment_only_notices_stay_silent
+> 11 passed, 2 errors in 12.70s
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1188 files, 5580 commits, 12 rules.
