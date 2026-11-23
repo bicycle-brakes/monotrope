@@ -642,3 +642,54 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-23: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
 
 Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1177 files, 5435 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5438 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-hand-held-rows/plan.md` +1 -1
+> - `scripts/stage2.py` +16 -4
+> - `tests/test_stage2.py` +27 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........F............                                                    [100%]
+> =================================== FAILURES ===================================
+> _________ test_repair_commits_listing_left_uncommitted_by_a_failed_run _________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-hand-held-rows/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3268/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3268/popen-gw2/test_repair_commits_listing_le0/state'))
+>
+>     def test_repair_commits_listing_left_uncommitted_by_a_failed_run(world: World) -> None:
+>         """L5-1. Planted fault: "already listed" is judged against the working tree, so a listing a
+>         failed run left uncommitted reports a successful hand-off and commits nothing."""
+>         world.script(codex=[codex_ok("TR1", "must not run")])
+>         seed_tests(world)
+>         write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+>         assert world.run("repair") == 0
+>         git(world.root, "reset", "--soft", "HEAD~1")  # the listing stays in the tree, no commit carries it
+>         assert stage2.HAND_STEP_HEADING in world.text()
+>         before = git(world.root, "rev-parse", "HEAD")
+> >       assert world.run("repair") == 0
+> E       AssertionError: assert 2 == 0
+> E        +  where 2 = run('repair')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3268/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3268/popen-gw2/test_repair_commits_listing_le0/state')).run
+>
+> tests/test_stage2.py:11878: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> repair: hand step L1-1 — held path AGENTS.md — runner-held path
+> repair: hand steps committed for the orchestrator · no model call · nothing repaired
+> ----------------------------- Captured stderr call -----------------------------
+> refused: the worktree has pre-existing changes outside this change's findings.md: plans/changes/demo/plan.md
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_commits_listing_left_uncommitted_by_a_failed_run
+> 1 failed, 20 passed in 11.22s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T093552541199Z-db00e679.md
+> ```
