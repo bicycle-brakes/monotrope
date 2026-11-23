@@ -11577,6 +11577,16 @@ def test_repair_classifies_wrapped_tokens_with_trailing_punctuation(world: World
     assert [row[0] for _, row, _ in hand] == ["L1-1"]
 
 
+def test_repair_unwraps_deeply_nested_wrappers(world: World) -> None:
+    """L4-1. Planted fault: unwrapping stops after a fixed number of passes, so five nested wrappers
+    leave `((AGENTS.md))` literal and the held row reaches the model."""
+    cell = "((((`AGENTS.md`))))"
+    named = stage2.where_named_paths(cell, world.root)
+    assert "AGENTS.md" in named, (cell, named)
+    hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L4-1", "taken — test_a", where=cell))])
+    assert [row[0] for _, row, _ in hand] == ["L4-1"]
+
+
 def test_repair_case_variant_directory_answers_with_tracked_spelling(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

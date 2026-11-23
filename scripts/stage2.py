@@ -9614,7 +9614,7 @@ def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | 
     wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">", "[": "]"}
     # Whole-token wrappers come off first; then prose punctuation after a wrapper (`AGENTS.md`. or
     # "AGENTS.md",) is dropped and the unwrapping tried again, so the opening wrapper cannot survive.
-    for _ in range(4):
+    while True:  # each pass shortens the token or breaks, so this ends
         if len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
             token = token[1:-1]
             continue
