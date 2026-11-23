@@ -509,6 +509,81 @@ context: |
 
 In the context of a loop shape that will be tuned, we decided that rounds, reviewers per round and lenses are central, validated settings, to achieve a change by one edited value, accepting a validator and tests for each setting — 2026-11-23
 
+## Q-25 · A seat fails (S-7)
+
+asked: 2026-11-23
+answer: B — when a required seat fails (exhausted quota, timeout), the runner seats a substitute model for that lens from a declared substitute list in the central setting (Q-24); the report names the failure and the substitute. The family rule of Q-8 holds for the substitute.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: a failed seat.
+  Intention: settle an open spec-review ambiguity of 2026-11-10.
+  Today: the spec admits two readings.
+  Repository change: the rule in the runner and the spec.
+  Architecture change: none.
+
+In the context of a failed seat, we decided on a substitute from a declared list, to achieve a complete round despite outages, accepting one more model per lens to maintain — 2026-11-23
+
+## Q-26 · Who ends the shadow period (S-8)
+
+asked: 2026-11-23
+answer: A — always the maintainer: after ten counting changes the runner reports how often the trigger was right and what the second round found in addition; the maintainer switches the mode with one value in the central setting. This replaces Q-12's automatic switch on clear data; 'clear' needs no definition.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the end of the shadow period.
+  Intention: settle an open spec-review ambiguity of 2026-11-10.
+  Today: the spec admits two readings.
+  Repository change: the rule in the runner and the spec.
+  Architecture change: none.
+
+In the context of the end of the shadow period, we decided on the maintainer always decides from a report, to achieve a simple, testable rule, accepting a wait for the maintainer even when the data are clear — 2026-11-23
+
+## Q-27 · A mechanism repair after the stop (S-15)
+
+asked: 2026-11-23
+answer: A — when the maintainer chooses a mechanism repair after the stop, that recorded choice authorises exactly one more phase-6 re-check, scoped to that repair; then the cap holds again. The choice is recorded in findings.md with the maintainer's word; no state release or loss resets the budget.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the review cap after the stop.
+  Intention: settle an open spec-review ambiguity of 2026-11-10.
+  Today: the spec admits two readings.
+  Repository change: the rule in the runner and the spec.
+  Architecture change: none.
+
+In the context of the review cap after the stop, we decided on one authorised re-check of the mechanism repair, to achieve no unreviewed repair merges, accepting one more review call in that case — 2026-11-23
+
+## Q-28 · Maintainability and small logic MINORs (S-17)
+
+asked: 2026-11-23
+answer: A — a small logic or state MINOR is repaired; a maintainability MINOR triggers no repair and goes to the weekly clean-up bead, as style does under Q-7.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: MINOR rows outside tests, security and false statements.
+  Intention: settle an open spec-review ambiguity of 2026-11-10.
+  Today: the spec admits two readings.
+  Repository change: the rule in the runner and the spec.
+  Architecture change: none.
+
+In the context of MINOR rows outside tests, security and false statements, we decided on logic is repaired, maintainability is collected, to achieve fewer repairs without leaving real defects, accepting maintainability debt waits for the weekly bead — 2026-11-23
+
+## Q-29 · What the Markdown gate blocks (S-18)
+
+asked: 2026-11-23
+answer: A — only errors on lines the change itself wrote block, measured against the merge base with main, the same locally and in CI; legacy errors on untouched lines stay until a targeted clean-up.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Markdown errors in changed files.
+  Intention: settle an open spec-review ambiguity of 2026-11-10.
+  Today: the spec admits two readings.
+  Repository change: the rule in the runner and the spec.
+  Architecture change: none.
+
+In the context of Markdown errors in changed files, we decided on only changed lines block, to achieve small changes to large legacy files, accepting legacy errors stay until a clean-up — 2026-11-23
+
 ## Provisional agent decisions on the spec-review ambiguities (2026-11-23)
 
 Maintainer's answer A of 2026-11-23: the orchestrator decides the smaller open ambiguities of the 2026-11-10 spec review by its recommendation, marked as provisional agent decisions; the maintainer sees the list on the plan card and may change any line. S-7, S-8, S-15, S-17 and S-18 go to the maintainer as questions.
