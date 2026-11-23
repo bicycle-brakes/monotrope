@@ -413,7 +413,8 @@ def test_findings_restore_notice_matches_the_verdict(world: World) -> None:
         make=[{"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
-    assert world.text().count("Stage-2 call,") == 1
+    # The fixture's seeded spec review carries one audit line of its own.
+    assert world.text().count("Stage-2 call,") == 2
     assert "failed its post-run checks" not in world.text(), "a passing restored attempt was labelled failed"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
     assert NOTICE in committed and "Loop restarted" not in committed
@@ -438,7 +439,7 @@ def test_findings_restore_notice_matches_the_verdict(world: World) -> None:
     # Attempt 3 (the Stage-1 route) still makes its call - the empty answer is a failed call that
     # stops the run - so both counts cover it: four calls, four audit lines, no checkpoint.
     assert len(world.calls("claude")) == 4
-    assert world.text().count("Stage-2 call,") == 4, "an earlier attempt's audit line was erased"
+    assert world.text().count("Stage-2 call,") == 5, "an earlier attempt's audit line was erased"
     prompt = world.calls("claude")[2]["prompt_file"]
     entry = prompt_entry(prompt, 1, "flash")
     assert entry[0] == f"- {RESTORED}", "the rejected attempt's restore note does not stand first"
