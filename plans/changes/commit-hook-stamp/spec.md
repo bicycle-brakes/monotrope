@@ -38,8 +38,8 @@ On 2026-11-23, research found that the frontmatter currency gate reports stale `
 2. When a held document is partially staged, stamping preserves all other staged content and does not add unstaged edits to the commit.
    *Refuted by:* an unstaged edit enters the commit or staged content other than the stamp changes.
    *Basis:* `decisions.md#Q-1`.
-3. When the hook stamps staged content, it leaves working-file contents and unrelated staged paths unchanged.
-   *Refuted by:* an unstaged file changes or an unrelated staged path differs after the hook.
+3. When the hook stamps staged content, it updates the working file to the same stamped content only if that file matched the staged content before stamping; otherwise it leaves the working file unchanged and reports that it was left unchanged.
+   *Refuted by:* a matching working file retains the old stamp, or a different working file is changed or left unchanged without a notice.
    *Basis:* `decisions.md#Q-1`.
 4. If a staged held document cannot safely be stamped, the hook refuses the commit and identifies the path and reason.
    *Refuted by:* a commit succeeds with malformed, duplicate or unreadable frontmatter, or the error does not identify the affected path and reason.
@@ -63,6 +63,8 @@ On 2026-11-23, research found that the frontmatter currency gate reports stale `
     *Refuted by:* the kit manifest omits the script or the assembled kit lacks it.
 12. When stamping produces a staged document, the hook checks the result against the applicable currency rules before allowing the commit.
     *Refuted by:* a failed post-stamp check permits the commit.
+13. When a commit is aborted after stamping succeeded for a separate reason, the stamped index remains in place.
+    *Refuted by:* a later commit-message abort rolls back the successful stamp.
 
 ## Non-goals
 
@@ -82,7 +84,9 @@ The Beads managed hook section and tracker database are protected to preserve tr
 
 ## Open decisions
 
-[DETAIL] Stamp the Git index without rewriting working files: this preserves partial staging and is reversible within this change. A hook deliberately disabled or replaced by a custom hook cannot run; the existing CI gate remains the backstop.
+[DETAIL] Update a matching working file along with its staged version; leave a different working file alone and report it. This avoids a stale working copy after a fully staged commit while preserving partial staging. A hook deliberately disabled or replaced by a custom hook cannot run; the existing CI gate remains the backstop.
+
+[DETAIL] A later abort does not roll back a successful stamp: the stamp remains correct and can be applied again without changing the result.
 
 [DETAIL] Measurement refusal passes unchanged with a diagnostic, while a stamping failure leaves the index intact; this retains commit access where the existing gate cannot measure and avoids partial updates. A missing runtime is a hook execution failure, reported by the hook rather than treated as a measurement result.
 
