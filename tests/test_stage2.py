@@ -195,6 +195,9 @@ previous = read_records(log)
 # A new script starts its own count: only the calls made since it was written use its steps.
 previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get("docs" if docs_check else alias, [])
+# A bare string step answers with that string on standard output, like a dict
+# step's `stdout` field; every reader below expects a dict.
+steps = [step if isinstance(step, dict) else {"stdout": step} for step in steps]
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
 # A step that names a `model` is kept for the call that asks for that model, so
@@ -384,6 +387,7 @@ class World:
     root: Path
     bin: Path
     state: Path
+    seeded_review: str = ""
 
     def script(self, **steps: object) -> None:
         log = self.bin / "calls.jsonl"
@@ -606,6 +610,8 @@ def pin_the_ladder(target: Path) -> None:
     # This fixture exercises legacy declarations and frozen run histories.
     # Availability-enabled fresh runs have their own integration suite.
     entry.pop("availability_preflight", None)
+    # The spec review's fallback is the maintainer's to switch; a test declares its own (`pin_spec_review`).
+    data.pop("spec_review", None)
     entry["modelle"] = list(TEST_LADDER)
     entry["modelle_terms"] = {
         model: admissible_terms(anfragen_5h=10000 - 100 * position) for position, model in enumerate(TEST_LADDER)
@@ -821,6 +827,14 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     venv_ruff(w)
     venv_pytest(w)
     w.script()
+    # The mandatory spec review (bead coding-harness-ttic): the fixture carries one qualifying,
+    # current review in findings.md, committed, so every implement call the suite makes is
+    # admitted and the work verbs' clean-tree requirement holds. A test that needs another
+    # history overwrites the file or unlinks it.
+    w.seeded_review = opus_review_block(w)
+    w.write_findings(w.seeded_review)
+    git(root, "add", "-A")
+    git(root, "commit", "--quiet", "-m", "seeded spec review")
     return w
 
 
@@ -1604,11 +1618,12 @@ def test_supersede_rejects_invalid_requests_without_changes(world: World, capsys
     shutil.copy(record, outside / "loop.md")
 
     standing = {"bytes": original}  # what the foreign record holds right now, whatever the case planted
+    seeded = world.text() if world.findings.exists() else ""  # the fixture's seeded spec review, if any
 
     def refuses(argv: list[str], fragment: str) -> None:
         assert world.run("release-loop", "demo", *argv) == 2, argv
         assert fragment in capsys.readouterr().err, argv
-        assert not world.findings.exists() or world.text() == "", argv
+        assert (world.text() if world.findings.exists() else "") == seeded, argv
         assert not archive_base().exists() or not any(archive_base().iterdir()), argv
         assert foreign_record_path_exists(other), f"the refused request removed the foreign record: {argv}"
         assert record.read_bytes() == standing["bytes"], argv
@@ -1664,14 +1679,15 @@ def test_supersede_respects_both_record_locks(world: World) -> None:
     key = stage2.record_key("demo", other)
     record = write_foreign_record(other, [1])
     original = record.read_bytes()
+    seeded = world.text() if world.findings.exists() else ""  # the fixture's seeded spec review, if any
     with lock_held_elsewhere(stage2.record_base() / f"{key}.lock"):
         assert supersede(world, key) == 2, "the held foreign record was superseded anyway"
     assert record.read_bytes() == original, "the held foreign record was altered"
-    assert not world.findings.exists() and not archive_base().exists()
+    assert (world.text() if world.findings.exists() else "") == seeded and not archive_base().exists()
     with lock_held_elsewhere(stage2.lock_path("demo", world.root)):
         assert supersede(world, key) == 2, "the held own lock did not stop the supersession"
     assert record.read_bytes() == original
-    assert not world.findings.exists() and not archive_base().exists()
+    assert (world.text() if world.findings.exists() else "") == seeded and not archive_base().exists()
     # With both locks free the same command succeeds and never leaves a lock held behind.
     assert supersede(world, key) == 0
     assert not record.exists()
@@ -1847,10 +1863,11 @@ def test_plain_restart_refuses_active_other_worktree_records(world: World, capsy
     other = other_worktree(world)
     key = stage2.record_key("demo", other)
     write_foreign_record(other, [4])
+    seeded = world.text() if world.findings.exists() else ""  # the fixture's seeded spec review, if any
     assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
     err = capsys.readouterr().err
     assert key in err and "--supersedes" in err, err
-    assert not world.findings.exists(), "the refused restart wrote into findings.md"
+    assert (world.text() if world.findings.exists() else "") == seeded, "the refused restart wrote into findings.md"
     world.write_findings(stage2.RELEASE_HEADING + " 2026-11-17", "Rounds run: 2")
     before = world.text()
     assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
@@ -2186,16 +2203,21 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     ],
     ids=["three-cells", "five-cells", "short-table"],
 )
-def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
-    """Malformed spec tables stay visible; malformed loop answers fail without a clean round."""
-    world.script(claude=[{"stdout": answer}], pi=[{"stdout": answer}])
-    assert world.run("spec-review") == 0
+def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(
+    world: World, answer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed table is no review: the spec-review retries and falls back, and nothing lands; the loop fails."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    before = world.text()
+    world.script(claude=[{"stdout": answer}, {"stdout": answer}], pi=[{"stdout": answer}])
+    assert world.run("spec-review") == 1
+    assert len(world.calls("claude")) == 2 and len(world.reviews("pi")) == 1
+    assert world.text() == before, "a malformed answer was kept as review evidence"
+    assert "reported no finding" not in world.text()
+    world.script(pi=[{"stdout": answer}])
     assert world.run("review-loop") == 1
     assert not world.record().exists()
-    text = world.text()
-    assert "reported no finding" not in text
-    assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
-    assert answer.splitlines()[-1] in text
 
 
 def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
@@ -2218,12 +2240,14 @@ def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
 @pytest.mark.parametrize("verb", sorted(stage2.VERBS))
 @pytest.mark.parametrize("change", [None, "missing", "..", "a/b"])
 def test_no_change_or_a_missing_folder_refuses_every_verb(world: World, verb: str, change: str | None) -> None:
+    before = world.findings.read_bytes() if world.findings.exists() else None
     assert world.run(verb, change) == 2
     assert world.calls() == []
-    assert not world.findings.exists()
+    assert (world.findings.read_bytes() if world.findings.exists() else None) == before
 
 
 def test_a_leak_refuses_the_call(world: World) -> None:
+    before = world.findings.read_bytes()
     (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
     for verb in ("spec-review", "review", "review-loop", "probe"):
         assert world.run(verb) == 2
@@ -2231,7 +2255,7 @@ def test_a_leak_refuses_the_call(world: World) -> None:
     # call that carries content starts.
     assert world.calls("claude") == [] and world.calls("codex") == []
     assert world.reviews("pi") == [], "a reviewer call started despite the leak"
-    assert not world.findings.exists()
+    assert world.findings.read_bytes() == before, "a refusal wrote findings"
 
 
 def test_each_call_runs_its_own_leak_check(world: World) -> None:
@@ -2428,6 +2452,7 @@ def test_every_call_leaves_its_line_in_findings(world: World) -> None:
 
 
 def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) -> None:
+    world.findings.unlink()
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -2613,7 +2638,9 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
     assert "seed fact" in before and "seed fact" in text
     assert "## Runner exploration" in text and "Fact from `src/app.py`" in text
     assert "attempt 1 · route flash" in text and "model glm-5.3-flash" in text
-    assert not world.findings.exists()
+    assert "attempt 1 · route flash" not in world.findings.read_text(encoding="utf-8"), (
+        "the exploration wrote findings, not research"
+    )
 
 
 def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
@@ -3261,7 +3288,9 @@ def _real_holder(ready: Path, seconds: float = 30.0) -> subprocess.Popen[bytes]:
             f"time.sleep({seconds})",
         ],
         cwd=REPO_ROOT,
-        env={**os.environ, "HOLDER_READY": str(ready)},
+        # The holder runs alone (setting 1), so the runner's own check must queue behind it even
+        # where a free second slot would otherwise admit it (verify-two-slots).
+        env={**os.environ, "HOLDER_READY": str(ready), stage2.verify_lock.SLOTS_ENV: "1"},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -4519,7 +4548,7 @@ def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(
     assert code == 0 and prompt is not None
     assert len(world.calls("codex")) == 2
     assert git(world.root, "log", "-1", "--pretty=%s").startswith("docs(demo): draft spec and plan")
-    assert world.text().count("leak check clean") == 2
+    assert minus_seeded_review(world).count("leak check clean") == 2
 
 
 def test_diagnostic_redaction_refuses_an_unusable_denylist(
@@ -4752,7 +4781,8 @@ def test_moved_head_diagnostics_protect_file_evidence(
 
 
 def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
-    world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
+    dirt = world.findings.read_text(encoding="utf-8") + "\nEarlier failed attempt.\n"
+    world.findings.write_text(dirt, encoding="utf-8")
     successful_implementation(world)
     assert world.run("implement") == 0
     assert git(world.root, "status", "--porcelain") == ""
@@ -4761,7 +4791,14 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
 
 def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World) -> None:
     # Repair L2-1. Planted fault: `producer_for` falls through to `pi` for the GLM endpoints.
-    assert not world.findings.exists()
+    # The review precondition exempts a spike (spec criterion 5), so a spike is the one
+    # implement run that still creates the findings file the attempt writes its evidence into.
+    world.findings.unlink()
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", "class: spike"), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spike stands outside the review rule")
     successful_implementation(world)
     assert world.run("implement") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -4862,10 +4899,15 @@ def commit_decisions(world: World, body: str, message: str) -> str:
 
 
 def assert_no_dispatch(world: World, capsys: pytest.CaptureFixture[str]) -> str:
-    """A refusal before the first model call: no call, no attempt entry, no audit line."""
+    """A refusal before the first model call: no call, no attempt entry, no audit line.
+
+    The fixture seeds one qualifying spec review, so "nothing written" reads as: no call, and
+    findings.md without a second audit line beside the seed's own.
+    """
     error = capsys.readouterr().err
     assert world.calls() == [], "a model call started on refused input"
-    assert not world.findings.exists(), "an attempt entry was written"
+    text = world.text() if world.findings.exists() else ""
+    assert text.count("Stage-2 call,") <= 1, "an attempt entry was written"
     assert "Stage-2 call" not in error
     return error
 
@@ -4933,7 +4975,7 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
 def test_a_findings_file_the_draft_creates_names_codex(world: World) -> None:
     # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
     draft_world(world)
-    assert not world.findings.exists()
+    world.findings.unlink()
     passing_draft(world)
     assert world.run("draft") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -6931,7 +6973,7 @@ def test_quoted_reader_lines_count_for_no_reader(world: World) -> None:
     ):
         assert pattern.findall(text) == pattern.findall(without) == []
     assert stage2_runs.measure(text) == stage2_runs.measure(without)
-    assert stage2_runs.measure(text).calls == [("implement", True), ("implement", True)]
+    assert stage2_runs.measure(minus_seeded_review(world, text)).calls == [("implement", True), ("implement", True)]
     assert "Stage-2 session, 2026-10-11: probe` +1 -0" in text, "the name's separator did not split the entry"
 
 
@@ -7614,7 +7656,7 @@ def test_a_findings_file_without_a_header_is_left_without_one(world: World) -> N
 def test_a_spec_without_a_bead_refuses(world: World) -> None:
     (world.root / "plans" / "changes" / "demo" / "spec.md").write_text("---\ntitle: Spec\n---\n", encoding="utf-8")
     assert world.run("spec-review") == 2
-    assert world.calls() == [] and not world.findings.exists()
+    assert world.calls() == []
 
 
 def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
@@ -7780,7 +7822,8 @@ def test_a_pi_off_the_pin_is_refused(
         assert handed["timeout"] == 0.5 and handed["outcome"] == "timeout", handed
     assert world.calls() == [], "a call started"
     assert not world.record().exists()
-    assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
+    text = world.text() if world.findings.exists() else ""
+    assert text.count("Stage-2 call,") <= 1, "a call line was written"
     assert "leak check" not in capsys.readouterr().out.lower(), "the leak check ran before the pin"
 
 
@@ -7857,7 +7900,7 @@ def test_a_refused_attempt_keeps_the_findings_a_human_touched(world: World) -> N
     """P2 of the #192 review: the restore keeps the verb's own allowed set, not only the baseline."""
     findings = world.root / "plans" / "changes" / "demo" / "findings.md"
     findings.parent.mkdir(parents=True, exist_ok=True)
-    findings.write_text("a human note\n", encoding="utf-8")
+    findings.write_text("a human note\n\n" + opus_review_block(world) + "\n", encoding="utf-8")
     world.script(
         claude=[
             {
@@ -8767,12 +8810,24 @@ def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
     assert len(world.calls("pi")) == 7, "one discovery plus two free and three paid members were expected"
 
 
-def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
-    world.script(claude=[{"stdout": "An opening remark.\n" + rows(1)}, {"stdout": "No finding at all."}])
+def test_an_answer_that_is_not_rows_is_kept(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(
+        claude=[
+            {"stdout": "An opening remark.\n" + rows(1)},
+            {"stdout": "No finding at all."},
+            {"stdout": "No finding at all."},
+        ],
+        pi=["No finding."],
+    )
     assert world.run("spec-review") == 0
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
     assert world.run("spec-review") == 0
-    assert "No finding at all." in world.text() and "Opus reported no finding." in world.text()
+    # The second call's answer is no readable review; after the single retry the declared
+    # fallback answers the exact clean form, and its block names the model declared at write.
+    assert f"{TEST_LADDER[0]} reported no finding." in world.text()
+    assert "> No finding." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
 
 
 def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: World) -> None:
@@ -8793,11 +8848,13 @@ def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: Worl
     ],
     ids=["empty-answer", "non-zero-exit"],
 )
-def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict) -> None:
-    world.script(claude=[step])
+def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    before = world.text()
+    world.script(claude=[step, step], pi=[{"exit": 1}])
     assert world.run("spec-review") == 1
-    text = world.text()
-    assert "Reviewer session" not in text and "## Phase 2a" not in text and "X1" not in text
+    assert world.text() == before, "a failed call left rows or an audit line in findings"
 
 
 def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
@@ -8818,7 +8875,7 @@ def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
 
 def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World) -> None:
     # Criterion 29. Planted fault: the producer map stays at `codex` or `pi`.
-    assert not world.findings.exists()
+    world.findings.unlink()
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
@@ -8836,6 +8893,1150 @@ def commit_review_findings(world: World) -> None:
 def seed_2a_session(world: World, session: str = "T1") -> None:
     """A findings.md whose last phase-2a block is a Codex one with its session line (criteria 30 and 31)."""
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex {session}")
+
+
+# ---------------------------------------------------------------------------
+# The mandatory spec review (bead coding-harness-ttic, spec criteria 1-19)
+# ---------------------------------------------------------------------------
+
+# The heading day every seeded block carries: inside the fingerprint rule, so no seeded block
+# falls into the legacy comparison (which would read the fixture's real commit days).
+FIXED_REVIEW_DAY = "2026-11-19"
+
+
+def current_fingerprint(world: World) -> str:
+    """The fingerprint of the demo spec's body bytes as they stand on disk."""
+    return stage2.spec_body_fingerprint(world.root / "plans" / "changes" / "demo" / "spec.md")
+
+
+def review_audit_line(model: str, endpoint: str = "claude-code-plan") -> str:
+    """The runner call line a seeded block carries directly above its heading (spec terms)."""
+    return (
+        f"Stage-2 call, {FIXED_REVIEW_DAY}: spec-review · endpoint {endpoint} · model {model} · "
+        "leak check clean over 4 files, 2 commits, 12 rules."
+    )
+
+
+def review_table(count: int, reviewer: str) -> str:
+    """A stored findings table of `count` open rows, one criterion each, as the runner writes them."""
+    table_rows = [
+        [f"R{n}", "MAJOR", "SPEC", f"criterion {n}", f"spec.md:{n}", f"FB{n} unique body", reviewer, "open", "—"]
+        for n in range(1, count + 1)
+    ]
+    return stage2.render_table(stage2.ROW_COLUMNS, table_rows)
+
+
+def opus_review_block(
+    world: World, count: int = 1, *, day: str = FIXED_REVIEW_DAY, fingerprint: str | None = "current"
+) -> str:
+    """A seeded Opus review block: audit line, heading, the fingerprint line when one stands, the table.
+
+    `fingerprint="current"` digests the spec's body as it stands now; `None` seeds an undigested
+    legacy block; any other string plants a fingerprint the current body cannot match.
+    """
+    mark = current_fingerprint(world) if fingerprint == "current" else fingerprint
+    parts = []
+    if mark is not None:
+        parts.append(f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}")
+        parts.append(f"Spec fingerprint: {mark}")
+    parts.append(review_table(count, "Opus 5.5"))
+    return f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n" + "\n\n".join(parts)
+
+
+def minus_seeded_review(world: World, text: str | None = None) -> str:
+    """The findings text without the fixture's seeded review block (audit line, heading, fingerprint, table).
+
+    Tests that count runner audit lines or look for table text measure the calls they made, not
+    the review the `world` fixture seeds so that every implement call is admitted.
+    """
+    return (world.text() if text is None else text).replace(world.seeded_review, "")
+
+
+def clean_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded clean review in the runner's own shape: the exact `No finding.` answer, quoted."""
+    body = stage2.answer_block([], "No finding.", "Opus")
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{body}"
+    )
+
+
+def fallback_review_block(world: World, model: str, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded fallback review: its audit line names the Pi endpoint and the model declared at write."""
+    parts = [
+        f"Spec fingerprint: {current_fingerprint(world)}",
+        f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}",
+        review_table(count, model),
+    ]
+    return f"{review_audit_line(model, 'opencode-go')}\n## Phase 2a — fallback {model}, {day}\n\n" + "\n\n".join(parts)
+
+
+def opus_recheck_block(world: World, count: int = 1, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """The Opus re-check of a fallback review, headed as the same round (spec criterion 17)."""
+    parts = [
+        f"Spec fingerprint: {current_fingerprint(world)}",
+        f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}",
+        review_table(count, "Opus 5.5"),
+    ]
+    heading = f"## Phase 2a — Opus 5.5 ({stage2.RECHECK_MARKER}), {day}"
+    return f"{review_audit_line(stage2.OPUS[1])}\n{heading}\n\n" + "\n\n".join(parts)
+
+
+def ambiguity_review_block(world: World, *, status: str = "open", day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded review whose newest row carries the `[AMBIGUITY]` mark where the severity stands."""
+    table_rows = [
+        [
+            "R1",
+            "[AMBIGUITY] round scope",
+            "SPEC",
+            "criterion 1",
+            "spec.md:1",
+            "Is the boundary the right one?",
+            "Opus 5.5",
+            status,
+            "—",
+        ],
+    ]
+    table = stage2.render_table(stage2.ROW_COLUMNS, table_rows)
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{table}"
+    )
+
+
+def unreadable_review_block(world: World, *, day: str = FIXED_REVIEW_DAY) -> str:
+    """A seeded block whose table carries one line no reader can parse: the whole block spoils."""
+    table = review_table(1, "Opus 5.5") + "\n| only | three | cells |"
+    return (
+        f"{review_audit_line(stage2.OPUS[1])}\n## Phase 2a — Opus 5.5, {day}\n\n"
+        f"Spec fingerprint: {current_fingerprint(world)}\nSpec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}\n\n{table}"
+    )
+
+
+def seed_review_rounds(world: World, rounds: int, *, stale_newest: bool = False, recheck: bool = False) -> None:
+    """Findings that hold `rounds` qualifying review rounds (spec criteria 3, 17 and 19)."""
+    blocks = [opus_review_block(world, 1) for _ in range(rounds)]
+    if stale_newest and blocks:
+        blocks[-1] = opus_review_block(world, 1, fingerprint="sha256:" + "0" * 64)
+    if recheck and blocks:
+        blocks[-1] = fallback_review_block(world, TEST_LADDER[0])
+        blocks.append(opus_recheck_block(world, 1))
+    world.write_findings(*blocks)
+
+
+def pin_spec_review(world: World, model: str = TEST_LADDER[0], minutes: int = 30, pause_seconds: int = 30) -> None:
+    """Declare the fallback model and the call settings in the world's `spec_review` block (spec criteria 13 and 15)."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["spec_review"] = {
+        "call_limit_minutes": minutes,
+        "pause_seconds": pause_seconds,
+        "fallback_endpoint": "opencode-go",
+        "fallback_model": model,
+    }
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def commit_at(
+    world: World, monkeypatch: pytest.MonkeyPatch, day: dt.date, message: str = "a committed spec change"
+) -> None:
+    """Commit a spec body edit under the given UTC committer day (spec criterion 12)."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8")
+    spec.write_text(text + f"\nBody change {day.isoformat()}.\n", encoding="utf-8")
+    stamp = f"{day.isoformat()}T12:00:00+00:00"
+    monkeypatch.setenv("GIT_COMMITTER_DATE", stamp)
+    monkeypatch.setenv("GIT_AUTHOR_DATE", stamp)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", message)
+    monkeypatch.delenv("GIT_COMMITTER_DATE", raising=False)
+    monkeypatch.delenv("GIT_AUTHOR_DATE", raising=False)
+
+
+def spec_review_texts() -> tuple[str, str, str, str]:
+    """The live workflow texts the spec names (spec terms): WORKFLOW, AGENTS.md and the two 2a prompts."""
+    return (
+        WORKFLOW.read_text(encoding="utf-8"),
+        (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+        (PROMPTS / "02-spec.md").read_text(encoding="utf-8"),
+        (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8"),
+    )
+
+
+def draft_chain(workflow: str) -> str | None:
+    """The ordered steps of the draft chain in docs/WORKFLOW.md §4, or None when the list is gone."""
+    chain = re.search(r"A drafted change runs in this order:\n\n(.*?)\n\n", workflow, re.S)
+    return chain.group(1) if chain else None
+
+
+def table_row(text: str, start: str) -> str | None:
+    """The first table line that begins with `start`, or None."""
+    return next((line for line in text.splitlines() if line.startswith(start)), None)
+
+
+def spec_review_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    """Criterion 1: every workflow text requires a current review before the card, the final draft excepted.
+
+    Loop rows L2-8, L2-12, L3-3 and L3-5: the phase rows, the class table and the class paragraph
+    are read for the words that let a card pass without a current review, so the old texts go red.
+    """
+    problems: list[str] = []
+    steps = draft_chain(workflow)
+    if steps is None:
+        return ["docs/WORKFLOW.md no longer states the draft chain in one ordered list."]
+    review = re.search(r"\d+\. `python3 scripts/stage2\.py spec-review <change>`", steps)
+    card = re.search(r"\d+\. The plan card reaches the maintainer", steps)
+    if review is None:
+        problems.append("the draft chain no longer names the spec-review step.")
+    if card is None:
+        problems.append("the draft chain no longer names the plan card.")
+    if review is not None and card is not None and review.start() > card.start():
+        problems.append("the spec-review step no longer stands before the plan card.")
+    lines = agents.splitlines()
+    review_row = next((index for index, line in enumerate(lines) if line.startswith("| 2a |")), None)
+    card_row = next((index for index, line in enumerate(lines) if line.startswith("| 3 | Plan")), None)
+    if review_row is None or card_row is None or review_row > card_row:
+        problems.append("AGENTS.md's phase table no longer puts Spec-Review before Plan.")
+    for name, row in (
+        ("AGENTS.md's phase table", table_row(agents, "| 2a |")),
+        ("docs/WORKFLOW.md's phase table", table_row(workflow, "| 2a | Spec review")),
+    ):
+        if row is None:
+            problems.append(f"{name} has no 2a row.")
+            continue
+        if "optional" in row.lower():
+            problems.append(f"{name} still calls the spec review optional.")
+        if "a current review" not in row:
+            problems.append(f"{name}'s 2a gate does not require a current review of the spec.")
+        if not re.search(r"final draft after round three", row):
+            problems.append(f"{name}'s 2a gate does not except the final draft after round three.")
+    for klass in ("`bounded`", "`feature`, `architectural`"):
+        row = table_row(section(workflow, "### Which change gets what"), f"| {klass} |")
+        cell = row.split("|")[2].strip() if row else ""
+        if not cell.startswith("Opus 5.5") or "required" not in cell or "where one is held" in cell:
+            problems.append(f"the class table does not require the spec review for {klass}.")
+    for stale in (
+        r"may skip the\s+spec review",
+        r"spec review,\s+which is optional",
+        r"Nothing checks a change's class beyond explore",
+    ):
+        if re.search(stale, workflow):
+            problems.append(f"docs/WORKFLOW.md still says `{stale}`.")
+    if not re.search(r"final draft[^.]*without a\s+new review", workflow):
+        problems.append("docs/WORKFLOW.md no longer lets the final draft after three rounds pass without a review.")
+    if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
+        problems.append("the final draft after three rounds is fenced behind another review.")
+    return problems
+
+
+def test_doctrine_requires_review_before_card() -> None:
+    """Criterion 1: the live texts require a current review before the card and leave the final draft unfenced."""
+    workflow, agents, _spec_prompt, _review_prompt = spec_review_texts()
+    assert spec_review_doctrine_problems(workflow, agents) == []
+    wounded = re.sub(r"\n\d+\. `python3 scripts/stage2\.py spec-review <change>`[^\n]*\n[^\n]*", "\n", workflow)
+    assert spec_review_doctrine_problems(wounded, agents), "a chain without the spec-review step must go red"
+    optional = re.sub(r"^\| 2a \| Spec-Review [^|]*\|", "| 2a | Spec-Review *(optional)* |", agents, flags=re.M)
+    assert optional != agents and spec_review_doctrine_problems(workflow, optional), "an optional 2a row must go red"
+    held = re.sub(r"^(\| `bounded` \| )[^|]*\|", r"\1Opus 5.5, where one is held |", workflow, flags=re.M)
+    assert held != workflow and spec_review_doctrine_problems(held, agents), "a bounded row that may skip must go red"
+    skip = workflow + "\nOne stated as `bounded` may skip the spec review, which is optional there.\n"
+    assert spec_review_doctrine_problems(skip, agents), "a sentence that lets bounded skip the review must go red"
+
+
+def spec_review_spike_problems(workflow: str) -> list[str]:
+    """Criterion 2: the class table and the phase row keep the spike outside the spec review."""
+    found = re.search(r"^\| a one-sentence change, a `spike` \| ([^|]+) \|", workflow, re.M)
+    if found is None:
+        return ["the class table no longer carries the spike row."]
+    problems: list[str] = []
+    cell = found.group(1)
+    if "no stage 2" not in cell and "no spec review" not in cell:
+        problems.append("the spike row's spec-review cell no longer keeps the spike outside the review.")
+    row = table_row(workflow, "| 2a | Spec review")
+    if row is None or "not for a spike" not in row:
+        problems.append("the 2a phase row no longer exempts the spike.")
+    return problems
+
+
+def test_doctrine_exempts_spike() -> None:
+    """Criterion 2: the live table exempts the spike; a spike row that requires the review goes red."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert spec_review_spike_problems(workflow) == []
+    planted = workflow.replace(
+        "| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | Opus 5.5, required |"
+    )
+    assert spec_review_spike_problems(planted), "a spike row that requires the review must go red"
+    unexempt = workflow.replace("| 2a | Spec review *(not for a spike)* |", "| 2a | Spec review |")
+    assert unexempt != workflow and spec_review_spike_problems(unexempt), "a 2a row for every class must go red"
+
+
+def spec_review_repeat_problems(workflow: str, spec_prompt: str = "") -> list[str]:
+    """Criterion 3: draft and review repeat until a current review settles the rows or round three.
+
+    Loop rows L2-11, L2-12, L3-4 and L3-5: the chain and the spec prompt must name the re-review,
+    the three-round limit and the fourth round's recorded form, and that form must be the one
+    `stage2.fourth_round_authorized` reads; no text lets a fourth round run without it.
+    """
+    problems: list[str] = []
+    steps = draft_chain(workflow) or ""
+    second = re.search(r"\d+\. [^\n]*second `draft <change>`", steps)
+    card = re.search(r"\d+\. The plan card reaches the maintainer", steps)
+    if second is None or card is None:
+        problems.append("the draft chain no longer names the second draft before the plan card.")
+    else:
+        between = steps[second.start() : card.start()]
+        if not re.search(r"draft and review\s+repeat", between):
+            problems.append("the draft chain shows the card after the second draft without a re-review.")
+        if not re.search(r"third\s+review\s+round", between):
+            problems.append("the draft chain names no three-round limit.")
+        if not re.search(r"authorizes a\s+fourth\s+round", between) or "re-sliced" not in between:
+            problems.append("the draft chain does not leave round four to the maintainer or a re-slice.")
+    after = section(spec_prompt, "## After the spec review")
+    if not re.search(r"draft and review\s+repeat", after) or not re.search(r"third\s+review\s+round", after):
+        problems.append("prompts/02-spec.md does not repeat draft and review up to the third round.")
+    for name, text in (("docs/WORKFLOW.md", workflow), ("prompts/02-spec.md", after)):
+        form = re.search(r"`Q-<n> · (Fourth spec-review\s+round)`", text)
+        if form is None:
+            problems.append(f"{name} does not name the recorded form that authorizes a fourth round.")
+        elif not stage2.FOURTH_ROUND_TITLE.match(re.sub(r"\s+", " ", form.group(1))):
+            problems.append(f"{name} names a fourth-round form the runner does not read.")
+    if re.search(r"a fourth (?:spec-)?review round[^.]*runs without[^.]*authoriz", workflow, re.I):
+        problems.append("the text admits a fourth review round without the maintainer's authorization.")
+    if re.search(r"final draft[^.]*still requires[^.]*review", workflow, re.I):
+        problems.append("the final draft after three rounds is fenced behind another review.")
+    return problems
+
+
+def test_doctrine_repeats_review_after_edit() -> None:
+    """Criterion 3: the live chain repeats review after an edit and leaves the fourth round to the maintainer."""
+    workflow, _agents, spec_prompt, _review_prompt = spec_review_texts()
+    assert spec_review_repeat_problems(workflow, spec_prompt) == []
+    planted = (
+        workflow
+        + "\nA fourth spec-review round runs without the maintainer's authorization when the loop demands it.\n"
+    )
+    assert spec_review_repeat_problems(planted, spec_prompt), "an unauthorized fourth round must go red"
+    no_repeat = re.sub(r"draft and review\s+repeat", "the card follows", workflow)
+    assert spec_review_repeat_problems(no_repeat, spec_prompt), "a chain without the re-review must go red"
+    other_form = workflow.replace("Fourth spec-review\n  round", "Extra round").replace(
+        "Fourth spec-review round", "Extra round"
+    )
+    assert spec_review_repeat_problems(other_form, spec_prompt), "a form the runner does not read must go red"
+
+
+def test_spec_review_prompt_states_the_strict_answer_format() -> None:
+    """Loop row L3-6: the 2a prompt asks for the strict severities and the exact clean answer its reader takes."""
+    prompt = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
+    assert spec_review_prompt_problems(prompt) == []
+    old = prompt.replace(
+        section(prompt, "## If you find nothing"),
+        "## If you find nothing\n\nSay so, in one sentence, and name what you checked.",
+    )
+    assert spec_review_prompt_problems(old), "a one-sentence clean result must go red"
+
+
+def spec_review_prompt_problems(prompt: str) -> list[str]:
+    """Where the 2a prompt disagrees with `SPEC_REVIEW_ANSWER_FORMAT` and the reader behind it."""
+    problems: list[str] = []
+    assert "exactly BLOCKER, MAJOR or MINOR" in stage2.SPEC_REVIEW_ANSWER_FORMAT
+    assert "No finding." in stage2.SPEC_REVIEW_ANSWER_FORMAT
+    clean = section(prompt, "## If you find nothing")
+    if f"`{stage2.NO_FINDING_ANSWER}`" not in clean or "in one sentence" in clean:
+        problems.append("the clean result is not the exact `No finding.` answer.")
+    if not re.search(r"exactly `BLOCKER`, `MAJOR` or `MINOR`,? or begins with\s+the\s+mark `\[AMBIGUITY\]`", prompt):
+        problems.append("the prompt does not state the severities the reader takes.")
+    if stage2.readable_review(stage2.NO_FINDING_ANSWER) != []:
+        problems.append("the reader no longer takes the exact clean answer.")
+    return problems
+
+
+def test_repository_declares_the_spec_review_fallback() -> None:
+    """Loop row L3-2: the repository's own declaration names the fallback, the call limit and the pause."""
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    block = data.get("spec_review")
+    assert isinstance(block, dict), "model-endpoints.yaml declares no `spec_review` block"
+    assert {"call_limit_minutes", "pause_seconds", "fallback_endpoint", "fallback_model"} <= set(block)
+    config = stage2.spec_review_call_config(REPO_ROOT)
+    assert config["fallback_model"] is not None and config["fallback_endpoint"] == stage2.OPENCODE
+    assert config["timeout_seconds"] == block["call_limit_minutes"] * 60
+    assert config["pause_seconds"] == block["pause_seconds"]
+    entry = next(e for e in data["endpunkte"] if e["name"] == stage2.OPENCODE)
+    assert config["fallback_model"] in entry["modelle"], "the fallback is no admitted model of its endpoint"
+    assert config["fallback_model"] in entry.get("modelle_terms", {}), "the fallback has no terms reading"
+
+
+def test_morning_handover_runs_the_spec_review_inventory(tmp_path: Path) -> None:
+    """Loop row L3-10: the handover skill runs the inventory option the runner offers."""
+    skill = (REPO_ROOT / "tools" / "claude-code" / "skills" / "handover" / "SKILL.md").read_text(encoding="utf-8")
+    command = "python3 scripts/stage2.py --spec-review-inventory"
+    assert command in skill, "the morning handover does not run the spec-review inventory"
+    assert "Spec-review inventory" in skill
+    assert stage2.main(["--spec-review-inventory", "--root", str(tmp_path)]) == 0
+
+
+@pytest.mark.parametrize(
+    ("replacement", "expected"),
+    [("class: unplanned", "states the class 'unplanned'"), ("", "no class is stated")],
+    ids=["invalid-class", "missing-class"],
+)
+def test_implement_refuses_unknown_class(
+    world: World, replacement: str, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4 (spec): an unknown or missing class refuses implement before any model starts."""
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", replacement), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a class statement the runner cannot accept")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_implement_exempts_spike_from_spec_review(world: World) -> None:
+    """Criterion 5 (spec): a spike reaches the existing implement checks without any review evidence."""
+    world.findings.unlink()
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", "class: spike"), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spike stands outside the review rule")
+    successful_implementation(world)
+    assert world.run("implement") == 0
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        ("unlink", "no qualifying spec review exists"),
+        ("unaudited", "no matching runner call line"),
+        ("codex", "no qualifying spec review exists"),
+        ("unreadable", "is no readable review"),
+        ("stale", "is stale"),
+    ],
+    ids=["missing", "unaudited", "codex-block", "unreadable-table", "stale-fingerprint"],
+)
+def test_implement_refuses_missing_stale_or_unreadable_review(
+    world: World, seed: str, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 6 (spec): a missing, unaudited, Codex, unreadable or stale review refuses implement."""
+    if seed == "unlink":
+        world.findings.unlink()
+    elif seed == "unaudited":
+        world.write_findings(opus_review_block(world).split("\n", 1)[1])
+    elif seed == "codex":
+        seed_2a_session(world)
+    elif seed == "unreadable":
+        world.write_findings(unreadable_review_block(world))
+    else:
+        world.write_findings(opus_review_block(world, fingerprint="sha256:" + "0" * 64))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", f"a review that does not qualify ({seed})")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_implement_names_open_review_ambiguity(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7 (spec): an open ambiguity row refuses implement and names the row."""
+    world.write_findings(ambiguity_review_block(world))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a review with an open ambiguity")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "open ambiguity row R1" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_each_open_ambiguity_needs_its_own_settlement(world: World) -> None:
+    block = ambiguity_review_block(world)
+    row = "| R1 | [AMBIGUITY] round scope |"
+    assert row in block
+    second = next(line for line in block.splitlines() if line.startswith(row)).replace("| R1 |", "| R2 |", 1)
+    world.write_findings(opus_review_block(world), opus_review_block(world), block + "\n" + second)
+    decisions = world.root / "plans/changes/demo/decisions.md"
+    decisions.write_text(fourth_round_record("Q-30", "settled", title="Ambiguity R1"))
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem and "open ambiguity row R2" in admission.review_problem
+
+
+def test_implement_accepts_current_review(world: World) -> None:
+    """Criterion 8 (spec): the fixture's current qualifying review admits the standing green implement call."""
+    successful_implementation(world)
+    assert world.run("implement") == 0
+
+
+@pytest.mark.parametrize(
+    ("strip_findings", "expected"),
+    [(True, "no qualifying spec review exists"), (False, "no class is stated")],
+    ids=["review-missing", "class-missing"],
+)
+def test_stage2_off_enforces_review(
+    world: World, strip_findings: bool, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 9 (spec): --stage2-off keeps both the class and the review preconditions."""
+    if strip_findings:
+        world.findings.unlink()
+    else:
+        world.research.write_text(
+            world.research.read_text(encoding="utf-8").replace("\nclass: bounded", ""), encoding="utf-8"
+        )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "the offline route keeps the preconditions")
+    successful_implementation(world)
+    assert world.run("implement", "demo", "--stage2-off", "offline test") == 2
+    assert expected in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_spec_review_fingerprints_reviewed_bytes(world: World) -> None:
+    """Criterion 10 (spec): the block digests the body bytes, and the prompt carried exactly those bytes."""
+    world.script(claude=[{"stdout": rows(2)}])
+    assert world.run("spec-review") == 0
+    fingerprint = current_fingerprint(world)
+    assert f"Spec fingerprint: {fingerprint}" in world.text()
+    assert f"Spec review commit: {git(world.root, 'rev-parse', 'HEAD').strip()}" in world.text()
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert "## The spec body under review" in prompt
+    assert "# Spec" in prompt
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8").replace("title: Spec\n", "title: Spec v2\n"), encoding="utf-8")
+    assert stage2.spec_body_fingerprint(spec) == fingerprint, "a front-matter-only edit is no body change"
+
+
+@pytest.mark.parametrize(
+    ("edit", "current"),
+    [("body", False), ("front-matter", True)],
+    ids=["body-edit", "header-edit"],
+)
+def test_review_currency_rejects_changed_bytes(world: World, edit: str, current: bool) -> None:
+    """Criterion 11 (spec): the fingerprint reads body bytes; a header-only edit never goes stale."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8")
+    if edit == "body":
+        spec.write_text(text + "\nA later body sentence.\n", encoding="utf-8")
+    else:
+        spec.write_text(text.replace("title: Spec\n", "title: Spec v2\n"), encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is current
+    if not current:
+        assert "is stale" in admission.review_problem
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("current", None),
+        ("predates", "predates the spec's last committed change"),
+        ("cutoff-day", "was written on or after the fingerprint rule and carries none"),
+        ("dirty-body", "changed on disk without a commit"),
+        ("header-only", None),
+    ],
+)
+def test_legacy_review_currency_by_day(
+    world: World, monkeypatch: pytest.MonkeyPatch, case: str, expected: str | None
+) -> None:
+    """Criterion 12 (spec): a legacy block is measured against the committed day and the disk body."""
+    cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
+    world.findings.unlink()
+    if case == "cutoff-day":
+        world.write_findings(opus_review_block(world, day=cutoff.isoformat(), fingerprint=None))
+    else:
+        if case == "predates":
+            commit_day, block_day = cutoff - dt.timedelta(days=9), cutoff - dt.timedelta(days=10)
+        else:
+            commit_day = block_day = cutoff - dt.timedelta(days=4)
+        commit_at(world, monkeypatch, commit_day)
+        world.write_findings(opus_review_block(world, day=block_day.isoformat(), fingerprint=None))
+        spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+        text = spec.read_text(encoding="utf-8")
+        if case == "dirty-body":
+            spec.write_text(text + "More body.\n", encoding="utf-8")
+        elif case == "header-only":
+            spec.write_text(text.replace("title: Spec", "title: Spec v2"), encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is (expected is None)
+    if expected is not None:
+        assert expected in admission.review_problem
+
+
+def test_legacy_currency_ignores_committed_header_edit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = stage2.LEGACY_SPEC_REVIEW_DAY - dt.timedelta(days=5)
+    commit_at(world, monkeypatch, day)
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text().replace("title: Spec", "title: Changed"))
+    monkeypatch.setenv("GIT_COMMITTER_DATE", f"{day + dt.timedelta(days=1)}T12:00:00+00:00")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "header")
+    assert stage2.legacy_currency_problem(world.root, "demo", day) is None
+
+
+def test_spec_commit_day_uses_utc(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text() + "\nChanged body.\n")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2020-01-02T00:30:00+0200")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "body")
+    assert stage2.spec_last_commit_day(world.root, "demo") == dt.date(2020, 1, 1)
+
+
+@pytest.mark.parametrize("content", ["- item\n", "scalar\n", "false\n"])
+def test_spec_review_config_refuses_non_mapping(world: World, content: str) -> None:
+    (world.root / "model-endpoints.yaml").write_text(content)
+    try:
+        stage2.spec_review_call_config(world.root)
+    except stage2.Refused as error:
+        assert "field mapping" in str(error)
+    except AttributeError:
+        pytest.fail("non-mapping configuration must be refused")
+    else:
+        pytest.fail("non-mapping configuration must be refused")
+
+
+@pytest.mark.parametrize(
+    "step",
+    [{"exit": 1}, {"stdout": ""}, {"stdout": "A refusal in prose."}],
+    ids=["nonzero-exit", "empty-answer", "unreadable-answer"],
+)
+def test_spec_review_retries_then_falls_back(
+    world: World, monkeypatch: pytest.MonkeyPatch, step: dict, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 13 (spec): one retry after the configured pause, then the declared fallback through Pi."""
+    defaults = stage2.spec_review_call_config(world.root)
+    assert defaults["timeout_seconds"] == 30 * 60 and defaults["pause_seconds"] == 30
+    assert defaults["fallback_model"] is None, "no fallback is declared before the configuration names one"
+    pin_spec_review(world)
+    waits: list[int] = []
+    monkeypatch.setattr(stage2, "pause", waits.append)
+    world.script(claude=[step, step], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    assert waits == [30]
+    assert len(world.calls("claude")) == 2 and len(world.reviews("pi")) == 1
+    assert f"## Phase 2a — fallback {TEST_LADDER[0]}, " in world.text()
+    assert f"Spec fingerprint: {current_fingerprint(world)}" in world.text()
+    assert stage2.spec_review_call_config(world.root)["timeout_seconds"] == defaults["timeout_seconds"]
+    assert "no fallback" not in capsys.readouterr().err
+
+
+def test_fallback_review_has_worktree_read_access(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L2-10: the fallback reviewer gets the read tools and the worktree, not the tool-less free mode."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    calls = []
+
+    def reviewer(*_args, **kwargs):
+        calls.append(kwargs)
+        return rows(1)
+
+    monkeypatch.setattr(stage2, "run_reviewer", reviewer)
+    world.script(claude=[{"exit": 1}, {"exit": 1}])
+    assert world.run("spec-review") == 0
+    assert calls and not calls[0].get("free", False)
+
+
+@pytest.mark.parametrize("fingerprint", [None, "current"], ids=["legacy", "fingerprinted"])
+def test_a_blank_line_between_call_line_and_heading_still_qualifies(world: World, fingerprint: str | None) -> None:
+    """L2-5: the call line qualifies a block when it is the nearest non-blank line above the heading."""
+    text = opus_review_block(world, day="2026-11-17", fingerprint=fingerprint)
+    assert "\n## Phase 2a" in text
+    text = text.replace("\n## Phase 2a", "\n\n\n## Phase 2a")
+    blocks = stage2.spec_review_blocks(text)
+    assert len(blocks) == 1 and blocks[0].audit_matches
+    prose = text.replace("\n\n\n## Phase 2a", "\n\nA note between.\n\n## Phase 2a")
+    assert not stage2.spec_review_blocks(prose)[0].audit_matches
+
+
+def test_spec_review_refuses_a_spec_body_that_is_not_utf8(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L2-15: a spec body that is not UTF-8 ends spec-review with the runner's refusal, never a traceback."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_bytes(spec.read_bytes() + b"\ninvalid \xff byte\n")
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert capsys.readouterr().err.startswith("refused: ")
+    assert world.calls() == []
+    with pytest.raises(stage2.Refused, match="UTF-8"):
+        stage2.spec_review_prompt(world.root, "demo", b"invalid \xff")
+
+
+BAD_SEVERITY_ANSWERS = [
+    "| X1 | CRITICAL | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 |  | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | MAJOR (contract) | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | [ambiguity] scope | SPEC | criterion 1 | spec.md:1 | a finding |",
+    "| X1 | MAJOR | SPEC | criterion 1 | spec.md:1 | a finding |\n| X2 | CRITICAL | SPEC | c | s | one | two |",
+]
+
+
+BAD_SEVERITY_IDS = ["critical", "empty", "qualified", "lowercase-mark", "wide"]
+
+
+@pytest.mark.parametrize("answer", BAD_SEVERITY_ANSWERS, ids=BAD_SEVERITY_IDS)
+def test_spec_review_answer_the_stored_reader_rejects_fails_the_call(answer: str) -> None:
+    """L2-1, L2-3, L2-6, L2-7: an answer whose rows the stored reader could not read is no readable review."""
+    with pytest.raises(stage2.CallFailed):
+        stage2.readable_review(answer)
+
+
+def test_the_spec_review_prompt_states_the_severity_its_reader_takes(world: World) -> None:
+    """L2-1, L2-6: the 2a prompt names the strict severity set, not the free-text convention."""
+    prompt = stage2.spec_review_prompt(world.root, "demo", b"# Spec\n")
+    assert "exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`" in prompt
+    assert "free text" not in prompt
+
+
+def test_f5_overwide_review_row_refuses_implement(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """F-5: an unescaped pipe in the location cannot hide an open ambiguity."""
+    block = opus_review_block(world)
+    row = "| F-5 | BLOCKER | SPEC | criteria 6 and 7 | scripts/stage2.py | parse_rows | [AMBIGUITY] scope | Opus 5.5 | open | — |"
+    block += "\n" + row
+    world.write_findings(block)
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    assert "F-5" in error and "readable review" in error
+    assert world.calls() == []
+    with pytest.raises(stage2.CallFailed, match="F-5"):
+        stage2.readable_review("| F-5 | BLOCKER | SPEC | criteria | location | extra | [AMBIGUITY] scope |")
+
+
+def test_spec_review_with_an_unreadable_severity_retries_then_falls_back(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2-1, L2-6: a call whose rows would not read back is retried and then falls back; no such block is written."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    bad = {"stdout": BAD_SEVERITY_ANSWERS[0]}
+    world.script(claude=[bad, bad], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    assert len(world.calls("claude")) == 2
+    assert "CRITICAL" not in world.text()
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+@pytest.mark.parametrize(
+    ("rounds", "edits", "admitted"),
+    [(3, 1, True), (3, 2, False), (2, 1, False)],
+    ids=["three-rounds-one-final-draft", "three-rounds-later-edit", "two-rounds"],
+)
+def test_stale_legacy_blocks_still_count_as_rounds(
+    world: World, monkeypatch: pytest.MonkeyPatch, rounds: int, edits: int, admitted: bool
+) -> None:
+    """Legacy blocks count as rounds, but stale legacy evidence cannot count final-draft edits."""
+    cutoff = stage2.LEGACY_SPEC_REVIEW_DAY
+    day = (cutoff - dt.timedelta(days=10)).isoformat()
+    world.write_findings(*[opus_review_block(world, day=day, fingerprint=None) for _ in range(rounds)])
+    for step in range(edits):
+        commit_at(world, monkeypatch, cutoff - dt.timedelta(days=4 - step))
+    # The fixture's initial commit uses the real clock; place that initial body before
+    # the simulated review so only the explicit edits above follow the review.
+    versions = stage2.spec_body_versions(world.root, "demo")
+    initial_stamp = int(dt.datetime.combine(dt.date.fromisoformat(day), dt.time(), tzinfo=dt.UTC).timestamp())
+    versions[0] = (initial_stamp, versions[0][1])
+    monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: versions)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.rounds == rounds
+    if admitted:
+        assert admission.review_problem is None
+    else:
+        assert admission.review_problem is not None
+        assert "predates" in admission.review_problem or "stale" in admission.review_problem
+
+
+def test_a_later_spec_edit_after_the_final_draft_needs_a_review_again(world: World) -> None:
+    """L3-1: three rounds admit one final draft only; a second body version after the review is refused."""
+    seed_review_rounds(world, 3)
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    for sentence in ("The final draft.", "A much later edit."):
+        spec.write_text(spec.read_text(encoding="utf-8") + f"\n{sentence}\n", encoding="utf-8")
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", sentence)
+        problem = stage2.review_admission(world.root, "demo").review_problem
+        if sentence == "The final draft.":
+            assert problem is None
+    assert problem is not None and "final draft" in problem
+
+
+def test_an_ambiguity_with_no_round_left_is_settled_in_decisions(world: World) -> None:
+    """L3-8: when no review can run, the maintainer's recorded answer settles the row; before that the gate says how."""
+    seed_review_rounds(world, 2)
+    world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "open ambiguity row R1" in problem
+    assert "Ambiguity R1" in problem and "review the spec again" not in problem
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        fourth_round_record("Q-30", "the boundary stays as drafted", title="Ambiguity R1"), encoding="utf-8"
+    )
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+def test_a_committed_spec_body_that_is_not_utf8_reads_byte_exact(world: World) -> None:
+    """L3-9: a committed body with a non-UTF-8 byte is read as bytes - current when unchanged, never a traceback."""
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_bytes(spec.read_bytes() + b"\nbyte \xff here\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a spec body with a non-UTF-8 byte")
+    later = dt.datetime.now(dt.UTC).date() + dt.timedelta(days=1)
+    try:
+        committed = stage2.spec_last_commit_day(world.root, "demo")
+        problem = stage2.legacy_currency_problem(world.root, "demo", later)
+    except (UnicodeEncodeError, UnicodeDecodeError) as error:
+        pytest.fail(f"a committed non-UTF-8 spec body must be read as bytes, not decoded: {error}")
+    assert committed is not None
+    assert problem is None, "the committed body equals the disk body byte for byte, so the review stands"
+
+
+def test_the_inventory_lists_a_change_in_every_failing_group(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L2-14: a change with no class and no review stands in the class group and the review group."""
+    folder = world.root / "plans" / "changes" / "both"
+    folder.mkdir()
+    (folder / "spec.md").write_text("---\ntitle: Spec both\nbead: other-both\n---\n\n# Spec\n", encoding="utf-8")
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    class_group = out.split("Class refused (missing, invalid or disagreeing):", 1)[-1].split("\n\n", 1)[0]
+    review_group = out.split("Review missing, unreadable, stale or ambiguous:", 1)[-1].split("\n\n", 1)[0]
+    assert "\n- both (" in class_group
+    assert "\n- both (" in review_group
+
+
+def test_fallback_refuses_spec_changed_after_opus_failures(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F-6: fallback must not review a spec changed after the initial commit check."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    spec = world.root / "plans/changes/demo/spec.md"
+    changed = spec.read_text(encoding="utf-8") + "\nUncommitted change.\n"
+    world.script(
+        claude=[{"exit": 1}, {"exit": 1, "plant": {"plans/changes/demo/spec.md": changed}}],
+        pi=[rows(1)],
+    )
+    before = world.text()
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    assert "plans/changes/demo/spec.md" in error and "commit the spec, then rerun" in error
+    assert world.reviews("pi") == []
+    assert world.text() == before
+
+
+def test_fallback_spec_review_honours_leak_check(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 14 (spec): a leak BLOCK stops the fallback too; no Pi call starts."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(claude=[{"exit": 1}, {"exit": 1, "plant": {"src/leak.txt": f"{LEAK}\n"}}], pi=[rows(1)])
+    before = world.text()
+    assert world.run("spec-review") == 2
+    assert "the leak check is not clean" in capsys.readouterr().err
+    assert world.reviews("pi") == []
+    assert world.text() == before, "a blocked fallback wrote findings"
+
+
+@pytest.mark.parametrize("redeclare", [False, True], ids=["same-declaration", "changed-declaration"])
+def test_fallback_review_is_marked(world: World, monkeypatch: pytest.MonkeyPatch, redeclare: bool) -> None:
+    """Criterion 15 (spec): the fallback block names the model declared at write; redeclaring keeps it qualifying."""
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.script(claude=[{"exit": 1}, {"exit": 1}], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    blocks = stage2.spec_review_blocks(world.text())
+    assert len(blocks) == 2
+    newest = blocks[-1]
+    assert newest.is_fallback and newest.audit_matches
+    assert newest.fingerprint == current_fingerprint(world)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None and admission.recheck
+    if redeclare:
+        pin_spec_review(world, model=TEST_LADDER[1])
+        assert stage2.review_admission(world.root, "demo").review_problem is None
+
+
+def test_morning_inventory_uses_review_admission(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 16 (spec): the inventory groups class and review refusals; spikes and spec-less folders stand out."""
+    base = world.root / "plans" / "changes"
+    for name, research_class in (("late", "bounded"), ("unclassified", None), ("spiked", "spike")):
+        folder = base / name
+        folder.mkdir()
+        header = f"---\ntitle: Spec {name}\nbead: other-{name}\n"
+        if name == "late":
+            header += "implementation_status: implemented\n"
+        (folder / "spec.md").write_text(header + "---\n\n# Spec\n", encoding="utf-8")
+        if research_class is not None:
+            (folder / "research.md").write_text(
+                f"---\ntitle: Research {name}\nbead: other-{name}\nclass: {research_class}\n---\n\n# Research\n",
+                encoding="utf-8",
+            )
+    (base / "nospec").mkdir()
+    (base / "nospec" / "research.md").write_text(
+        "---\ntitle: Research nospec\nbead: other-nospec\nclass: bounded\n---\n\n# Research\n", encoding="utf-8"
+    )
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    class_group = out.split("Class refused (missing, invalid or disagreeing):", 1)[-1].split("\n\n", 1)[0]
+    review_group = out.split("Review missing, unreadable, stale or ambiguous:", 1)[-1].split("\n\n", 1)[0]
+    assert "\n- late (" in review_group
+    assert "\n- unclassified (" in class_group
+    assert "spiked" not in out and "nospec" not in out and "\n- demo" not in out
+
+
+def test_morning_inventory_names_fallback_rechecks(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 17 (spec): a current fallback is named for the Opus re-check, and the re-check costs no round."""
+    world.write_findings(fallback_review_block(world, TEST_LADDER[0]))
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    recheck_group = out.split("Fallback review to re-check with Opus in the next day session (same round):", 1)[-1]
+    assert "\n- demo" in recheck_group.split("\n\n", 1)[0]
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    blocks = stage2.spec_review_blocks(world.text())
+    assert blocks[-1].is_recheck and not blocks[-1].is_fallback
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None and admission.rounds == 1
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "\n- demo\n" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("issue", ["ambiguity", "blocker"])
+def test_inventory_lists_refused_current_fallback_for_recheck(
+    world: World, capsys: pytest.CaptureFixture[str], issue: str
+) -> None:
+    block = fallback_review_block(world, TEST_LADDER[0])
+    block = block.replace("MAJOR", "[AMBIGUITY] scope" if issue == "ambiguity" else "BLOCKER")
+    world.write_findings(opus_review_block(world), opus_review_block(world), block)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem
+    stage2.spec_review_inventory(world.root)
+    out = capsys.readouterr().out
+    assert "Fallback review to re-check with Opus" in out
+    assert "\n- demo" in out.split("Fallback review to re-check with Opus", 1)[1]
+
+
+def test_implement_rechecks_previously_implemented_change(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 18 (spec): a later implement call faces the same review precondition again."""
+    world.findings.unlink()
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    text = spec.read_text(encoding="utf-8").replace(
+        "bead: demo-1\n", "bead: demo-1\nimplementation_status: implemented\n"
+    )
+    spec.write_text(text, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an implemented change without review evidence")
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "no qualifying spec review exists" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize(
+    ("rounds", "ambiguity", "admitted"),
+    [(3, False, True), (2, False, False), (3, True, False)],
+    ids=["final-draft", "before-three-rounds", "ambiguity-still-refuses"],
+)
+def test_final_draft_after_three_spec_review_rounds(
+    world: World,
+    rounds: int,
+    ambiguity: bool,
+    admitted: bool,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Criterion 19 (spec): after three rounds a changed body is admitted; before them not; an ambiguity never."""
+    if ambiguity:
+        seed_review_rounds(world, rounds - 1)
+        world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    else:
+        seed_review_rounds(world, rounds)
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nA late body sentence.\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "the body changed after the newest review")
+    admission = stage2.review_admission(world.root, "demo")
+    assert (admission.review_problem is None) is admitted
+    successful_implementation(world)
+    if admitted:
+        assert world.run("implement") == 0
+    else:
+        assert world.run("implement") == 2
+        assert ("open ambiguity row R1" if ambiguity else "is stale") in capsys.readouterr().err
+        assert world.calls() == []
+
+
+@pytest.mark.parametrize("state", ["unstaged", "staged", "staged-reverted", "untracked"])
+def test_spec_review_requires_committed_spec_and_explains_unknown_fingerprint(
+    world: World, state: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F-4: reviews start from committed files, and old unknown fingerprints have a remedy."""
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text(encoding="utf-8")
+    spec.write_text(original + "\nReviewed but uncommitted.\n", encoding="utf-8")
+    if state == "untracked":
+        git(world.root, "rm", "--cached", "--", "plans/changes/demo/spec.md")
+    elif state in ("staged", "staged-reverted"):
+        git(world.root, "add", "--", "plans/changes/demo/spec.md")
+        if state == "staged-reverted":
+            spec.write_text(original, encoding="utf-8")
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    assert "plans/changes/demo/spec.md" in error and "commit the spec, then rerun" in error
+    assert world.calls() == []
+
+    # Simulate a review created by an older runner over bytes absent from history.
+    spec.write_text(original + "\nPreviously reviewed dirty body.\n", encoding="utf-8")
+    seed_review_rounds(world, 3)
+    git(world.root, "reset", "--quiet", "HEAD", "--", "plans/changes/demo/spec.md")
+    spec.write_text(original + "\nFinal draft.\n", encoding="utf-8")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem
+    assert "fingerprint" in admission.review_problem and "no commit" in admission.review_problem
+    assert "commit the spec, then rerun" in admission.review_problem
+
+
+def test_final_draft_with_uncommitted_only_spec(world: World) -> None:
+    # L4-1: after three rounds the single-edit admission (criterion 19) also holds for a spec never committed.
+    folder = world.root / "plans" / "changes" / "fresh"
+    folder.mkdir()
+    (folder / "research.md").write_text(
+        "---\ntitle: Research fresh\nbead: other-fresh\nclass: bounded\n---\n\n# Research\n", encoding="utf-8"
+    )
+    spec = folder / "spec.md"
+    spec.write_text(
+        "---\ntitle: Spec fresh\nbead: other-fresh\n---\n\n# Spec\n\nThe reviewed body.\n", encoding="utf-8"
+    )
+    mark = stage2.spec_body_fingerprint(spec)
+    blocks = [opus_review_block(world, 1, fingerprint=mark) for _ in range(3)]
+    (folder / "findings.md").write_text("# Findings — fresh\n\n" + "\n\n".join(blocks) + "\n", encoding="utf-8")
+    assert stage2.spec_body_versions(world.root, "fresh") == [], "the spec must live on disk only"
+    assert stage2.review_admission(world.root, "fresh").review_problem is not None
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nThe final draft.\n", encoding="utf-8")
+    admission = stage2.review_admission(world.root, "fresh")
+    assert admission.rounds == 3
+    assert admission.review_problem is not None and "commit the spec" in admission.review_problem
+
+
+def test_inventory_continues_after_measurement_error(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # L4-2: an error while measuring one change is reported for that change, and the list goes on.
+    base = world.root / "plans" / "changes"
+    for name in ("broken", "later"):
+        (base / name).mkdir()
+        (base / name / "spec.md").write_text(
+            f"---\ntitle: Spec {name}\nbead: other-{name}\n---\n\n# Spec\n", encoding="utf-8"
+        )
+    original = stage2.review_admission
+
+    def failing(root: Path, change: str) -> stage2.ReviewAdmission:
+        if change == "broken":
+            raise FileNotFoundError("git could not be launched")
+        return original(root, change)
+
+    monkeypatch.setattr(stage2, "review_admission", failing)
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    out = capsys.readouterr().out
+    assert "broken" in out and "git could not be launched" in out
+    assert "\n- later (" in out, "the change after the failing one was not measured"
+    assert "None. Every change" not in out
+
+
+def test_a_review_whose_bytes_change_mid_call_writes_no_block(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 10's guard: a body that changes while the reviewer reads writes no block for bytes unread."""
+    original = stage2.run_work_model
+    spec = world.root / "plans" / "changes" / "demo" / "spec.md"
+
+    def editing(_ctx, _prompt, endpoint, writable, **kwargs):
+        text = spec.read_text(encoding="utf-8")
+        spec.write_text(text.replace("# Spec\n", "# Spec\n\nA sentence the reviewer did not read.\n"), encoding="utf-8")
+        return original(_ctx, _prompt, endpoint, writable, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_work_model", editing)
+    before = world.text()
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 1
+    assert "changed during the review" in capsys.readouterr().err
+    assert world.text() == before, "a block was written for bytes the reviewer did not read"
+
+
+def test_spec_review_caps_the_fourth_round_without_authorization(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3's runner half: three rounds cap the verb until decisions.md records the maintainer's say."""
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert "Fourth spec-review round" in capsys.readouterr().err
+    assert world.calls() == []
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        fourth_round_record("Q-20", "authorized — one fourth round"), encoding="utf-8"
+    )
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    assert len(stage2.spec_review_blocks(world.text())) == 4
+
+
+def fourth_round_record(
+    record_id: str, answer: str, *, answered_by: str = "maintainer", title: str | None = None
+) -> str:
+    """A decisions.md question about a fourth spec-review round, in the interview record format."""
+    heading = title or "Fourth spec-review round"
+    return (
+        f"## {record_id} · {heading}\n\nasked: 2026-11-20\nanswer: {answer}\nanswered_by: {answered_by}\n"
+        "status: answered\n\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# Decisions\n\nThe maintainer does not authorize a fourth round.\n",
+        "# Decisions\n\nQ-9 releases a fourth round, which the maintainer authorizes in decisions.md.\n",
+        fourth_round_record("Q-20", "declined — no fourth round is authorized"),
+        fourth_round_record("Q-20", "authorized", answered_by="agent"),
+        fourth_round_record("Q-20", "authorized", title="A BLOCKER after the third review round"),
+    ],
+    ids=["declining-note", "quoted-rule", "declined-answer", "agent-answer", "other-question"],
+)
+def test_fourth_round_is_not_released_by_wording(world: World, text: str) -> None:
+    """L2-4, L2-9, L2-13: only a maintainer-answered fourth-round question that authorizes releases a round."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(text, encoding="utf-8")
+    assert not stage2.fourth_round_authorized(world.root, "demo")
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 2
+    assert world.calls() == []
+
+
+def test_one_authorization_releases_exactly_one_extra_round(world: World) -> None:
+    """L2-4: recorded authorizations admit round four and never round five."""
+    (world.root / "plans" / "changes" / "demo" / "decisions.md").write_text(
+        fourth_round_record("Q-20", "Authorised — one fourth round")
+        + fourth_round_record("Q-21", "authorized — another round"),
+        encoding="utf-8",
+    )
+    assert stage2.fourth_round_authorized(world.root, "demo")
+    seed_review_rounds(world, 3)
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    assert world.run("spec-review") == 2
+    assert len(stage2.spec_review_blocks(world.text())) == 4
+
+
+def test_the_morning_inventory_takes_no_verb(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """The inventory is no verb and takes no verb and no change: it measures every change itself."""
+    assert stage2.main(["--spec-review-inventory", "demo", "--root", str(world.root)]) == 2
+    assert "--spec-review-inventory takes no verb" in capsys.readouterr().err
+    assert stage2.main(["draft", "--spec-review-inventory", "--root", str(world.root)]) == 2
+    assert stage2.main(["--root", str(world.root)]) == 2
+    assert "name a verb" in capsys.readouterr().err
+
+
+def test_the_morning_inventory_reports_a_clean_world(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """The inventory names nothing when every change with a spec holds a current qualifying review."""
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "None. Every change with a spec holds a current qualifying review." in capsys.readouterr().out
 
 
 def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
@@ -10020,7 +11221,7 @@ def test_a_leak_block_on_the_retry_prompt_makes_no_second_call(world: World, mon
     assert len(world.reviews("pi")) == 2
     text = world.text()
     assert "audit calls: 2" in text
-    assert text.count("Stage-2 call,") == 2
+    assert text.count("Stage-2 call,") == 3, "the two loop calls plus the fixture's seeded review"
     assert "was asked again with the format reminder" not in text
     assert "was asked again with the format reminder" not in capsys.readouterr().err
     assert not world.record().exists()
@@ -10787,7 +11988,7 @@ def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
         assert argv[argv.index("--tools") + 1] == "read,grep,find,ls"
         assert stage2.READ_REQUEST in call["prompt_file"]
     assert [rung_of(call) for call in paid_calls] == list(TEST_LADDER)
-    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    lines = [line for line in minus_seeded_review(world).splitlines() if line.startswith("Stage-2 call,")]
     assert len(lines) == 5, "a member call ran without its own declaration and leak check"
 
 
@@ -10812,7 +12013,7 @@ def test_the_probe_continues_after_member_failures(
     assert f"probe: 4 members answered: {', '.join(answered)}" in output.out
     assert f"probe: 1 members failed: {failed}" in output.out
     assert "failed:" in output.err
-    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    lines = [line for line in minus_seeded_review(world).splitlines() if line.startswith("Stage-2 call,")]
     assert len(lines) == len(members), "continuation bypassed a member's declaration/leak check"
 
 
@@ -11468,6 +12669,739 @@ def test_repair_skips_canonical_hand_repairs_in_every_location(
     assert record["L1-4"] == "fixed — tests/test_fix.py::test_fix"
 
 
+# ---------------------------------------------------------------------------
+# Held rows: the runner hands them to the orchestrator before any model call
+# (bead coding-harness-0zhf, spec criteria 1-19; criterion 7 is pinned by
+# test_repair_lifecycle_checkpoint_rollback_reports_restoration, criterion 19
+# is checked against docs/WORKFLOW.md in phase 6)
+# ---------------------------------------------------------------------------
+
+
+def record_cells(
+    ident: str, status: str, where: str = "src/app.py:1", finding: str | None = None, origin: str = "base"
+) -> list[str]:
+    """One record row's cells, with a `Where` cell of its own."""
+    return [
+        ident,
+        "MAJOR",
+        "MAINT",
+        origin,
+        where,
+        finding or f"finding of {ident}",
+        "deepseek-v4.1-flash",
+        status,
+        "no",
+    ]
+
+
+def write_cells_record(w: World, cells: list[list[str]], number: int = 1) -> None:
+    """A loop record of one round whose rows carry whole cell lists, unlike `World.write_record`."""
+    directory = w.record().parent
+    directory.mkdir(parents=True, exist_ok=True)
+    snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(loop_state(), sort_keys=True)}"
+    w.record().write_text(
+        f"# Loop record — demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
+        f"## Round {number} — deepseek-v4.1-flash, 2026-09-30\n\n"
+        f"{stage2.render_table(stage2.ROW_COLUMNS, cells)}\n",
+        encoding="utf-8",
+    )
+
+
+def held_world(world: World, cells: list[list[str]], answer: str) -> str:
+    """A repair world whose record rows carry whole cell lists, scripted for one mixed repair."""
+    seed_tests(world)
+    write_cells_record(world, cells)
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def hand_steps_of(w: World) -> str:
+    """The change's hand-step listing block, or an empty string when findings.md holds none."""
+    text = w.text() if w.findings.exists() else ""
+    index = text.find(stage2.HAND_STEP_HEADING)
+    return text[index:] if index >= 0 else ""
+
+
+def decide_provenance_prefix(world: World, prefix: str) -> None:
+    """Commit a provenance map whose `prefix` is human-decided, with a tracked file below it."""
+    directory = world.root / prefix
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "0001-decided.md").write_text("# A decided record\n", encoding="utf-8")
+    (world.root / "provenance.yaml").write_text(
+        "paths:\n"
+        "  - {prefix: 'plans/', frontmatter: required}\n"
+        f"  - {{prefix: '{prefix}', allowed: [human-decided]}}\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a decided prefix")
+
+
+def test_repair_classifies_held_paths_before_dispatch(world: World) -> None:
+    """Criterion 1. Planted fault: a mixed-path row, a held link text, a case-folded prefix, an
+    unknown held file, `docs/adr, decisions.md` or `see prompts.` reaches the model, or an outside
+    target is treated as inside."""
+    decide_provenance_prefix(world, "docs/adr")
+    held_world(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="src/app.py, AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="[read AGENTS.md](src/app.py)"),
+            record_cells("L1-3", "taken — test_c", where="agents.md"),
+            record_cells("L1-4", "taken — test_d", where="templates/keep.md"),
+            record_cells("L1-5", "taken — test_e", where="docs/adr, decisions.md"),
+            record_cells("L1-6", "taken — test_f", where="see prompts."),
+            record_cells("L1-7", "taken — test_g", where="[link](../../outside.md)"),
+        ],
+        answer="L1-7: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "finding of L1-7" in prompt, "the row naming no held path stays in the model batch"
+    for held in ("L1-1", "L1-2", "L1-3", "L1-4", "L1-5", "L1-6"):
+        assert f"finding of {held}" not in prompt, held
+
+
+def test_repair_classifies_wrapped_tokens_with_trailing_punctuation(world: World) -> None:
+    """L1-1. Planted fault: prose punctuation after a wrapper leaves the opening wrapper on the token,
+    so the held path comes back as a literal and the row stays committable."""
+    for cell in ("`AGENTS.md`.", '"AGENTS.md",', "(AGENTS.md).", "see `AGENTS.md`;"):
+        assert world.root.joinpath("AGENTS.md").exists()
+        named = stage2.where_named_paths(cell, world.root)
+        assert "AGENTS.md" in named, (cell, named)
+        assert not any(path.startswith(("`", '"', "(")) for path in named), (cell, named)
+    hand = stage2.repair_hand_rows(
+        world.root, "demo", [("record", record_cells("L1-1", "taken — test_a", where="`AGENTS.md`."))]
+    )
+    assert [row[0] for _, row, _ in hand] == ["L1-1"]
+
+
+def test_repair_unwraps_deeply_nested_wrappers(world: World) -> None:
+    """L4-1. Planted fault: unwrapping stops after a fixed number of passes, so five nested wrappers
+    leave `((AGENTS.md))` literal and the held row reaches the model."""
+    cell = "((((`AGENTS.md`))))"
+    named = stage2.where_named_paths(cell, world.root)
+    assert "AGENTS.md" in named, (cell, named)
+    hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L4-1", "taken — test_a", where=cell))])
+    assert [row[0] for _, row, _ in hand] == ["L4-1"]
+
+
+def test_repair_case_variant_directory_answers_with_tracked_spelling(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L1-3. Planted fault: the directory is checked on disk by the token's spelling, so on a
+    case-sensitive checkout a case-variant directory loses its canonical slash and its held prefix."""
+    real = Path.is_dir
+
+    def case_sensitive_is_dir(self: Path) -> bool:
+        try:
+            relative = self.relative_to(world.root)
+        except ValueError:
+            return real(self)
+        current = world.root
+        for part in relative.parts:
+            if part not in os.listdir(current):
+                return False
+            current = current / part
+        return real(current)
+
+    (world.root / "templates").mkdir(exist_ok=True)
+    (world.root / "templates" / "held.md").write_text("held\n", encoding="utf-8")
+    git(world.root, "add", "templates/held.md")
+    git(world.root, "commit", "--quiet", "-m", "track a directory")
+    monkeypatch.setattr(Path, "is_dir", case_sensitive_is_dir)
+    assert stage2.where_named_paths("TEMPLATES", world.root) == ["templates/"]
+    assert stage2.where_named_paths("Templates/", world.root) == ["templates/"]
+
+
+def test_repair_held_rows_keep_unchanged_cell_check(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """L1-2. Planted fault: the unchanged-row check receives only the eligible rows, so an attempt
+    that edits a held row's Status or Broke a test cell is not refused."""
+    checked: list[list[str]] = []
+    real = stage2.require_unchanged_repair_rows
+
+    def spy(ctx: object, taken: list, resolved: list) -> None:
+        checked.append([row[0] for _, row in taken])
+        real(ctx, taken, resolved)
+
+    monkeypatch.setattr(stage2, "require_unchanged_repair_rows", spy)
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    assert checked, "the unchanged-row check must run before the commit"
+    for ids in checked:
+        assert "L1-1" in ids and "L1-2" in ids, ids
+
+
+def test_repair_keeps_nonheld_locations_in_model_batch(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 2. Planted fault: a pathless row, an unknown non-held path or a non-held directory
+    is handed off or refused solely because of its `Where`."""
+    answer = "\n".join(f"{ident}: fixed — tests/test_fix.py::test_fix" for ident in ("L1-1", "L1-2", "L1-3", "L1-4"))
+    held_world(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="everywhere in the runner prose"),
+            record_cells("L1-2", "taken — test_b", where="src/missing.py:9"),
+            record_cells("L1-3", "taken — test_c", where="src"),
+            record_cells("L1-4", "taken — test_d", where="[spec](plans/changes/demo/spec.md:3)"),
+        ],
+        answer=answer,
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    for eligible in ("finding of L1-1", "finding of L1-2", "finding of L1-3", "finding of L1-4"):
+        assert eligible in prompt, eligible
+    assert "## Held rows" not in prompt
+    assert hand_steps_of(world) == ""
+    assert "runner-held path" not in capsys.readouterr().out
+    assert len(repair_calls(world)) == 1
+
+
+def test_repair_splits_mixed_held_and_committable_rows(world: World) -> None:
+    """Criterion 3. Planted fault: the model receives a held row, or an eligible committable row is omitted."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "finding of L1-2" in prompt, "the committable row must reach the model"
+    assert "finding of L1-1" not in prompt, "the held row must not reach the model"
+
+
+def test_repair_hands_off_all_held_without_model_call(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 4. Planted fault: an all-held batch calls a model, exits nonzero, or standard
+    output does not identify the rows and their held paths — loop record, released and phase-6
+    rows alike."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    released = ["L1-3", "MAJOR", "MAINT", "base", "AGENTS.md:12", "released finding", "deepseek-v4.1-flash"]
+    phase = ["F-1", "MAJOR", "SPEC", "base", "templates/keep.md", "phase finding", "Codex", "taken — crit 6"]
+    world.write_findings(
+        VERDICT,
+        released_block([[*released, "taken — test_c", "no", "—"]]),
+        phase6_block([[*phase, "—"]]),
+    )
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    assert world.run("repair") == 0
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == [], (
+        "an all-held batch must make no model call"
+    )
+    out = capsys.readouterr().out
+    fragments = (
+        "L1-1",
+        "AGENTS.md",
+        "L1-2",
+        "model-endpoints.yaml",
+        "L1-3",
+        "F-1",
+        "runner-held path",
+        "no model call",
+    )
+    for fragment in fragments:
+        assert fragment in out, fragment
+
+
+def test_repair_reports_and_records_each_held_path(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5. Planted fault: stdout or the findings listing omits an affected row, a named
+    held path, or the reason, including when no model call is made."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md templates/keep.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    created = not world.findings.exists()  # the fixture may seed a spec review into findings.md
+    assert world.run("repair") == 0
+    out = capsys.readouterr().out
+    fragments = ("L1-1", "AGENTS.md", "templates/keep.md", "L1-2", "model-endpoints.yaml", "runner-held path")
+    for fragment in fragments:
+        assert fragment in out, fragment
+    text = world.text()
+    assert not created or text.startswith("---\n"), "the runner-created findings file carries its registry header"
+    block = hand_steps_of(world)
+    bullets = (
+        "- L1-1 — `AGENTS.md`, `templates/keep.md` — runner-held path",
+        "- L1-2 — `model-endpoints.yaml` — runner-held path",
+    )
+    for bullet in bullets:
+        assert bullet in block, bullet
+
+
+def test_repair_handoff_preserves_held_row_cells(world: World) -> None:
+    """Criterion 6. Planted fault: the handoff marks a held row fixed or changes its `Broke a test` cell."""
+    held = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    eligible = record_cells("L1-2", "taken — test_b")
+    held_world(world, [held, eligible], answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    assert world.run("repair") == 0
+    record_text = world.record().read_text(encoding="utf-8")
+    assert render_row(held) in record_text, "the held row's cells must stand unchanged"
+    rows = {row[0]: row for row in stage2.record_rows(record_text)}
+    assert rows["L1-1"][7] == "taken — test_a" and rows["L1-1"][8] == "no"
+    assert rows["L1-2"][7].startswith("fixed")
+
+
+def test_repair_mixed_batch_books_only_eligible_rows(world: World) -> None:
+    """Criterion 8. Planted fault: the answer check demands a fixed line for a held row, or an
+    eligible fixed row is not booked and committed."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the eligible fix must be committed"
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+    assert record["L1-2"][8] == "yes — tests/test_fix.py::test_fix"
+    assert record["L1-1"][7] == "taken — test_a", "a held row is never booked by the runner"
+    assert record["L1-1"][8] == "no"
+
+
+def test_repair_handoff_preserves_existing_preflight_guards(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 9. Planted fault: a held row with a legacy completion marker bypasses the booking
+    refusal, or a waiting or invalid-origin row is bypassed."""
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a; fixed by hand yesterday", where="AGENTS.md")])
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    assert world.run("repair") == 2
+    assert "rows carry a taken status that already names a fix" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+    write_cells_record(
+        world,
+        [record_cells("L1-1", "taken — test_a"), record_cells("L1-2", "open", where="AGENTS.md")],
+    )
+    assert world.run("repair") == 2
+    assert "rows are waiting for a decision" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+    invalid = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    invalid[3] = "invalid"
+    write_cells_record(world, [invalid])
+    assert world.run("repair") == 2
+    assert "selected repair rows carry an invalid Origin" in capsys.readouterr().err
+    assert world.calls() == []
+    assert hand_steps_of(world) == ""
+
+
+@pytest.mark.parametrize("scenario", ["retry", "rollback"])
+def test_repair_handoff_survives_failed_attempt_once(world: World, scenario: str) -> None:
+    """Criterion 10. Planted fault: a retry duplicates the listing, or a rollback loses it."""
+    cells = [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")]
+    held_world(world, cells, answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    if scenario == "retry":
+        script_repair(
+            world,
+            [
+                repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+                repair_step(stdout="L1-2: fixed — tests/test_fix.py::test_fix"),
+            ],
+            make=[{"exit": 1, "stdout": "red\n"}, {"stdout": "green\n"}],
+        )
+        assert world.run("repair") == 0
+        assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a retry must not duplicate the listing"
+    else:
+        script_repair(
+            world,
+            [
+                repair_step(
+                    plant={
+                        "src/app.py": "value = 2\n",
+                        "tests/test_fix.py": FIX_TEST,
+                        "AGENTS.md": "tampered\n",
+                    }
+                )
+            ],
+            make=[{"stdout": "green\n"}],
+        )
+        baseline = git(world.root, "rev-parse", "HEAD")
+        # The attempt is refused and commits nothing; the held-path refusal's own wording is
+        # criterion 7's contract, pinned by
+        # test_repair_lifecycle_checkpoint_rollback_reports_restoration. This scenario pins
+        # criterion 10: the listing neither duplicates nor is lost, whatever refusal fired.
+        assert world.run("repair") == 1
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+        assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a rollback must not lose the listing"
+
+
+def test_repair_held_prefix_directory_without_tracked_file_is_held(world: World) -> None:
+    """L5-2. Planted fault: a bare directory token naming a held prefix that holds no tracked file
+    stays a literal word, never matches the prefix ending in a slash, and the row reaches the model."""
+    (world.root / "provenance.yaml").write_text(
+        "paths:\n"
+        "  - {prefix: 'plans/', frontmatter: required}\n"
+        "  - {prefix: 'docs/frozen/', allowed: [human-decided]}\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a decided prefix without files")
+    for cell in ("docs/frozen", "Docs/Frozen/", "docs/frozen/"):
+        hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L5-2", "taken — t", where=cell))])
+        assert [row[0] for _, row, _ in hand] == ["L5-2"], cell
+
+
+def test_repair_failed_handoff_commit_leaves_no_uncommitted_listing(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L5-1. Planted fault: a held-only run whose checkpoint fails leaves its listing in the tree, so
+    the next run reports a successful hand-off, commits nothing and the record never reaches a commit."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    real = stage2.checkpoint
+
+    def failing(*_args: object, **_kwargs: object) -> None:
+        raise stage2.Refused("the checkpoint failed")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") != 0
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    left = world.text() if world.findings.exists() else ""
+    assert stage2.HAND_STEP_HEADING not in left, "a failed run leaves no listing behind"
+    monkeypatch.setattr(stage2, "checkpoint", real)
+    capsys.readouterr()
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the next run commits the listing"
+    assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
+def test_repair_held_only_run_commits_listing_left_by_failed_mixed_run(world: World) -> None:
+    """P6-1. Planted fault: a held-only run judges "already listed" against the working tree, so a
+    listing a failed mixed run left uncommitted stays uncommitted and the run exits 0."""
+    cells = [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")]
+    held_world(world, cells, answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    script_repair(world, [repair_step(plant={"AGENTS.md": "tampered\n"})], make=[{"stdout": "green\n"}])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert stage2.HAND_STEP_HEADING in world.text(), "the failed mixed run keeps its listing in the tree"
+    # The orchestrator settles the eligible row; only the held row is left.
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the held-only run commits the leftover listing"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert committed.count(stage2.HAND_STEP_HEADING) == 1
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+def test_repair_hand_step_listing_names_the_file_of_each_row(world: World) -> None:
+    """P6-2. Planted fault: the booking hint says `findings.md` for every row, though a taken row
+    can live in the loop record, whose Status a hand edit in findings.md never reaches."""
+    row_a = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    row_b = record_cells("F-2", "taken — test_b", where="AGENTS.md")
+    text = stage2.hand_step_listing(
+        [("record", row_a, ["AGENTS.md"]), ("phase-6", row_b, ["AGENTS.md"])], "2026-11-23", "/state/loop.md"
+    )
+    assert "L1-1 in the loop record `/state/loop.md`" in text
+    assert "F-2 in findings.md" in text
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [row_a])
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert "L1-1 in the loop record" in block
+    assert str(world.record()) in block
+    assert "in findings.md" not in block
+
+
+def test_repair_where_strips_unmatched_leading_wrappers(world: World) -> None:
+    """P6-3. Planted fault: an opening wrapper whose closing partner sits on a later token stays on
+    the token, so `(AGENTS.md, rule 9)` names the literal `(AGENTS.md` and the row reaches the model."""
+    for cell in ("(AGENTS.md, rule 9)", '"AGENTS.md, rule 9"', "`AGENTS.md, rule 9`", "[AGENTS.md, rule 9]"):
+        named = stage2.where_named_paths(cell, world.root)
+        assert "AGENTS.md" in named, (cell, named)
+        hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L1-1", "taken — t", where=cell))])
+        assert [row[0] for _, row, _ in hand] == ["L1-1"], cell
+
+
+def test_repair_all_held_commits_only_handoff(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 11. Planted fault: a successful held-only run leaves findings uncommitted, or
+    admits changes outside the existing checkpoint allowances."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline
+    # The commit carries the listing and the runner's own time line for the hand-off (L3-2).
+    assert git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines() == [
+        "plans/changes/demo/findings.md",
+        "plans/changes/demo/plan.md",
+    ]
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "no model call" in capsys.readouterr().out
+    after_first = git(world.root, "rev-parse", "HEAD")
+    (world.root / "AGENTS.md").write_text("# tampered\n", encoding="utf-8")
+    write_cells_record(world, [record_cells("L1-2", "taken — test_b", where="AGENTS.md")])
+    assert world.run("repair") == 2
+    refusal = capsys.readouterr().err
+    assert "the worktree has pre-existing changes outside this change's findings.md: AGENTS.md" in refusal
+    assert git(world.root, "rev-parse", "HEAD") == after_first, "the refusal must not commit"
+    assert "finding of L1-2" not in world.text()
+
+
+def test_repair_handoff_uses_dated_bullets(world: World) -> None:
+    """Criterion 12. Planted fault: the listing is a table, undated, lacks normalized paths, or
+    retains the location in `AGENTS.md#L24` or `agents.md:24–30`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md#L24"),
+            record_cells("L1-2", "taken — test_b", where="agents.md:24–30 and prompts/04-implement.md#L3-L9"),
+        ],
+    )
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert block.startswith(f"{stage2.HAND_STEP_HEADING} — {stage2.today()}")
+    assert "- L1-1 — `AGENTS.md` — runner-held path" in block
+    assert "- L1-2 — `AGENTS.md`, `prompts/04-implement.md` — runner-held path" in block
+    for retained in ("#L24", ":24–30", "#L3-L9"):
+        assert retained not in block, retained
+    assert not any(line.lstrip().startswith("|") for line in block.splitlines()), "the listing is no table"
+
+
+def test_repair_handoff_is_not_resolved_as_a_finding(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 13. Planted fault: a later resolution treats a listing bullet as a finding — a
+    previously listed identifier causes a duplicate-row refusal or becomes a repair target."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    capsys.readouterr()
+    assert world.run("repair") == 0, "the second handoff must resolve the listing as no finding"
+    error = capsys.readouterr().err
+    for refusal in ("several rows", "carries this id", "duplicate"):
+        assert refusal not in error, refusal
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
+
+
+def test_repair_mixed_commit_distinguishes_held_rows(world: World) -> None:
+    """Criterion 14. Planted fault: the subject claims a held row as repaired, or the body omits it."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    subject = message.splitlines()[0]
+    assert subject == "fix(demo): repair taken findings L1-2"
+    assert "L1-1" not in subject, "a held identifier is never claimed as repaired"
+    assert "Hand steps for the orchestrator" in message
+    assert "L1-1 — runner-held path AGENTS.md" in message
+
+
+def test_repair_handoff_uses_valid_booking_hint(world: World) -> None:
+    """Criterion 15. Planted fault: the hint proposes `fixed — orchestrator hand edit <sha>`, omits
+    a valid test form or the option to retake a row as `taken — not a test`, or allows the
+    not-a-test form without that status."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert "`fixed — tests/<path>::<function>`" in block
+    assert "`fixed — guard test — tests/<path>::<function>`" in block
+    assert "`taken — not a test — <reason>`" in block
+    assert "`fixed — not a test — orchestrator hand edit <sha>`" in block
+    assert "fixed — orchestrator hand edit" not in block, "the bare hand-edit form does not exist"
+    assert block.index("`taken — not a test — <reason>`") < block.index("orchestrator hand edit")
+
+
+def test_repair_held_only_commit_names_hand_steps(world: World) -> None:
+    """Criterion 16. Planted fault: the subject claims the held identifiers were repaired, or uses
+    the repair subject."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(
+        world,
+        [
+            record_cells("L1-1", "taken — test_a", where="AGENTS.md"),
+            record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml"),
+        ],
+    )
+    assert world.run("repair") == 0
+    subject = git(world.root, "log", "-1", "--format=%s")
+    assert subject == "docs(demo): hand steps for the orchestrator L1-1, L1-2"
+    assert "repair taken findings" not in subject
+
+
+def test_repair_ignores_answer_lines_for_held_rows(world: World) -> None:
+    """Criterion 17. Planted fault: a held answer line fails the attempt or marks the held row fixed."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "taken — test_a", "a held row is never booked from the answer"
+    assert record["L1-1"][8] == "no"
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        "L1-1 (held)",
+        "L1-1 — held",
+        "`L1-1` held note",
+        "- **L1-1** (hand step)",
+        "Held row L1-1",
+        "Skipping L1-1 (runner-held)",
+    ],
+)
+def test_repair_ignores_annotated_answer_lines_for_held_rows(world: World, annotation: str) -> None:
+    """Criterion 17, L2-1. Planted fault: an annotated mention of a held row fails the attempt."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer=f"L1-2: fixed — tests/test_fix.py::test_fix\n{annotation}: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "taken — test_a"
+    assert record["L1-2"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_repair_legacy_refusal_precedes_hand_classification(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 9, L2-2. Planted fault: classification runs before the legacy refusal and its
+    provenance read raises first, replacing the booking instruction."""
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a; fixed by hand", where="AGENTS.md")])
+    world.script(codex=[codex_ok("TR1", "must not run")])
+
+    def broken(*_args: object, **_kwargs: object) -> list:
+        raise stage2.Refused("classification ran before the legacy refusal")
+
+    monkeypatch.setattr(stage2, "repair_hand_rows", broken)
+    assert world.run("repair") == 2
+    assert "already names a fix" in capsys.readouterr().err
+
+
+def test_repair_held_only_run_needs_no_time_used_heading(world: World) -> None:
+    """Criterion 4, L2-3. Planted fault: a held-only run refuses for a plan without `## Time used`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    world.plan.write_text("---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan without a time heading")
+    assert world.run("repair") == 0
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
+    assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
+def test_repair_held_only_runs_document_gates_and_writes_time_line(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L3-2. Planted fault: the held-only hand-off commits without the document gates or without
+    its measured time line, or a red gate still commits."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    selected: list[list[str]] = []
+    real = stage2.run_gates
+
+    def gates(root: Path, env: dict, key: str | None, chosen: list[dict]) -> tuple[list[str], list[str]]:
+        selected.append([gate["id"] for gate in chosen])
+        return real(root, env, key, chosen)
+
+    monkeypatch.setattr(stage2, "run_gates", gates)
+    assert world.run("repair") == 0
+    assert selected and selected[0], "the document gates ran before the commit"
+    plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "repair · attempt 1 · route hand-off" in plan and "measured by the runner" in plan
+    assert "nothing repaired" in plan
+    assert "nothing repaired" in capsys.readouterr().out
+    # A red gate stops the hand-off: no commit, no listing left behind.
+    after = git(world.root, "rev-parse", "HEAD")
+    write_cells_record(world, [record_cells("L1-2", "taken — test_b", where="model-endpoints.yaml")])
+    monkeypatch.setattr(stage2, "run_gates", lambda *_args, **_kwargs: (["gate `docs-all` (block) exited 1"], []))
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == after
+    assert "L1-2" not in world.text(), "a refused hand-off leaves no listing"
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "failed the document gates" in capsys.readouterr().err
+
+
+def test_repair_handoff_hint_conditions_the_guard_form(world: World) -> None:
+    """L3-3. Planted fault: the hint offers the guard status without saying it needs a row taken
+    as `taken — guard test — <reason>`."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    words = " ".join(hand_steps_of(world).split())
+    guard = "`fixed — guard test — tests/<path>::<function>` only for a row taken as "
+    guard += "`taken — guard test — <reason>`"
+    assert guard in words
+
+
+def test_repair_answer_filter_drops_all_held_lines_and_names_mixed_ones() -> None:
+    """L3-4. Planted fault: a held line with a leading word survives the filter, or a line naming
+    held and eligible ids together is dropped or reported without both."""
+    answer = "Held row L1-1: fixed — tests/a.py::t\nL1-2: fixed — tests/b.py::t"
+    kept, problems = stage2.without_held_answer_lines(answer, ["L1-1"], ["L1-2"])
+    assert kept == "L1-2: fixed — tests/b.py::t" and problems == []
+    kept, problems = stage2.without_held_answer_lines("L1-1 and L1-2: fixed — tests/a.py::t", ["L1-1"], ["L1-2"])
+    assert len(problems) == 1 and "L1-1" in problems[0] and "L1-2" in problems[0]
+    kept, problems = stage2.without_held_answer_lines("See L1-10: fixed — tests/a.py::t", ["L1-1"], ["L1-10"])
+    assert kept == "See L1-10: fixed — tests/a.py::t" and problems == [], "an id inside a longer id is another id"
+
+
+def test_repair_does_not_list_the_same_hand_step_twice(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L3-5. Planted fault: a repeated repair appends and commits another block for rows already listed."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    listed = git(world.root, "rev-parse", "HEAD")
+    capsys.readouterr()
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") == listed, "no second commit for an already listed row"
+    assert world.text().count(stage2.HAND_STEP_HEADING) == 1
+    out = capsys.readouterr().out
+    assert "already listed" in out and "L1-1" in out
+    assert [c for m in ("codex", "claude", "pi") for c in world.calls(m)] == []
+
+
+def test_repair_prompt_excludes_handed_off_rows(world: World) -> None:
+    """Criterion 18. Planted fault: the prompt does not tell the model that the held rows are not its work."""
+    held_world(
+        world,
+        [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")],
+        answer="L1-2: fixed — tests/test_fix.py::test_fix",
+    )
+    assert world.run("repair") == 0
+    prompt = prompt_of(world.calls("codex")[0])
+    assert "## Held rows" in prompt
+    assert "not your work" in prompt
+    held_block = prompt.split("## Held rows", 1)[1]
+    assert "L1-1" in held_block
+    assert "- L1-1 [" not in prompt, "the held row is not listed among the taken rows"
+    assert "finding of L1-1" not in prompt
+
+
 @pytest.mark.parametrize("block", ["MUST_RUN_DELEGATED", "MUST_RUN_COMMANDS", "MUST_RUN_DELEGATED_REPAIR"])
 def test_must_run_instructions_distinguish_repair_and_implement_verification(block: str) -> None:
     """No tool route may promise unconditional full verification after a work verb (repair-targeted-check L5-2).
@@ -11559,9 +13493,10 @@ def test_repair_with_nothing_taken_refuses_before_any_call(
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
     seed_tests(world)
     world.write_record([("L1-1", "rejected — out of scope", "")])
+    findings_before = world.findings.read_bytes()
     world.script(claude=[{"stdout": "must not run"}])
     assert world.run("repair") == 2
-    assert world.calls() == [] and not world.findings.exists()
+    assert world.calls() == [] and world.findings.read_bytes() == findings_before
     assert "no row is taken" in capsys.readouterr().err
     shutil.rmtree(world.record().parent)
     assert world.run("repair") == 2
@@ -12821,6 +14756,7 @@ def test_a_leak_in_a_taken_row_stops_the_repair_without_fallback(world: World) -
     """Criterion 10. Planted fault: the rows outside the scanned prompt, or a fallback after the BLOCK."""
     seed_tests(world)
     world.write_record([("L1-1", "taken — test_a", "no")], finding=f"leak {LEAK}")
+    findings_before = world.findings.read_bytes()
     world.script(
         codex=[{"stdout": "must not run"}] * 3,
         claude=[{"stdout": "must not run"}] * 3,
@@ -12828,7 +14764,7 @@ def test_a_leak_in_a_taken_row_stops_the_repair_without_fallback(world: World) -
     )
     assert world.run("repair") == 2
     assert world.calls() == []
-    assert not world.findings.exists()
+    assert world.findings.read_bytes() == findings_before, "a leak refusal wrote findings"
 
 
 @pytest.mark.parametrize(("blocked", "calls_before"), [(2, 1), (3, 2)])
@@ -12898,7 +14834,7 @@ def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) 
             world.text(),
             re.M,
         ), attempt
-    assert stage2_runs.measure(world.text()).calls == [("repair", True)] * 3
+    assert stage2_runs.measure(minus_seeded_review(world)).calls == [("repair", True)] * 3
 
 
 @pytest.mark.parametrize(("attempt", "earlier"), [(2, 1), (3, 1), (3, 2)])
@@ -14098,7 +16034,7 @@ def test_empty_attempt_keeps_rejected_records(world: World, verb: str) -> None:
     entries = runner_entries(world.plan)
     assert len(entries) == 3
     assert all("rejected" in line and "accepted" not in line for line in entries)
-    assert world.text().count("Stage-2 call,") == 3
+    assert world.text().count("Stage-2 call,") == 4, "the three attempts plus the fixture's seeded review"
     if held is not None:
         assert world.record().read_text(encoding="utf-8") == held, "a repair row was marked without a fix"
 
@@ -14200,7 +16136,7 @@ def test_runner_ledger_clearing_cannot_qualify_a_retry(
     entries = runner_entries(world.plan)
     assert len(entries) == 3
     assert all("rejected" in line and "accepted" not in line for line in entries)
-    assert world.text().count("Stage-2 call,") == 3
+    assert world.text().count("Stage-2 call,") == 4, "the three attempts plus the fixture's seeded review"
     text = world.text()
     assert text.count(stage2.NO_WORK) == 2, text
     # The retained test stayed across the retries; each retry's clearing (counted above) shows the
@@ -20296,7 +22232,7 @@ def test_repair_starts_no_review_call(world: World) -> None:
     assert 'sandbox_mode="workspace-write"' in call["argv"] and "resume" not in call["argv"]
     assert "Write only your verdict now." not in prompt_of(call)
     assert world.calls("pi") == []
-    assert "Phase 6" not in world.text() and "Broke a test" not in world.text()
+    assert "Phase 6" not in world.text() and "Broke a test" not in minus_seeded_review(world)
 
 
 def test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark(world: World) -> None:
@@ -20719,7 +22655,10 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         ),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
         ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
-        ("| `bounded` | Opus 5.5, where one is held | the ladder |", "| `bounded` | the ladder | the ladder |"),
+        (
+            "| `bounded` | Opus 5.5, required before the plan card | the ladder |",
+            "| `bounded` | the ladder | the ladder |",
+        ),
         ("| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | the ladder |"),
     ):
         assert old in text, old
@@ -20971,19 +22910,25 @@ DRAFT_ORDER_NEEDLES = (
     ("`python3 scripts/stage2.py draft <change>`", "Codex writes"),
     ("reads the whole draft",),
     ("`python3 scripts/stage2.py spec-review <change>`", "Opus 5.5"),
-    ("second `draft <change>`", "open rows in"),
+    ("triages the rows",),
+    ("second `draft <change>`", "works the rows in"),
+    ("After the third round", "final draft"),
     ("unchanged",),
 )
 
 
 def draft_order_problems(workflow: str) -> list[str]:
-    """The draft section's five numbered steps, each carrying its own needles (spec, criterion 33)."""
+    """The draft section's seven numbered steps, each carrying its own needles (spec, criterion 33).
+
+    Seven since mandatory-spec-review: the triage, the repeated draft and review, and the final draft
+    after round three stand between the spec review and the plan card.
+    """
     draft = section(workflow, "### The draft (phases 2, 2b and 3)")
     if not draft:
         return ["section 4 has no draft section"]
     steps = re.findall(r"^\d+\. (.*)$", draft, re.M)
-    if len(steps) != 5:
-        return [f"the draft section holds {len(steps)} numbered steps, not 5"]
+    if len(steps) != len(DRAFT_ORDER_NEEDLES):
+        return [f"the draft section holds {len(steps)} numbered steps, not {len(DRAFT_ORDER_NEEDLES)}"]
     found = []
     for step, needles in zip(steps, DRAFT_ORDER_NEEDLES, strict=True):
         one = flat(step)
@@ -20994,7 +22939,7 @@ def draft_order_problems(workflow: str) -> list[str]:
 
 
 def test_the_workflow_states_the_order_of_a_drafted_change() -> None:
-    # Criterion 33. Planted fault: one of the five steps removed from the draft section.
+    # Criterion 33. Planted fault: one of the seven steps removed from the draft section.
     text = WORKFLOW.read_text(encoding="utf-8")
     assert draft_order_problems(text) == []
     steps = re.findall(r"^(\d+\. .*)$", section(text, "### The draft (phases 2, 2b and 3)"), re.M)
@@ -23123,7 +25068,7 @@ def test_baseline_cleanup_refuses_reinstated_external_parent(
     cache.symlink_to("relay" if chain else "../outside", target_is_directory=True)
     if chain:
         (world.root / "relay").symlink_to("../outside", target_is_directory=True)
-    world.findings.write_text("# Findings\n", encoding="utf-8")
+    world.findings.write_text("# Findings\n\n" + opus_review_block(world) + "\n", encoding="utf-8")
     (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
     git(world.root, "add", "-f", "cache")
     git(world.root, "add", "-A")
@@ -24616,7 +26561,7 @@ def test_implement_cannot_write_findings(world: World, forged: str) -> None:
 @pytest.mark.parametrize("forgery", ["release", "round", "metadata"])
 def test_implement_cannot_forge_loop_lines_in_the_frontmatter(world: World, forgery: str) -> None:
     """The forged frontmatter goes back with the whole snapshot; the attempt is not spent on it."""
-    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n"
+    before = "---\ntitle: Findings\nupdated: 2026-09-30\n---\n\n# Findings\n\n" + opus_review_block(world) + "\n"
     injected = {
         "release": f"{stage2.RELEASE_HEADING} 2026-10-25\nRounds run: 1\nLoop state: {{}}\n",
         "round": "## Round 9 — forged, 2026-10-25\n",
@@ -25438,7 +27383,6 @@ def test_triage_is_local_and_does_not_write_proof_or_repository_state(
     assert world.run("triage", "demo", "L1-1=taken — not a test", "no test can show it") == 0
     after = {path.relative_to(world.root): path.read_bytes() for path in world.root.rglob("*") if path.is_file()}
     assert after == tree, "triage changed a repository file"
-    assert not world.findings.exists(), "triage wrote findings.md"
     rows = stage2.record_rows(world.record().read_text(encoding="utf-8"))
     assert rows[0][7] == "taken — not a test — no test can show it"
     assert rows[0][8] == "", "triage filled the proof mark"
@@ -27709,14 +29653,14 @@ def test_a_runner_check_hands_its_child_the_admission_token(tmp_path: Path, monk
     monkeypatch.delenv(verify_lock.TOKEN_ENV, raising=False)
     probe = (
         "import json, os, sys; sys.path.insert(0, 'scripts'); import verify_lock; "
-        "h = verify_lock.read_holder(); "
+        "h = verify_lock._read_record(verify_lock.state_root() / verify_lock.SLOT_HOLDER_NAMES[0]); "
         "print(json.dumps([h.get('token') if h else None, os.environ.get(verify_lock.TOKEN_ENV), "
         "verify_lock.nested_holder_pid()]))"
     )
     with verify_lock.hold_admission(["make", "verify"]) as owned:
         assert owned is not None
         env = verify_lock.inherit_env(dict(os.environ))
-        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=(owned,))
+        done = stage2.launch([sys.executable, "-c", probe], REPO_ROOT, env, timeout=60, pass_fds=tuple(owned))
     assert done.returncode == 0, done.stderr
     published, inherited, nested = json.loads(done.stdout)
     assert published and published == inherited, "the runner's child did not inherit the admission token"
@@ -28610,7 +30554,7 @@ def test_passing_full_fallback_repair_keeps_scope_only_in_plan(world: World, mon
     assert "· accepted · full `make verify` ran (result: green)" in time_lines[0]
     assert "the link inventory could not be read" in time_lines[0] and "planted inventory fault" in time_lines[0]
     lines = world.text().splitlines()
-    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,") and ": spec-review" not in line]
     assert len(audits) == 1
     after_audit = "\n".join(lines[audits[-1] + 1 :])
     assert "full `make verify`" not in after_audit, "the passing repair left a separate scope note after its audit line"
@@ -28728,7 +30672,8 @@ def test_review_requires_fresh_full_verification_before_model_call(
     assert code == (2 if case == "dirty-before" else 1)
     assert "codex" not in names, "the reviewer started after a failed full check"
     if world.findings.exists():
-        assert "Stage-2 call" not in world.text() and "Phase 6 verdict" not in world.text()
+        text = world.text()
+        assert text.count("Stage-2 call,") <= 1 and "Phase 6 verdict" not in text
 
 
 @pytest.mark.parametrize(
@@ -30330,6 +32275,142 @@ def test_draft_keep_accepts_only_established_adr_absence(
     assert new_adrs == ([adr.as_posix()] if is_new else [])
 
 
+def test_single_cell_review_line_refuses_without_traceback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.write_findings(opus_review_block(world) + "\n| note |\n")
+    try:
+        admission = stage2.review_admission(world.root, "demo")
+    except IndexError:
+        pytest.fail("a one-cell table line must make the review unreadable, not raise IndexError")
+    assert admission.review_problem and "no qualifying spec review" in admission.review_problem
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "demo" in capsys.readouterr().out
+
+
+def test_open_third_round_blocker_refuses_implement_and_inventory(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed_review_rounds(world, 2)
+    block = opus_review_block(world).replace("| MAJOR |", "| BLOCKER |")
+    assert "| BLOCKER |" in block
+    world.findings.write_text(world.text() + "\n\n" + block + "\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "third review has an open blocker")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem and "BLOCKER" in admission.review_problem
+    successful_implementation(world)
+    assert world.run("implement") == 2
+    assert "BLOCKER" in capsys.readouterr().err
+    assert world.calls() == []
+    assert stage2.main(["--spec-review-inventory", "--root", str(world.root)]) == 0
+    assert "demo" in capsys.readouterr().out
+
+
+def test_review_refusals_explain_required_decision_fields(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    seed_review_rounds(world, 2)
+    world.findings.write_text(world.text() + "\n\n" + ambiguity_review_block(world) + "\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem or ""
+    for field in ("status: answered", "answered_by: maintainer", "asked", "answer"):
+        assert field in problem
+    assert world.run("spec-review") == 2
+    error = capsys.readouterr().err
+    for field in ("status: answered", "answered_by: maintainer", "asked", "answer"):
+        assert field in error
+
+
+def test_implement_missing_class_remedy_names_valid_headers(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.research.write_text(
+        world.research.read_text(encoding="utf-8").replace("class: bounded", ""), encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "remove class declaration")
+    assert world.run("implement") == 2
+    error = capsys.readouterr().err
+    assert "research.md" in error and "spec.md" in error
+    assert "--class" not in error
+
+
+def test_ambiguity_settlement_requires_exact_question_title(world: World) -> None:
+    decisions = world.root / "plans/changes/demo/decisions.md"
+    decisions.write_text(fourth_round_record("Q-30", "declined", title="Why the Ambiguity R1 wording was chosen"))
+    assert not stage2.ambiguity_settled(world.root, "demo", "R1")
+    decisions.write_text(fourth_round_record("Q-30", "settled", title="Ambiguity R1"))
+    assert stage2.ambiguity_settled(world.root, "demo", "R1")
+
+
+def test_spec_review_severity_splice_refuses_changed_shared_instruction() -> None:
+    builder = getattr(stage2, "spec_review_answer_format", None)
+    assert callable(builder), "the severity splice must validate its shared instruction"
+    with pytest.raises(ValueError, match="severity"):
+        builder(stage2.ANSWER_FORMAT.replace("The severity cell is free text", "Severity is free text"))
+    assert builder(stage2.ANSWER_FORMAT) == stage2.SPEC_REVIEW_ANSWER_FORMAT
+
+
+def test_spec_review_config_refuses_unadmitted_fallback_endpoint(world: World) -> None:
+    (world.root / "model-endpoints.yaml").write_text("spec_review:\n  fallback_endpoint: typo\n")
+    try:
+        stage2.spec_review_call_config(world.root)
+    except stage2.Refused as error:
+        assert stage2.OPENCODE in str(error)
+    else:
+        pytest.fail("an unadmitted fallback endpoint must be refused when configuration is read")
+
+
+def test_fallback_replacing_recheck_respects_round_cap(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    pin_spec_review(world)
+    monkeypatch.setattr(stage2, "pause", lambda _seconds: None)
+    world.write_findings(
+        opus_review_block(world), opus_review_block(world), fallback_review_block(world, TEST_LADDER[0])
+    )
+    world.script(claude=[{"exit": 1}, {"exit": 1}], pi=[rows(1)])
+    assert world.run("spec-review") == 0
+    blocks, _ = stage2.qualifying_reviews(world.text())
+    assert blocks[-1].is_fallback and blocks[-1].is_recheck
+    assert stage2.review_rounds(blocks) == 3
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    blocks, _ = stage2.qualifying_reviews(world.text())
+    assert not blocks[-1].is_fallback and blocks[-1].is_recheck
+    assert stage2.review_rounds(blocks) == 3
+
+
+@pytest.mark.parametrize("unreadable", ["findings", "spec"])
+def test_spec_review_refuses_files_unreadable_after_preflight(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], unreadable: str
+) -> None:
+    if unreadable == "spec":
+        world.write_findings()
+    original = stage2.preflight
+
+    def preflight_then_break(*args, **kwargs):
+        ctx = original(*args, **kwargs)
+        if unreadable == "findings":
+            ctx.findings.write_bytes(b"\xff")
+        else:
+            (ctx.folder / "spec.md").unlink()
+        return ctx
+
+    monkeypatch.setattr(stage2, "preflight", preflight_then_break)
+    try:
+        result = world.run("spec-review")
+    except (OSError, UnicodeDecodeError) as error:
+        pytest.fail(f"unreadable {unreadable} must be refused: {error}")
+    assert result == 2
+    assert f"{unreadable}.md cannot be read" in capsys.readouterr().err
+    assert world.calls() == []
+
+
+def test_legacy_body_versions_count_from_review_day(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    day = stage2.LEGACY_SPEC_REVIEW_DAY - dt.timedelta(days=10)
+    world.write_findings(*[opus_review_block(world, day=day.isoformat(), fingerprint=None)] * 3)
+    block = stage2.qualifying_reviews(world.text())[0][-1]
+    stamps = [
+        int(dt.datetime.combine(day + dt.timedelta(days=n), dt.time(), tzinfo=dt.UTC).timestamp()) for n in (1, 2)
+    ]
+    monkeypatch.setattr(stage2, "spec_body_versions", lambda *_args: [(stamps[0], b"one"), (stamps[1], b"two")])
+    assert stage2.legacy_currency_problem(world.root, "demo", day) is not None
+    assert stage2.body_edits_after_review(world.root, "demo", block, b"two") == 1
+
+
 def test_interrupted_supersession_requires_complete_keys(world: World, capsys) -> None:
     first = other_worktree(world)
     second = other_worktree(world, "repo-c")
@@ -30711,6 +32792,154 @@ def test_draft_defers_document_gates_not_declared_cheap(world: World, monkeypatc
     assert all(gate["id"] in scope for gate in protected)
 
 
+def test_review_commit_counts_return_to_prior_body(world: World) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text(encoding="utf-8")
+    blocks = [opus_review_block(world) for _ in range(3)]
+    world.write_findings(*blocks)
+    for suffix in ("\nB\n", "", "\nC\n"):
+        spec.write_text(original + suffix, encoding="utf-8")
+        git(world.root, "add", "--", str(spec.relative_to(world.root)))
+        git(world.root, "commit", "--quiet", "-m", "change spec body")
+        if not suffix:
+            assert stage2.review_admission(world.root, "demo").review_problem is None
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "one spec body edit" in problem
+
+
+def test_review_commit_required_for_uncommitted_spec(world: World) -> None:
+    folder = world.root / "plans/changes/fresh"
+    folder.mkdir()
+    (folder / "research.md").write_text("---\nclass: bounded\n---\n", encoding="utf-8")
+    spec = folder / "spec.md"
+    spec.write_text("---\nclass: bounded\n---\n\nReviewed.\n", encoding="utf-8")
+    mark = stage2.spec_body_fingerprint(spec)
+    (folder / "findings.md").write_text(
+        "\n\n".join(opus_review_block(world, fingerprint=mark) for _ in range(3)), encoding="utf-8"
+    )
+    spec.write_text(spec.read_text() + "Changed.\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "fresh").review_problem
+    assert problem is not None and "commit the spec" in problem and "spec-review" in problem
+
+
+def test_workflow_describes_cheap_gate_failures() -> None:
+    text = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
+    assert "other unprotected gates still run" in text
+    assert "no protected gate starts" in text
+
+
+@pytest.mark.parametrize("stamp", ["missing", "unknown"])
+def test_review_refuses_missing_or_unknown_commit(world: World, stamp: str) -> None:
+    block = opus_review_block(world)
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    block = block.replace(
+        f"Spec review commit: {head}", "" if stamp == "missing" else f"Spec review commit: {'0' * 40}"
+    )
+    # The fingerprint is in no commit and not the disk body, so the commit stamp cannot rescue it.
+    block = re.sub(r"Spec fingerprint: sha256:[0-9a-f]{64}", "Spec fingerprint: sha256:" + "0" * 64, block)
+    world.write_findings(block)
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "commit the spec" in problem and "spec-review" in problem
+
+
+@pytest.mark.parametrize("stamp", ["missing", "unknown"])
+def test_r6_2_review_of_the_disk_body_survives_a_lost_commit(world: World, stamp: str) -> None:
+    """R6-2: a fingerprint equal to the disk body admits even when its commit is no ancestor (a rebase)."""
+    block = opus_review_block(world)
+    head = git(world.root, "rev-parse", "HEAD").strip()
+    block = block.replace(
+        f"Spec review commit: {head}", "" if stamp == "missing" else f"Spec review commit: {'0' * 40}"
+    )
+    world.write_findings(block)
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None, admission.review_problem
+
+
+def test_r6_2_final_draft_found_by_fingerprint_after_a_rebase(world: World) -> None:
+    """R6-2: after three rounds the reviewed body is searched in history when its commit is gone."""
+    blocks = [opus_review_block(world).replace(git(world.root, "rev-parse", "HEAD").strip(), "0" * 40)] * 3
+    world.write_findings(*blocks)
+    spec = world.root / "plans/changes/demo/spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nThe final draft.\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "final draft")
+    assert stage2.review_admission(world.root, "demo").review_problem is None
+    spec.write_text(spec.read_text(encoding="utf-8") + "\nA later edit.\n", encoding="utf-8")
+    problem = stage2.review_admission(world.root, "demo").review_problem
+    assert problem is not None and "stale" in problem
+
+
+def test_r6_3_row_without_its_leading_pipe_is_unreadable(world: World) -> None:
+    """R6-3: one valid row plus an ambiguity row lacking its leading pipe is no readable review."""
+    loose = "R-2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved | Opus 5.5 | open | — |"
+    with pytest.raises(stage2.CallFailed, match="R-2"):
+        stage2.readable_review(rows(1) + "\n" + loose)
+    world.findings.write_text(world.text() + "\n" + loose + "\n")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is not None, "a row without its leading pipe makes the stored review unreadable"
+
+
+def test_r6r_1_quoted_diagnostic_after_a_block_does_not_spoil_it(world: World) -> None:
+    """R6R-1: a runner-quoted diagnostic of six or more cells after a valid block leaves it qualifying."""
+    quoted = "> tests/test_x.py::t | a | b | c | d | e | f | g"
+    audit = "Stage-2 call, 2026-11-22 · implement · demo"
+    stored = world.text()
+    world.findings.write_text(stored + "\n" + quoted + "\n")
+    block = stage2.spec_review_blocks(world.text())[-1]
+    assert block.table_readable, block.bad_row
+    world.findings.write_text(stored + "\n" + audit + "\n" + "x | y | z | w | v | u | t\n")
+    assert stage2.spec_review_blocks(world.text())[-1].table_readable
+
+
+def test_r6r_2_prose_with_many_pipes_does_not_fail_the_call() -> None:
+    """R6R-2: a prose sentence or fenced code with many pipes beside valid rows is no unparseable table line."""
+    prose = "Run it as a | b | c | d | e | f to see.\n```\nx | y | z | w | v | u\n```"
+    try:
+        assert stage2.readable_review(rows(1) + "\n" + prose)
+    except stage2.CallFailed as error:
+        pytest.fail(f"prose with pipes failed the call: {error}")
+
+
+def test_r6s_1_fenced_ambiguity_row_without_leading_pipe_is_unreadable() -> None:
+    """R6S-1: a fence does not hide a loose ambiguity row beside a valid row from the table-line checks."""
+    loose = "R-2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved | Opus 5.5 | open | — |"
+    for answer in (
+        rows(1) + "\n```\n" + loose + "\n```",
+        rows(1) + "\n```\n" + loose,
+    ):
+        try:
+            stage2.readable_review(answer)
+        except stage2.CallFailed:
+            continue
+        pytest.fail("a fenced ambiguity row lacking its leading pipe must make the answer unreadable")
+
+
+def test_review_restored_body_is_current(world: World) -> None:
+    spec = world.root / "plans/changes/demo/spec.md"
+    original = spec.read_text()
+    spec.write_text(original + "\nChanged body.\n")
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "change body")
+    spec.write_text(original)
+    git(world.root, "add", str(spec))
+    git(world.root, "commit", "--quiet", "-m", "restore body")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is None, admission.review_problem
+
+
+def test_unterminated_review_row_refuses_admission_and_answer(world: World) -> None:
+    malformed = "| R2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved"
+    world.findings.write_text(world.text() + "\n" + malformed + "\n")
+    admission = stage2.review_admission(world.root, "demo")
+    assert admission.review_problem is not None, "an unterminated row makes the stored review unreadable"
+    try:
+        stage2.readable_review(rows(1) + "\n" + malformed)
+    except stage2.CallFailed:
+        pass
+    else:
+        pytest.fail("an unterminated row must make the review answer unreadable")
+
+
 def test_interrupted_supersession_refuses_another_worktree(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     first = other_worktree(world, "repo-first")
     second = other_worktree(world, "repo-second")
@@ -30767,6 +32996,7 @@ def test_repository_supersession_lock_blocks_release_and_supersession(world: Wor
     key = stage2.record_key("demo", other)
     record = write_foreign_record(other, [1])
     before = record.read_bytes()
+    seeded = world.text() if world.findings.exists() else ""  # the fixture's seeded spec review, if any
     with stage2.holding_supersession("demo", world.root):
         rival = World(other, world.bin, world.state)
         assert rival.run("release-loop") == 2
@@ -30774,7 +33004,7 @@ def test_repository_supersession_lock_blocks_release_and_supersession(world: Wor
         assert supersede(world, key) == 2
         assert stage2.record_key("demo", world.root) in capsys.readouterr().err
     assert record.read_bytes() == before
-    assert not world.findings.exists()
+    assert (world.text() if world.findings.exists() else "") == seeded
     assert supersede(world, key) == 0
 
 
@@ -30892,3 +33122,14 @@ def test_supersede_retries_with_audit_snapshot_after_manifest_interruption(
     except stage2.Refused as error:
         pytest.fail(f"the archived audit call should permit release: {error}")
     assert f"Loop rows: superseded by {stage2.record_key('demo', world.root)}" in findings.read_text(encoding="utf-8")
+
+
+def test_old_runner_reviews_before_the_merge_day_stay_legacy(world: World) -> None:
+    """Bead coding-harness-8b0u: a review the pre-merge runner wrote on 2026-11-22 carries no fingerprint
+    and must be read as a legacy block, not refused as "written on or after the fingerprint rule".
+    Planted fault: the legacy cutoff stays at 2026-11-19, before the fingerprinting runner reached main."""
+    assert dt.date(2026, 11, 23) == stage2.LEGACY_SPEC_REVIEW_DAY
+    world.write_findings(opus_review_block(world, day="2026-11-22", fingerprint=None))
+    admission = stage2.review_admission(world.root, "demo")
+    assert "on or after the fingerprint rule" not in (admission.left_out or "")
+    assert "on or after the fingerprint rule" not in (admission.review_problem or "")
