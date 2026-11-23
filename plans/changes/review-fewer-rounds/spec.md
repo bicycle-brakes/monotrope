@@ -54,34 +54,36 @@ This is a proposal until its decision pull request merges.
   families review it once (Q-14).
 - **Small change:** class `bounded`, or a text-only change under the repository
   rule (Markdown outside `scripts/`, `tests/`, `prompts/` and `decisions/`).
+- **Model family / lineage:** the origin of model weights, independent of
+  serving endpoint; model IDs have an explicit family in the policy. The
+  implementer family comes from its recorded model ID, not its provider.
+- **Complete shadow change:** a full, non-text-only, non-bounded change with
+  every required focused and free-round seat, triage and phase-6 verdict
+  recorded; early-ended or stopped changes are reported but do not count.
 - **Shadow:** record per-lens signals; eligible full changes receive the free
   second round except when the configured minor-only early end applies.
 
 ## Acceptance criteria
 
-1. When a fresh loop starts, it covers spec fidelity and scope, hostile input
+1. When a fresh loop starts under the initial policy, it covers spec fidelity and scope, hostile input
    and failure paths, state/retry/abort, tests as evidence, and maintainability
-   through maintainer-approved defect-class check questions.
-   *Refuted by:* a missing lens, a role-only prompt, or an unapproved question
-   list reaching a model.
+   through sourced defect-class check questions.
+   *Refuted by:* a missing initial lens, a role-only prompt, an unapproved
+   initial list, or a later addition without a phase-6 finding source.
    *Basis:* decisions.md#Q-1, decisions.md#Q-9, decisions.md#Q-10, decisions.md#Q-13.
 
-2. When round 1 runs, each of the five lenses receives three independent
-   read-only calls (best measured precision, cheap other lineage, and Codex
-   `gpt-6.1-terra` at effort `medium`) under the initial configuration, except
-   that a bounded change receives one reviewer per lens and a text-only change
-   skips the loop.
-   *Refuted by:* a full change scheduling other than fifteen calls, a small
-   bounded change scheduling other than five, a text-only change scheduling
-   any loop calls, repeated models within a trio, shared
-   answers, an unmeasured precision claim, or a trio's wrong Codex effort or
-   cheap seat sharing the precision seat's lineage.
-   *Basis:* decisions.md#Q-2, decisions.md#Q-19, decisions.md#Q-24.
+2. When round 1 runs under the initial policy, each lens receives two
+   independent read-only calls, including for bounded changes: fixed
+   `deepseek-v4.1-flash` and one randomly drawn reachable challenger.
+   *Refuted by:* a missing seat, duplicate models, a challenger outside the
+   configured reachable pool, an unrecorded draw and seed, shared answers, or
+   any phase-4b call for a text-only change.
+   *Basis:* decisions.md#Q-19, decisions.md#Q-24, decisions.md#Q-30.
 
 3. When a lens is seated, at most one reviewer belongs to the implementer's
    model family, and a sole reviewer belongs to another family.
    *Refuted by:* a sole self-family reviewer, two self-family members on one
-   lens, or refusal solely because a diverse trio has one self-family member.
+   lens, or refusal solely because a diverse group has one self-family member.
    *Basis:* decisions.md#Q-8.
 
 4. When review policy changes, one validated central declaration supplies
@@ -103,46 +105,44 @@ This is a proposal until its decision pull request merges.
    completed seat, mixing revisions within a round, or release resetting it.
    *Basis:* decisions.md#Q-4, decisions.md#Q-3.
 
-7. When reviewer rows are triaged, their union retains every report and its
-   provenance alongside an explicit accepted-defect grouping.
-   *Refuted by:* majority voting dropping a singleton, counting rejected rows
-   as captures, silently deleting duplicates, or combining different defects
-   merely because they share a location or category.
+7. When reviewer rows are triaged, their union retains every source row,
+   seat and lens, disposition, and an orchestrator-assigned defect group.
+   *Refuted by:* majority voting dropping a singleton, a rejected row counted
+   as a capture, a missing source row, or unrelated defects grouped merely
+   because they share a location or category.
    *Basis:* decisions.md#Q-3, decisions.md#Q-11.
 
-8. When a lens's round-1 results are complete and decided, its observation
-   states accepted-defect counts and singleton share, with three-seat
-   Mh-jackknife and Chao diagnostics only where their prerequisites hold.
-   *Refuted by:* for three seats, S differing from f1+f2+f3, share differing
-   from f1/S, jackknife total differing from S+2*f1/3, or Chao total differing
-   from S+f1*f1/(2*f2); a fabricated ratio for S=0, Chao for f2=0, or a
-   three-reviewer estimate from a small change's one reviewer also refutes it.
-   *Basis:* decisions.md#Q-2, decisions.md#Q-11, decisions.md#Q-12.
+8. When a lens's round-1 results are complete and triaged, its observation
+   states accepted-defect counts and singleton share, and applicable
+   diagnostics for the actual number of independent seats.
+   *Refuted by:* for two seats, S differing from f1+f2, share differing from
+   f1/S, jackknife total differing from S+f1/2, Chao total differing from
+   S+f1*f1/(2*f2), a fabricated ratio for S=0, or Chao for f2=0.
+   *Basis:* decisions.md#Q-11, decisions.md#Q-12, decisions.md#Q-30.
 
 9. While shadow mode is active, an eligible full change receives one free
    second round over the whole post-repair diff regardless of per-lens signals,
-   except when round 1 brought only MINOR findings and all are repaired.
+   except when round 1 brought at least one finding, all findings were MINOR,
+   and all are repaired.
    *Refuted by:* focused lens prompts in round 2, a low singleton share alone
    skipping it, or a second round despite the configured minor-only early end.
    *Basis:* decisions.md#Q-3, decisions.md#Q-12, decisions.md#Q-19, decisions.md#Q-20, decisions.md#Q-24.
 
-10. When ten complete shadow changes are available, the calibration report
-    presents the singleton rule and logged estimator candidates against new
-    accepted round-2 defects, for an evidence-based end of shadow if clear or
-    a request to the maintainer otherwise.
-    *Refuted by:* waiting unconditionally for twenty changes, counting
-    incomplete or duplicate runs, omitting zero-finding lenses or would-stop
-    MAJOR/BLOCKER misses, or choosing a production threshold or winning
-    trigger without a recorded calibration decision.
-    *Basis:* decisions.md#Q-11, decisions.md#Q-12.
+10. When ten complete shadow changes are available, a report compares the
+    singleton candidate and logged estimators with additional accepted
+    round-2 defects and presents the evidence for the maintainer's decision.
+    *Refuted by:* counting incomplete, early-ended, bounded, text-only or
+    duplicate changes; omitting zero-finding lenses or would-stop
+    MAJOR/BLOCKER misses; or switching modes without the maintainer's edit.
+    *Basis:* decisions.md#Q-11, decisions.md#Q-12, decisions.md#Q-19, decisions.md#Q-26, decisions.md#Q-30.
 
 11. When an approved calibrated live policy calls for re-review on at least
-    one lens, the runner schedules one free second round over the whole diff.
-    *Refuted by:* selective lens re-review, more than one second round,
-    equality interpreted differently from the configured comparison, or an
-    estimator becoming authoritative before the recorded comparison of
-    triggers; applying this overlap rule to small changes also refutes it.
-    *Basis:* decisions.md#Q-3, decisions.md#Q-11, decisions.md#Q-12.
+    one complete lens, the runner schedules one free second round over the
+    whole diff for a full change that has not met the minor-only early end.
+    *Refuted by:* selective lens re-review, more than one second round, an
+    incorrect comparison, treating undefined share as triggered, or a free
+    second round for a bounded or text-only change.
+    *Basis:* decisions.md#Q-3, decisions.md#Q-11, decisions.md#Q-19, decisions.md#Q-20, decisions.md#Q-26.
 
 12. When round 2 finishes, its triaged findings lead to at most one last repair
     before phase 6, with no third full loop round under the initial policy.
@@ -151,49 +151,47 @@ This is a proposal until its decision pull request merges.
     task replacing a repair except for a defect in code outside this change.
     *Basis:* decisions.md#Q-6.
 
-13. When triage finds MINOR issues, tests/security/false statements require
-    repair and unambiguous style corrections only accompany an otherwise
-    required repair; matters of taste are PR limits.
-    *Refuted by:* style alone triggering a repair/round, an available clear
-    style fix being omitted from a required repair without reason, or an
-    unrepaired security MINOR being dismissed as style.
-    *Basis:* decisions.md#Q-6, decisions.md#Q-7.
+13. When triage finds MINOR issues, logic, state, tests, security and false
+    statements require repair; maintainability and clear style go to weekly
+    clean-up unless fixed in an already required repair; taste is a PR limit.
+    *Refuted by:* leaving a logic MINOR unrepaired, maintainability alone
+    requiring a repair, or treating a security defect as style.
+    *Basis:* decisions.md#Q-6, decisions.md#Q-7, decisions.md#Q-28.
 
-14. When new or changed Markdown or change artifacts fail their applicable
-    lint/formality checks, the new checks block those paths while unchanged
-    stock remains report-only under these new checks.
-    *Refuted by:* an invalid changed header/status/card placement or appetite/time structure passing,
-    Markdownlint failure on a changed file passing, or an unchanged legacy
-    defect failing the new checks; existing blocking gates remain in force.
-    *Basis:* decisions.md#Q-1, decisions.md#Q-8.
+14. When Markdown lint reports an error on a line written by the change
+    relative to the merge base with main, it blocks locally and in CI.
+    *Refuted by:* a new-line error passing, an untouched legacy-line error
+    blocking, or local and CI comparisons using different bases.
+    *Basis:* decisions.md#Q-8, decisions.md#Q-29.
 
-15. When phase 6 reaches its configured first review plus one re-check,
-    it stops with unresolved rows and a concrete proposal unless it is a
-    night run whose open findings all belong to one repaired mechanism,
-    which may receive exactly one additional re-check.
-    *Refuted by:* an ordinary third review, a night third review without the
-    single-mechanism repair evidence, any fourth review, state release or
-    loss resetting the budget, or reporting a stopped run as approved/clean.
-    *Basis:* decisions.md#Q-5.
+15. When phase 6 reaches its configured first review and one re-check, it
+    stops with unresolved rows and a concrete proposal, subject to the
+    documented night exception or one maintainer-authorized repair re-check.
+    *Refuted by:* an ordinary third review without either authorization, a
+    night exception without one evidenced repaired mechanism, replaying an
+    authorization, loss or release resetting the budget, or a stopped run
+    reported as clean.
+    *Basis:* decisions.md#Q-5, decisions.md#Q-27.
 
-16. When a second confirmed finding exposes the same defective mechanism,
-    further repair addresses that mechanism rather than another isolated case.
-    *Refuted by:* another case-only repair, or repeated findings alone
-    authorizing a further re-check without criterion 15's night conditions.
-    *Basis:* decisions.md#Q-5.
+16. When two confirmed findings in phase-6 re-checks share a recorded
+    defective mechanism, the next repair instruction requires a mechanism fix.
+    *Refuted by:* linked findings whose repair instruction permits only the
+    latest case, or an unreviewed repair treated as reviewed.
+    *Basis:* decisions.md#Q-5, decisions.md#Q-27.
 
-17. If any required seat fails or receives cut/unreadable review input, its
-    round remains incomplete and cannot supply completion or stopping evidence.
-    *Refuted by:* timeout, exhausted quota, malformed output or truncation
-    becoming a clean/zero result or a three-reviewer estimate from two results.
-    *Basis:* decisions.md#Q-2, decisions.md#Q-3, decisions.md#Q-12.
+17. If a required seat fails, a declared eligible substitute is attempted
+    on the same complete input, and the failure and substitution are reported.
+    *Refuted by:* a failed or truncated seat counted as clean, an undeclared
+    or family-ineligible replacement, replaying successful seats, or completing
+    a round without the required successful seats and full input.
+    *Basis:* decisions.md#Q-8, decisions.md#Q-25, decisions.md#Q-30.
 
-18. When calls and repair checks finish, the run records per-seat unique
-    accepted yield, call count/duration/tokens, and verification count/duration
+18. When calls and repair checks finish, the run records per-model and per-lens accepted-row share, unique accepted yield,
+    call count/duration/tokens, and verification count/duration
     including lock wait, marking unavailable measurements explicitly.
-    *Refuted by:* absent provenance, omitted failed calls, invented token
-    counts, or lock wait conflated with verification execution time.
-    *Basis:* decisions.md#Q-2, decisions.md#Q-12; research.md, cost section.
+    *Refuted by:* absent provenance, omitted failed calls, invented token counts, a missing challenger comparison,
+    or lock wait conflated with verification execution time.
+    *Basis:* decisions.md#Q-12, decisions.md#Q-30; research.md, cost section.
 
 19. When the new loop calls a foreign reviewer, the existing admission,
     per-call leak check, credential isolation and read-only boundaries hold.
@@ -202,18 +200,18 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-2, decisions.md#Q-8; research.md, current loop.
 
 20. When this change is delivered, the workflow, prompts and one new amendment
-    describe focused round 1, the three-model free second round, and bounded
+    describe focused round 1, the configured free second round, and bounded
     phase 6 with its single-mechanism night exception.
     *Refuted by:* current instructions still requiring the old ladder/until-clean
     route for new runs, calling answered choices open, or claiming a live
     threshold was approved here.
     *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-7, decisions.md#Q-12, decisions.md#Q-14.
 
-21. When a week has clear style findings left standing, the orchestrator
-    gathers them in one clean-up bead for repair in its own pull request.
+21. When a week has clear style or maintainability MINOR findings left standing,
+    the orchestrator gathers them in one clean-up bead for its own pull request.
     *Refuted by:* clear findings being discarded, taste-only proposals being
     required repairs, or style alone adding a round to their source change.
-    *Basis:* decisions.md#Q-7.
+    *Basis:* decisions.md#Q-7, decisions.md#Q-28.
 
 22. When artefact formalities are removed from reviewer duties, the spec's
     formality inventory names a checking gate for each, and the orchestrator
@@ -223,10 +221,10 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-1.
 
 23. When phase 6 finds a defect that no lens question covers, a derived
-    question addition applies immediately and is shown in the pull request
+    question addition is shown in the pull request and applies to new runs from its merge
     after the initial list has received the maintainer's approval.
     *Refuted by:* revising the list without an uncovered phase-6 finding,
-    hiding an addition, or treating immediate additions as permission to use
+    hiding an addition, changing an already frozen run, or treating additions as permission to use
     the first list without approval.
     *Basis:* decisions.md#Q-9, decisions.md#Q-10.
 
@@ -237,15 +235,15 @@ This is a proposal until its decision pull request merges.
     competing policy file, or duplicating authoritative settings in code.
     *Basis:* decisions.md#Q-4, decisions.md#Q-16.
 
-25. When the free second round runs, exactly three distinct models from
-    several model families independently read the whole diff once, with at
-    most one member of the implementer's family.
+25. When the free second round runs under the initial policy, three distinct
+    models from several model families independently read the whole diff once,
+    with at most one member of the implementer's family.
     *Refuted by:* fifteen repeated lens calls, fewer or more than three
     required calls, shared answers, one family filling the roster, or two
     implementer-family members.
     *Basis:* decisions.md#Q-14, decisions.md#Q-8.
 
-26. When a bounded change completes its focused round and required repair,
+26. When a bounded change completes its two-seat focused round and required repair,
     it proceeds to phase 6 without a free second round.
     *Refuted by:* scheduling a second loop round for a bounded change.
     *Basis:* decisions.md#Q-19.
@@ -278,8 +276,8 @@ This is a proposal until its decision pull request merges.
   subsequent ten-change evaluation is not phase 4 of this change; its report
   and decision handoff are included.
 - Choosing a production stopping threshold now, changing implement/repair
-  routes, or replacing phase-6 review. The promotion procedure is unresolved
-  in the open spec-review findings.
+  routes, or replacing phase-6 review. The maintainer makes the later
+  promotion decision after seeing the calibration report (Q-26).
 - Building the separate central configuration infrastructure; this change
   uses a section of an existing central file in the meantime (Q-16).
 - Majority voting, new model providers, a
@@ -324,14 +322,14 @@ semantic checks rather than assert that it proved them.
 
 ## Boundary
 
-Three correlated models cannot establish review completeness. The research read
+Two correlated models cannot establish review completeness. The research read
 on 2026-11-09 reports approximately 27% median underestimation for
 three-inspector jackknife data, not a calibrated error rate for this repo. Zero
 accepted findings are weak evidence. During shadow both estimators are
 diagnostics; eligible full changes get the free second round subject to the
-minor-only early end. One-seat bounded changes cannot measure overlap and do
-not get the free second round (Q-19 and Q-20). Missing required seats pause completion rather than silently changing the frozen
-seating. Existing legacy snapshots retain their old semantics until completed or
+minor-only early end. Bounded changes have two-seat overlap but do not get the free second round
+(Q-19 and Q-30). A failed seat is replaced from the declared list; when no
+eligible replacement succeeds, completion waits with the evidence retained. Existing legacy snapshots retain their old semantics until completed or
 explicitly restarted by the maintainer.
 
 ## Definition of Done
@@ -354,8 +352,8 @@ explicitly restarted by the maintainer.
 
 The maintainer approved this English list unchanged on 2026-11-10
 (decisions.md#Q-13, referring to draft `5bda389c`). Later additions follow
-Q-9 and Q-10: an uncovered phase-6 finding is required and the addition is
-disclosed in the PR. The runtime list belongs to the central configuration.
+Q-9 and Q-10: an uncovered phase-6 finding is required, the addition is
+disclosed in the PR, and it applies to new runs after merge. The runtime list belongs to the central configuration.
 
 | Lens | Approved check questions | Derivation |
 |---|---|---|
@@ -367,60 +365,72 @@ disclosed in the PR. The runtime list belongs to the central configuration.
 
 ## Open decisions
 
-The spec review of 2026-11-10 contains unresolved ambiguities S-1, S-3,
-S-4, S-7, S-8, S-11, S-13, S-15, S-17, S-18 and S-21 in `findings.md`.
-Their meanings and alternatives are recorded there. The later answers Q-16
-through Q-24 settle parts of the original scope but do not supply answers
-to all of these ambiguities. The draft is not ready for implementation.
+None open. The following reversible details make the answered rules
+observable and can be changed before implementation:
 
-[DECISION] **End of the shadow period (S-8)**
-
-Topic: Wann die Erprobung der zweiten Prüfrunde endet.
-Intention: Der Ablauf braucht eine überprüfbare Regel für den Übergang.
-Today: Die vorhandenen Aussagen lassen zwei Lesarten zu.
-Repository change: Der Prüflauf dokumentiert und verwendet die gewählte Regel.
-Architecture change: Der Übergang von der Erprobung zum regulären Betrieb
-ändert sich; die unabhängige Abschlussprüfung bleibt bestehen.
-
-Goal in one sentence: Klarstellen, wer den Übergang aus der Erprobung auslöst.
-Options: (1) Bei klaren Daten automatisch wechseln; bei unklaren Daten fragen.
-(2) Immer vor dem Wechsel die Entscheidung des Maintainers einholen.
-Recommendation: Option 1 — sie entspricht der festgehaltenen Antwort Q-12.
-If you say "ok": Der Lauf wechselt bei klaren Daten automatisch und fragt sonst.
-What is lost: Option 2 gäbe dem Maintainer vor jedem Wechsel die letzte Kontrolle.
-Downside you accept: Option 1 kann ohne erneute persönliche Prüfung wechseln;
-Option 2 hält auch bei klaren Daten für eine Entscheidung an.
-
-Welche Einbuße akzeptierst du: Option 1 oder Option 2?
-
-I decide these reversible details and record why:
-
-- `[DETAIL]` Twelve hours of phase 4, repairs included, is the appetite stop:
-  no interview answer supplies one, and the runner, gates and doctrine must
-  move together. This is not a promise to finish within twelve hours.
-- `[DETAIL]` The proposed integration location is a `review_loop` section
-  of existing `model-endpoints.yaml`; this existing central file is the
-  interim home under Q-16. Move the section when the central configuration
-  lands; do not create competing sources.
-- `[DETAIL]` Initial precision seat: `deepseek-v4.1-flash` on Q-2's
-  2026-11-08 aggregate 91% accepted share, explicitly not per-lens evidence.
-  Cheap other-lineage seat: `mimo-v2.6-flash`, declared 30,100 requests/5h
-  versus GLM Flash's 6,320 at baseline `d23f416c`. These are configuration
-  proposals, subject to current admission/reachability, not fresh probes.
-- `[DETAIL]` Shadow logs a provisional candidate `singleton_share > 0.5`,
-  derived from research's proposed half-share signal; it has no minimum
-  count override and no authority to skip a lens. S=0 is undefined. Live
-  configuration requires the later recorded comparison, winning trigger and
-  threshold; this shadow candidate does not prejudge that outcome.
-- `[DETAIL]` A lens reviewer reports only BLOCKERs outside its own lens,
-  preserving serious incidental discoveries without recreating general review.
-- `[DETAIL]` The free second round initially reuses the full-change trio
-  as one mixed-family team, with three calls total; Q-14 fixes the count
-  and diversity, while model identities remain centrally revisable.
-- `[DETAIL]` Each small-change lens initially uses the precision seat
-  when it is outside the implementer family, otherwise the declared
-  cheap other-family seat; refuse preparation if neither is admissible.
-  This keeps its one-seat policy explicit without claiming per-lens data.
-- `[DETAIL]` The checked-in branch already contains an ADR 0027 draft. Its
-  current body predates Q-16 through Q-24; the present runner instruction
-  permits only one new ADR file, so this draft is not silently rewritten.
+- `[DETAIL]` The appetite is 12 hours, including repairs: it is a stop, not
+  a prediction; no recorded answer gives a different limit.
+- `[DETAIL]` Use `model-endpoints.yaml:review_loop` as the interim central
+  section (Q-16); no second authoritative policy is created.
+- `[DETAIL]` The fixed seat cites its 2026-11-08 aggregate 91% accepted
+  share; the validator checks the citation and date, not a claim that the
+  aggregate is still the best per-lens value. The report compares observed
+  per-model and per-lens shares as accepted rows divided by all triaged rows,
+  with sample counts and undefined for zero rows; the maintainer changes the
+  seat (Q-30). Compare only observations on the same lens and report an
+  observed overtake when the challenger share exceeds the fixed seat share.
+- `[DETAIL]` Model family means weight origin, declared per model ID; an
+  unknown implementer or reviewer family refuses seating. This distinguishes
+  OpenAI model IDs from their serving endpoint and makes Q-8 checkable.
+- `[DETAIL]` The orchestrator assigns a stable defect ID and records raw row,
+  reporting seat and lens, primary defect lens, disposition and mechanism in
+  run evidence released into findings. A group requires the same mechanism,
+  trigger and violated invariant; each seat counts once per lens. A BLOCKER
+  outside its reporting lens is triaged and repaired but excluded from lens
+  observations. Semantic grouping is a human judgment, not machine proof.
+- `[DETAIL]` Complete review input may be split into bounded chunks, with
+  coverage and revision recorded for each seat; all chunks must succeed. This
+  avoids treating an oversized diff as permanently unreviewable or as clean.
+- `[DETAIL]` Undefined S=0 yields no positive live trigger and is reported
+  as weak evidence; an incomplete seat is not a completed observation and
+  must be substituted or retried before the round can proceed.
+- `[DETAIL]` Shadow records `singleton_share > 0.5` as a provisional
+  candidate only. For two seats use the first-order jackknife `S + f1/2`;
+  Chao is diagnostic only when `f2 > 0`. The three-seat research estimate
+  is not applied to two seats. Candidate thresholds for diagnostics are
+  reported as sensitivity analyses, not silently chosen live rules.
+- `[DETAIL]` The orchestrator labels each accepted free-round defect with
+  its primary lens and whether it existed before the round-1 repair, was
+  introduced by it, or cannot be determined; only pre-existing defects are
+  counted as observed misses, and unknowns remain explicit. The report gives
+  candidate thresholds and misses, including zero denominators, rather than
+  declaring a winner automatically. For each candidate and threshold it
+  reports the number of eligible changes where it would stop and the number
+  of those with at least one accepted pre-existing MAJOR/BLOCKER in round 2;
+  unknown-origin cases are separately counted. The candidate threshold grid
+  includes the observed distinct values for each estimator, recorded in the
+  report, so no unchosen live threshold is presented as approved.
+- `[DETAIL]` The maintainer's post-shadow mode edit must cite a dated,
+  repository-held decision and calibration report; a reference is resolved,
+  not merely checked for nonempty text. The decision sets the winning rule,
+  threshold and comparison; no present record approves live mode. Prepare
+  those references and settings before the maintainer switches mode with one
+  central value (Q-26).
+- `[DETAIL]` The orchestrator derives a question addition from an uncovered
+  phase-6 finding, records its source row and discloses it in that change's
+  PR. The initial list cites Q-13; additions apply to newly prepared runs
+  after merge, preserving each in-progress run's frozen policy.
+- `[DETAIL]` A night run is explicitly marked at run start in durable run
+  evidence, rather than inferred from a clock. The orchestrator links all
+  unresolved rows to one mechanism ID and its repair revision before the
+  night exception; a maintainer-authorized re-check separately records the
+  maintainer's actual choice and the repair revision (Q-27).
+- `[DETAIL]` A weekly collection uses ISO weeks and source row IDs, with
+  explicit clear-style, maintainability and taste dispositions; this makes
+  omissions and duplicate collections reviewable.
+- `[DETAIL]` The formality inventory's minimum reference is Q-1's headers,
+  status, card against decisions and time ledger. The orchestrator records a
+  follow-up for any uncovered semantic check rather than claiming proof.
+- `[DETAIL]` The existing branch-local ADR draft 0027 predates Q-16–Q-30.
+  This draft attempt cannot change an existing file outside the change folder;
+  the orchestrator must reconcile it before a decision PR can be complete.

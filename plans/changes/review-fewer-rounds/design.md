@@ -19,215 +19,112 @@ tags: [design, review-loop]
 
 # Design — review-fewer-rounds
 
-Shape the focused-review experiment in `spec.md` from the fifteen answered
-records and dated research. The 2026-11-10 answers approve the initial
-questions (Q-13), seat one mixed-family trio in round 2 (Q-14), and always
-run that round for small changes (Q-15). This draft records no new approval.
-
-**Draft blocked:** the phase-2a review in `findings.md` contains unresolved
-ambiguities. The design below predates Q-16 through Q-24 and must be
-reconciled after those ambiguities are settled; it does not authorize
-implementation or override the revised spec.
+This proposal implements the spec and the superseding answers through Q-30.
+The existing branch-local ADR 0027 still describes the older policy; the
+orchestrator must reconcile it before the decision PR is ready.
 
 ## Alternatives
 
-- **Extend the runner with more inline branches:** reuses current scheduling
-  but mixes the old ladder, new policy, statistics and review budget in an
-  already large module, making the central declaration harder to enforce.
-- **A policy adapter and a focused-review component behind existing commands:**
-  keeps leak/admission/launch/release paths, isolates new state and calculations,
-  and permits offline fault tests; owes explicit legacy/new dispatch.
-- **A separate review service:** isolates scheduling but adds another lifecycle,
-  credentials boundary and operational service for a repository-local job.
+- Extend the existing runner through a versioned policy adapter and focused
+  scheduler: reuses the admission, leak check and lifecycle, but needs explicit
+  dispatch between legacy snapshots and new runs.
+- A separate review service: separates scheduling but adds a service lifecycle
+  and credential boundary for a repository-local operation.
 
-Chosen: the policy adapter and focused-review component. This is a proposal
-until merge. Existing `prepare-loop`, `review-loop`, `repair` and `review`
-remain the entry points; new runs dispatch by a versioned snapshot, not by
-guessing from current model names. Old snapshots continue through the old path
-until completed or explicitly restarted, never converted into captures.
+Chosen: the adapter and scheduler, because the existing commands remain the
+single entry points and legacy snapshots keep their existing interpretation.
+The merge of the decision PR decides this proposal.
 
 ## Interfaces
 
-- **Central configuration → policy adapter:** consume a `review_loop` section
-  in the one central declaration, provisionally `model-endpoints.yaml`.
-  The central configuration work (`coding-harness-twvx`) must land first;
-  if its canonical location differs, reconcile these artifacts before phase 4.
-  Do not add a second file, local override or fallback constant. The adapter
-  extends that work's reader/validation contract, not its ownership.
-- **Preparation → maintainer → runner:** retain the existing reported,
-  input-bound availability receipt. Add the exact round/lens/seat mapping,
-  small/full classification, model evidence dates, lineage and policy digest. Probe declared candidates only;
-  missing required seats pause admission rather than selecting an undeclared
-  substitute or producing three-seat diagnostics from fewer results (the
-  permitted wait option of Q-8). A stale or differently configured receipt is refused.
-- **Runner → reviewer:** build round-1 scenario questions from the initially approved
-  configuration, spec/plan and a frozen implementation revision; round 2
-  receives the whole diff without lens questions or other reviewers' answers.
-  Its configured roster is one mixed-family trio for both small and full
-  changes, at most one member from the implementer family (Q-14/Q-8).
-  Paid Go calls keep existing repository read tools; Codex uses the official CLI's read-only
-  route with `gpt-6.1-terra`/`medium`, independent of draft/repair/phase-6 routing.
-  No reviewer sees another answer. Calls may execute concurrently within a
-  round; no repair runs until required answers have been collected. Class
-  `bounded` or text-only uses five sole reviewers in round 1, each outside
-  the implementer family; otherwise each lens uses its configured trio.
-- **Reviewer → orchestrator → statistics:** preserve original six-cell rows
-  and seat identities, then add triage/grouping metadata rather than changing
-  the existing row-table width. Unresolved or ambiguous grouping blocks the
-  affected statistics and next action; the estimator does not judge defects.
-- **Checks → runner/CI:** one changed-path formalities command runs the new
-  checks plus Markdownlint on eligible changed Markdown. Existing all-stock
-  Markdownlint remains report-only; existing blocking gates are not relaxed.
-  New blocking gate definitions and generated CI belong to the orchestrator.
-- **Loop → final review:** after second-round triage and one required final
-  repair, use the existing fresh-full-verification guard, verdict-before-release
-  order and fresh read-only re-check. A persistent budget gates substantive
-  phase-6 launches; row-marking calls do not spend that budget. The normal
-  two-launch budget has one night-only exception: all unresolved findings
-  share one recorded mechanism and its repair is evidenced. Record the
-  authorization before the third launch; no fourth launch is allowed.
+- The orchestrator maintains the validated `review_loop` section in the
+  existing central `model-endpoints.yaml` (Q-16); preparation consumes it and
+  reports the policy-bound availability receipt, fixed seat, eligible pool,
+  random draw and seed. The pool is constrained by admission, reachability,
+  distinct IDs and the implementer-family rule. Missing eligible seats pause.
+- The runner invokes independent read-only reviewers through its existing
+  admission and per-call leak checks. Every seat receives all diff chunks on
+  the same revision; coverage is recorded. The initial policy uses two seats
+  per lens, including bounded changes; text-only skips phase 4b. Failures use
+  the declared eligible substitute list and preserve successful results.
+- The orchestrator triages the union and records group identities, origin,
+  lens, severity, mechanism and disposition; the runner computes diagnostics
+  from that evidence. An incidental out-of-lens BLOCKER remains actionable,
+  but does not pollute any lens observation.
+- Eligible full changes have one independent free second round in shadow,
+  except after an all-repaired MINOR-only first round. Initial free seating is
+  the Q-14 three-model mixed-family roster; no fixed Terra lens seat is implied.
+  A bounded change goes from the first round and repair to phase 6.
+- Phase 6 enforces a durable launch budget, a recorded night exception and the
+  one repair-specific maintainer authorization. Failed or unknown launches
+  cannot silently release reservations or reset the count.
+- Markdownlint blocks only errors on lines written relative to the merge base
+  with main; local and hosted callers use the same rule. Artifact formalities
+  use their existing or planned checks without claiming semantic proof.
 
 ## Data model
 
-The orchestrator writes the central policy after the configuration skeleton
-has merged, using the existing intent answers Q-1 through Q-15. Proposed
-fields are:
-
-| Record | Fields and owner |
-|---|---|
-| Policy | Schema version; lens IDs, defect-class questions and approval reference; ordered focused/free rounds; full/small round-1 seats and one independent three-model mixed-family round-2 roster; small-change round-2 rule `always`; seat endpoint/model/family/effort; dated precision evidence and cost evidence; trigger `singleton_share`; mode `shadow`; candidate threshold `0.5` and comparison `>` marked provisional; live calibration reference absent; phase-6 maximum ordinary reviews `2`, night exception maximum `1` with single-mechanism repair precondition; weekly style cadence. Orchestrator, through central configuration. |
-| Run snapshot | Run ID, policy version/digest and resolved policy, implementation family, preparation receipt, round input HEAD/diff digests, scheduled lens/seat keys, launched/completed/failed state, completed-round state. Runner, atomically under existing record lock. |
-| Triage map | Raw row ID → accepted defect ID or rejected reason, primary defect lens, reporting seat/lens or free-round origin, severity, mechanism key and disposition. Orchestrator, validated by runner. |
-| Lens observation | Run/round/lens/input digest, S, f1/f2/f3, singleton share, jackknife total/remaining/completeness, Chao total/remaining/completeness or undefined reason, candidate decision, actual scheduled decision and shadow mode. Runner after triage. |
-| Budget | Run ID, launch reservations and results, substantive phase-6 count, configured maximum, unresolved rows and stop proposal, night-run evidence, common mechanism and repair commit, exceptional launch use; survives external-record release in findings. Runner. |
-| Calibration | Per-seat calls, status, duration, provider-reported token counts or unavailable reason, unique accepted yield; repair/verification cycles, execution and lock-wait duration; round-2 new accepted defect IDs/severities. Runner and orchestrator triage. |
-
-Initial proposed full-change seats for each lens are `deepseek-v4.1-flash`,
-`mimo-v2.6-flash`, and `gpt-6.1-terra`/`medium`; the spec records the dated
-evidence and its limits. Declarations must admit Terra before any call; adding
-that loop model does not replace the current Sol route for other phases.
-Validate unique lens/seat IDs, endpoint references, model families and distinct
-models, at most one implementer-family member per lens, sole-reviewer family
-exclusion, initial question approval, finite round order/count, declared
-trigger/comparison and applicable ranges, positive review budget and bounded
-night exception, known keys and duplicate YAML keys. Small-change seats must be
-explicit; a missing free-round trio or a small-change rule other than `always`
-is invalid under the initial policy. The free trio also permits at most one
-implementer-family member. Use the initial model choices and small-seat
-selection recorded as details in the spec, subject to admission/preparation. A
-live mode without a recorded calibrated rule and comparison is invalid. The
-initial sample is shadow; zero accepted defects yield an undefined share, not a
-fabricated zero. No default enables live mode.
-
-Two reports describe one defect only when the same faulty mechanism and trigger
-violate the same intended invariant and a mechanism correction would resolve
-both. A shared file, symptom word or severity is insufficient. Keep one
-canonical accepted defect and every raw source row. The primary lens supports
-reporting; captures for a lens count only its own seats that actually reported
-the defect, never imported votes from other lenses. A repeat from one seat
-counts once. An incidental outside-lens BLOCKER stays in the union.
-
-For each complete, triaged three-seat lens: S=f1+f2+f3; share=f1/S when S>0;
-jackknife total=S+2*f1/3; Chao total=S+f1*f1/(2*f2) only when f2>0. Remaining is
-total−S; completeness is S/total when total>0. Undefined denominators carry
-reasons. Store diagnostics and the candidate comparison, but shadow always
-schedules the one free second round. For a one-seat small change, S=f1 and
-share=1 when S>0; three-seat estimators are explicitly not applicable. Failed
-required seats remain incomplete. In approved live mode, per-lens triggers
-combine by OR into one free second round for full changes, never a subset of
-lenses; small changes always receive that round, independent of the signal.
-Unresolved evidence cannot be silently interpreted as a negative trigger.
-Q-11 permits an estimator to win the later comparison, so the adapter accepts the recorded
-winner rather than hard-coding share forever.
-
-Round 2 uses its separately declared three-model mixed-family roster on the
-post-repair revision and reads freely over the whole diff; no third round
-follows under the initial policy. All accepted MAJOR/BLOCKERs and required
-MINORs enter one final repair; style cannot create that repair. The orchestrator
-handles any authorized outside-change follow-up, never a reviewer or a foreign
-repair attempt.
-
-Persist successful seat outputs as they arrive. Retrying a failed seat uses the
-same revision; if the input changed, refuse the attempted resume and report why.
-Reserve a phase-6 budget slot before launching its substantive reviewer; a
-timeout or crash does not silently refund it. A reservation of unknown outcome
-is reported, not replayed. Marking the existing verdict's loop rows does not
-count as a new review. Lost or conflicting budget state refuses.
-
-Use the existing external loop record plus a versioned sidecar block, released
-unchanged into `findings.md` after the verdict; do not create a new service or
-change table parsing for historical records. Append calibration JSONL to
-`docs/research/review-fewer-rounds-calibration.jsonl` through an explicit local
-report command. Re-export by run ID replaces that run's records atomically,
-without duplicate samples; the command never scans outside repository inputs
-supplied by the orchestrator. At ten complete changes it reports observed
-whole-round-2 misses for candidate rules, with per-lens round-1 captures and
-separately labelled primary-lens classification of round-2 defects. Free
-reviewers are not synthetic per-lens captures. Compare share with recorded
-estimators once; if the evidence is unclear, report that and request the
-maintainer's decision. The later calibration decision records the winner,
-threshold and end of shadow; the export command never decides these by itself.
-Keep small/full strata separate because their overlap evidence is not
-comparable.
-
-The orchestrator collects unrepaired clear style rows once per week in one
-clean-up bead and its own PR; retain source row IDs and collection week so rows
-are not collected twice. Taste-only limits are not required work. No
-reviewer/repair attempt writes the tracker or starts a scheduling service.
-Question additions require a phase-6 row that no current question covers, its
-evidence source and PR disclosure; the initial list already has approval
-under Q-13 and is copied unchanged from the spec into the central declaration.
-The formality inventory in the spec distinguishes existing gates, planned mechanical
-checks and semantic card-scope comparison with no gate. The orchestrator creates
-the uncovered item's follow-up and records its ID/title; the new check cannot
-claim that semantic equivalence is machine-proved.
+- Policy: version, lenses/questions and source, round order, seat rules, fixed
+  model and dated precision citation, challenger pool, substitutes, families,
+  finding cap, early-end rule, diagnostics, shadow/live mode, threshold and
+  phase-6 limits. The orchestrator edits this single validated declaration.
+- Run: policy snapshot, change class, implementation revision and model
+  family, availability receipt, each draw/seed, seat attempts, chunk coverage,
+  successful outputs and failures. The runner persists it under the existing
+  run lock and refuses mismatched resume input.
+- Triage: raw row and source seat, accepted/rejected disposition, canonical
+  defect and mechanism IDs, reporting and primary lenses, and repair origin.
+  The orchestrator assigns these; the runner does not pretend to decide
+  semantic identity. The record is released to `findings.md` after verdict.
+- Observation: per-lens f1, f2, S, singleton share, two-seat jackknife and
+  Chao where defined; per-model/per-lens accepted share and call/verify
+  measurements. The runner labels unavailable values and preserves failed
+  attempts. It uses the observed number of seats, never a three-seat formula
+  for a two-seat run.
+- Calibration: the orchestrator attributes free-round accepted defects as
+  pre-existing, repair-introduced or unknown, retaining source rows. Export
+  by run ID without duplicate samples; compare signals and documented
+  candidate thresholds at ten eligible complete changes without automatically
+  selecting a winner. A later maintainer-recorded decision and report must be
+  resolvable before a live setting is admitted.
+- Budget: durable reserved launches, results, mechanism IDs and repair
+  revisions; the maintainer's exact authorization is stored in findings.
+  Release, crash, missing data or retry cannot refund or replay authorization.
 
 ## ADR draft
 
-The one MADR-form draft is
-`docs/adr/0027-focused-review-with-a-shadow-period.md`. At baseline
-`67042d9b` on 2026-11-10 it is already the change's branch-local draft:
-0026 is reserved for the central-configuration dependency, as recorded in
-`decisions.md`. Revise 0027 in place; do not create another ADR. It amends
-ADR 0021 and ADR 0017 without changing a D-/O-number or an existing ADR body; no continuity-map
-amendment is required. Its pending approval and merge-effective status are
-explicit. There is no second embedded or separately numbered draft.
+`docs/adr/0027-focused-review-with-a-shadow-period.md` is already the one
+ADR added by this branch relative to its local `origin/main` reference. It
+must be reconciled with Q-16–Q-30 by the orchestrator: this draft attempt is
+restricted to the change folder and one *new* ADR file, and 0027 is already
+tracked. Creating 0028 here would leave two ADR additions for one decision.
+The existing ADR is not evidence that the current proposal is approved.
 
 ## Architecture delta
 
 ```mermaid
 flowchart LR
-    maintainer["Person: Maintainer"] --> policy["Component: Central review policy"]
+    person["Person: Maintainer"] --> policy["Component: Review policy"]
     policy --> runner["Container: Stage-2 runner"]
-    checks["Component: Changed-path formality gate"] --> runner
-    runner --> lenses["Component: Focused review scheduler"]
-    lenses --> pi["Container: Repository-pinned Pi"]
-    lenses --> codex["Container: Official Codex CLI"]
-    pi --> triage["Component: Review record and triage"]
-    codex --> triage
-    maintainer --> triage
-    triage --> overlap["Component: Per-lens diagnostics and round trigger"]
-    overlap --> free["Component: One free second round"]
-    free --> pi
-    free --> codex
-    free --> triage
-    triage --> final["Component: Bounded phase-6 review"]
-    final --> evidence["Component: Findings and calibration evidence"]
+    runner --> seats["Component: Focused review scheduler"]
+    seats --> review["Container: Read-only model reviewers"]
+    review --> triage["Component: Triage and observations"]
+    person --> triage
+    triage --> round["Component: Conditional free second round"]
+    round --> final["Component: Bounded phase-6 review"]
+    triage --> calibration["Component: Calibration report"]
+    calibration --> person
 ```
 
 **Added**
 
-- Focused scheduling, explicit captures, diagnostics and calibration evidence.
-- Changed-path checks and a persistent phase-6 launch budget.
+- Seeded challenger selection, triage provenance and calibration reporting.
 
 **Changed**
 
-- New review runs consume the central policy and use independent mixed-endpoint
-  trios or small-change sole reviewers, followed by one free second round,
-  rather than the successive free/Flash/ladder sequence.
-- Triage controls accepted-defect identities and final repair disposition.
+- New runs use central policy and bounded review; legacy runs keep their
+  frozen prior schedule.
 
 **Removed**
 
-- The until-clean/ladder stop rule for new-policy runs; legacy snapshots keep
-  their existing interpretation. No provider, security guard or service is removed.
+- Until-clean ladder scheduling for new-policy runs only.
