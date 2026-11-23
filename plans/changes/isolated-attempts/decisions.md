@@ -71,7 +71,7 @@ In the context of the attempt environment, facing links, fresh installs or copie
 ## Q-4 · Where attempt worktrees live, and for whom
 
 asked: 2026-11-22
-answer: A — under $TMPDIR/coding-harness-attempts/<change>/<attempt>, registered git worktrees, removed after the attempt, orphans pruned at the next start. The maintainer added: "es müssen sich andere harnesses darauf zugreifen können bzw. es umsetzen können" — location, naming, lifecycle and the side-ref rule are defined harness-neutrally (runner code plus docs/WORKFLOW.md and AGENTS.md), so Codex, Pi or any other harness can find the attempt worktrees and follow or implement the same procedure.
+answer: 'A — under $TMPDIR/coding-harness-attempts/<change>/<attempt>, registered git worktrees, removed after the attempt, orphans pruned at the next start. The maintainer added: "es müssen sich andere harnesses darauf zugreifen können bzw. es umsetzen können" — location, naming, lifecycle and the side-ref rule are defined harness-neutrally (runner code plus docs/WORKFLOW.md and AGENTS.md), so Codex, Pi or any other harness can find the attempt worktrees and follow or implement the same procedure.'
 answered_by: maintainer
 status: answered
 context: |
