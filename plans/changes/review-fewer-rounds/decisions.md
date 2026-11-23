@@ -616,6 +616,33 @@ Maintainer's answer A of 2026-11-23: the orchestrator decides the smaller open a
 - [DETAIL] **S-13 (provisional agent decision):** Reading B — only changes with full three-seat lenses count toward the ten shadow changes; small changes are reported but do not count.
 - [DETAIL] **S-21 (provisional agent decision):** Reading A — a lens with an undefined singleton share (S=0) or an incomplete observation does not trigger the second round; the run reports it.
 
+## Provisional agent decisions on spec review round 2 (2026-11-23)
+
+Under the maintainer's answer A of 2026-11-23 the orchestrator decides the rows of spec review round 2 by its recommendation, marked provisional; the plan card lists them for the maintainer.
+
+- [DETAIL] **S2-1 (provisional agent decision):** Reading A — "all repaired" means every MINOR that the MINOR rule requires to be repaired; deferred maintainability or style rows do not block the early end.
+- [DETAIL] **S2-2 (provisional agent decision):** Reading A — only accepted rows count; a rejected MAJOR or BLOCKER does not stop the early end.
+- [DETAIL] **S2-3 (provisional agent decision):** Reading A — one independent challenger draw per lens; each pick and the seed are recorded.
+- [DETAIL] **S2-4 (provisional agent decision):** The free second round's three models are drawn with a recorded seed from the reachable pool, three distinct families, Codex excluded, the implementer-family rule applied; the substitute list of Q-25 covers it. The pool is a Q-24 setting.
+- [DETAIL] **S2-5 (provisional agent decision):** The spec lists every setting key with type, allowed values or range, initial value and meaning: rounds per change 1–2, seats per lens 1–3, lenses as a non-empty list of declared lens ids, finding cap 1–20, early-end on or off, challenger pool and substitute list as lists of declared model ids. Values outside a range refuse at load; a test per key shows that a changed value takes effect.
+- [DETAIL] **S2-6 (provisional agent decision):** The trigger compares the singleton share directly with its threshold; no separate jackknife quantity.
+- [DETAIL] **S2-7 (provisional agent decision):** Reading A — a seat counts as one call however many bounded chunks its input uses.
+- [DETAIL] **S2-8 (provisional agent decision):** Count only MINOR rows: at most the cap of MINOR rows per answer, BLOCKER and MAJOR not capped; rows ranked by severity.
+- [DETAIL] **S2-9 (provisional agent decision):** Rows that break the answer form (no file and line, MINOR over the cap) are dropped and listed in the report; the rest of the answer stands; the seat does not count as failed. A finding about something absent cites the path where it belongs and the line `0`.
+- [DETAIL] **S2-10 (provisional agent decision):** Reading A — the answer-form rules apply to the phase-4b reviewers (round 1 and the free round); phase 6 keeps its form.
+- [DETAIL] **S2-11 (provisional agent decision):** Reading A — the implementer's family is the recorded phase-4 implementer model; repair models do not widen it.
+- [DETAIL] **S2-12 (provisional agent decision):** Reading A — at most one extra phase-6 re-check per change in total.
+- [DETAIL] **S2-13 (provisional agent decision):** Reading A — the mechanism-fix rule fires on two confirmed findings raised in phase-6 re-checks, as written.
+- [DETAIL] **S2-14 (provisional agent decision):** Reading B — the overtake is measured cumulatively per model and lens over all runs since the fixed seat was set, and flagged only when both models have at least 20 triaged rows on that lens.
+- [DETAIL] **S2-15 (provisional agent decision):** A loop already running when this change merges finishes under the two-round house rule of AGENTS.md (PR #436), not under the old loop-until-clean.
+- [DETAIL] **S2-16 (provisional agent decision):** "Stopped" means stopped by the maintainer or by an outage; a change that reached the phase-6 limit counts toward calibration.
+- [DETAIL] **S2-17 (provisional agent decision):** Out-of-lens rows of any severity are triaged and repaired when taken but enter no lens observation (extends S-4).
+- [DETAIL] **S2-18 (provisional agent decision):** A failed seat gets one retry of the same model, then the substitutes in list order (order recorded); a failed challenger is replaced by a new draw. If no substitute answers, the run records a waiting state; the next invocation resumes it; after 5 hours it is reported as stopped.
+- [DETAIL] **S2-19 (provisional agent decision):** A deferred row gets the Status prefix `deferred — clean-up`; a report command lists deferred rows of a closed ISO week that no clean-up bead names; criterion 21 is tested on a fixture of that command.
+- [DETAIL] **S2-20 (provisional agent decision):** A MINOR outside the listed classes (for example performance, a documentation omission) is repaired unless the reviewer marks it maintainability, style or taste.
+- [DETAIL] **S2-21 (provisional agent decision):** The reconciler records mechanism, trigger and violated invariant as separate fields, and the grouping check compares them.
+- [DETAIL] **S2-22 (provisional agent decision):** Locally the base is `git merge-base HEAD origin/main` after a fetch; in CI it is the PR base commit.
+
 ## Decided by the agent — the ADR number
 
 [DETAIL] **The ADR draft of this change is ADR 0027**
