@@ -635,6 +635,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/loop-record-other-worktree/research.md`](changes/loop-record-other-worktree/research.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/spec.md`](changes/loop-record-other-worktree/spec.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/mandatory-spec-review/decisions.md`](changes/mandatory-spec-review/decisions.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/findings.md`](changes/mandatory-spec-review/findings.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/plan.md`](changes/mandatory-spec-review/plan.md) | draft | none | 2026-11-19 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/research.md`](changes/mandatory-spec-review/research.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/spec.md`](changes/mandatory-spec-review/spec.md) | draft | none | 2026-11-19 | coding-harness-ttic |
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
