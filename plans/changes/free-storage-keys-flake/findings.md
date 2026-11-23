@@ -82,3 +82,15 @@ Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoi
 > ```
 
 Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1188 files, 5531 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again · leak check clean over 1188 files, 5561 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; make the change the plan names
+> - Runner cheap checks before post-run verification: the criterion ledger names tests that do not stand, and this attempt owes them: `tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving` (not yet written)
+> ```
