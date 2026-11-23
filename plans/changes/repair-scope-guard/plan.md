@@ -91,3 +91,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage-limited 
 2026-11-23 13:28:02–13:46:55 UTC, 1133 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-23 14:17:50–14:20:42 UTC, 172 s — repair · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-23 15:43:02–16:05:42 UTC, 1360 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-23 16:26:18–16:43:48 UTC, 1050 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-23 16:43:58–17:06:44 UTC, 1366 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

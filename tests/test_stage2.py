@@ -21273,6 +21273,70 @@ def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
 # ---------------------------------------------------------------------------
 
 
+def test_repair_scope_respects_path_case(world: World) -> None:
+    scope = stage2.repair_scope(["src/new.py"], "demo", world.root)
+    assert stage2.within_scope(Path("src/new.py"), scope)
+    assert not stage2.within_scope(Path("src/NEW.py"), scope)
+    assert not stage2.within_scope(Path("TESTS/stray.py"), scope)
+
+
+def test_repair_scope_refuses_untracked_bytecode(world: World) -> None:
+    before = stage2.file_inventory(world.root)
+    path = world.root / "src/__pycache__/stray.pyc"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"stray")
+    with pytest.raises(stage2.CheckpointRolledBack) as raised:
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            git(world.root, "rev-parse", "HEAD"),
+            repair_scope=stage2.repair_scope([], "demo", world.root),
+            scope_baseline=before,
+        )
+    assert "src/__pycache__/stray.pyc" in str(raised.value)
+
+
+def test_repair_scope_preserves_configured_excludes(world: World) -> None:
+    excludes = world.root / "local-excludes"
+    excludes.write_text("cache/\n", encoding="utf-8")
+    git(world.root, "config", "core.excludesFile", str(excludes))
+    ignore = world.root / ".gitignore"
+    ignore.write_text("other/\n", encoding="utf-8")
+    git(world.root, "add", ".gitignore", "local-excludes")
+    git(world.root, "commit", "--quiet", "-m", "seed ignore rules")
+    before = stage2.file_inventory(world.root)
+    rules = stage2.ignore_rules_state(world.root, before)
+    ignored = stage2.ignored_snapshot(world.root)
+    ignore.write_text("changed/\n", encoding="utf-8")
+    cache = world.root / "cache/item.bin"
+    cache.parent.mkdir()
+    cache.write_bytes(b"cache")
+    assert Path("cache/item.bin") not in stage2.attempt_new_files(world.root, before, rules, ignored)
+
+
+def test_draft_refuses_journal_before_restoring(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "docs/journal/note.md": "journal\n",
+                },
+            )
+        ],
+        docs=[{"stdout": "green\n"}],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert "docs/journal/note.md" in capsys.readouterr().err
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert not (world.root / "docs/journal/note.md").exists()
+
+
 @pytest.mark.parametrize(
     ("verb", "kind"),
     [(verb, kind) for verb in ("implement", "repair", "draft") for kind in ("edit", "add", "case-variant")],
@@ -21823,14 +21887,14 @@ def test_repair_scope_ignores_files_the_verification_itself_writes(
 
 
 def test_repair_scope_casefolds_uppercase_change_folder(world: World) -> None:
-    """L1-1. Planted fault: the change-folder entry is not casefolded, so an uppercase id never matches its own files."""
+    """L1-1. An uppercase change id grants its own folder with its original spelling."""
     seed_tests(world)
     scope = stage2.repair_scope([], "Demo", world.root)
     try:
         assert stage2.within_scope(Path("plans/changes/Demo/new.md"), scope)
     except AssertionError:
         pytest.fail("a new file under an uppercase change id's own folder is outside its scope")
-    assert all(entry == entry.casefold() for entry in scope)
+    assert not stage2.within_scope(Path("plans/changes/demo/new.md"), scope)
 
 
 def test_repair_scope_bare_name_prefers_change_folder(world: World) -> None:

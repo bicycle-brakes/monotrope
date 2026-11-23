@@ -708,10 +708,10 @@ Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-6 | MAJOR | SPEC | base | scripts/stage2.py:10765 | On a case-sensitive filesystem, a Where cell naming `src/new.py` also permits the distinct new file `src/NEW.py`; likewise, `TESTS/stray.py` is treated as a descendant of `tests/`. Case-folding both grants and candidates lets unrelated files pass the guard and be committed. [Criteria 3, 4 and 8] | Codex | taken | — |
-| P6-7 | MAJOR | SPEC | fix-r4 | scripts/stage2.py:6941 | A new, non-ignored and untracked `src/__pycache__/stray.pyc` is exempted as a derived leftover and can be committed outside the repair scope. The earlier fix covers indexed bytecode; this is a different case because the file is still untracked when the guard checks it. [Criterion 3] | Codex | taken | — |
-| P6-8 | MINOR | SPEC | fix-r4 | scripts/stage2.py:6818 | If the repository sets `core.excludesFile` locally, and a repair changes a tracked `.gitignore` while creating a cache ignored by that configured file, the temporary repository does not inherit the local configuration. It classifies the cache as non-ignored under the original rules and can refuse the repair. [Criterion 9] | Codex | taken | — |
-| P6-9 | MINOR | SPEC | base | scripts/stage2.py:13029 | When a draft writes `docs/journal/note.md`, the runner restores the journal file but can verify and commit the draft successfully. The held-path rule never refuses the attempt because the draft restores the file before the checkpoint sees it. [Criterion 1] | Codex | taken | — |
+| P6-6 | MAJOR | SPEC | base | scripts/stage2.py:10765 | On a case-sensitive filesystem, a Where cell naming `src/new.py` also permits the distinct new file `src/NEW.py`; likewise, `TESTS/stray.py` is treated as a descendant of `tests/`. Case-folding both grants and candidates lets unrelated files pass the guard and be committed. [Criteria 3, 4 and 8] | Codex | fixed — tests/test_stage2.py::test_repair_scope_respects_path_case | — |
+| P6-7 | MAJOR | SPEC | fix-r4 | scripts/stage2.py:6941 | A new, non-ignored and untracked `src/__pycache__/stray.pyc` is exempted as a derived leftover and can be committed outside the repair scope. The earlier fix covers indexed bytecode; this is a different case because the file is still untracked when the guard checks it. [Criterion 3] | Codex | fixed — tests/test_stage2.py::test_repair_scope_refuses_untracked_bytecode | — |
+| P6-8 | MINOR | SPEC | fix-r4 | scripts/stage2.py:6818 | If the repository sets `core.excludesFile` locally, and a repair changes a tracked `.gitignore` while creating a cache ignored by that configured file, the temporary repository does not inherit the local configuration. It classifies the cache as non-ignored under the original rules and can refuse the repair. [Criterion 9] | Codex | fixed — tests/test_stage2.py::test_repair_scope_preserves_configured_excludes | — |
+| P6-9 | MINOR | SPEC | base | scripts/stage2.py:13029 | When a draft writes `docs/journal/note.md`, the runner restores the journal file but can verify and commit the draft successfully. The held-path rule never refuses the attempt because the draft restores the file before the checkpoint sees it. [Criterion 1] | Codex | fixed — tests/test_stage2.py::test_draft_refuses_journal_before_restoring | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -721,3 +721,128 @@ Phase 6 verdict: codex 01a20938-782d-7d12-ad4e-1b8a5d038339, 2026-11-23
 Reviewer session: codex 01a20938-782d-7d12-ad4e-1b8a5d038339 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Orchestrator triage of the re-check, 2026-11-23 (provisional agent decision, night run 2026-11-23-a): P6-6 to P6-9 taken. P6-7 is the second finding of the derived-leftover exemption mechanism (after P6-3), so case repair ends: the repair fixes the mechanism — a bytecode or cache file is exempt only when the ignore rules the attempt started under ignore it and it is not in the index. P6-6 is a mechanism fix too: path comparison folds case only when the repository's `core.ignorecase` is true. P6-8 and P6-9 are repaired as cases. One further phase-6 re-check follows, scoped to this repair; new MAJOR rows after it park the lane for the maintainer.
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5503 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +30 -16
+> - `tests/test_stage2.py` +64 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 78 lines of this gate left out …]
+> ........................................................................ [ 78%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 80%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ...........................F...............................              [100%]
+> =================================== FAILURES ===================================
+> _____________ test_repair_scope_casefolds_uppercase_change_folder ______________
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-6azrobbv/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_repair_scope_casefolds_uppercase_change_folder(world: World) -> None:
+>         """L1-1. Planted fault: the change-folder entry is not casefolded, so an uppercase id never matches its own files."""
+>         seed_tests(world)
+>         scope = stage2.repair_scope([], "Demo", world.root)
+>         try:
+>             assert stage2.within_scope(Path("plans/changes/Demo/new.md"), scope)
+>         except AssertionError:
+>             pytest.fail("a new file under an uppercase change id's own folder is outside its scope")
+> >       assert all(entry == entry.casefold() for entry in scope)
+> E       assert False
+> E        +  where False = all(<generator object test_repair_scope_casefolds_uppercase_change_folder.<locals>.<genexpr> at 0x108ba0ee0>)
+>
+> tests/test_stage2.py:21897: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=10706) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/tests/test_stage2.py:27532: DeprecationWarning: This process (pid=10706) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_scope_casefolds_uppercase_change_folder
+> 1 failed, 6953 passed, 17 skipped, 5 warnings in 799.61s (0:13:19)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 55677 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-scope-guard/stage2/attempts/repair-scope-guard/attempt-1-20261123T162608119744Z-5aa7ed2a.md
+> ````
+
+Stage-2 call, 2026-11-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5509 commits, 12 rules.
+
+Runner restoration, 2026-11-23: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

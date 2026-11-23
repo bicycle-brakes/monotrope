@@ -6790,6 +6790,9 @@ def ignore_rules_state(root: Path, inventory: set[Path]) -> dict[str, bytes]:
     ignored = ignored_snapshot(root)
     exclude = _git_output(root, "rev-parse", "--git-path", "info/exclude").strip()
     sources = {".git/info/exclude": root / exclude}
+    configured = _git_output(root, "config", "--path", "--get", "core.excludesFile", allow={1: ""}).strip()
+    if configured:
+        sources[".git/stage2-configured-excludes"] = root / configured
     sources.update({rel.as_posix(): root / rel for rel in inventory | set(ignored) if rel.name == ".gitignore"})
     state = {}
     for name, path in sources.items():
@@ -6829,8 +6832,20 @@ def attempt_new_files(
             path = temp / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
+        excludes = temp / ".git/stage2-configured-excludes"
+        excludes.touch(exist_ok=True)
         names = b"".join(os.fsencode(path.as_posix()) + b"\0" for path in sorted(candidates))
-        result = run_git(temp, "check-ignore", "--no-index", "-z", "--stdin", stdin=names, allow={1: ""})
+        result = run_git(
+            temp,
+            "-c",
+            f"core.excludesFile={excludes}",
+            "check-ignore",
+            "--no-index",
+            "-z",
+            "--stdin",
+            stdin=names,
+            allow={1: ""},
+        )
         originally_ignored = {Path(os.fsdecode(name)) for name in result.stdout.split(b"\0") if name}
     # Indexed additions always count, even if the original rules ignored them.
     indexed = set()
@@ -9591,11 +9606,7 @@ def checkpoint(
                 # targeted check itself writes is never the attempt's stray (L2-11). A candidate the
                 # checks removed again is gone.
                 candidates = {path for path in scope_new if os.path.lexists(root / path)}
-            stray = sorted(
-                relative.as_posix()
-                for relative in candidates
-                if not within_scope(relative, repair_scope) and not derived_leftover(root, relative)
-            )
+            stray = sorted(relative.as_posix() for relative in candidates if not within_scope(relative, repair_scope))
         except Refused as error:
             # An unreadable inventory fails this attempt like an unreadable held-path map: the edits
             # go first, so nothing the runner could not classify stays in the tree (L2-9).
@@ -10748,20 +10759,20 @@ def repair_scope(cells: list[str], change: str, root: Path) -> frozenset[str]:
 
     Built before the first model call from the rows as they stand, so an attempt-written plan or
     finding text can never enlarge what its own checkpoint accepts and the plan is never a source
-    (bead coding-harness-t83, S-3). Every entry is casefolded like the held prefixes; a file entry
+    (bead coding-harness-t83, S-3). A file entry
     is exact, a directory entry carries its trailing slash.
     """
-    scope = {f"plans/changes/{change}/".casefold(), "tests/"}
+    scope = {f"plans/changes/{change}/", "tests/"}
     tracking = where_tracking(root)
     for cell in cells:
         for path, _descendants in repair_scope_locations(cell, change, root, tracking):
-            scope.add(path.casefold())
+            scope.add(path)
     return frozenset(scope)
 
 
 def within_scope(relative: Path, scope: frozenset[str]) -> bool:
-    """Whether a new file's path stands inside the frozen repair scope (casefolded on both sides)."""
-    posix = relative.as_posix().casefold()
+    """Whether a new file's exact path stands inside the frozen repair scope."""
+    posix = relative.as_posix()
     for entry in scope:
         if entry.endswith("/"):
             # A directory grant covers its descendants and the path itself (a symlink standing in its place).
@@ -12324,11 +12335,7 @@ def run_attempts(
                 # commit them through `git add -A` without naming them (L2-5, L3-1, L3-4), and the
                 # next run would stop at preflight on them.
                 try:
-                    outside = {
-                        path
-                        for path in scope_new
-                        if not within_scope(path, repair_scope) and not derived_leftover(root, path)
-                    }
+                    outside = {path for path in scope_new if not within_scope(path, repair_scope)}
                     removed = remove_stray_files(root, outside)
                 except (Refused, OSError) as error:
                     problems.append(f"the repair scope guard could not remove the attempt's new files ({error})")
@@ -13027,6 +13034,13 @@ def draft(root: Path, change: str) -> None:
         else:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
+        blocked = [path for path in uncommittable(root, change, keep) if path.casefold().startswith("docs/journal/")]
+        if blocked:
+            reason = "the attempt changed paths a stage-2 run does not commit: " + ", ".join(
+                f"`{path}`" for path in blocked
+            )
+            restored = restore_baseline(root, baseline, allowed, ignored_before)
+            raise CheckpointRolledBack(f"{reason}; {restored}")
         put = put_back(root, baseline, keep)
         put = [path for path in put if Path(path) not in started_with]
         if put:
