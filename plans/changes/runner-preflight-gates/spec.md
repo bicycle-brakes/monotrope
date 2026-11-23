@@ -27,11 +27,11 @@ On 2026-11-23 a stale document date in an orchestrator's edit caused a draft to 
 
 ## Acceptance criteria
 
-1. When draft, implement or repair is about to make its first model call, every gate in the existing registry with `subsets: [docs]` that `ci_gates.declared_cheap` admits runs on the starting tree.
-   *Refuted by:* Any gate in that set does not run before a model call for one of the three verbs.
+1. When draft, implement or repair is about to make its first model call, the locally runnable verify gates selected by the existing document-gate selector and admitted by `ci_gates.declared_cheap` run on the starting tree.
+   *Refuted by:* A selected gate is skipped before a model call, or a hosted-only or locally unrunnable gate is selected.
    *Basis:* `decisions.md#Q-1`.
-2. When a blocking document gate fails on the starting tree, the run stops before any model call or fallback call.
-   *Refuted by:* A fake model records a call after a blocking gate exits nonzero.
+2. When a blocking document gate identifies a starting-tree fault outside the verb’s writable scope, the run stops before any model call or fallback call (provisional pending the decision below).
+   *Refuted by:* A fake model records a call after a blocking gate identifies a stale `decisions.md` that the draft cannot change, or a fixable fault alone stops the draft.
    *Basis:* `decisions.md#Q-1`.
 3. When a blocking gate reports a fix command, the refusal shows that command to the operator.
    *Refuted by:* A stale document date causes refusal without `python3 scripts/check_frontmatter_current.py --stamp`.
@@ -42,8 +42,8 @@ On 2026-11-23 a stale document date in an orchestrator's edit caused a draft to 
 5. When all blocking starting-tree document gates pass, the existing route proceeds to its ordinary model-call admission.
    *Refuted by:* A green starting tree stops a valid draft, implement or repair before its normal call.
    *Basis:* `decisions.md#Q-1`.
-6. While the starting-tree check runs, it preserves the tree and does not create or modify draft artifacts or automatically apply a fix.
-   *Refuted by:* The check stamps a document or writes a spec, plan or index before the model call.
+6. While the starting-tree check runs, it does not create, modify or delete tracked files or draft artifacts, or automatically apply a fix.
+   *Refuted by:* The check changes or deletes a tracked file, creates a draft artifact, or stamps a document before the model call.
    *Basis:* `decisions.md#Q-1`.
 7. When a nonblocking document gate reports a finding, the starting-tree check preserves its existing report-only enforcement.
    *Refuted by:* A report-only gate prevents a model call solely because it reports a finding.
@@ -67,7 +67,7 @@ The gate registry and endpoint declarations remain unchanged: the existing regis
 
 ## Open decisions
 
-[DETAIL] Use the existing document-gate selection and enforcement for the starting check, including its report-only gates; this keeps the reversible selection aligned with the established document check. A draft's own missing ADR answer retains the existing document-check tolerance, because the maintainer alone can supply it. The scope of blocking failures is unresolved below; the provisional agent preference in `decisions.md` is not a maintainer answer.
+[DETAIL] Use the existing locally runnable document-gate selection intersected with cheap gates, including report-only gates; this keeps the selection aligned with the established document check. Incidental ignored files such as caches are outside the no-write condition because existing checks may create them. A draft's own missing ADR answer retains the existing document-check tolerance, because the maintainer alone can supply it. The scope of blocking failures is unresolved below; criterion 2 expresses the provisional preference in `decisions.md`, not a maintainer answer. The check boundary across retries and a hand-only repair also remains unresolved (review R-2).
 
 [DECISION] **Welche Dokumentfehler stoppen den Start?**
 
