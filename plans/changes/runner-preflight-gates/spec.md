@@ -27,8 +27,8 @@ On 2026-11-23 a stale document date in an orchestrator's edit caused a draft to 
 
 ## Acceptance criteria
 
-1. When draft, implement or repair is about to make its first model call, the locally runnable, non-admitted document gates selected from the existing gate registry run on the starting tree.
-   *Refuted by:* Any of the three verbs calls a model without running that selected set, or uses a separate hand-maintained gate list.
+1. When draft, implement or repair is about to make its first model call, every gate in the existing registry with `subsets: [docs]` that `ci_gates.declared_cheap` admits runs on the starting tree.
+   *Refuted by:* Any gate in that set does not run before a model call for one of the three verbs.
    *Basis:* `decisions.md#Q-1`.
 2. When a blocking document gate fails on the starting tree, the run stops before any model call or fallback call.
    *Refuted by:* A fake model records a call after a blocking gate exits nonzero.
@@ -67,4 +67,23 @@ The gate registry and endpoint declarations remain unchanged: the existing regis
 
 ## Open decisions
 
-[DETAIL] Use the existing document-gate selection and enforcement for the starting check, including its report-only gates; this keeps the reversible selection aligned with the established document check. A draft's own missing ADR answer retains the existing document-check tolerance, because the maintainer alone can supply it. No maintainer decision is open.
+[DETAIL] Use the existing document-gate selection and enforcement for the starting check, including its report-only gates; this keeps the reversible selection aligned with the established document check. A draft's own missing ADR answer retains the existing document-check tolerance, because the maintainer alone can supply it. The scope of blocking failures is unresolved below; the provisional agent preference in `decisions.md` is not a maintainer answer.
+
+[DECISION] **Welche Dokumentfehler stoppen den Start?**
+
+Topic: Dokumentfehler vor einem Modellaufruf.
+Intention: Vermeidbare Modellaufrufe bei fehlerhaften Ausgangsdokumenten verhindern.
+Today: Dokumentprüfungen laufen nach dem Versuch; ein Fehler kann mehrere Aufrufe verbrauchen.
+Repository change: Der Runner prüft Dokumente vor dem ersten Aufruf und meldet blockierende Fehler.
+Architecture change: Die bestehenden Prüfungen bleiben erhalten; offen ist, welche ihrer Fehler den Start verhindern.
+
+Goal in one sentence: Festlegen, welche Fehler ein Modell vor seinem ersten Aufruf aufhalten.
+Options:
+- A — Alle blockierenden Dokumentfehler stoppen: Auch Fehler in Dateien, die der Versuch ändern darf, müssen vorher von Hand behoben werden. Nachteil: Ein erneuter Entwurf kann an seinen eigenen Dateien scheitern.
+- B — Nur Fehler außerhalb des Schreibbereichs des Versuchs stoppen: Fehler in Dateien, die der Versuch ändern darf, bleiben dem Versuch überlassen. Nachteil: Solche Fehler können weiterhin Modellaufrufe verbrauchen.
+Recommendation: B — weil der Versuch Fehler in seinem eigenen Schreibbereich selbst beheben kann.
+If you say "ok": Der Start stoppt nur bei blockierenden Fehlern in Dateien, die der jeweilige Versuch nicht ändern darf.
+What is lost: A würde auch bei Fehlern in veränderbaren Dateien Modellaufrufe vermeiden.
+Downside you accept: Bei A ist vorherige Handarbeit an veränderbaren Dateien möglich; bei B können deren Fehler Modellaufrufe verbrauchen.
+
+Welche Option und den jeweils genannten Nachteil akzeptierst du?
