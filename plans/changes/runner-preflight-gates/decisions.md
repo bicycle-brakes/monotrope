@@ -35,3 +35,10 @@ context: |
   Architecture change: none.
 
 In the context of a stale document date that cost three model attempts, facing a choice between two bounded layers, one note in bead coding-harness-7ftj, or the hook layer alone, we decided on two bounded P1 changes, of which this is one, to achieve a fix that holds for every harness and saves model calls, accepting two small changes instead of one larger feature — 2026-11-23
+
+## Provisional agent decisions on the spec review (2026-11-23, night run 2026-11-23-a)
+
+Decided by the orchestrator by its recommendation, marked provisional; the plan card lists them for the maintainer.
+
+- [DETAIL] **S-1 (provisional agent decision):** Reading B — the preflight refuses only for a blocking document gate whose failing file the attempt may not change (decisions.md, research.md, files outside the change folder, as the runner's draft_keep/held rules define); a gate the attempt can fix does not refuse.
+- [DETAIL] **S-2 (provisional agent decision):** drop 'non-admitted' from the criterion; the selection is every gate with subsets [docs] that ci_gates.declared_cheap admits, and the criterion is refuted by a gate in that set that does not run.
