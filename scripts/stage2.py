@@ -3851,7 +3851,9 @@ def legacy_completed(status: str) -> bool:
 # The day the fingerprint rule took hold, fixed in code: an undigested block (one without a
 # `Spec fingerprint:` line) qualifies only when its heading day lies strictly before this day,
 # and only while it is current against the last committed spec change (spec criteria 11 and 12).
-LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 19)
+# It is the day the fingerprinting runner reached main (PR #432, merged 2026-11-23): reviews the
+# runner wrote before that day could not carry a fingerprint (bead coding-harness-8b0u).
+LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 23)
 # A spec's body bytes: everything after the front matter header. The fingerprint and the legacy
 # currency compare exactly these bytes, so a front-matter-only edit never invalidates a review
 # and a body edit always does.
