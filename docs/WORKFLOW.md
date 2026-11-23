@@ -2082,15 +2082,21 @@ its target; unreadable YAML is restored from the snapshot and rejects the attemp
 
 **The repair scope is frozen, and new files outside it refuse the checkpoint.** The scope is the
 change's own folder, `tests/`, and the paths the taken rows' Where cells name, read by the shared
-Where-path rules: path-like tokens and Markdown link text and target, a trailing `:line` or
-`:line-line` selector dropped, a bare name resolved against the change folder first and the
-repository root second, a token ending in `/` or naming an existing tracked directory granting its
-descendants, prose granting nothing, an unresolvable path-like token refusing. The runner freezes
+Where-path classifier (`where_named_paths`, the reader the held-row routing also uses, so there is
+no second grammar): path-like tokens and Markdown link text and target, a trailing `:line`,
+`:line-line`, `#L<line>` or `#L<line>-L<line>` selector dropped, a bare name resolved against the
+change folder first. A path naming a tracked file grants that file; a path not tracked yet grants
+that exact path; a directory grants its tree only when the cell writes it with a trailing `/`; a
+bare word that merely names a tracked directory and prose grant nothing, and nothing is refused.
+The runner freezes
 the scope from the rows as they stand before the first model call; the plan is never a source, and
 an attempt's own plan, findings or row writes cannot enlarge it. Both repair prompts state the rule
 in words and forbid handover and journal writes — `docs/journal/` is held for the orchestrator, on
-the runner's held list beside the other held paths. At the checkpoint the runner compares every
-file git sees with the inventory taken right before that attempt's call: a new file outside the
+the runner's held list beside the other held paths. Right after the call, before verification
+writes anything of its own, the runner compares every file git sees with the inventory taken right
+before that attempt's call, judging ignored files by the ignore rules the attempt started under (an
+edited `.gitignore` or `.git/info/exclude` cannot hide a new file). A failed attempt's new files
+outside the scope are removed before the next route starts. At the checkpoint: a new file outside the
 scope — an untracked non-ignored file, an indexed addition, an explicitly indexed ignored file or a
 rename destination — refuses the attempt on the held-path refusal path. The refusal names every
 offending path and the saved attempt under `refs/stage2/attempts/`, the baseline and the pre-call

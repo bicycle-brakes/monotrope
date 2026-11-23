@@ -5552,6 +5552,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
         "plant": {
             "src/other.py": "value = 2\n",
             "tests/test_other.py": OTHER_TEST,
+            # In the change folder, a path the repair scope admits (L2-13); a root file would be refused.
             "plans/changes/demo/verification-scope.txt": "requires full verification\n",
         },
         "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
@@ -15893,8 +15894,9 @@ def test_idle_retry_cannot_reuse_previous_work(world: World, verb: str) -> None:
     if verb == "repair":
         # The first call's work stays in the tree but fails the verifier; the idle second must still fail.
         # Its unsupported input selects the full check (ADR 0025), so the scripted red `make` is the verifier.
-        # Both plants stay inside the change folder: the scope guard judges new files, and the
-        # first attempt's leftover is not attempt 3's new file (per-attempt baselines).
+        # Both plants stay inside the change folder so the scope guard admits them: a failed attempt's
+        # new file outside the scope is removed before the next route (L2-5), and this test needs the
+        # first attempt's work to stand, so it cannot plant `verification-scope.txt` at the root (L2-13).
         steps[0] = {
             **steps[0],
             "plant": {
@@ -21419,7 +21421,7 @@ def test_repair_allows_new_paths_within_scope(world: World, kind: str) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
     if kind == "named-directory":
         record = world.record()
-        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src |")
+        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/ |")
         record.write_text(granted, encoding="utf-8")
     extra, content = {
         "change-folder": ("plans/changes/demo/notes.md", "note\n"),
@@ -21579,15 +21581,154 @@ def test_repair_where_paths_resolve_with_shared_rules(world: World) -> None:
             "src/",
         },
     )
-    for cell in (
-        "src/missing.py",
-        "missing.md",
-        "../outside.md",
-        "/absolute/x.py",
-        "tests/test_seed.py::test_seed",
-    ):
-        with pytest.raises(stage2.Refused):
-            stage2.repair_scope([cell], "demo", world.root)
+    base = stage2.repair_scope([], "demo", world.root)
+    # A bare word that names a tracked directory is prose (L2-1, L2-8): it grants nothing.
+    for cell in ("src", "scripts", "fix the scripts and docs and tools", "../outside.md", "/absolute/x.py"):
+        assert stage2.repair_scope([cell], "demo", world.root) == base, cell
+    # A path that is not tracked yet grants exactly that path and nothing is refused (L2-2, L2-14).
+    untracked = stage2.repair_scope(["src/missing.py:3", "missing.md"], "demo", world.root)
+    assert untracked == base | {"src/missing.py", "missing.md"}
+    # The directory grant needs the written trailing slash, even for a directory not tracked yet.
+    directories = stage2.repair_scope(["scripts/", "newdir/"], "demo", world.root)
+    assert directories == base | {"scripts/", "newdir/"}
+
+
+def test_repair_scope_reads_cells_through_the_shared_classifier(world: World) -> None:
+    """L2-4/L2-7/L2-12. Planted fault: the scope has a Where grammar of its own that drifts from the classifier."""
+    seed_tests(world)
+    cell = "see [the helper](src/app.py:1), `tests/test_seed.py#L3`, (src/new_mod.py) and scripts/ for docs"
+    named = stage2.where_named_paths(cell, world.root)
+    assert {"src/app.py", "tests/test_seed.py", "src/new_mod.py", "scripts/"} <= set(named)
+    scope = stage2.repair_scope([cell], "demo", world.root)
+    granted = {"src/app.py", "tests/test_seed.py", "src/new_mod.py", "scripts/"}
+    assert scope - stage2.repair_scope([], "demo", world.root) == granted
+
+
+def test_repair_scope_not_yet_tracked_path_grants_a_new_file(world: World) -> None:
+    """L2-2. Planted fault: a Where cell naming a file the remedy creates is refused or grants nothing."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    record = world.record()
+    record.write_text(
+        record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1, src/new_mod.py |"),
+        encoding="utf-8",
+    )
+    plant = {
+        "src/app.py": "value = 2\n",
+        "tests/test_fix.py": FIX_TEST,
+        "src/new_mod.py": "x = 1\n",
+    }
+    script_repair(world, [repair_step(plant=plant)], make=[GREEN])
+    assert world.run("repair") == 0
+    assert git(world.root, "show", "HEAD:src/new_mod.py") == "x = 1"
+
+
+def test_repair_scope_prose_word_grants_no_directory(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """L2-1/L2-8. Planted fault: a Where sentence containing `scripts` lets the repair add files below it."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    record = world.record()
+    record.write_text(
+        record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1 and the scripts |"),
+        encoding="utf-8",
+    )
+    plant = {
+        "src/app.py": "value = 2\n",
+        "tests/test_fix.py": FIX_TEST,
+        "scripts/stray.py": "x = 1\n",
+    }
+    script_repair(world, [repair_step(plant=plant)], make=[GREEN])
+    assert world.run("repair") == 1
+    assert "`scripts/stray.py`" in capsys.readouterr().err
+
+
+def test_repair_scope_attempt_cannot_hide_a_stray_through_gitignore(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L2-3. Planted fault: the guard reads ignore state the attempt wrote, so a listed stray stays unseen."""
+    seed_tests(world)
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore caches")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    ".gitignore": "cache/\nsrc/stray.txt\n",
+                    "src/stray.txt": "hidden\n",
+                },
+            ),
+        ],
+        make=[GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert "`src/stray.txt`" in capsys.readouterr().err
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert not (world.root / "src" / "stray.txt").exists()
+
+
+def test_repair_failed_attempt_stray_is_removed_before_the_next_route(world: World) -> None:
+    """L2-5. Planted fault: a failed attempt's out-of-scope file reaches the next attempt's checkpoint commit."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(
+        plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"},
+    )
+    script_repair(world, [first, repair_step()], full_check=True, make=[{"stdout": "red\n", "exit": 1}, GREEN])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert "src/stray.txt" not in git(world.root, "ls-files").splitlines()
+    assert "src/stray.txt" not in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert not (world.root / "src" / "stray.txt").exists()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_scope_inventory_failure_fails_the_attempt_with_a_named_reason(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2-9. Planted fault: an unreadable inventory escapes as a bare refusal or skips the guard silently."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step(), repair_step(), repair_step()], make=[GREEN] * 3)
+    original = stage2.file_inventory
+    calls = {"count": 0}
+
+    def flaky(root: Path, env: dict[str, str] | None = None) -> set[Path]:
+        calls["count"] += 1
+        if calls["count"] >= 2:
+            raise stage2.Refused("git ls-files did not finish")
+        return original(root, env)
+
+    monkeypatch.setattr(stage2, "file_inventory", flaky)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert "the repair scope guard could not read the file inventory" in world.text()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+def test_repair_scope_ignores_files_the_verification_itself_writes(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2-11. Planted fault: a non-ignored file `make verify` writes outside the scope refuses the attempt."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    original_launch = stage2.launch
+
+    def writing(command, root, env, secret=None, **kwargs):
+        if list(command) == FULL_CHECK_ARGV:
+            (root / "verify-report.txt").write_text("written by the check\n", encoding="utf-8")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", writing)
+    script_repair(world, [repair_step()], full_check=True, make=[GREEN])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
 def test_repair_scope_casefolds_uppercase_change_folder(world: World) -> None:
@@ -25823,8 +25964,9 @@ def test_work_verbs_skip_escaped_scan_parent(
         repair_world(world)
         script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
         # The scan destination is a Where grant: the symlink that replaces it is no stray new file.
+        # A directory grants its tree only when written with its trailing slash (round-2 decision).
         record = world.record()
-        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1 src/deep |")
+        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1 src/deep/ |")
         record.write_text(granted, encoding="utf-8")
     else:
         successful_implementation(world)
@@ -28355,10 +28497,11 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     else:
         repair_world(world)
         step = repair_step()
-        # Under `tests/`, a path the repair scope admits.
-        step["plant"] = {**step["plant"], "tests/new_tool.py": "VALUE = 1\n"}
+        # The repair scope refuses a new `scripts/new_tool.py`, so the repair plants its new file in the
+        # change folder, a path the scope admits that is still outside `tests/` (L2-13).
+        step["plant"] = {**step["plant"], "plans/changes/demo/new_tool.py": "VALUE = 1\n"}
         script_repair(world, [step], make=[{"stdout": "green\n"}])
-    new_file = "scripts/new_tool.py" if verb == "implement" else "tests/new_tool.py"
+    new_file = "scripts/new_tool.py" if verb == "implement" else "plans/changes/demo/new_tool.py"
     assert world.run(verb) == 0
     assert seen and new_file in seen[0].splitlines(), seen
     assert new_file in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()

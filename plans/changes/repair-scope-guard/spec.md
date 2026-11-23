@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -29,11 +29,11 @@ The runner prevents repair attempts from committing new files outside their scop
 
 ## Terms
 
-**Repair scope:** descendants of the current change folder and `tests/`, plus paths named in the selected taken rows' Where cells, frozen before the attempt. A named file grants that file alone. A token ending in `/` or naming an existing tracked directory grants its descendants. The plan does not grant paths. Existing held-path restrictions take precedence.
+**Repair scope:** descendants of the current change folder and `tests/`, plus paths named in the selected taken rows' Where cells, frozen before the attempt. A named file grants that file alone, whether or not it is tracked yet. A directory grants its descendants only when the cell writes it with a trailing `/`; a bare word that merely names a tracked directory grants nothing. The plan does not grant paths. Existing held-path restrictions take precedence.
 
-**Where path:** a path-like token, or Markdown link text or target, in a taken Where cell. A trailing `:line` or `:line-line` is removed. A bare file name resolves against the change folder first, then the repository root; paths cannot escape the repository. Prose without a path grants nothing.
+**Where path:** a path-like token, or Markdown link text or target, in a taken Where cell. A trailing `:line`, `:line-line`, `#L<line>` or `#L<line>-L<line>` selector is removed. The cell is read only through the shared Where classifier; nothing is refused. A bare file name resolves against the change folder first, then the repository root; paths cannot escape the repository. Prose without a path grants nothing.
 
-**New file:** a file absent from the pre-attempt baseline and present at the checkpoint after the runner's checks, including a non-ignored untracked file, an indexed addition, and a rename destination. Untracked ignored files do not count, including test and tool caches; an explicitly indexed ignored addition does count.
+**New file:** a file absent from the pre-attempt baseline and present right after the attempt's call, before the runner's own checks write anything and judged by the ignore rules the attempt started under, including a non-ignored untracked file, an indexed addition, and a rename destination. Untracked ignored files do not count, including test and tool caches; an explicitly indexed ignored addition does count.
 
 ## Acceptance criteria
 

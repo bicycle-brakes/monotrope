@@ -6785,6 +6785,61 @@ def file_inventory(root: Path, env: dict[str, str] | None = None) -> set[Path]:
     return paths
 
 
+def ignore_rules_state(root: Path, inventory: set[Path]) -> dict[str, str]:
+    """A digest of every ignore rule file a repair attempt could edit: each `.gitignore` and `.git/info/exclude`.
+
+    The scope guard compares it before and after the attempt: an attempt that edits a rule to hide a
+    new file must not decide what counts as a new file (bead coding-harness-t83, L2-3).
+    """
+    state: dict[str, str] = {}
+    exclude = _git_output(root, "rev-parse", "--git-path", "info/exclude").strip()
+    sources = [(".git/info/exclude", root / exclude)]
+    sources += [(rel.as_posix(), root / rel) for rel in sorted(inventory) if rel.name == ".gitignore"]
+    for name, path in sources:
+        try:
+            state[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            state[name] = ""
+    return state
+
+
+def attempt_new_files(
+    root: Path,
+    before: set[Path],
+    rules_before: dict[str, str],
+    ignored_before: dict[Path, tuple[int, int]] | None,
+) -> set[Path]:
+    """The files this attempt added, judged by the ignore rules it started under.
+
+    Normally an untracked ignored file is no new file (a cache). When an ignore rule file changed
+    during the attempt, every ignored file that did not exist before counts as new too, so the
+    attempt cannot hide a stray by listing it in `.gitignore` or `.git/info/exclude`.
+    """
+    after = file_inventory(root)
+    new = after - before
+    if ignored_before is not None and ignore_rules_state(root, after) != rules_before:
+        new |= {path for path in ignored_snapshot(root) if path not in ignored_before and path not in before}
+    return new
+
+
+def remove_stray_files(root: Path, stray: Iterable[Path]) -> list[str]:
+    """Delete an attempt's new files outside the repair scope, index entries included; name what went."""
+    removed: list[str] = []
+    for relative in sorted(stray):
+        _git_output(
+            root, "--literal-pathspecs", "rm", "--cached", "-q", "--ignore-unmatch", "-f", "--", relative.as_posix()
+        )
+        path = root / relative
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+        else:
+            continue
+        removed.append(relative.as_posix())
+    return removed
+
+
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
@@ -9431,6 +9486,7 @@ def checkpoint(
     repair_scope: frozenset[str] | None = None,
     scope_baseline: set[Path] | None = None,
     attempt_label: str | None = None,
+    scope_new: set[Path] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
@@ -9480,11 +9536,30 @@ def checkpoint(
         # taken rows' Where grants (bead coding-harness-t83). Held paths took precedence above; an
         # edit to an existing tracked file is not a new file; and what the runner itself derives
         # (the rendered index, a stamp, its bytecode) is not the attempt's to answer for.
-        stray = sorted(
-            relative.as_posix()
-            for relative in file_inventory(root) - scope_baseline
-            if not within_scope(relative, repair_scope) and not derived_leftover(root, relative)
-        )
+        try:
+            if scope_new is None:
+                candidates = file_inventory(root) - scope_baseline
+            else:
+                # Measured right after the call, before verification: what `make verify` or the
+                # targeted check itself writes is never the attempt's stray (L2-11). A candidate the
+                # checks removed again is gone.
+                candidates = {path for path in scope_new if os.path.lexists(root / path)}
+            stray = sorted(
+                relative.as_posix()
+                for relative in candidates
+                if not within_scope(relative, repair_scope) and not derived_leftover(root, relative)
+            )
+        except Refused as error:
+            # An unreadable inventory fails this attempt like an unreadable held-path map: the edits
+            # go first, so nothing the runner could not classify stays in the tree (L2-9).
+            try:
+                restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
+            except RestorationRefused as safety_error:
+                preserve_attempt_failure(safety_error, error)
+                raise
+            raise CheckpointRolledBack(
+                f"the repair scope guard could not read the file inventory ({error}); {restored}"
+            ) from error
         if stray:
             names = ", ".join(f"`{path}`" for path in stray)
             reason = (
@@ -10595,43 +10670,29 @@ def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     return locations
 
 
-def repair_scope_locations(cell: str, change: str, root: Path) -> list[tuple[str, bool]]:
-    """One Where cell's repair-scope grants as (path, descendants) pairs, by the shared Where-path rules.
+def repair_scope_locations(
+    cell: str, change: str, root: Path, tracking: WhereTracking | None = None
+) -> list[tuple[str, bool]]:
+    """One Where cell's repair-scope grants as (path, descendants) pairs; it reads `where_named_tokens` only.
 
-    The token splitting, wrapper stripping, URL skipping, line-selector dropping and the refusal of
-    unknown path-like tokens are the shared `where_locations` grammar; this adds the repair scope's
-    two extras (bead coding-harness-t83): a token ending in `/` or naming an existing tracked
-    directory grants its descendants, a bare file name resolves against the change folder first and
-    the repository root second, and a Markdown link contributes its text and its target. Prose
-    grants nothing.
+    No second grammar and no refusal (bead coding-harness-t83, L2-1/2/4/7/8/12/14): a path that names
+    a tracked file grants it; a path that is not tracked yet grants that exact path when it looks
+    like one (it has a `/` or an extension); a directory grants its tree only when the cell writes
+    it with a trailing slash; a bare word that merely names a tracked directory, and prose, grant
+    nothing. A bare file name resolves against the change folder first.
     """
-    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
+    tracking = where_tracking(root) if tracking is None else tracking
     folder = f"plans/changes/{change}/"
     grants: list[tuple[str, bool]] = []
-    cell = re.sub(r"\[([^\]]*)\]\(([^)]+)\)", r" \1 \2 ", cell)
-    for token in _WHERE_TOKEN_SPLIT.split(cell):
-        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
-        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
-            token = token[1:-1]
-        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
-            continue
-        path = re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
-        if "/" not in token and f"{folder}{path}" in tracked:
+    for token, path in where_named_tokens(cell, root, tracking):
+        if token.rstrip(_WHERE_TRAILING).endswith("/"):
+            grants.append((path.rstrip("/") + "/", True))
+        elif path.endswith("/"):
+            continue  # a bare word naming a tracked directory is prose, not a grant
+        elif "/" not in path and f"{folder}{path}" in tracking.exact:
             grants.append((f"{folder}{path}", False))
-            continue
-        if path in tracked:
+        elif path in tracking.exact or "/" in path or re.search(r"\.[A-Za-z0-9_-]+$", path):
             grants.append((path, False))
-            continue
-        if path.endswith("/") or any(name.startswith(f"{path}/") for name in tracked):
-            grants.append((path if path.endswith("/") else f"{path}/", True))
-            continue
-        if "/" in token or re.search(r"\.[\w-]+", token):
-            raise Refused(
-                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been "
-                "written. Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or "
-                "#L<line>-L<line> suffix, a bare name resolved against the change folder first, or an existing "
-                "tracked directory for its descendants."
-            )
     return grants
 
 
@@ -10644,8 +10705,9 @@ def repair_scope(cells: list[str], change: str, root: Path) -> frozenset[str]:
     is exact, a directory entry carries its trailing slash.
     """
     scope = {f"plans/changes/{change}/".casefold(), "tests/"}
+    tracking = where_tracking(root)
     for cell in cells:
-        for path, _descendants in repair_scope_locations(cell, change, root):
+        for path, _descendants in repair_scope_locations(cell, change, root, tracking):
             scope.add(path.casefold())
     return frozenset(scope)
 
@@ -10788,12 +10850,27 @@ def where_named_paths(cell: str, root: Path = REPO_ROOT, tracking: WhereTracking
     a tracked file is not required, and an unknown token stays literal instead of refusing. A cell
     naming only an external URL, an outside path or bare prose names nothing.
     """
-    tracking = where_tracking(root) if tracking is None else tracking
     named: list[str] = []
+    for _token, path in where_named_tokens(cell, root, tracking):
+        if path not in named:
+            named.append(path)
+    return named
+
+
+def where_named_tokens(
+    cell: str, root: Path = REPO_ROOT, tracking: WhereTracking | None = None
+) -> list[tuple[str, str]]:
+    """Every (raw token, normalized path) pair a `Where` cell names: the one grammar all its readers share.
+
+    The repair scope reads the raw token as well, because only a directory written with a trailing
+    slash grants its tree (spec, Terms); the classification itself stays `_where_token_path`.
+    """
+    tracking = where_tracking(root) if tracking is None else tracking
+    named: list[tuple[str, str]] = []
     for token in _WHERE_TOKEN_SPLIT.split(_WHERE_LINK.sub(lambda match: f" {match[1]} {match[2]} ", cell)):
         path = _where_token_path(token, root, tracking)
-        if path is not None and path not in named:
-            named.append(path)
+        if path is not None:
+            named.append((token, path))
     return named
 
 
@@ -11804,9 +11881,19 @@ def run_attempts(
             before, unmeasured = "", str(error)
         # The scope guard's own baseline: every path git sees right before the call, so the
         # checkpoint's new files are measured against this attempt's start, never a sibling's
-        # leftover (bead coding-harness-t83, S-1). An unreadable inventory fails the attempt
-        # before the model runs, rather than silently skipping the guard.
-        scope_before = file_inventory(root) if repair_scope is not None else None
+        # leftover (bead coding-harness-t83, S-1). An unreadable inventory fails the attempt with
+        # a named reason (L2-9), rather than silently skipping the guard.
+        scope_before: set[Path] | None = None
+        scope_rules: dict[str, str] = {}
+        scope_problem: str | None = None
+        scope_new: set[Path] | None = None
+        if repair_scope is not None:
+            try:
+                scope_before = file_inventory(root)
+                scope_rules = ignore_rules_state(root, scope_before)
+            except Refused as error:
+                scope_before = None
+                scope_problem = f"the repair scope guard could not read the file inventory before the call ({error})"
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
@@ -12020,6 +12107,13 @@ def run_attempts(
             else:
                 files = unmeasured
                 work_unmeasured = unmeasured
+            if scope_before is not None:
+                # The attempt's new files, measured before verification writes anything of its own
+                # (L2-11) and judged by the ignore rules the attempt started under (L2-3).
+                try:
+                    scope_new = attempt_new_files(root, scope_before, scope_rules, ignored_before)
+                except Refused as error:
+                    scope_problem = f"the repair scope guard could not read the file inventory after the call ({error})"
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -12143,6 +12237,26 @@ def run_attempts(
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
             problems = [*work_problems, *lifecycle_problems, *problems]
+            if scope_problem is not None:
+                problems.append(scope_problem)
+            if problems and repair_scope is not None and scope_new is not None and attempt < len(routes):
+                # A failed attempt's new files outside the scope never reach the next route: that
+                # attempt's checkpoint would commit them through `git add -A` without naming them (L2-5).
+                try:
+                    outside = {
+                        path
+                        for path in scope_new
+                        if not within_scope(path, repair_scope) and not derived_leftover(root, path)
+                    }
+                    removed = remove_stray_files(root, outside)
+                except (Refused, OSError) as error:
+                    problems.append(f"the repair scope guard could not remove the attempt's new files ({error})")
+                else:
+                    if removed:
+                        problems.append(
+                            "the repair scope guard removed the attempt's new files outside its scope: "
+                            + ", ".join(f"`{name}`" for name in removed)
+                        )
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -12313,6 +12427,7 @@ def run_attempts(
                         keep=allowed,
                         repair_scope=repair_scope,
                         scope_baseline=scope_before,
+                        scope_new=scope_new,
                         attempt_label=f"{verb}-attempt-{attempt}",
                     )
                 except CheckpointRolledBack as error:
@@ -12945,15 +13060,16 @@ def draft(root: Path, change: str) -> None:
 # warning. Both repair endpoints share this block, so both variants carry the same rule.
 REPAIR_SCOPE_RULE = (
     "## Repair scope\n\n"
-    "Write only inside this change's own folder (`plans/changes/{change}/`), inside `tests/`, and at "
-    "the exact existing tracked paths the taken rows' Where cells name - a token ending in `/` or "
-    "naming an existing tracked directory also covers the files below it, and a trailing `:line` "
-    "selector is dropped. Create no new file outside this scope: at the checkpoint the runner "
+    "Your new files stay inside this change's own folder (`plans/changes/{change}/`), inside `tests/`, "
+    "and at the paths the taken rows' Where cells name - a named file grants that file, a directory "
+    "grants the files below it only when the cell writes it with a trailing `/`, and a trailing "
+    "`:line` selector is dropped. Create no new file outside this scope: at the checkpoint the runner "
     "compares every new file against that scope and refuses the attempt, saves it under a local ref, "
-    "restores the baseline and stops the run. Never write handover or journal files - `docs/journal/` "
-    "is the orchestrator's record - nor any other held path, and do not enlarge the scope by editing "
-    "the plan or your own findings rows. An untracked file git ignores (a test or tool cache) is not "
-    "a new file; an ignored file explicitly added to the index is."
+    "restores the baseline and stops the run. Editing an existing tracked file outside the scope is "
+    "not restricted by this rule; only new files are. Never write handover or journal files - "
+    "`docs/journal/` is the orchestrator's record - nor any other held path, and do not enlarge the "
+    "scope by editing the plan or your own findings rows. An untracked file git ignores (a test or "
+    "tool cache) is not a new file; an ignored file explicitly added to the index is."
 )
 
 
