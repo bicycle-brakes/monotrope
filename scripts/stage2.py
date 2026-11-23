@@ -5773,6 +5773,32 @@ def changed_paths(
     return paths
 
 
+def file_inventory(root: Path, env: dict[str, str] | None = None) -> set[Path]:
+    """Every path git currently sees: indexed entries and untracked non-ignored files.
+
+    The repair scope guard compares this with the pre-attempt inventory, so a new file is one the
+    inventory lacked at the attempt's start: an untracked non-ignored file, an indexed addition (an
+    explicitly indexed ignored file included) or a rename destination. An untracked ignored file
+    reaches neither listing, so it is never new for this guard (bead coding-harness-t83, S-2).
+    """
+    paths: set[Path] = set()
+    for raw in [
+        *_git_bytes(root, "ls-files", "-z", "--cached", env=env).split(b"\0"),
+        *_git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0"),
+    ]:
+        if not raw:
+            continue
+        try:
+            name = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            name = raw.decode("utf-8", errors="surrogateescape")
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts or name not in (path.as_posix(), path.as_posix() + "/"):
+            raise Refused("a staged or untracked path cannot be mapped safely")
+        paths.add(path)
+    return paths
+
+
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
@@ -8416,6 +8442,9 @@ def checkpoint(
     ignored_before: dict[Path, tuple[int, int]] | None = None,
     message: str | None = None,
     keep: set[Path] | None = None,
+    repair_scope: frozenset[str] | None = None,
+    scope_baseline: set[Path] | None = None,
+    attempt_label: str | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
@@ -8460,6 +8489,29 @@ def checkpoint(
             preserve_attempt_failure(safety_error, Refused(reason))
             raise
         raise CheckpointRolledBack(f"{reason}; {restored}")
+    if repair_scope is not None and scope_baseline is not None:
+        # A repair's new files are confined to its frozen scope: the change folder, `tests/` and the
+        # taken rows' Where grants (bead coding-harness-t83). Held paths took precedence above; an
+        # edit to an existing tracked file is not a new file; and what the runner itself derives
+        # (the rendered index, a stamp, its bytecode) is not the attempt's to answer for.
+        stray = sorted(
+            relative.as_posix()
+            for relative in file_inventory(root) - scope_baseline
+            if not within_scope(relative, repair_scope) and not derived_leftover(root, relative)
+        )
+        if stray:
+            names = ", ".join(f"`{path}`" for path in stray)
+            reason = (
+                "the repair left new files outside its scope (the change folder, `tests/` and the taken "
+                f"rows' Where cells grant the rest): {names}. No commit was made."
+            )
+            saved = save_attempt(root, baseline, change, attempt_label or "attempt")
+            try:
+                restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
+            except RestorationRefused as safety_error:
+                preserve_attempt_failure(safety_error, Refused(reason))
+                raise
+            raise CheckpointRolledBack(f"{reason} {saved}; {restored}")
     if stamps:
         preflight_recovery(
             root, [root / path for path in sorted(stamps)], aliases=alias_baseline(root, baseline, ignored_before)
@@ -9557,6 +9609,74 @@ def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     return locations
 
 
+def repair_scope_locations(cell: str, change: str, root: Path) -> list[tuple[str, bool]]:
+    """One Where cell's repair-scope grants as (path, descendants) pairs, by the shared Where-path rules.
+
+    The token splitting, wrapper stripping, URL skipping, line-selector dropping and the refusal of
+    unknown path-like tokens are the shared `where_locations` grammar; this adds the repair scope's
+    two extras (bead coding-harness-t83): a token ending in `/` or naming an existing tracked
+    directory grants its descendants, a bare file name resolves against the change folder first and
+    the repository root second, and a Markdown link contributes its text and its target. Prose
+    grants nothing.
+    """
+    tracked = set(_git_output(root, "ls-files", "-z").split("\0")) - {""}
+    folder = f"plans/changes/{change}/"
+    grants: list[tuple[str, bool]] = []
+    cell = re.sub(r"\[([^\]]*)\]\(([^)]+)\)", r" \1 \2 ", cell)
+    for token in _WHERE_TOKEN_SPLIT.split(cell):
+        wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">"}
+        while len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+        if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
+            continue
+        path = re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if path in tracked:
+            grants.append((path, False))
+            continue
+        if path.endswith("/") or any(name.startswith(f"{path}/") for name in tracked):
+            grants.append((path if path.endswith("/") else f"{path}/", True))
+            continue
+        if "/" not in token and f"{folder}{path}" in tracked:
+            grants.append((f"{folder}{path}", False))
+            continue
+        if "/" in token or re.search(r"\.[\w-]+", token):
+            raise Refused(
+                f"unrecognised Where location `{token}`; correct the location by hand first, nothing has been "
+                "written. Use an exact tracked path with an optional :<line>, :<line>-<line>, #L<line> or "
+                "#L<line>-L<line> suffix, a bare name resolved against the change folder first, or an existing "
+                "tracked directory for its descendants."
+            )
+    return grants
+
+
+def repair_scope(cells: list[str], change: str, root: Path) -> frozenset[str]:
+    """The frozen repair scope: the change folder, `tests/` and the taken rows' Where grants.
+
+    Built before the first model call from the rows as they stand, so an attempt-written plan or
+    finding text can never enlarge what its own checkpoint accepts and the plan is never a source
+    (bead coding-harness-t83, S-3). Every entry is casefolded like the held prefixes; a file entry
+    is exact, a directory entry carries its trailing slash.
+    """
+    scope = {f"plans/changes/{change}/", "tests/"}
+    for cell in cells:
+        for path, _descendants in repair_scope_locations(cell, change, root):
+            scope.add(path.casefold())
+    return frozenset(scope)
+
+
+def within_scope(relative: Path, scope: frozenset[str]) -> bool:
+    """Whether a new file's path stands inside the frozen repair scope (casefolded on both sides)."""
+    posix = relative.as_posix().casefold()
+    for entry in scope:
+        if entry.endswith("/"):
+            # A directory grant covers its descendants and the path itself (a symlink standing in its place).
+            if posix.startswith(entry) or posix == entry.rstrip("/"):
+                return True
+        elif posix == entry:
+            return True
+    return False
+
+
 def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
     """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
 
@@ -10313,6 +10433,7 @@ def run_attempts(
     verify_mode: str = "full",  # implement and repair: "targeted" (bead coding-harness-0swp); draft keeps its own path
     new_file_guard: bool = False,  # implement: new production code without a reachable test refuses the attempt
     protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
+    repair_scope: frozenset[str] | None = None,  # repair: new files outside this frozen scope refuse the checkpoint
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -10446,6 +10567,11 @@ def run_attempts(
             before = worktree_tree(root)
         except (Refused, OSError) as error:
             before, unmeasured = "", str(error)
+        # The scope guard's own baseline: every path git sees right before the call, so the
+        # checkpoint's new files are measured against this attempt's start, never a sibling's
+        # leftover (bead coding-harness-t83, S-1). An unreadable inventory fails the attempt
+        # before the model runs, rather than silently skipping the guard.
+        scope_before = file_inventory(root) if repair_scope is not None else None
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
@@ -10942,7 +11068,18 @@ def run_attempts(
                 if scope_record:
                     message += "\n\n" + SCOPE_COMMIT_HEADING + "\n" + "\n".join(scope_record)
                 try:
-                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                    checkpoint(
+                        root,
+                        ctx.change,
+                        baseline,
+                        key,
+                        ignored_before,
+                        message=message,
+                        keep=allowed,
+                        repair_scope=repair_scope,
+                        scope_baseline=scope_before,
+                        attempt_label=f"{verb}-attempt-{attempt}",
+                    )
                 except CheckpointRolledBack as error:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
@@ -11534,6 +11671,22 @@ def draft(root: Path, change: str) -> None:
     )
 
 
+# Stated in words, not as a resolved path list (S-5): the guard is the enforcement, the prompt the
+# warning. Both repair endpoints share this block, so both variants carry the same rule.
+REPAIR_SCOPE_RULE = (
+    "## Repair scope\n\n"
+    "Write only inside this change's own folder (`plans/changes/{change}/`), inside `tests/`, and at "
+    "the exact existing tracked paths the taken rows' Where cells name - a token ending in `/` or "
+    "naming an existing tracked directory also covers the files below it, and a trailing `:line` "
+    "selector is dropped. Create no new file outside this scope: at the checkpoint the runner "
+    "compares every new file against that scope and refuses the attempt, saves it under a local ref, "
+    "restores the baseline and stops the run. Never write handover or journal files - `docs/journal/` "
+    "is the orchestrator's record - nor any other held path, and do not enlarge the scope by editing "
+    "the plan or your own findings rows. An untracked file git ignores (a test or tool cache) is not "
+    "a new file; an ignored file explicitly added to the index is."
+)
+
+
 def repair_prompt(
     ctx: Context,
     baseline: str,
@@ -11548,6 +11701,7 @@ def repair_prompt(
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
+        REPAIR_SCOPE_RULE.format(change=ctx.change),
         # A command-capable Codex runs the must-runs itself; the file-tools route delegates the same
         # checks to the runner. The repair owes its findings' proofs and the written ledger entries;
         # missing unwritten tests are named without being owed, and no missing id reaches its pytest
@@ -11612,6 +11766,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             "of marking it fixed."
         )
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    # The scope is frozen from the rows as they stand, before any model runs: the plan is never a
+    # source and an attempt's own plan, findings or row writes cannot enlarge it (spec, criteria 7
+    # and 8; bead coding-harness-t83). Held paths keep their precedence at the checkpoint.
+    scope = repair_scope([row[4] for _, row in taken], change, root)
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
@@ -11674,6 +11832,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         retain_answer=True,
         verify_mode="targeted",
         protect_lifecycle=True,
+        repair_scope=scope,
     )
 
 

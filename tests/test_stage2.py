@@ -5512,7 +5512,7 @@ def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(
         "plant": {
             "src/other.py": "value = 2\n",
             "tests/test_other.py": OTHER_TEST,
-            "verification-scope.txt": "requires full verification\n",
+            "plans/changes/demo/verification-scope.txt": "requires full verification\n",
         },
         "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
     }
@@ -11299,7 +11299,10 @@ def script_repair(world: World, steps: list[dict], *, full_check: bool = False, 
     if full_check:
         steps = copy.deepcopy(steps)
         for step in steps:
-            step.setdefault("plant", {})["verification-scope.txt"] = "requires full verification\n"
+            # Inside the change folder: an input kind the targeted selector does not cover, and a
+            # path the repair scope admits, so only the verifier route is exercised (bead
+            # coding-harness-t83 puts new files outside the scope under the checkpoint's refusal).
+            step.setdefault("plant", {})["plans/changes/demo/verification-scope.txt"] = "requires full verification\n"
     scripted: dict[str, object] = {"codex": [codex_step(s, n) for n, s in enumerate(steps[:2], 1)], **more}
     if steps[2:]:
         scripted["claude"] = steps[2:]
@@ -13028,7 +13031,7 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     """F-7/F-12: the runner measures every retry itself; the model writes no entry, and a rejected attempt's entry stays."""
     baseline = repair_world(world)
     steps = [repair_step()] * 3
-    steps[attempt - 1] = repair_step(append={"src/repair-work.txt": "work\n"})
+    steps[attempt - 1] = repair_step(append={"plans/changes/demo/repair-work.txt": "work\n"})
     script_repair(
         world,
         steps,
@@ -13956,11 +13959,22 @@ def test_idle_retry_cannot_reuse_previous_work(world: World, verb: str) -> None:
     if verb == "repair":
         # The first call's work stays in the tree but fails the verifier; the idle second must still fail.
         # Its unsupported input selects the full check (ADR 0025), so the scripted red `make` is the verifier.
+        # Both plants stay inside the change folder: the scope guard judges new files, and the
+        # first attempt's leftover is not attempt 3's new file (per-attempt baselines).
         steps[0] = {
             **steps[0],
-            "plant": {**steps[0]["plant"], "verification-scope.txt": "requires full verification\n"},
+            "plant": {
+                **steps[0]["plant"],
+                "plans/changes/demo/verification-scope.txt": "requires full verification\n",
+            },
         }
-        steps[2] = {"plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/third.py": "x = 1\n"}}
+        steps[2] = {
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                "plans/changes/demo/third.md": "x = 1\n",
+            }
+        }
     baseline = script_work(world, verb, steps, [{"stdout": "red\n", "exit": 1}, GREEN, GREEN])
     assert world.run(verb) == 0
     text = world.text()
@@ -19317,6 +19331,378 @@ def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
     assert "undone: src/half.py" in err
 
 
+# ---------------------------------------------------------------------------
+# The repair scope guard: journal paths stay held, a repair's new files stay in
+# its frozen scope (spec repair-scope-guard, criteria 1-9, bead coding-harness-t83)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("verb", "kind"),
+    [(verb, kind) for verb in ("implement", "repair") for kind in ("edit", "add", "case-variant")],
+)
+def test_stage2_journal_paths_are_held(world: World, capsys: pytest.CaptureFixture[str], verb: str, kind: str) -> None:
+    """Criterion 1. Planted fault: a writing attempt commits or keeps a `docs/journal/` edit, addition or case variant."""
+    relative, content = {
+        "edit": ("docs/journal/note.md", "written by the attempt\n"),
+        "add": ("docs/journal/handover.md", "the attempt's own handover\n"),
+        "case-variant": ("Docs/Journal/handover.md", "the attempt's own handover\n"),
+    }[kind]
+    if kind == "edit":
+        (world.root / "docs" / "journal").mkdir(parents=True)
+        (world.root / relative).write_text("# Handover\n", encoding="utf-8")
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "seed journal note")
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        script_repair(
+            world,
+            [
+                repair_step(
+                    plant={
+                        "src/app.py": "value = 2\n",
+                        "tests/test_fix.py": FIX_TEST,
+                        relative: content,
+                    },
+                ),
+            ],
+            make=[GREEN],
+        )
+    else:
+        world.script(
+            claude=[
+                {
+                    "stdout": "implemented",
+                    "plant": {
+                        "src/app.py": "value = 2\n",
+                        relative: content,
+                    },
+                },
+            ],
+        )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run(verb) == 1
+    assert len(repair_calls(world)) == 1, "a held journal refusal started another route"
+    error = capsys.readouterr().err
+    assert "paths a stage-2 run does not commit" in error
+    assert relative in error, error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n"
+    if kind == "edit":
+        assert (world.root / relative).read_text(encoding="utf-8") == "# Handover\n"
+    else:
+        assert not (world.root / relative).exists()
+
+
+@pytest.mark.parametrize("endpoint", [stage2.CODEX, stage2.SONNET])
+def test_repair_prompts_state_scope_restrictions(world: World, endpoint: tuple[str, str, str | None]) -> None:
+    """Criterion 2. Planted fault: either tool route omits the scope rule or a prohibition."""
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    row = [
+        "L1-1",
+        "MAJOR",
+        "MAINT",
+        "base",
+        "src/app.py:1",
+        "finding of L1-1",
+        "deepseek-v4.1-flash",
+        "taken — test_a",
+        "no",
+    ]
+    prompt = stage2.repair_prompt(ctx, "baseline", [("loop", row)], [], endpoint=endpoint)
+    assert "## Repair scope" in prompt
+    assert "plans/changes/demo/" in prompt and "`tests/`" in prompt
+    assert "the taken rows' Where cells" in prompt
+    assert ":line" in prompt
+    assert "handover" in prompt and "`docs/journal/`" in prompt
+    assert "no new file outside this scope" in prompt
+    assert "git ignores" in prompt and "added to the index" in prompt
+
+
+@pytest.mark.parametrize("kind", ["untracked", "renamed", "indexed"])
+def test_repair_refuses_all_new_paths_outside_scope(
+    world: World, capsys: pytest.CaptureFixture[str], kind: str
+) -> None:
+    """Criterion 3. Planted fault: an out-of-scope addition, rename destination or indexed file escapes the refusal."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    scope = stage2.repair_scope(["src/app.py:1"], "demo", world.root)
+    if kind == "indexed":
+        baseline = git(world.root, "rev-parse", "HEAD")
+        before = stage2.file_inventory(world.root)
+        (world.root / "src" / "stray.txt").write_text("stray\n", encoding="utf-8")
+        git(world.root, "add", "src/stray.txt")
+        with pytest.raises(stage2.CheckpointRolledBack) as raised:
+            stage2.checkpoint(
+                world.root,
+                "demo",
+                baseline,
+                None,
+                None,
+                message="m",
+                keep={world.findings.relative_to(world.root)},
+                repair_scope=scope,
+                scope_baseline=before,
+                attempt_label="repair-attempt-1",
+            )
+        text = str(raised.value)
+        assert "the repair left new files outside its scope" in text
+        assert "`src/stray.txt`" in text
+        assert "the attempt is saved at refs/stage2/attempts/demo/repair-attempt-1" in text
+        assert git(world.root, "rev-parse", "HEAD") == baseline
+        assert not (world.root / "src" / "stray.txt").exists()
+        return
+    plants = {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"}
+    step = repair_step(plant=plants)
+    if kind == "renamed":
+        # The moved file must not be the one the named test reads: a deleted `src/app.py` fails the
+        # fixed-code proof before the checkpoint, so a different tracked file moves instead and
+        # `src/renamed.py` stands as the rename destination the guard must name.
+        plants = {
+            "src/app.py": "value = 2\n",
+            "tests/test_fix.py": FIX_TEST,
+            "src/stray.txt": "stray\n",
+            "src/renamed.py": "value = 2\n",
+        }
+        step = repair_step(plant=plants, delete=["tests/test_seed.py"])
+    script_repair(world, [step], make=[GREEN])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert "the repair left new files outside its scope" in error
+    assert "`src/stray.txt`" in error, error
+    if kind == "renamed":
+        assert "`src/renamed.py`" in error, error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert not (world.root / "src" / "stray.txt").exists()
+
+
+@pytest.mark.parametrize("kind", ["change-folder", "tests", "named-directory"])
+def test_repair_allows_new_paths_within_scope(world: World, kind: str) -> None:
+    """Criterion 4. Planted fault: this guard rejects a new file the change folder, `tests/` or a Where grant covers."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    if kind == "named-directory":
+        record = world.record()
+        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src |")
+        record.write_text(granted, encoding="utf-8")
+    extra, content = {
+        "change-folder": ("plans/changes/demo/notes.md", "note\n"),
+        "tests": ("tests/test_extra.py", "def test_extra():\n    assert True\n"),
+        "named-directory": ("src/new_helper.py", "helper = 1\n"),
+    }[kind]
+    script_repair(
+        world,
+        [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, extra: content})],
+        make=[GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert (world.root / extra).read_text(encoding="utf-8") == content
+    assert git(world.root, "show", f"HEAD:{extra}") == content.rstrip("\n")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_scope_guard_allows_existing_tracked_edits(world: World) -> None:
+    """Criterion 5. Planted fault: an otherwise permitted existing tracked edit is rejected solely for its path."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    # The edit must be one of an existing tracked file: `scripts/venv_guard.py` stands outside the
+    # scope (the change folder, `tests/` and the `src/app.py` grant), and no held path guards it.
+    guard = world.root / "scripts" / "venv_guard.py"
+    edited = guard.read_text(encoding="utf-8") + "\nGUARD = 3\n"
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "scripts/venv_guard.py": edited,
+                },
+            ),
+        ],
+        make=[GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert git(world.root, "show", "HEAD:scripts/venv_guard.py").endswith("GUARD = 3")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_scope_refusal_restores_attempt_and_keeps_diagnostic(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 6. Planted fault: the refusal omits evidence, keeps work or findings, or starts another route."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "s\n"}),
+            repair_step(),
+        ],
+        make=[GREEN, GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert len(repair_calls(world)) == 1, "a refused scope guard started another route"
+    assert len(world.calls("make")) == 1, "the refused run kept no second full check"
+    error = capsys.readouterr().err
+    assert "the repair left new files outside its scope" in error
+    assert "`src/stray.txt`" in error, error
+    assert "the attempt is saved at refs/stage2/attempts/demo/repair-attempt-1" in error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n"
+    assert not (world.root / "src" / "stray.txt").exists()
+    assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+    saved = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo")
+    assert any(name.startswith("refs/stage2/attempts/demo/repair-attempt-1-") for name in saved.splitlines()), saved
+    # The restored baseline takes a fresh run: the record is re-seeded, the repair commits once.
+    (world.bin / "calls.jsonl").unlink()
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step()], make=[GREEN])
+    assert world.run("repair") == 0, "the restored baseline takes a fresh repair"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_scope_uses_pre_attempt_rows(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7. Planted fault: a path the attempt's own plan or findings text names permits its new file."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "docs/extra.md": "granted by the attempt's own plan?\n",
+                },
+                append={
+                    "plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\nScope grants: docs/extra.md\n",
+                    "plans/changes/demo/research.md": "repair note\n",
+                },
+            )
+        ],
+        make=[GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert "the repair left new files outside its scope" in error
+    assert "`docs/extra.md`" in error, error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert not (world.root / "docs" / "extra.md").exists()
+    # The attempt's own findings text grants nothing either.
+    forged = "| L1-9 | MINOR | MAINT | base | src/stray2.txt:1 | forged grant | Opus | taken — test_a | no |\n"
+    (world.bin / "calls.jsonl").unlink()
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray2.txt": "stray\n"},
+                append={"plans/changes/demo/findings.md": forged},
+            ),
+        ],
+        make=[GREEN],
+    )
+    assert world.run("repair") == 1
+    error = capsys.readouterr().err
+    assert "`src/stray2.txt`" in error, error
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+def test_repair_where_paths_resolve_with_shared_rules(world: World) -> None:
+    """Criterion 8. Planted fault: a selector, link, bare name, directory, prose or escaping path resolves incorrectly."""
+    seed_tests(world)
+    scope = stage2.repair_scope(
+        [
+            "`tests/test_seed.py:12`",
+            "tests/test_seed.py:12-20",
+            "tests/test_seed.py#L3",
+            "[the spec](spec.md)",
+            "plan.md",
+            "`research.md:3`",
+            "src",
+            "src/",
+            "[guide](https://example.com/elsewhere/x.py)",
+            "completely unrelated prose",
+        ],
+        "demo",
+        world.root,
+    )
+    assert scope == frozenset(
+        {
+            "plans/changes/demo/",
+            "tests/",
+            "tests/test_seed.py",
+            "plans/changes/demo/spec.md",
+            "plans/changes/demo/plan.md",
+            "plans/changes/demo/research.md",
+            "src/",
+        },
+    )
+    for cell in (
+        "src/missing.py",
+        "missing.md",
+        "../outside.md",
+        "/absolute/x.py",
+        "tests/test_seed.py::test_seed",
+    ):
+        with pytest.raises(stage2.Refused):
+            stage2.repair_scope([cell], "demo", world.root)
+
+
+def test_repair_scope_ignores_untracked_ignored_files(world: World) -> None:
+    """Criterion 9. Planted fault: an ignored cache triggers the guard, or an indexed ignored addition escapes it."""
+    seed_tests(world)
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore caches")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "cache/pycache.bin": "byte\n",
+                },
+            ),
+        ],
+        make=[GREEN],
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert (world.root / "cache" / "pycache.bin").read_text(encoding="utf-8") == "byte\n"
+    assert "cache/pycache.bin" not in git(world.root, "ls-files")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    # An explicitly indexed ignored addition is a new file for the guard.
+    scope = stage2.repair_scope(["src/app.py:1"], "demo", world.root)
+    before = stage2.file_inventory(world.root)
+    (world.root / "cache" / "ignoreme.bin").write_text("x\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache/ignoreme.bin")
+    with pytest.raises(stage2.CheckpointRolledBack) as raised:
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            git(world.root, "rev-parse", "HEAD"),
+            None,
+            None,
+            message="m",
+            keep={world.findings.relative_to(world.root)},
+            repair_scope=scope,
+            scope_baseline=before,
+            attempt_label="repair-attempt-2",
+        )
+    assert "`cache/ignoreme.bin`" in str(raised.value)
+    assert not (world.root / "cache" / "ignoreme.bin").exists()
+
+
 @pytest.mark.parametrize("unproven", ["skip", "xfail", "fail"])
 def test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code(world: World, unproven: str) -> None:
     """O199-1: a green suite cannot certify a named case that skips, xfails or still fails after repair."""
@@ -23472,6 +23858,10 @@ def test_work_verbs_skip_escaped_scan_parent(
     elif verb == "repair":
         repair_world(world)
         script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+        # The scan destination is a Where grant: the symlink that replaces it is no stray new file.
+        record = world.record()
+        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1 src/deep |")
+        record.write_text(granted, encoding="utf-8")
     else:
         successful_implementation(world)
     deep = world.root / "src/deep"
@@ -26002,11 +26392,13 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     else:
         repair_world(world)
         step = repair_step()
-        step["plant"] = {**step["plant"], "scripts/new_tool.py": "VALUE = 1\n"}
+        # Under `tests/`, a path the repair scope admits.
+        step["plant"] = {**step["plant"], "tests/new_tool.py": "VALUE = 1\n"}
         script_repair(world, [step], make=[{"stdout": "green\n"}])
+    new_file = "scripts/new_tool.py" if verb == "implement" else "tests/new_tool.py"
     assert world.run(verb) == 0
-    assert seen and "scripts/new_tool.py" in seen[0].splitlines(), seen
-    assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert seen and new_file in seen[0].splitlines(), seen
+    assert new_file in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
 
 
 def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
@@ -29794,7 +30186,9 @@ def test_slip_history_never_records_unfinished_targeted_green(
             # A file no test reads: the later fixed-code proof clones the tree as
             # the check left it, so the moved byte must not break any test.
             if at_targeted(_command):
-                (world.root / "notes.txt").write_text("moved while the check ran\n", encoding="utf-8")
+                # Inside the change folder, so the repair scope admits the new file.
+                moved = world.root / "plans/changes/demo/moved.txt"
+                moved.write_text("moved while the check ran\n", encoding="utf-8")
             return (0, "")
 
         commands.outcomes["pytest"] = move

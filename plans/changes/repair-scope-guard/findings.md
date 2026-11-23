@@ -132,3 +132,219 @@ Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-
 > FAILED tests/test_stage2.py::test_repair_scope_refusal_restores_attempt_and_keeps_diagnostic
 > 16 failed, 7 passed in 14.94s
 > ```
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1177 files, 5435 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +19 -0
+> - `scripts/stage2.py` +159 -1
+> - `tests/test_stage2.py` +378 -5
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>             make=[GREEN],
+>         )
+>         baseline = git(world.root, "rev-parse", "HEAD")
+>         assert world.run("repair") == 0
+> >       assert git(world.root, "show", f"HEAD:{extra}") == content
+> E       AssertionError: assert 'helper = 1' == 'helper = 1\n'
+> E         
+> E         - helper = 1
+> E         ?           -
+> E         + helper = 1
+>
+> tests/test_stage2.py:19494: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3270/popen-gw4/test_repair_allows_new_paths_w1/repo/.git/stage2/attempts/demo/attempt-1-20261123T101501892064Z-d3bd3953.md
+> repair: verified and committed · route codex · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ___________ test_repair_allows_new_paths_within_scope[change-folder] ___________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3270/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3270/popen-gw3/test_repair_allows_new_paths_w0/state'))
+> kind = 'change-folder'
+>
+>     @pytest.mark.parametrize("kind", ["change-folder", "tests", "named-directory"])
+>     def test_repair_allows_new_paths_within_scope(world: World, kind: str) -> None:
+>         """Criterion 4. Planted fault: this guard rejects a new file the change folder, `tests/` or a Where grant covers."""
+>         seed_tests(world)
+>         world.write_record([("L1-1", "taken — test_a", "no")])
+>         if kind == "named-directory":
+>             record = world.record()
+>             granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src |")
+>             record.write_text(granted, encoding="utf-8")
+>         extra, content = {
+>             "change-folder": ("plans/changes/demo/notes.md", "note\n"),
+>             "tests": ("tests/test_extra.py", "def test_extra():\n    assert True\n"),
+>             "named-directory": ("src/new_helper.py", "helper = 1\n"),
+>         }[kind]
+>         script_repair(
+>             world,
+>             [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, extra: content})],
+>             make=[GREEN],
+>         )
+>         baseline = git(world.root, "rev-parse", "HEAD")
+>         assert world.run("repair") == 0
+> >       assert git(world.root, "show", f"HEAD:{extra}") == content
+> E       AssertionError: assert 'note' == 'note\n'
+> E         
+> E         - note
+> E         ?     -
+> E         + note
+>
+> tests/test_stage2.py:19494: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> repair: the attempt's protected answer is saved at /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3270/popen-gw3/test_repair_allows_new_paths_w0/repo/.git/stage2/attempts/demo/attempt-1-20261123T101502026793Z-f1d521ae.md
+> repair: verified and committed · route codex · attempt 1
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_scope_guard_allows_existing_tracked_edits
+> FAILED tests/test_stage2.py::test_repair_allows_new_paths_within_scope[tests]
+> FAILED tests/test_stage2.py::test_repair_refuses_all_new_paths_outside_scope[renamed]
+> FAILED tests/test_stage2.py::test_repair_allows_new_paths_within_scope[named-directory]
+> FAILED tests/test_stage2.py::test_repair_allows_new_paths_within_scope[change-folder]
+> 5 failed, 21 passed in 13.85s
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1177 files, 5440 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-scope-guard/plan.md` +9 -9
+> - `tests/test_stage2.py` +18 -5
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 328 lines of this gate left out …]
+>             # An exception the targeted body cannot contain escapes `run_targeted`
+>             # between its begin and its finish: the check never completes, so no end
+>             # row can exist.
+>             commands.outcomes["pytest"] = lambda _command: (
+>                 RuntimeError("the targeted check crashed mid-run: planted") if at_targeted(_command) else None
+>             )
+>             assert world.run("repair") != 0
+>         elif case == "pytest-launch-failure":
+>             commands.outcomes["pytest"] = lambda _command: (
+>                 stage2.CallFailed("pytest could not be started: planted") if at_targeted(_command) else None
+>             )
+>             assert world.run("repair") != 0
+>         else:  # tree-moved
+>     
+>             def move(_command: list[str]) -> tuple[int, str]:
+>                 # A file no test reads: the later fixed-code proof clones the tree as
+>                 # the check left it, so the moved byte must not break any test.
+>                 if at_targeted(_command):
+>                     (world.root / "notes.txt").write_text("moved while the check ran\n", encoding="utf-8")
+>                 return (0, "")
+>     
+>             commands.outcomes["pytest"] = move
+> >           assert world.run("repair") == 0
+> E           AssertionError: assert 1 == 0
+> E            +  where 1 = run('repair')
+> E            +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-v7g4980r/pytest-of-mikypiky/...nyzwyfjptgm40000gn/T/verify-run-v7g4980r/pytest-of-mikypiky/pytest-1/popen-gw5/test_slip_history_never_record4/state')).run
+>
+> tests/test_stage2.py:30187: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: the repair left new files outside its scope (the change folder, `tests/` and the taken rows' Where cells grant the rest): `notes.txt`. No commit was made. the attempt is saved at refs/stage2/attempts/demo/repair-attempt-1-20261123T103532194747Z (0303b0953cb5); `git diff 7b1a3975db8d refs/stage2/attempts/demo/repair-attempt-1-20261123T103532194747Z` shows it; the runner restored the worktree to 7b1a3975db8d (undone: notes.txt, plans/INDEX.md, plans/changes/demo/plan.md, plans/changes/demo [… 253 characters left out …]
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=86728) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/tests/test_stage2.py:25267: DeprecationWarning: This process (pid=86724) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent[repair-True]
+> FAILED tests/test_stage2.py::test_make_verify_sees_the_attempts_new_files_in_git[repair]
+> FAILED tests/test_stage2.py::test_slip_history_never_records_unfinished_targeted_green[tree-moved]
+> 3 failed, 6780 passed, 17 skipped, 5 warnings in 656.21s (0:10:56)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 53769 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
+
+Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1177 files, 5442 commits, 12 rules.

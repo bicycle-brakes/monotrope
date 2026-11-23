@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-22
+updated: 2026-11-23
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -2018,6 +2018,25 @@ restores the whole frontmatter block from trusted snapshot bytes, preserving the
 attempt's body. Other header edits survive only when effective lifecycle values
 stay unchanged. A linked leaf recovers trusted whole-document bytes without reading
 its target; unreadable YAML is restored from the snapshot and rejects the attempt.
+
+**The repair scope is frozen, and new files outside it refuse the checkpoint.** The scope is the
+change's own folder, `tests/`, and the paths the taken rows' Where cells name, read by the shared
+Where-path rules: path-like tokens and Markdown link text and target, a trailing `:line` or
+`:line-line` selector dropped, a bare name resolved against the change folder first and the
+repository root second, a token ending in `/` or naming an existing tracked directory granting its
+descendants, prose granting nothing, an unresolvable path-like token refusing. The runner freezes
+the scope from the rows as they stand before the first model call; the plan is never a source, and
+an attempt's own plan, findings or row writes cannot enlarge it. Both repair prompts state the rule
+in words and forbid handover and journal writes — `docs/journal/` is held for the orchestrator, on
+the runner's held list beside the other held paths. At the checkpoint the runner compares every
+file git sees with the inventory taken right before that attempt's call: a new file outside the
+scope — an untracked non-ignored file, an indexed addition, an explicitly indexed ignored file or a
+rename destination — refuses the attempt on the held-path refusal path. The refusal names every
+offending path and the saved attempt under `refs/stage2/attempts/`, the baseline and the pre-call
+findings go back, and the run stops without another route. Edits to existing tracked files are
+judged as before, untracked files git ignores (test and tool caches) are not new files, and the
+runner's own derived leftovers (the rendered `plans/INDEX.md`, a stamp, its bytecode) are not the
+attempt's to answer for.
 
 When every post-run check passes — the selected verification is green,
 every fixed line checked — the runner writes each row's Status `fixed` in
