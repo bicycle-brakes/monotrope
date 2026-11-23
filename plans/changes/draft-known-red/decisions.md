@@ -68,3 +68,18 @@ context: |
   Architecture change: ADR 0016 decision 9 addendum (Q-1) gains the automatic route.
 
 In the context of drafts that stall when Codex and GLM fail, facing a manual or an automatic Opus route, we decided the draft falls through to Opus xhigh on its own after GLM, to achieve night runs whose drafts do not stall, accepting more load on the runner account's Opus limits. — 2026-11-23
+
+## Q-3 · When Opus cannot draft either
+
+asked: 2026-11-23
+answer: A, with an addition — the runner stops with a clear message naming every failed route and its reason, the lane is parked and the other lanes go on; the attempts stay saved as side refs; after five hours the draft is tried again (the maintainer's words: "A, aber nach 5 stunden erneuter versuch").
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what follows when Codex, Codex repair, GLM and Opus all fail to draft.
+  Intention: the Opus route runs on the runner's Claude account, whose five-hour and weekly limits stopped calls on 2026-11-21/22; after Opus no route is left.
+  Today: the draft's route list ends at GLM 5.3; the orchestrator drafts by hand (ADR 0016 decision 9).
+  Repository change: Options: A stop with a message naming every failed route, park the lane, keep the attempts as side refs; B the runner waits and retries by itself (for example after 30 minutes, at most three times); C the orchestrator drafts by hand as today.
+  Architecture change: none beyond the ADR 0016 addendum of Q-1.
+
+In the context of a draft whose every route failed, facing a stop, an in-call wait or a hand draft, we decided to stop and park the lane and to retry the draft after five hours, to achieve free lanes meanwhile and a retry once a five-hour limit has reset, accepting a lane that waits five hours when the limit was short. — 2026-11-23
