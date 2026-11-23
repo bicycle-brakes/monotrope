@@ -34,6 +34,33 @@ PRE_CHANGE_REVISION = "3b8a1ccf"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import verify_lock  # noqa: E402
 
+
+def test_missing_group_does_not_signal_a_reused_pid(monkeypatch):
+    def missing_group(_group, _signum):
+        raise ProcessLookupError
+
+    calls = []
+    monkeypatch.setattr(os, "killpg", missing_group)
+    monkeypatch.setattr(os, "kill", lambda pid, signum: calls.append((pid, signum)))
+    verify_lock.signal_group(12345)
+    assert calls == [], "a missing group must not cause a signal to a reused pid"
+
+
+def test_missing_group_cleanup_swallows_pid_signal_errors(monkeypatch):
+    def missing_group(_group, _signum):
+        raise ProcessLookupError
+
+    def denied_pid(_pid, _signum):
+        raise PermissionError("pid signal denied")
+
+    monkeypatch.setattr(os, "killpg", missing_group)
+    monkeypatch.setattr(os, "kill", denied_pid)
+    try:
+        verify_lock.signal_group(12345)
+    except PermissionError:
+        pytest.fail("a pid signal error escaped group cleanup")
+
+
 # One protected body, run as a supervised child: it records its pid before the
 # work, then the interval it ran in — so tests can compare intervals of
 # independent admissions.

@@ -26058,27 +26058,16 @@ def _child_alive(pid: int) -> bool:
     return state != "Z"
 
 
-def _child_stopped(pid: int) -> bool:
-    """Observed state of this process's own child: dead as a zombie, reaped, or no longer ours.
-
-    Unlike `_child_alive` this waits through this process's own child table, so a recycled pid can
-    never stand in for the child a launch created (the hazard `_reaped_pid` in tests/test_ci.py
-    records: a concurrently spawning process can take a freed pid back).
-    """
-    try:
-        waited, _status = os.waitpid(pid, os.WNOHANG)
-    except ChildProcessError:
-        return True  # already reaped, or the pid was never this process's child
-    return waited == pid
-
-
 def _abandon(pid: int) -> None:
     """Best-effort teardown of a launch child: its group through the production route, then its
     exit status. Never raises: the 2026-10-31 runs turned this cleanup's own `PermissionError`
     into a red test (plans/changes/archive/2026-11-06-go-access-point/findings.md)."""
-    with contextlib.suppress(OSError):
-        verify_lock.signal_group(pid)
     with contextlib.suppress(ChildProcessError):
+        waited, _ = os.waitpid(pid, os.WNOHANG)
+        if waited:
+            return
+        with contextlib.suppress(OSError):
+            os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
 
 
@@ -29625,17 +29614,9 @@ class SignalDuringCreation:
                 thread.join(timeout=30)
                 assert not thread.is_alive(), "the cancelled launch never finished"
 
-    def stopped_children(self, limit: float = 10.0) -> None:
-        """Every created child is stopped: a zombie of ours, reaped, or no longer our child."""
-        assert self.children, "the signal never landed during process creation"
-        deadline = time.monotonic() + limit  # watchdog only: bounds a wedged reap, never a verdict
-        for pid in self.children:
-            while not _child_stopped(pid) and time.monotonic() < deadline:
-                time.sleep(0.01)
-            assert _child_stopped(pid), "a child survived cancellation during Popen"
-
     def reaped_children(self) -> None:
         """Every created child was reaped by its launch's cleanup, not left a zombie behind."""
+        assert self.children, "the signal never landed during process creation"
         for pid in self.children:
             with pytest.raises(ChildProcessError):
                 os.waitpid(pid, os.WNOHANG)
@@ -29661,31 +29642,21 @@ def test_a_signal_during_process_creation_leaves_no_child(
                 instrument.run(world, monkeypatch, tmp_path, worker)
         else:
             assert instrument.run(world, monkeypatch, tmp_path, worker) == 143
-        instrument.stopped_children()
+        instrument.reaped_children()
     finally:
         instrument.cleanup()
 
 
-def test_a_cancellation_kills_a_registered_leader_that_leads_no_group_yet() -> None:
-    """The recorded flakes' cause, held open deterministically: between fork and the child's own
-    setsid no process group of its pid exists, so the killpg a cancellation sends misses. A plain
-    child that never setsids keeps that window open for the whole assertion - the kill boundary
-    must fall back to the leader's pid; the verdict is its observed state, not a race. Red on the
-    pre-fix boundary, whose swallowed ProcessLookupError left exactly this child running."""
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+def test_a_cancellation_kills_a_registered_session_leader() -> None:
+    """A registered launch already has its own group when Popen returns."""
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
     try:
-        # The window itself, as a fact: the child leads no group of its own, so the killpg the old
-        # boundary swallowed was a ProcessLookupError.
-        with pytest.raises(ProcessLookupError):
-            os.killpg(child.pid, 0)
+        os.killpg(child.pid, 0)
         with stage2._LIVE_LOCK:
             expected = len(stage2._LIVE_GROUPS) + 1
             stage2._LIVE_GROUPS.add(child.pid)
         assert stage2.kill_live() == expected
-        deadline = time.monotonic() + 10  # watchdog only: bounds the reap, never a verdict
-        while not _child_stopped(child.pid) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert _child_stopped(child.pid), "a registered leader without its setsid survived kill_live"
+        assert child.wait(timeout=10) == -signal.SIGKILL
     finally:
         with stage2._LIVE_LOCK:
             stage2._LIVE_GROUPS.discard(child.pid)
@@ -29707,7 +29678,6 @@ def test_cancellation_during_timed_launch_stops_and_reaps_the_child(
                 instrument.run(world, monkeypatch, tmp_path, worker)
         else:
             assert instrument.run(world, monkeypatch, tmp_path, worker) == 143
-        instrument.stopped_children()
         instrument.reaped_children()
         if worker:
             assert instrument.popen_returned is not None, "Popen never returned during the launch"

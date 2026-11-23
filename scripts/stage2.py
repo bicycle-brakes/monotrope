@@ -1011,10 +1011,8 @@ KILL_DRAIN_SECONDS = 5
 def kill_live() -> int:
     """Kill the process group of every timed program still running; return how many were signalled.
 
-    The kill goes through `verify_lock.signal_group`: a group registered while its leader was still
-    between fork and `setsid` leads nothing yet, and a plain `killpg` there misses the fresh child
-    with `ProcessLookupError` — suppressed, it left the created program running through the stop
-    (bead coding-harness-oag7).
+    Only registered groups are signalled. A launch registers after Popen has established the
+    child's session, and cancellation during creation is checked after registration.
     """
     _LAUNCH_STOPPED.set()
     with _LIVE_LOCK:
@@ -1135,7 +1133,7 @@ def launch(
             if process is None:
                 raise
             # Kill before unregistering and before any Popen cleanup could wait for a live child;
-            # `signal_group` reaches a leader that has not reached its own setsid yet.
+            # The child's session was established before Popen returned.
             verify_lock.signal_group(process.pid)
             with contextlib.suppress(subprocess.TimeoutExpired):
                 process.communicate(timeout=KILL_DRAIN_SECONDS)

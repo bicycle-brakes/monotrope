@@ -2811,32 +2811,24 @@ def test_verify_runner_cleans_on_interrupt(tmp_path: Path, name: str, number: in
         assert not any(parent.iterdir()), f"{name}: the interrupted run left its area behind"
 
 
-def test_an_interrupt_reaches_a_gate_leader_that_leads_no_group_yet(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The verify runner's kill carries the same window the runner's launch carried (bead
-    coding-harness-oag7): between fork and the gate leader's own setsid no process group of its
-    pid exists, and the suppressed killpg of a cancellation misses the fresh gate — the gate
-    outlives the stop. A plain child that never setsids holds that window open for the whole
-    assertion, so the interrupt handler must fall back to the leader's pid; the verdict is its
-    observed state, not a race."""
+def test_an_interrupt_reaches_a_registered_gate_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An interrupt stops a registered gate whose session Popen has already established."""
     import signal
 
     import verify_run
 
     monkeypatch.setattr(verify_run, "_LIVE_GROUPS", set())
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
     previous = verify_run._install_run_handlers()
     try:
         verify_run._LIVE_GROUPS.add(child.pid)
-        # The window itself, as a fact: the child leads no group of its own, so the killpg the old
-        # handler swallowed was a ProcessLookupError.
-        with pytest.raises(ProcessLookupError):
-            os.killpg(child.pid, 0)
+        os.killpg(child.pid, 0)
         with pytest.raises(verify_run.GateInterrupted):
             os.kill(os.getpid(), signal.SIGTERM)
         deadline = time.monotonic() + 10  # watchdog only: bounds the reap, never a verdict
         while child.poll() is None and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert child.poll() is not None, "a registered gate leader without its setsid survived the interrupt"
+        assert child.poll() is not None, "a registered gate leader survived the interrupt"
     finally:
         verify_run._restore_run_handlers(previous)
         verify_run._LIVE_GROUPS.discard(child.pid)

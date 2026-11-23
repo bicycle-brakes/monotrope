@@ -95,3 +95,7 @@ Stage-2 call, 2026-11-23: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-23: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1188 files, 5527 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1188 files, 5528 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5536 commits, 12 rules.
+
+Runner restoration, 2026-11-23: repair · attempt 1 · route codex — lifecycle fields: plans/changes/flaky-popen-signal/plan.md, plans/changes/flaky-popen-signal/spec.md — unchanged

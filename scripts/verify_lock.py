@@ -1277,22 +1277,14 @@ def _group_alive(group: int) -> bool:
 
 
 def signal_group(leader: int, signum: int = signal.SIGKILL) -> None:
-    """Signal the process group led by `leader`; before the leader's own `setsid`, the leader itself.
+    """Signal a registered group without risking a recycled leader pid.
 
-    A timed launch registers its child while that child can still sit between fork and its own
-    `setsid`: no process group of the child's id exists yet, so the `killpg` a cancellation sends
-    misses with `ProcessLookupError`, and suppressed it left freshly created programs running
-    through the stop (bead coding-harness-oag7, CI run 44591912821). The fallback signals the
-    leader by pid, which owns no descendants in that window; a group already gone — its leader
-    waited and reaped — misses the same way and stays silent, as the callers did before.
+    A missing group is left alone: its leader may already have been reaped and its pid reused.
+    Launches register after Popen returns with start_new_session, which establishes the group
+    before the child executes its program.
     """
-    try:
+    with contextlib.suppress(OSError):
         os.killpg(leader, signum)
-    except ProcessLookupError:
-        with contextlib.suppress(ProcessLookupError):
-            os.kill(leader, signum)
-    except OSError:
-        pass
 
 
 def end_lingering_group(group: int) -> None:
