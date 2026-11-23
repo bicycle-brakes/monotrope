@@ -635,6 +635,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/loop-record-other-worktree/research.md`](changes/loop-record-other-worktree/research.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-record-other-worktree/spec.md`](changes/loop-record-other-worktree/spec.md) | draft | none | 2026-11-18 | coding-harness-e82i |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
+| [`changes/mandatory-spec-review/decisions.md`](changes/mandatory-spec-review/decisions.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/findings.md`](changes/mandatory-spec-review/findings.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/plan.md`](changes/mandatory-spec-review/plan.md) | draft | none | 2026-11-19 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/research.md`](changes/mandatory-spec-review/research.md) | draft | none | 2026-11-17 | coding-harness-ttic |
+| [`changes/mandatory-spec-review/spec.md`](changes/mandatory-spec-review/spec.md) | draft | none | 2026-11-19 | coding-harness-ttic |
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
@@ -643,6 +648,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/plan-card-what-line/plan.md`](changes/plan-card-what-line/plan.md) | draft | none | 2026-11-22 | coding-harness-kg8n |
 | [`changes/plan-card-what-line/research.md`](changes/plan-card-what-line/research.md) | draft | none | 2026-11-22 | coding-harness-kg8n |
 | [`changes/plan-card-what-line/spec.md`](changes/plan-card-what-line/spec.md) | draft | none | 2026-11-22 | coding-harness-kg8n |
+| [`changes/repair-hand-held-rows/decisions.md`](changes/repair-hand-held-rows/decisions.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
+| [`changes/repair-hand-held-rows/findings.md`](changes/repair-hand-held-rows/findings.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
+| [`changes/repair-hand-held-rows/plan.md`](changes/repair-hand-held-rows/plan.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
+| [`changes/repair-hand-held-rows/research.md`](changes/repair-hand-held-rows/research.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
+| [`changes/repair-hand-held-rows/spec.md`](changes/repair-hand-held-rows/spec.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
@@ -681,4 +691,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-cheap-before-admission/research.md`](changes/verify-cheap-before-admission/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/seconds-gate-audit.md`](changes/verify-cheap-before-admission/seconds-gate-audit.md) | draft | none | 2026-11-14 | coding-harness-bxxt.6 |
 | [`changes/verify-cheap-before-admission/spec.md`](changes/verify-cheap-before-admission/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.6 |
+| [`changes/verify-two-slots/decisions.md`](changes/verify-two-slots/decisions.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
+| [`changes/verify-two-slots/findings.md`](changes/verify-two-slots/findings.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
+| [`changes/verify-two-slots/measurements.md`](changes/verify-two-slots/measurements.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
+| [`changes/verify-two-slots/plan.md`](changes/verify-two-slots/plan.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
+| [`changes/verify-two-slots/research.md`](changes/verify-two-slots/research.md) | draft | none | 2026-11-20 | coding-harness-u1ha |
+| [`changes/verify-two-slots/spec.md`](changes/verify-two-slots/spec.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
