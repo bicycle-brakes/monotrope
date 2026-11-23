@@ -509,6 +509,17 @@ context: |
 
 In the context of a loop shape that will be tuned, we decided that rounds, reviewers per round and lenses are central, validated settings, to achieve a change by one edited value, accepting a validator and tests for each setting — 2026-11-23
 
+## Provisional agent decisions on the spec-review ambiguities (2026-11-23)
+
+Maintainer's answer A of 2026-11-23: the orchestrator decides the smaller open ambiguities of the 2026-11-10 spec review by its recommendation, marked as provisional agent decisions; the maintainer sees the list on the plan card and may change any line. S-7, S-8, S-15, S-17 and S-18 go to the maintainer as questions.
+
+- [DETAIL] **S-1 (provisional agent decision):** resolved by Q-24 — no criterion, prompt, test or doc fixes the number of rounds, seats per round or lenses; criteria name the setting and test that a changed value takes effect.
+- [DETAIL] **S-3 (provisional agent decision):** Reading A — a seat's "best measured precision" is a dated citation in the central setting; the validator checks that the citation exists and names a measurement date; a stale or wrong value is a maintainer edit, not a red criterion. Reason: Q-24 makes seating an edited value; a runner that re-seats itself would contradict it.
+- [DETAIL] **S-4 (provisional agent decision):** Reading C — an out-of-lens BLOCKER is triaged and repaired like any row but enters no lens's observation, so the three-seat basis of each lens stays intact.
+- [DETAIL] **S-11 (provisional agent decision):** Reading A — an added check question is committed on the branch of the change whose phase 6 found it and reaches other lanes when that PR merges; "applies immediately" is reworded to "applies from the merge on".
+- [DETAIL] **S-13 (provisional agent decision):** Reading B — only changes with full three-seat lenses count toward the ten shadow changes; small changes are reported but do not count.
+- [DETAIL] **S-21 (provisional agent decision):** Reading A — a lens with an undefined singleton share (S=0) or an incomplete observation does not trigger the second round; the run reports it.
+
 ## Decided by the agent — the ADR number
 
 [DETAIL] **The ADR draft of this change is ADR 0027**
