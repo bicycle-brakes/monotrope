@@ -6785,45 +6785,59 @@ def file_inventory(root: Path, env: dict[str, str] | None = None) -> set[Path]:
     return paths
 
 
-def ignore_rules_state(root: Path, inventory: set[Path]) -> dict[str, str]:
-    """A digest of every ignore rule file a repair attempt could edit: each `.gitignore` and `.git/info/exclude`.
-
-    The scope guard compares it before and after the attempt: an attempt that edits a rule to hide a
-    new file must not decide what counts as a new file (bead coding-harness-t83, L2-3).
-    """
-    state: dict[str, str] = {}
+def ignore_rules_state(root: Path, inventory: set[Path]) -> dict[str, bytes]:
+    """Freeze the contents of ignore rules, including self-ignored rule files."""
+    ignored = ignored_snapshot(root)
     exclude = _git_output(root, "rev-parse", "--git-path", "info/exclude").strip()
-    sources = [(".git/info/exclude", root / exclude)]
-    sources += [(rel.as_posix(), root / rel) for rel in sorted(inventory) if rel.name == ".gitignore"]
-    for name, path in sources:
+    sources = {".git/info/exclude": root / exclude}
+    sources.update({rel.as_posix(): root / rel for rel in inventory | set(ignored) if rel.name == ".gitignore"})
+    state = {}
+    for name, path in sources.items():
         try:
-            state[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-        except OSError:
-            state[name] = ""
+            state[name] = path.read_bytes()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise Refused(f"cannot snapshot ignore rules {name}: {error}") from error
     return state
 
 
 def attempt_new_files(
     root: Path,
     before: set[Path],
-    rules_before: dict[str, str],
+    rules_before: dict[str, bytes],
     ignored_before: dict[Path, tuple[int, int]] | None,
 ) -> set[Path]:
-    """The files this attempt wrote, judged by the ignore rules it started under.
-
-    `ignored_before` is the attempt's own pre-call snapshot of ignored files. Normally an untracked
-    ignored file is no new file (a cache). When an ignore rule file changed during the attempt, the
-    rules it started under decide: an ignored file that did not exist before counts as new, so the
-    attempt cannot hide a stray by listing it in `.gitignore` or `.git/info/exclude`; and a file
-    that already existed (ignored) is never new, so an attempt that removes an ignore line cannot
-    make the files it exposes its own (bead coding-harness-t83, L3-2).
-    """
+    """Judge newly appearing paths by the rules frozen at the start of the call."""
     after = file_inventory(root)
     new = after - before
-    if ignored_before is not None and ignore_rules_state(root, after) != rules_before:
-        new -= set(ignored_before)
-        new |= {path for path in ignored_snapshot(root) if path not in ignored_before and path not in before}
-    return new
+    if ignored_before is None:
+        return new
+    ignored_after = ignored_snapshot(root)
+    if ignore_rules_state(root, after) == rules_before:
+        return new
+    candidates = (new | (set(ignored_after) - before)) - set(ignored_before)
+    if not candidates:
+        indexed = _git_bytes(root, "ls-files", "-z", "--cached")
+        return new & {Path(os.fsdecode(name)) for name in indexed.split(b"\0") if name}
+    # A separate temporary worktree reconstructs the original per-directory rules, so Git
+    # applies its own matching semantics without changing the attempt's files or index.
+    with tempfile.TemporaryDirectory(prefix="stage2-ignore-") as scratch:
+        temp = Path(scratch)
+        _git_output(temp, "init", "-q")
+        for name, content in rules_before.items():
+            path = temp / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        names = b"".join(os.fsencode(path.as_posix()) + b"\0" for path in sorted(candidates))
+        result = run_git(temp, "check-ignore", "--no-index", "-z", "--stdin", stdin=names, allow={1: ""})
+        originally_ignored = {Path(os.fsdecode(name)) for name in result.stdout.split(b"\0") if name}
+    # Indexed additions always count, even if the original rules ignored them.
+    indexed = set()
+    for raw in _git_bytes(root, "ls-files", "-z", "--cached").split(b"\0"):
+        if raw:
+            indexed.add(Path(os.fsdecode(raw)))
+    return (candidates - originally_ignored) | ((after - before) & indexed)
 
 
 def remove_stray_files(root: Path, stray: Iterable[Path]) -> list[str]:
@@ -6924,7 +6938,9 @@ def derived_leftover(root: Path, relative: Path) -> bool:
     if relative.as_posix() == "plans/INDEX.md":
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
-        return True
+        return not bool(
+            _git_bytes(root, "--literal-pathspecs", "ls-files", "-z", "--cached", "--", relative.as_posix())
+        )
     # The two versions are compared with the frontmatter `updated:` line masked, never through a parsed diff:
     # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3). Both are
     # read as bytes and decoded without newline translation, so a CRLF to LF conversion is a change (P243-1).
@@ -7003,12 +7019,15 @@ SAVE_IDENTITY = {
 }
 
 
-def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
+def save_attempt(
+    root: Path, baseline: str, change: str, label: str, *, stray: Iterable[str] = (), reason: str = ""
+) -> str:
     """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
 
     A failed call is not a worthless one: a run that hits a spent budget after hours of edits still
     holds them (bead coding-harness-znc). The snapshot goes through a temporary index, so the real
-    index and the files stay untouched; tracked and untracked files go in, gitignored ones do not.
+    index and the files stay untouched; tracked and untracked files go in, together with named stray files.
+    A scope refusal records its reason in the saved commit message.
     The temporary index is seeded with the baseline, as in `worktree_tree`, so a file tracked although
     ignored stays in the snapshot. The commit's parent is the baseline, so `git diff <baseline> <ref>`
     shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
@@ -7024,9 +7043,29 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
         try:
             _git_output(root, "read-tree", baseline, env=env)
             _git_output(root, "add", "-A", "--", ".", env=env)
+            names = list(stray)
+            if names:
+                _git_bytes(
+                    root,
+                    "--literal-pathspecs",
+                    "add",
+                    "-f",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                    env=env,
+                    stdin=b"".join(os.fsencode(name) + b"\0" for name in names),
+                )
             tree = _git_output(root, "write-tree", env=env).strip()
             commit = _git_output(
-                root, "commit-tree", tree, "-p", baseline, "-m", f"stage2: saved {label} of {change}", env=env
+                root,
+                "commit-tree",
+                tree,
+                "-p",
+                baseline,
+                "-m",
+                f"stage2: saved {label} of {change}",
+                *(["-m", reason] if reason else []),
+                env=env,
             ).strip()
             _git_output(root, "update-ref", ref, commit)
         except (Refused, OSError) as error:
@@ -9491,7 +9530,7 @@ def checkpoint(
     scope_baseline: set[Path] | None = None,
     attempt_label: str | None = None,
     scope_new: set[Path] | None = None,
-    scope_rules: dict[str, str] | None = None,
+    scope_rules: dict[str, bytes] | None = None,
     scope_ignored: dict[Path, tuple[int, int]] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
@@ -9574,7 +9613,7 @@ def checkpoint(
                 "the repair left new files outside its scope (the change folder, `tests/` and the taken "
                 f"rows' Where cells grant the rest): {names}. No commit was made."
             )
-            saved = save_attempt(root, baseline, change, attempt_label or "attempt")
+            saved = save_attempt(root, baseline, change, attempt_label or "attempt", stray=stray, reason=reason)
             try:
                 restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
             except RestorationRefused as safety_error:
@@ -11892,7 +11931,7 @@ def run_attempts(
         # leftover (bead coding-harness-t83, S-1). An unreadable inventory fails the attempt with
         # a named reason (L2-9), rather than silently skipping the guard.
         scope_before: set[Path] | None = None
-        scope_rules: dict[str, str] = {}
+        scope_rules: dict[str, bytes] = {}
         scope_problem: str | None = None
         scope_new: set[Path] | None = None
         scope_ignored: dict[Path, tuple[int, int]] | None = None

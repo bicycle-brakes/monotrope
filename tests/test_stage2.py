@@ -33771,3 +33771,81 @@ def test_supersede_retries_with_audit_snapshot_after_manifest_interruption(
     except stage2.Refused as error:
         pytest.fail(f"the archived audit call should permit release: {error}")
     assert f"Loop rows: superseded by {stage2.record_key('demo', world.root)}" in findings.read_text(encoding="utf-8")
+
+
+def test_repair_scope_detects_self_ignoring_rule(world: World) -> None:
+    before = stage2.file_inventory(world.root)
+    rules = stage2.ignore_rules_state(world.root, before)
+    ignored = stage2.ignored_snapshot(world.root)
+    (world.root / "src" / ".gitignore").write_text("*\n", encoding="utf-8")
+    (world.root / "src" / "stray.txt").write_text("stray\n", encoding="utf-8")
+    assert {Path("src/.gitignore"), Path("src/stray.txt")} <= stage2.attempt_new_files(
+        world.root, before, rules, ignored
+    )
+
+
+def test_repair_scope_keeps_originally_ignored_new_cache(world: World) -> None:
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    before = stage2.file_inventory(world.root)
+    rules = stage2.ignore_rules_state(world.root, before)
+    ignored = stage2.ignored_snapshot(world.root)
+    (world.root / ".gitignore").write_text("cache/\nnew-rule\n", encoding="utf-8")
+    (world.root / "cache").mkdir()
+    (world.root / "cache" / "item").write_text("cache", encoding="utf-8")
+    assert Path("cache/item") not in stage2.attempt_new_files(world.root, before, rules, ignored)
+
+
+def test_repair_scope_rejects_indexed_ignored_bytecode(world: World) -> None:
+    (world.root / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    before = stage2.file_inventory(world.root)
+    cache = world.root / "src" / "__pycache__"
+    cache.mkdir()
+    (cache / "stray.pyc").write_bytes(b"bytecode")
+    git(world.root, "add", "-f", "src/__pycache__/stray.pyc")
+    assert not stage2.derived_leftover(world.root, Path("src/__pycache__/stray.pyc"))
+    with pytest.raises(stage2.CheckpointRolledBack):
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            git(world.root, "rev-parse", "HEAD"),
+            repair_scope=stage2.repair_scope([], "demo", world.root),
+            scope_baseline=before,
+        )
+
+
+def test_repair_scope_saved_ref_contains_ignored_stray(world: World) -> None:
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    before = stage2.file_inventory(world.root)
+    cache = world.root / "cache"
+    cache.mkdir()
+    (cache / "stray").write_text("evidence\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache/stray")
+    with pytest.raises(stage2.CheckpointRolledBack):
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            git(world.root, "rev-parse", "HEAD"),
+            repair_scope=stage2.repair_scope([], "demo", world.root),
+            scope_baseline=before,
+        )
+    ref = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo").splitlines()[-1]
+    try:
+        saved = git(world.root, "show", f"{ref}:cache/stray")
+    except subprocess.CalledProcessError:
+        pytest.fail("the saved attempt must contain the ignored stray")
+    assert saved == "evidence"
+
+
+def test_repair_scope_saved_ref_contains_refusal_reason(world: World) -> None:
+    before = stage2.file_inventory(world.root)
+    (world.root / "src" / "stray.txt").write_text("evidence\n", encoding="utf-8")
+    with pytest.raises(stage2.CheckpointRolledBack):
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            git(world.root, "rev-parse", "HEAD"),
+            repair_scope=stage2.repair_scope([], "demo", world.root),
+            scope_baseline=before,
+        )
+    ref = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo").splitlines()[-1]
+    assert "src/stray.txt" in git(world.root, "show", "-s", "--format=%B", ref)
