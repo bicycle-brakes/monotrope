@@ -50,6 +50,19 @@ On 2026-11-23, research found that the frontmatter currency gate reports stale `
 6. When a staged path is deleted or is not a held document, the stamping operation leaves it alone.
    *Refuted by:* a deletion is restored or a non-held staged path is changed.
    *Basis:* `decisions.md#Q-1`.
+7. If the currency measurement refuses to run, the hook reports its reason on standard error and allows the commit without changing the index.
+   *Refuted by:* a shallow checkout or an empty held set blocks the commit, changes the index, or produces no reason.
+8. If stamping any staged document fails, the hook leaves the entire index as it was before the hook ran.
+   *Refuted by:* an earlier document remains stamped in the index after a later document fails.
+9. When the repository's Beads hooks are installed or reinstalled, the pre-commit hook invokes the stamping step.
+   *Refuted by:* a fresh installation or a regenerated hook commits a staged stale held document without invoking the step.
+10. When a staged date is later than tomorrow in UTC, the hook treats it as the currency gate's future finding.
+    *Refuted by:* the hook uses a different future threshold than the gate.
+    A date no later than tomorrow UTC is not future solely for being after the local date.
+11. When a kit copy is assembled, it includes the staged-document stamping script.
+    *Refuted by:* the kit manifest omits the script or the assembled kit lacks it.
+12. When stamping produces a staged document, the hook checks the result against the applicable currency rules before allowing the commit.
+    *Refuted by:* a failed post-stamp check permits the commit.
 
 ## Non-goals
 
@@ -62,7 +75,7 @@ The Beads managed hook section and tracker database are protected to preserve tr
 ## Definition of Done
 
 - `make verify` green and the temporary-repository commit tests pass.
-- Updated hook, stamp command, tests and workflow documentation move in the same pull request; no ADR is due.
+- Updated hook, `scripts/hooks/stamp_staged.py`, `scripts/kit/manifest.yaml`, tests and workflow documentation move in the same pull request; no ADR is due.
 - Protected areas and non-goals are checked against the pull request file list.
 - The pull request closes `coding-harness-yv9i.2` and its last commit carries `Closes-Bead: coding-harness-yv9i.2`.
 - Special runs: none.
@@ -70,3 +83,26 @@ The Beads managed hook section and tracker database are protected to preserve tr
 ## Open decisions
 
 [DETAIL] Stamp the Git index without rewriting working files: this preserves partial staging and is reversible within this change. A hook deliberately disabled or replaced by a custom hook cannot run; the existing CI gate remains the backstop.
+
+[DETAIL] Measurement refusal passes unchanged with a diagnostic, while a stamping failure leaves the index intact; this retains commit access where the existing gate cannot measure and avoids partial updates. A missing runtime is a hook execution failure, reported by the hook rather than treated as a measurement result.
+
+[DETAIL] The future threshold follows the existing currency gate, and the kit carries the stamping script; these reuse existing definitions and distribution. The tracked `.beads/hooks/pre-commit` invokes `scripts/hooks/stamp_staged.py` outside the managed section so installation and regeneration retain the invocation.
+
+[DECISION] Invalid date values (phase-2a finding S-1):
+
+Topic: Ungültiger Datumswert in einem zum Commit vorgemerkten Dokument.
+Intention: Der Commit-Hook soll vor dem Commit einen fehlenden oder veralteten Datumsstempel behandeln.
+Today: Der vorhandene Stempelbefehl ersetzt auch einen ungültigen Datumswert; die bisherige Spec lässt offen, ob der Hook das ebenfalls tun darf.
+Repository change: Die Spec legt fest, ob der Commit bei einem ungültigen Datumswert fortgesetzt oder angehalten wird.
+Architecture change: Die bestehende Datumsprüfung bleibt die Grundlage; die Entscheidung bestimmt das Verhalten des neuen Commit-Hooks.
+
+Goal in one sentence: Ein ungültiger Datumswert soll beim Commit eindeutig behandelt werden.
+Options: A — automatisch auf das heutige Datum setzen und den Commit fortsetzen; B — den Commit mit einer Fehlermeldung anhalten.
+Recommendation: A — weil der vorhandene Stempelbefehl ungültige Datumswerte bereits repariert.
+If you say "ok": Der Hook ersetzt einen ungültigen Datumswert durch das lokale Datum; nicht als UTF-8 lesbare Dateien bleiben ein gesonderter Fehler.
+What is lost: Option B würde eine manuelle Prüfung vor jeder Korrektur erzwingen.
+Downside you accept: A — ein falscher Wert wird ohne manuelle Prüfung ersetzt; B — ein reparierbarer Wert unterbricht den Commit.
+
+Welche dieser Folgen akzeptierst du: A oder B?
+
+The other unresolved ambiguities S-2 through S-4 remain open in `findings.md`; their provisional agent decisions are not maintainer answers.
