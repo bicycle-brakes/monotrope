@@ -1429,3 +1429,7 @@ Re-check by Opus 5.5 through Claude Code's read-only `reviewer` agent at HEAD `5
 Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5416 commits, 12 rules.
 
 Runner restoration, 2026-11-23: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/mandatory-spec-review/plan.md, plans/changes/mandatory-spec-review/spec.md — unchanged
+
+## Phase 6 — Opus 5.5, 2026-11-23 (re-check of R6S-1)
+
+Re-check by Opus 5.5 through Claude Code's read-only `reviewer` agent at HEAD `7a904ac7` (maintainer permission of 2026-11-22). Verdict, recorded unchanged in substance: "No finding." R6S-1 fixed (`readable_review` no longer skips fenced lines, `scripts/stage2.py:4446-4474`; test `tests/test_stage2.py::test_r6s_1_fenced_ambiguity_row_without_leading_pipe_is_unreadable`, closed and unclosed fence); R6-3, R6R-1 and R6R-2 still hold; no new gap against the spec. Remaining limit noted by the reviewer, not raised as a row: a line with neither edge pipe and an invalid severity still reads as prose — the narrowing R6R-2 accepted on purpose; it needs two reviewer format errors at once and no criterion asks the reader to catch it.
