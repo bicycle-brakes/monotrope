@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-zywb
@@ -46,3 +46,102 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | S-6 | MAJOR | SPEC | base | `spec.md` Open decisions [DETAIL] ("The report's existing stdout takes precedence over an earlier discovery stream in this case"), criterion 7; `scripts/stage2.py:2831–2832`; `scripts/stage2_availability.py:325–331`, `:1450`, `:1468–1478`, `:1509` | [AMBIGUITY] "In this case" could refer to either of the two preceding sentences. In prepare-loop, `discover_free` meets a notice X first and today prints it to stderr (`stage2.py:2832`). `prepare` can still stop before `print(report(state))` (`stage2_availability.py:1509`): `preflight` (`:1450`) or `_checked_probe`'s admission and leak-check refusals (`:325–331`) raise `Refused`, and the probe loop catches only `CallFailed` and `DestinationRefused` (`:1468–1478`). Reading A: the sentence refers to the early exit named just before it, so held notices are flushed to stdout, the report's stream. Reading B: the sentence refers to the printed report and explains why the report's stdout line replaces discovery's stderr line. On an early exit, criterion 7 then applies ("printed outside a preparation report … the stream of its first occurrence"), so X goes to stderr. A test of this early exit that reads stderr passes under B and fails under A, and Reading A contradicts criterion 7. | Opus | in spec — [DETAIL] decided by the orchestrator: 'in this case' means a call that prints an availability report: there the report's stdout line is the one console appearance, and discover_free and probe_go stay silent for the notices that report will list; in calls without such a report the first console print wins. Reason: one sentence, one rule per call kind | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1160 files, 5212 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5536 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/address-notice-once/plan.md` +13 -13
+> - `scripts/stage2.py` +21 -6
+> - `scripts/stage2_availability.py` +42 -2
+> - `scripts/stage2_go.py` +157 -0
+> - `tests/test_stage2_go_access.py` +461 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2_go_access.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+>      |
+> 1589 |     seeded_round(world, ("free", "flash"), go_store(*(row(member, baseUrl=MOVED_BASE) for member in TEST_LADDER)))
+> 1590 |
+> 1591 |     def refusing_dispatch(root, member, send, *args, **kwargs):
+>      |                                                        ^^^^^^ ARG001
+> 1592 |         raise stage2.Refused("the planted dispatch refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1643:64: ARG001 Unused function argument: `monkeypatch`
+>      |
+> 1643 | def test_first_address_notice_preserves_text_and_stream(world, monkeypatch, capsys):
+>      |                                                                ^^^^^^^^^^^ ARG001
+> 1644 |     """Criterion 7: the first printed occurrence keeps its exact wording and its stream.
+>      |
+>
+> tests/test_stage2_go_access.py:1672:40: F821 Undefined name `TEST_FLASH`
+>      |
+> 1670 |     capsys.readouterr()
+> 1671 |     assert world.run("review-loop") == 0
+> 1672 |     assert len(world.reviews()) == len(TEST_FLASH), "a suppressed notice stopped or replaced a launch"
+>      |                                        ^^^^^^^^^^ F821
+> 1673 |     record = world.record().read_text(encoding="utf-8")
+> 1674 |     assert f"Address notice: opencode-go/{model}:" in record, "the admitted move left no evidence"
+>      |
+>
+> tests/test_stage2_go_access.py:1817:32: ARG001 Unused function argument: `root`
+>      |
+> 1815 |     fixture.catalog.tools["drift-free"] = {"id": "drift-free", "tool_call": True}
+> 1816 |
+> 1817 |     def refusing_probe(runner, root, change, model, *args, **kwargs):
+>      |                                ^^^^ ARG001
+> 1818 |         raise runner.Refused("the planted probe refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1817:38: ARG001 Unused function argument: `change`
+>      |
+> 1815 |     fixture.catalog.tools["drift-free"] = {"id": "drift-free", "tool_call": True}
+> 1816 |
+> 1817 |     def refusing_probe(runner, root, change, model, *args, **kwargs):
+>      |                                      ^^^^^^ ARG001
+> 1818 |         raise runner.Refused("the planted probe refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1817:46: ARG001 Unused function argument: `model`
+>      |
+> 1815 |     fixture.catalog.tools["drift-free"] = {"id": "drift-free", "tool_call": True}
+> 1816 |
+> 1817 |     def refusing_probe(runner, root, change, model, *args, **kwargs):
+>      |                                              ^^^^^ ARG001
+> 1818 |         raise runner.Refused("the planted probe refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1817:54: ARG001 Unused function argument: `args`
+>      |
+> 1815 |     fixture.catalog.tools["drift-free"] = {"id": "drift-free", "tool_call": True}
+> 1816 |
+> 1817 |     def refusing_probe(runner, root, change, model, *args, **kwargs):
+>      |                                                      ^^^^ ARG001
+> 1818 |         raise runner.Refused("the planted probe refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1817:62: ARG001 Unused function argument: `kwargs`
+>      |
+> 1815 |     fixture.catalog.tools["drift-free"] = {"id": "drift-free", "tool_call": True}
+> 1816 |
+> 1817 |     def refusing_probe(runner, root, change, model, *args, **kwargs):
+>      |                                                              ^^^^^^ ARG001
+> 1818 |         raise runner.Refused("the planted probe refusal")
+>      |
+>
+> tests/test_stage2_go_access.py:1840:23: ARG001 Unused function argument: `state`
+>      |
+> 1838 |     monkeypatch.setattr(stage2, "free_diff", lambda _root: ("", ""))
+> 1839 |
+> 1840 |     def broken_report(state):
+>      |                       ^^^^^ ARG001
+> 1841 |         raise stage2.Refused("the planted report failure")
+>      |
+>
+> Found 18 errors.
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1188 files, 5547 commits, 12 rules.
