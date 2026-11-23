@@ -86,7 +86,7 @@ In the context of attempt worktrees, facing the temporary directory, the lane or
 ## Q-5 · A failed model call
 
 asked: 2026-11-22
-answer: A — implement the 2026-10-16 decision: a failed model call (error, time or usage limit) counts as a failed attempt and falls through to the next route, building on its saved state; the switch and its reason stand visibly in findings.md; the doctrine sentence in docs/WORKFLOW.md §3 is amended with an ADR addendum. A leak refusal still never falls back.
+answer: 'A — implement the 2026-10-16 decision: a failed model call (error, time or usage limit) counts as a failed attempt and falls through to the next route, building on its saved state; the switch and its reason stand visibly in findings.md; the doctrine sentence in docs/WORKFLOW.md §3 is amended with an ADR addendum. A leak refusal still never falls back.'
 answered_by: maintainer
 status: answered
 context: |
@@ -101,7 +101,7 @@ In the context of failed model calls, facing a stop or a visible fall-through, w
 ## Q-6 · Scope, order and structure
 
 asked: 2026-11-22
-answer: A — one change, two pull requests: PR 1 the shared attempt lifecycle, isolation switched on for repair; PR 2 switches it on for draft and implement after one night of use. Checked, at the maintainer's request, against modularisation and centralisation (AGENTS.md rule 9, bead coding-harness-vg9): the lifecycle lives in one new module scripts/stage2_attempts.py, the single choke point all three verbs call from PR 1 on; isolation is a declared per-verb parameter, so no second attempt path stands beside it at any time; the module has its own command-line entry for other harnesses; a check goes red when a writing verb starts a model outside it.
+answer: 'A — one change, two pull requests: PR 1 the shared attempt lifecycle, isolation switched on for repair; PR 2 switches it on for draft and implement after one night of use. Checked, at the maintainer''s request, against modularisation and centralisation (AGENTS.md rule 9, bead coding-harness-vg9): the lifecycle lives in one new module scripts/stage2_attempts.py, the single choke point all three verbs call from PR 1 on; isolation is a declared per-verb parameter, so no second attempt path stands beside it at any time; the module has its own command-line entry for other harnesses; a check goes red when a writing verb starts a model outside it.'
 answered_by: maintainer
 status: answered
 context: |
@@ -116,7 +116,7 @@ In the context of a large shared runner file, facing one big or two staged pull 
 ## Q-7 · When side refs are deleted
 
 asked: 2026-11-03
-answer: "nach dem Merge" — after a change merges, the clean-up after merge (bead coding-harness-kpaq) deletes that change's refs under refs/stage2/attempts/<change>/, locally and on origin (asked 2026-11-03 under coding-harness-c99h, which this bead absorbed on 2026-11-12).
+answer: '"nach dem Merge" — after a change merges, the clean-up after merge (bead coding-harness-kpaq) deletes that change''s refs under refs/stage2/attempts/<change>/, locally and on origin (asked 2026-11-03 under coding-harness-c99h, which this bead absorbed on 2026-11-12).'
 answered_by: maintainer
 status: answered
 context: |
