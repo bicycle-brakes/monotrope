@@ -104,7 +104,7 @@ Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | implementation | tests/test_close_merged_beads.py:660; tests/test_beads_start.py:620 | Both controlled-clock wrappers record imported module paths before calling the reconciler. The renderer `render_beads_export` is imported lazily during that call, so its path is absent from the record and never checked. A renderer loaded from outside the disposable copy can therefore pass the path assertion; every local dependency must resolve inside that copy. [Acceptance criterion 6] | Codex | open | — |
+| F-1 | MAJOR | SPEC | base | tests/test_close_merged_beads.py:660; tests/test_beads_start.py:620 | Both controlled-clock wrappers record imported module paths before calling the reconciler. The renderer `render_beads_export` is imported lazily during that call, so its path is absent from the record and never checked. A renderer loaded from outside the disposable copy can therefore pass the path assertion; every local dependency must resolve inside that copy. [Acceptance criterion 6] | Codex | taken | — |
 
 Phase 6 verdict: codex 01a20a50-71e9-79c2-b33e-db2acc40f4de, 2026-11-23
 Reviewer session: codex 01a20a50-71e9-79c2-b33e-db2acc40f4de — a fresh session reviewed: no phase-2a session was recorded
