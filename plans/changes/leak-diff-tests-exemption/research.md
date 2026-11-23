@@ -11,7 +11,7 @@ bead: coding-harness-juu
 owner: Data Architect
 provenance: ai-drafted-reviewed
 neighbours: []
-produced_by: {kind: llm-session, name: stage2-research-swarm, version: "2026-11-23"}
+produced_by: [{kind: llm-session, name: stage2-research-swarm, version: "2026-11-23"}, {kind: llm-session, name: claude-code, version: "2026-11-23", model: "claude-haiku-5-5"}]
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
@@ -28391,3 +28391,53 @@ public topic: Exempting test file diff lines from secret scanning in prompts sen
 run 7e5d57459e7faea6a508e0b2a6ca20a2 status: incomplete - a declaration or leak check refused a call; every queued call was cancelled.
 
 <!-- /research-swarm/v2 -->
+
+Stage-2 call, 2026-11-23: explore · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-haiku-5-5 · reason the research swarm for this leak-check change quoted the test fixture value and was refused (2026-11-23); single-model Stage-1 explore instead · leak check clean over 1174 files, 5435 commits, 12 rules.
+
+## Runner exploration — 2026-11-23
+
+## Research: leak-diff-tests-exemption (explorer output, English, ready to append)
+
+Read-only pass with Glob, Grep and Read. Nothing was edited and nothing was run. `research.md` is 2.1 MB and was only sampled: its header, the start of its swarm section, and the `neighbours:` line. The swarm manifest body was not read.
+
+### What exists today
+
+- **Decisions already taken.** `plans/changes/leak-diff-tests-exemption/decisions.md` records four answers from the maintainer. Q-1 (2026-11-01): diff hunks under `tests/` in a prompt get the file's exemption, for secret rules only. Q-2 (2026-11-01): only added (`+`) lines in `tests/` are exempt; context and removed lines stay checked. Q-3 (2026-11-01): each use is recorded in the findings call record as a count of exempt lines, never their content. Q-4 (2026-11-22): context lines of files under `tests/` are also exempt; removed (`-`) lines stay checked. The file states that Q-4 widens Q-2. Status is `draft`, class `feature`, bead `coding-harness-juu`.
+- **The check.** `scripts/leakcheck.py` (module doc and `check()`) scans five things: the change folder, the tree, the commit history, the staged diff, and any `--prompt-file` text. Rules whose name starts with `secret:` are skipped under `tests/`, by `_under_tests()` for files and by `_header_in_tests()` for diff hunks. The `patch=True` path in `_scan()` switches exemption per file on each `diff --git` header. Only a clean `tests/` path with the exact `a/<path> b/<path>` form counts; a quoted name is not exempt.
+- **Prompt texts are never exempt today.** `_scan(text, f"prompt text {label}", rules, ...)` is called with `exempt=False` and `patch=False`, so a prompt is scanned whole with every rule. The module doc says so: "nor is a commit message or a prompt text."
+- **Call sites that pass prompt text.** `scripts/stage2.py` `check_prompt`-style guard (around the `leakcheck.check(ctx.change, ..., [("prompt", prompt)])` call, near line 1923) runs before every foreign call. `scripts/stage2_availability.py` (near line 328) and `scripts/stage2_research_run.py` (near line 698, `self.runner.leakcheck.check(...)` with `slot.prompt`) do the same. All three pass the prompt as a single unlabelled `("prompt", text)` pair, so the check cannot tell a diff hunk inside a prompt from any other text.
+- **Tests that pin today's behaviour.** `tests/test_leakcheck.py`:
+  - `test_a_prompt_text_is_never_exempt` asserts that a secret-shaped line under `tests/prompt.md`, passed as a prompt text, blocks. Q-1 changes this rule.
+  - `test_the_exemption_and_its_consequence_are_stated` checks that the module doc names the `secret:` marker and `tests/`. Any new wording must keep that check green.
+  - `test_a_commit_patch_that_touches_tests_follows_the_same_split`, `test_the_staged_diff_follows_the_same_split` and `test_the_exemption_follows_a_hunk_back_out_of_tests` pin the whole-hunk exemption for commit and staged patches.
+  - `test_the_report_of_a_clean_run_names_the_exemption` pins the report wording.
+- **Denylist** is outside the repository (`LEAKCHECK_DENYLIST` or `~/.config/cc-routing/denylist.txt`). Nothing in the repository names its rules.
+- **Where the call record is written.** `scripts/stage2.py` has `record_credential_scan_skips`, which "appends them at the end of the call record" (near line 9201), and a comment about recording scan limits "only in a contained regular call record" (near line 6308). This is the existing mechanism for appending a line to a call record. The Q-3 line (exempt-line count) has not been traced into it yet.
+- **Recent history.** The git log names `d58b0ee1`, "runner records of a research run refused by the leak check (prompt line 39)". The subject line only; the refused run's content was not read.
+
+### Where it lives
+
+- `scripts/leakcheck.py`: `_header_in_tests`, `_under_tests`, `_scan`, `check`, `read_denylist`, `ADVICE`, module doc.
+- `scripts/stage2.py`, `scripts/stage2_availability.py`, `scripts/stage2_research_run.py`: the three prompt callers listed above.
+- `tests/test_leakcheck.py`: the pinned behaviour listed above.
+- `plans/changes/leak-diff-tests-exemption/decisions.md`: the four answers.
+- `plans/changes/leak-diff-tests-exemption/research.md`: a runner artefact (`research-swarm/v2`, run `7e5d5745…`, class `feature`, `neighbours: []`).
+- No other `plans/specs/` or `plans/changes/` artefact about this topic was found by the keyword search; the hits in other changes concern the wider stage-2 or leak work and were not opened.
+
+### What is unclear
+
+1. **Whether Q-1 to Q-4 apply to prompts only, or also to commit and staged patches.** Q-1 and Q-2 name "diff hunks in a prompt". Today the commit and staged paths exempt the whole `tests/` hunk, removed lines included. Q-4 says removed lines stay checked, which, read literally, also changes those paths. The decisions do not say which reading is meant. Not resolved here.
+2. **How the prompt diff is recognised.** `leakcheck.check` receives one `("prompt", text)` pair with no structure. Nothing shows how a diff hunk inside a prompt would be identified, or how a header would survive prompt assembly. The swarm and review prompt builders were not read.
+3. **Whether the exemption count can be written to the call record.** `record_credential_scan_skips` is the nearest pattern. Whether it is the right place, and what line format the findings call record uses, was not traced.
+4. **Unverified claim in the decisions.** Q-4 cites a 2026-11-21 block on `tests/test_verify_lock.py` (commit `06c6414b`). That commit was not checked.
+5. **Unknown interaction with `test_a_prompt_text_is_never_exempt`.** It will fail once Q-1 lands unless it is rewritten to the new rule. Whether the maintainer wants it rewritten or kept as a guard for non-diff prompt text is not stated in the decisions.
+
+### Which files a change would have to touch
+
+- `scripts/leakcheck.py`: the prompt scan path (`check`, the `prompt_texts` loop) and the module doc paragraph on prompt texts.
+- `scripts/stage2.py`, `scripts/stage2_availability.py`, `scripts/stage2_research_run.py`: only if prompts need labelling or structure to carry the hunk boundaries. Not decided.
+- `scripts/stage2.py` call-record writer near `record_credential_scan_skips`: for the Q-3 count line.
+- `tests/test_leakcheck.py`: `test_a_prompt_text_is_never_exempt` and new cases for added, context and removed lines; the doc test if the wording changes.
+- `scripts/kit/manifest.yaml` (lines 142 and 231 point at `leakcheck.py` and its test) and `scripts/ci_gates.py` (line 127 describes `leakcheck.py`): checked for consistency only if the doc or file set changes.
+
+**Open questions for the maintainer** (for the interview, not answered here): question 1 above, whether the commit and staged paths follow the new rule; and question 5, what becomes of the prompt test.
