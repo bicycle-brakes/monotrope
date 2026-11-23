@@ -21774,6 +21774,25 @@ def test_repair_scope_attempt_cannot_hide_a_stray_through_gitignore(
     assert not (world.root / "src" / "stray.txt").exists()
 
 
+def test_repair_stray_cleanup_refuses_external_parent_before_removing_files(world: World) -> None:
+    """A failed check can replace a stray's parent with an external symlink."""
+    outside = world.root.parent / "outside"
+    outside.mkdir()
+    victim = outside / "stray.txt"
+    victim.write_text("external", encoding="utf-8")
+    safe = world.root / "a-stray.txt"
+    safe.write_text("attempt", encoding="utf-8")
+    (world.root / "z-link").symlink_to(outside, target_is_directory=True)
+    refused = False
+    try:
+        stage2.remove_stray_files(world.root, {Path("a-stray.txt"), Path("z-link/stray.txt")})
+    except stage2.Refused:
+        refused = True
+    assert victim.exists(), "cleanup followed an external parent and deleted its file"
+    assert safe.exists(), "cleanup must preflight the entire batch before deleting files"
+    assert refused, "cleanup must refuse an unsafe parent"
+
+
 def test_repair_failed_attempt_stray_is_removed_before_the_next_route(world: World) -> None:
     """L2-5. Planted fault: a failed attempt's out-of-scope file reaches the next attempt's checkpoint commit."""
     seed_tests(world)

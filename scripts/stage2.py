@@ -6857,8 +6857,15 @@ def attempt_new_files(
 
 def remove_stray_files(root: Path, stray: Iterable[Path]) -> list[str]:
     """Delete an attempt's new files outside the repair scope, index entries included; name what went."""
+    paths = sorted(stray)
+    # Verification can replace a parent after the inventory was captured. Check the
+    # whole batch before changing the index or deleting any path.
+    for relative in paths:
+        problem = restoration_parent_problem(root, root / relative)
+        if problem is not None:
+            raise Refused(f"cleanup of {relative.as_posix()} is refused: its parent {problem}")
     removed: list[str] = []
-    for relative in sorted(stray):
+    for relative in paths:
         _git_output(
             root, "--literal-pathspecs", "rm", "--cached", "-q", "--ignore-unmatch", "-f", "--", relative.as_posix()
         )
