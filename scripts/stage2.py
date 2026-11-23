@@ -4915,7 +4915,17 @@ def language_replacement(
     returned verdict thread differs from it.
     """
     try:
-        saved = save_answer_evidence(ctx.root, ctx.change, f"phase6-language-{time.time_ns()}", 1, answer, None)
+        # The token pairs the verdict thread with the UTC stamp of the one clock boundary (`clock_now`;
+        # a direct clock read here fails the runtime clock guard), so the exclusively created evidence
+        # file never collides with an earlier save for this change.
+        saved = save_answer_evidence(
+            ctx.root,
+            ctx.change,
+            f"phase6-language-{thread}-{clock_now().utc.strftime('%Y-%m-%dT%H-%M-%SZ')}",
+            1,
+            answer,
+            None,
+        )
     except (CallFailed, Refused) as error:
         notices.append(
             "Language notice: the first verdict was detected as non-English, but its answer could not be saved as "
