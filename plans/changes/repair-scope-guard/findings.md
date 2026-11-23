@@ -853,7 +853,7 @@ Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-10 | BLOCKER | MAINT | implementation | scripts/stage2.py:6864 | If a repair creates an out-of-scope file, then a failing verification replaces that file’s parent directory with a symlink to a directory outside the worktree, cleanup follows the symlink and can delete the matching external file. Cleanup must refuse an unsafe parent before deleting attempt files. | Codex | open | — |
+| P6-10 | BLOCKER | MAINT | fix-r5 | scripts/stage2.py:6864 | If a repair creates an out-of-scope file, then a failing verification replaces that file’s parent directory with a symlink to a directory outside the worktree, cleanup follows the symlink and can delete the matching external file. Cleanup must refuse an unsafe parent before deleting attempt files. | Codex | taken | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -861,3 +861,5 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20971-b99d-7a10-9300-67393ac6eb62, 2026-11-23
 Reviewer session: codex 01a20971-b99d-7a10-9300-67393ac6eb62 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Orchestrator triage of the final re-check, 2026-11-23 (provisional agent decision, night run 2026-11-23-a): P6-10 taken, Origin fix-r5 (the P6-6..P6-9 repair 75be25de added the cleanup path). The repair runs overnight because the implement routes are down and Codex is free; the further phase-6 re-check this repair needs is left to the maintainer's word (recommendation on bead coding-harness-t83).
