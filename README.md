@@ -109,7 +109,7 @@ places; agents do the rest, and scripts check it.
 | # | Phase | Leaves |
 | --- | --- | --- |
 | 1 | Explore, then interview | `research.md`, `decisions.md` |
-| 2 | Spec (optional spec review, design by class) | `spec.md`, `design.md` |
+| 2 | Spec (spec review except for a spike, design by class) | `spec.md`, `design.md` |
 | 3 | Plan | `plan.md` |
 | 4 | Implement, then the review loop | code and tests |
 | 5 | Verify | test output |
