@@ -132,7 +132,20 @@ each of them into `spec.md` itself: a hole is closed, a criterion that cannot
 go red gets its refuting case. A row you do not take over gets its reason in
 `findings.md`. An `[AMBIGUITY]` goes to the person, and their answer goes into
 the spec. Each 2a row then says `in spec` or `rejected — <reason>`; none stays
-open. The revised `spec.md` is the one yardstick from here on: plan, code and
+open.
+
+A spec you changed this way is reviewed again: draft and review repeat until a
+current review, one that read the spec body as it now stands, leaves only
+settled rows that need no further spec edit, or until the third review round
+has run. After the third round one final draft works the last rows in without
+a new review; rows still open that are no BLOCKER become named limits in
+`plan.md`. A BLOCKER, or an `[AMBIGUITY]` whose answer changes the spec, goes
+to the maintainer, who either authorizes a fourth round, with a question of the
+change in `decisions.md` headed `Q-<n> · Fourth spec-review round` and answered
+`authorized`, or has the change re-sliced. A `spike` needs no spec review.
+
+The revised `spec.md` is the one yardstick from here on: plan, code and
 the phase 6 review measure against it, not against the 2a rows. On the runner
 path (`docs/WORKFLOW.md` §4) a second `draft <change>` does this, after the
-maintainer has answered every `[AMBIGUITY]` a row raised.
+maintainer has answered every `[AMBIGUITY]` a row raised, and
+`spec-review <change>` then reviews the changed spec.

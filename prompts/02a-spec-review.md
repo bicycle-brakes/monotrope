@@ -3,10 +3,12 @@
 **Model:** Opus 5.5 — in a fresh context that never saw the author's
 reasoning; for a spike by hand, where §3 keeps the whole phase in a session;
 otherwise started by `python3 scripts/stage2.py spec-review <change>`
-(Claude Code, effort `xhigh`, read-only tools).
+(Claude Code, effort `xhigh`, read-only tools); when Opus fails twice, the
+declared fallback reviewer reads the same prompt through Pi.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
-**Gate:** no open `[AMBIGUITY]`.
+**Gate:** a current review of the spec, no open `[AMBIGUITY]`; at most three
+spec-review rounds (`docs/WORKFLOW.md` §4, "The spec review before the plan card").
 **Session:** the same reviewer later runs phase 6 for a spike. On the by-hand
 path (a spike), start it with a fixed id, `claude --model claude-opus-5-5
 --session-id <uuid> -n review-<name>`, and write the id under the table in
@@ -20,6 +22,13 @@ Flash swarm, then the paid ladder (`docs/WORKFLOW.md` §4, ADR 0021).
 Through the runner you answer in table rows of six cells — `| ID | Severity |
 Dimension | Origin | Where | Finding |` — and the runner adds the reviewer and
 the status (`docs/WORKFLOW.md` §4). Write a `|` inside a cell as `\|`.
+The Severity cell is exactly `BLOCKER`, `MAJOR` or `MINOR`, or begins with the
+mark `[AMBIGUITY]`. Any other severity, and any table line that is not such a
+row, makes the whole answer unreadable, and an unreadable answer counts as no
+review. A row is an open ambiguity when the mark `[AMBIGUITY]` stands in either
+of two places: at the start of the Severity cell, or at the start of the Finding
+cell beside one of the three severities. Either one holds implement until the
+row is settled.
 
 A validator checks that the sections are there. It cannot check that they say
 the right thing. A clean, complete spec describing the wrong thing passes every
@@ -56,5 +65,7 @@ construction that it is checking itself.
 
 ## If you find nothing
 
-Say so, in one sentence, and name what you checked. A reviewer who always finds
-something is not a stricter reviewer; it is a signal nobody can read.
+Answer exactly `No finding.` — those two words and the full stop, nothing
+before or after them. Any other clean result, a sentence naming what you
+checked included, is unreadable and counts as no review. A reviewer who always
+finds something is not a stricter reviewer; it is a signal nobody can read.

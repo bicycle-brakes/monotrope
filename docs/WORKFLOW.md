@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-21
+updated: 2026-11-23
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -82,7 +82,7 @@ handover to the next phase — not the chat history.**
 | 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — eleven topics from a finder map for a `feature` or `architectural` change, one report otherwise | the `research-handoff` check for a complete swarm run, otherwise — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
 | 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason; after a research swarm every obligation item answered and linked (`research_items`, `research_neighbours`; minimums are no ceiling) | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]`; after a research swarm `neighbours:` and every criterion's `*Basis:*` match the research (`research-handoff`) | [`02-spec.md`](../prompts/02-spec.md) |
-| 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 2a | Spec review *(not for a spike)* | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | a current review of the spec before the plan card, the final draft after round three excepted; every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]`; at most three spec-review rounds, a fourth only by the maintainer's recorded answer (§4, "The spec review before the plan card") | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
@@ -540,7 +540,7 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # local gates; every cheap gate first, admission only for protected work
+make verify     # local gates, unprotected first; stop protected work on a blocking failure
 make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
@@ -552,51 +552,57 @@ make index      # regenerate plans/INDEX.md
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
 
-Local verification runs in two phases (`scripts/verify_run.py`, the one
-scheduler behind `verify_all.sh` and the Stage-2 checks). The **unprotected**
-gates — every selected `seconds` gate without the explicit shared-state mark —
-execute first, all of them, and every one's diagnostic is collected even past
-a blocking red, so a lint failure never hides behind a queue wait again. Only
-when the cheap phase holds no blocking red does the run take **one admission**
-for the protected work — the `minutes` gates and the `seconds` gates marked
-`needs_admission` — where a local run stops at its first blocking failure and
-names the remaining selected gates as not run. A selection with no protected
-gate, such as the `docs` job, never waits for the slot at all. When admission
-follows a green cheap phase and the tree is unchanged in the meantime, the
-cheap results are reused instead of executed twice; a changed tree reloads
-the gate list, reselects and reruns the complete cheap pass inside the held
-admission, so stale results cannot survive a reclassification. A run with
-protected work measures the tree around its cheap pass: a tree that cannot be
-measured (no named HEAD, an unreadable entry) or that changes while the cheap
-gates run refuses the run with a request to rerun, names what moved and the
-gates not run; unmeasured cheap results are never relied on. A selection
-without protected work, and a cheap pass that ended blocking red, rely on no
-baseline and measure none. Hosted CI and
-`--ci` continue through all selected gates of both phases whatever failed
-before. See the [gate catalog](governance/gate-catalog.md) for costs,
-admission marks and enforcement.
+Local verification runs unprotected gates first. If one fails blocking-red,
+other unprotected gates still run and no protected gate starts. Protected gates
+include minute-cost gates and gates explicitly requiring admission. In the protected
+phase, the first blocking failure stops the run. The report names selected gates
+that did not run; a red run is therefore not a complete check. Hosted CI and
+`--ci` continue through all selected gates.
+See the [gate catalog](governance/gate-catalog.md) for costs and enforcement.
 
 CI runs on pull requests (a superseded run is cancelled) and on pushes to
 `main`, under Python 3.12; a branch without a pull request gets no hosted run,
 and the schedule runs only the drift gates.
 
-**One admission per user and machine** (bead coding-harness-p6mu). Only
-protected work enters it: before its protected gates, the shared scheduler
-hands the run to `scripts.verify_lock` — protected work
-of one user on one machine queues in `${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
-— shared across repositories and worktrees, so the protected gates of
-concurrent full checks never run together again, as they did in the three-lane
-trial. The admission does not serialise the rest: the seconds gates and the
-runner's full-mode preparation (formatting, its cheap checks) run in every
-lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
+**One admission per user and machine, two slots by default** (beads
+coding-harness-p6mu, coding-harness-u1ha). Only protected work enters it:
+before its protected gates, the shared scheduler hands the run to
+`scripts.verify_lock` — protected work of one user on one machine shares
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/`
+across repositories and worktrees, so independent protected checks reserve
+one of two machine-wide admission slots instead of serialising. At most two
+protected admissions are live machine-wide; each is independent, with its own
+memory wait and its own ownership lifetime. `HARNESS_VERIFY_SLOTS` selects
+`1` or `2` per entry (default `2`, exact strings only — any other value
+refuses the entry before protected work, naming the setting), is forwarded to
+local child processes, and stays outside the foreign-model environment
+allow-list. Effective capacity is the minimum of the settings of all live
+holders and the head live waiter: a `1` entry admits alone, after every other
+holder has drained. The admission does not serialise the rest: the seconds
+gates and the runner's full-mode preparation (formatting, its cheap checks)
+run in every lane at once. The [seconds-gate audit](../plans/changes/verify-cheap-before-admission/seconds-gate-audit.md)
 records why that is safe today and what it did not measure; free disk space
-is not checked (bead coding-harness-87b0). Waiters are admitted in
-registration order; while waiting, an entry logs its wait immediately and
-every five minutes, naming the holder's process id, command and start time.
-A nested protected entry — a check descended from a live admission — carries
+is not checked (bead coding-harness-87b0). Before the two-slot change (bead coding-harness-u1ha) the admission
+held one exclusive machine-wide lock and serialised protected checks, as the
+three-lane trial had shown necessary at the time; that lock remains the
+compatibility path — an older checkout still takes it exclusively, updated
+holders share it, and an older checkout's live queue entry keeps its place at
+the head of the shared queue. Waiters are admitted in registration order; a
+dead waiter never blocks the queue. While waiting, an entry logs its wait
+immediately and every five minutes, naming each occupied slot and its
+holder's process id, command and start time — or explicitly that a holder is
+unavailable — without exposing ownership tokens. A nested protected entry — a
+check descended from a live admission — carries
 `HARNESS_VERIFY_LOCK_HELD=<holder-pid>` and reuses its ancestor's admission
-instead of deadlocking on it; a stale or unrelated marker uses ordinary
-admission. After the lock, admission reads the system's free memory (macOS
+instead of deadlocking on it when the descendant uses updated code (or an updated
+descendant uses a legacy admission). An older checkout inside a new admission
+cannot validate the new marker and may wait for its own ancestor. A stale or unrelated marker uses ordinary
+admission, and one process holds at most one independent admission — a second
+request while holding or acquiring one is refused promptly. After the lock,
+each admission reads the system's free memory at that instant; a second reading
+need not include the first run's eventual peak. Each run retains the unchanged
+worker count, so two runs can use twice that count in total. Each admission reads
+free memory (macOS
 `memory_pressure`'s system-wide free percentage, Linux `MemAvailable` over
 `MemTotal`) and waits, rechecking every 30 seconds, while readings sit below
 the floor — 25 percent by default, or `HARNESS_VERIFY_MEMORY_FLOOR` as a
@@ -606,69 +612,23 @@ the last reading; a reading that cannot be taken is logged and the entry
 proceeds. Unusable state — a substituted or unwritable lock, holder or queue
 file — refuses the entry before any protected work instead of running
 unlocked. Ownership ends only when the protected work and its children stop,
-including on failure, cancellation and signals, so a dead entry never blocks
-the next one. The queue and memory waits consume no runner step limit and no
-pytest proof's execution timeout; the configured limits still bind the
-executing check. Hosted CI is untouched: its gate steps never enter the
-runner's shell path, and nothing disables admission because CI is set.
+including on failure, cancellation and signals; a holder's configured
+capacity stays reserved until its last inherited lock descriptor closes, so a
+dead supervisor's children keep the machine's capacity honest. The queue and
+memory waits consume no runner step limit and no pytest proof's execution
+timeout; the configured limits still bind the executing check. Hosted CI is
+untouched: its gate steps never enter the runner's shell path, and nothing
+disables admission because CI is set.
 
 Verification durations are appended locally to `verify-duration.jsonl` in
-that shared state directory. One invocation is one run identity spanning the
-cheap and the protected phase: every executed gate is recorded, including a
-cheap gate run twice after a changed-tree recheck, and a gate's seconds sum
-its active segments before and after admission — queue and memory waits are
-reported separately, never as execution time, with inherited waits marked as
-reused. A run that finished on the cheap phase alone states explicitly that
-no admission was requested; interrupted runs remain incomplete, and malformed
-rows are diagnosed. Read summaries with `python3 -m scripts.verify_duration
-report`, or inspect one run with `python3 -m scripts.verify_duration report
---run <run-id>`. Unusable measurement storage warns without changing gate
-execution or verdicts; raw history stays outside Git.
-
-A slip is one completed red local full verification run that answers the
-immediately preceding completed check of the same repository, change, checked
-tree and gate configuration when that check is a green targeted check (bead
-coding-harness-bxxt.7). The count is derived, never stored. The runner's
-targeted check (repair only) records its start and end, each with the checked
-tree, in `verify-targeted.jsonl` beside `verify-duration.jsonl`; the runner's
-admitted full check (`full_verify`) carries its comparison context in
-runner-owned environment variables that the shell's start record captures as
-additive version-1 fields with a version-2 marker, so older duration readers
-still read the history and never count a targeted check as a full duration.
-`python3 -m scripts.verify_duration slips [--since UTC] [--until UTC] [--change
-NAME]` combines both histories and reports two numbers side by side: the slip
-count and the incomplete or not countable runs. Checks are ordered by UTC
-completion, strictly earlier-than; equal completion times establish no order
-and make both runs incomplete. An intervening check of the same identity ends
-the pairing, so each red run counts at most once and only for its immediate
-predecessor. A potentially matching pair with a gap on either side — a missing
-end, conflicting records, a moved tree, an unknown identity, an unpaired
-completion, a full run still running — is counted as incomplete on each
-selected side, never as a slip or a clean non-slip. A full green immediately
-followed by a full red of one identity is reported separately as a flaky-test
-signal (undecided when an uncertain full run may stand between them). Legacy
-duration runs and change-less full runs are reported on an outside-the-count
-line and never make the report partial; legacy runs that name no repository
-appear as unattributed outside runs. A completion without a start is outside
-the count before the first version-2 comparison record and partial after it.
-Missing history is unavailable, never a counted zero: once the duration
-history holds a version-2 record, a missing targeted history is unavailable,
-and a targeted history without a duration history is too. A scope that selects
-no run at all (a misspelled `--change`, another checkout, an empty window)
-reads "0 runs selected, no statement possible" with exit 1. Exit 0 means
-complete evidence, 1 partial or unavailable evidence, 2 an invalid interval or
-refused storage. Reading never appends to either history, and no slip event,
-counter or consumed marker exists; trees are compared by contents and modes,
-never by commit identity, which the checkpoint commit, stamping and audit
-finalization move between the two checks. The comparison tree leaves out the
-change's own `plan.md` and `findings.md`, where the runner's and phase 6's
-bookkeeping lands between the checks; an edit to those two files in between
-goes unseen and can count one slip too many. An edit to another change file,
-such as `spec.md`, `decisions.md` or `research.md`, moves the comparison tree
-between the checks; the pair then no longer matches and a slip can go
-uncounted. The full run records its tree
-only at its start, so a tree that moved during a red full run can also count
-one slip too many (follow-up bead coding-harness-cf9h).
+that shared state directory. Each run records gate and execution durations,
+outcomes, revision, configuration and machine context; admission wait is
+reported separately, with inherited waits marked as reused. Read summaries
+with `python3 -m scripts.verify_duration report`, or inspect one run with
+`python3 -m scripts.verify_duration report --run <run-id>`. Interrupted runs
+remain incomplete, and malformed rows are diagnosed. Unusable measurement
+storage warns without changing gate execution or verdicts; raw history stays
+outside Git.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
@@ -767,7 +727,9 @@ medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
 --effort medium`.
 
 **The spec review improves the spec first.** The spec's author works each 2a
-row into `spec.md` (or rejects it with a reason) before phase 3; the revised
+row into `spec.md` (or rejects it with a reason) before phase 3, and a spec
+changed that way is reviewed again until a current review settles the rows or
+three rounds have run (§4, "The spec review before the plan card"); the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
 "After the spec review"). **One reviewer for both:** since ADR 0016 this holds
 for a `spike` only — a routed change's phase 6 is a fresh Codex session that
@@ -1047,8 +1009,8 @@ models on the declared endpoints run is the declaration's job, in
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Opus 5.5, where one is held | the ladder | Codex, a fresh session |
-| `feature`, `architectural` | Opus 5.5 | the ladder | Codex, a fresh session |
+| `bounded` | Opus 5.5, required before the plan card | the ladder | Codex, a fresh session |
+| `feature`, `architectural` | Opus 5.5, required before the plan card | the ladder | Codex, a fresh session |
 
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
 review and is reviewed by Opus 5.5 where §3 asks for a review. The draft and
@@ -1059,15 +1021,20 @@ routing table. The class is therefore needed before the spec exists: explore
 takes the class from the explicit `--class` argument and the headers of
 `research.md` and `spec.md`, wherever stated. All available declarations must
 agree; missing, invalid or disagreeing declarations refuse before any model
-call. `--stage2-off [REASON]` keeps the Stage-1 route and
+call. For explore, `--stage2-off [REASON]` keeps the Stage-1 route and
 skips class derivation and class/neighbour header checks. Passing `--class`
 beside `--stage2-off` is refused with exit 2 before any call; the class has
 no effect on that route.
 
-**Nothing checks a change's class beyond explore.** A `feature` stated as a
-`spike` skips every stage-2 review, and one stated as `bounded` may skip the
-spec review, which is optional there; only the review before the merge catches
-either. Whoever runs the change runs the verbs its row allows.
+**Explore and implement check the class.** `implement` reads the class through
+the same reader as explore, from `research.md` and `spec.md`, on every route,
+`--stage2-off` included, and refuses a missing, invalid or disagreeing class
+before any model starts, telling the operator to add or repair the `class:`
+declarations. A `bounded`, `feature` or `architectural` change then needs a
+current spec review ("The spec review before the plan card" below); a `spike`
+stands outside it. A `feature` stated as a `spike` still skips every stage-2
+review; only the review before the merge catches that. Whoever runs the change
+runs the verbs its row allows.
 
 ### The routing
 
@@ -1308,9 +1275,13 @@ into a shell. Thirteen verbs exist:
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
-  no session kept.
+  no session kept; one retry after the configured pause, then the declared
+  fallback through Pi; at most three rounds ("The spec review before the plan
+  card").
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
-  5.5 at effort `medium`.
+  5.5 at effort `medium`. On every route it first refuses, before any model
+  starts, a refused class or a `bounded`, `feature` or `architectural` change
+  without a current spec review free of open `[AMBIGUITY]` rows.
 - `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
@@ -1338,6 +1309,31 @@ into a shell. Thirteen verbs exist:
   line lands in `findings.md`, every earlier round stays, and the next
   `review-loop` is a fresh run — availability preparation, free swarm, Flash
   swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
+  While another worktree of this repository holds an active record of the
+  change, the plain restart refuses and names those keys: the maintainer
+  supersedes them instead with `--restart --supersedes <key> --reason <text>`,
+  repeating `--supersedes` for every active other-worktree key the refusal
+  names. Supersede before any new record exists in this worktree: a `review-loop` here can
+  start a fresh run when no audit call is unaccounted for, and its record must be released
+  after a phase-6 verdict before supersession can proceed. Supersession archives each selected record — everything a release
+  would delete, `availability.json` included, never the research siblings —
+  in one directory under
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/`, and
+  writes one accounting line naming every key, its round-number range, its
+  archive subdirectory and the audit calls pending since the last release or
+  restart; zero calls are allowed and reported as zero. The keys are discovered
+  from `git worktree list` of this repository only — a worktree still listed by git remains
+  discoverable even if its directory is gone; one pruned from git metadata and another
+  repository's record are excluded. If a removed worktree path is reused, its old
+  unarchived record has the same key and can continue; follow-up coding-harness-0aht addresses this
+  limit. A plain restart checks records under their locks and reports unreadable or symlinked records;
+  readable active records require supersession. Each selected record is
+  read only under its lock. The next `review-loop` here is a fresh run whose
+  rounds continue after the highest round ever assigned, a later release needs a
+  verdict written after the restart line, and releasing before any fresh round
+  fails without writing: the archived run is history, not something this
+  worktree can release again. The superseded worktree can run `release-loop`: it recognizes
+  the accounting line and records `Loop rows: superseded by <key>` (bead coding-harness-e82i).
 - `triage` — the orchestrator records one already-made decision on the loop
   record: `python3 scripts/stage2.py triage <change> '<row>=<status>'
   '<reason>'` takes one row and one of `taken`, `rejected`, `taken — not a
@@ -1563,10 +1559,20 @@ A drafted change runs in this order:
 2. The orchestrating session reads the whole draft against the change's
    problem.
 3. `python3 scripts/stage2.py spec-review <change>` — Opus 5.5 reviews the
-   spec (phase 2a), its rows into `findings.md`.
-4. A second `draft <change>` works the review's open rows in, once the
-   maintainer has answered every `[AMBIGUITY]` a row raised.
-5. The plan card reaches the maintainer unchanged — the veto stays theirs.
+   spec (phase 2a), its rows into `findings.md`; not for a `spike`.
+4. The orchestrator triages the rows: decisions go to the maintainer one at a
+   time, details it decides with reasons; the maintainer answers every
+   `[AMBIGUITY]` a row raised.
+5. When a row needs a spec edit, a second `draft <change>` works the rows in,
+   and step 3 runs again on the changed spec: draft and review repeat until a
+   current review leaves only settled rows that need no further spec edit, or
+   until the third review round has run.
+6. After the third round one final draft may work the last rows in without a
+   new review; rows still open that are no BLOCKER become named limits in
+   `plan.md`. A BLOCKER, or an `[AMBIGUITY]` whose answer changes the spec,
+   goes to the maintainer, who authorizes a fourth round or has the change
+   re-sliced.
+7. The plan card reaches the maintainer unchanged — the veto stays theirs.
 
 What the runner cannot see: which paths a draft's Codex call reads, and
 whether its sandbox in fact confines its writes. The put-back bounds what git
@@ -1575,6 +1581,64 @@ path outside the worktree, and not the repository's git directory (`.git`:
 hooks, config), which `git restore` and `git clean` never touch although the
 runner commits right after the draft; that residual risk is ADR 0016's to
 state, and the first real draft is a later change's.
+
+### The spec review before the plan card
+
+A `bounded`, `feature` or `architectural` change reaches its plan card, and
+`implement`, only with a current spec review; a `spike` stands outside this
+rule (bead coding-harness-ttic). The rule is enforced where it costs: the
+`implement` verb refuses before any model starts, on every route,
+`--stage2-off` included, and a change implemented earlier faces it again on
+its next `implement`.
+
+- **What counts.** Only a block the runner wrote: an Opus 5.5 block, or a
+  block of the declared fallback reviewer, with readable rows or the exact
+  answer `No finding.`, and the runner's matching `Stage-2 call … ·
+  spec-review` line directly above it. Prose, a refusal, a failed call, a
+  Codex block or a hand-held review counts as no review; one table line that
+  does not parse makes the whole block unreadable.
+- **What makes it current.** The block records the SHA-256 fingerprint of the
+  spec body, everything after the front matter, as the review prompt carried
+  it; a body that differs, an uncommitted edit included, makes the review
+  stale, and a front-matter edit does not. A block without a fingerprint
+  counts only when its day lies before the fixed implementation day written
+  in the runner; it is compared by day with the committer day, in UTC, of the
+  last commit that changed the spec body, and an uncommitted body edit makes
+  it stale.
+- **Open ambiguity.** In the newest qualifying block, a row whose Severity or
+  Finding begins `[AMBIGUITY]` and whose Status begins `open` refuses
+  `implement`, and the refusal names the row. Once no further round can run,
+  the maintainer settles such a row in `decisions.md`, with a question of the
+  change headed `Q-<n> · Ambiguity <row id>` and an answer.
+- **Three rounds.** After the third round one final draft passes without a new
+  review: one changed spec body after the newest qualifying review; a later
+  body change needs a current review again. A fourth round runs only when the
+  change's `decisions.md` holds a question headed `Q-<n> · Fourth spec-review
+  round` that the maintainer answered with an answer beginning `authorized`;
+  no round runs after the fourth, and otherwise the change is re-sliced.
+- **When Opus fails.** A call that exits nonzero, runs over the call limit, or
+  answers empty or unreadably is retried once after the configured pause;
+  then the declared fallback reviews through the runner's Pi on OpenCode Go,
+  the leak check first, and a leak-check BLOCK starts no fallback call. The
+  call limit, the pause and the fallback model, a DeepSeek model admitted on
+  OpenCode Go, stand in one place, the `spec_review` block of
+  `model-endpoints.yaml`. A fallback block is headed
+  `## Phase 2a — fallback <model>, <date>` and keeps the model it records, so
+  switching the declaration never voids it.
+- **The Opus re-check.** A current fallback review is re-checked by Opus in
+  the next day session: the next `spec-review` call on the unchanged spec.
+  The re-check replaces the fallback review in the same round and counts as
+  no new round; a BLOCKER from it after round three goes to the maintainer as
+  above.
+- **The morning inventory.** `python3 scripts/stage2.py
+  --spec-review-inventory` measures every non-archived change folder that
+  holds a `spec.md`, implemented changes included, with the same admission
+  `implement` faces. It lists, each in a group of its own, the changes whose
+  class is missing, invalid or disagreeing; the changes whose spec review is
+  missing, unreadable, stale or ambiguous; and the changes whose newest
+  current review is a fallback, for the Opus re-check. The morning handover
+  includes its output; whether a missing review is caught up is the
+  maintainer's decision, per change.
 
 ### The interactive session (`session`)
 
@@ -1747,8 +1811,15 @@ beside `loop.md` and replaces it in one step. The record is the only memory
 of a run, so a lost one stops the loop rather than starting it over: while a
 review-loop audit line remains unaccounted for in `findings.md` after the last
 release or restart, and no record exists, `review-loop`, `release-loop`
-(also the release inside `review`) and `release-loop --stage-failed` refuse and name the record path they
-expected. A review-loop call that wrote audit lines and then ended without
+(also the release inside `review`), `prepare-loop` and
+`release-loop --stage-failed` refuse. `triage` separately refuses whenever this worktree
+has no record of the change, regardless of pending audit calls. When unaccounted audit calls reveal a missing record, the
+refusal names the expected record path. When active records of the same change stand under other
+worktree keys of this repository in the same state directory, it names every such key.
+The keys are derived from `git worktree list` alone; a listed worktree remains discoverable
+even if its directory is gone. Records of worktrees no longer listed by git, of other
+repositories and of other changes are never named, and
+neither is anything already archived. A review-loop call that wrote audit lines and then ended without
 writing its round appends the runner's **no-round line**, `Loop attempt:
 <date> — no round was written; …`, so a retry after an attempt whose every
 member failed still runs. Each no-round line's `audit calls: N` accounts for
@@ -1765,6 +1836,33 @@ next `review-loop` starts a fresh run. It does not recover the lost record.
 Without a completed round, restart refuses; the maintainer must reconcile
 the missing record. This resolves the lost-record recovery question: the
 existing restart is the way past the refusal when its precondition holds.
+
+A record that is not lost but stands under **another worktree's key** — the
+change was continued in a second worktree of this repository — is never
+adopted by an ordinary verb; each worktree's record stays private, and the
+plain `--restart` refuses while such a record is active, naming its keys. The
+maintainer supersedes it explicitly: `release-loop <change> --restart
+--supersedes <key> --reason <text>`, repeating `--supersedes <key>` in that one call for every active other-worktree key.
+Supersession reads each selected record only under its lock, moves everything
+a release would delete — `availability.json` included — into one unique
+archive directory
+`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2-superseded/<change>@<superseding-digest>@<UTC timestamp>/`, one subdirectory per key, keeps the research state
+at its own key, and then writes one `Loop restarted:` line whose tail begins
+with the fixed clause `superseded record` and names every key, its
+round-number range, its archive subdirectory, the audit calls pending since
+the last release or restart (zero allowed and reported as zero) and the
+reason. An interrupted supersession is completed by repeating the same
+command: the staged archive's manifest carries the complete key set and the
+superseding worktree key, the retry matches its accounting line to the archive
+by the archive directory name, and it completes only that worktree's own key
+set. The next `review-loop` in this worktree is a fresh run; its rounds — and
+every later release's — continue after the highest round ever assigned, a later
+plain restart takes the highest round ever assigned, the clean stop and the
+repair brake read only the rounds after the restart, and a release before the
+first fresh round fails without writing. A record that is genuinely lost —
+its key is not derivable from any listed worktree, or it sits in another state
+directory — is not recovered by this: the command refuses it exactly like any
+other missing record.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
@@ -1861,6 +1959,52 @@ When the live record shadows a released copy in `findings.md`, repair fixes
 only the live row and prints a notice. The released copy stays unchanged: an
 outstanding status there remains outstanding after a successful repair until
 the next `release-loop` rewrites the released block from the record.
+
+Before any model call, repair classifies every selected row by the repository
+paths its `Where` cell names, read the way the checkpoint's own protection
+reads them — case-insensitive prefixes from the committed provenance map and
+the runner-held paths, with the change's own folder exempt. A token counts
+whether it stands bare, in backticks or as the text or target of a Markdown
+link, without a trailing line location, and a directory counts with its
+trailing slash: a bare word that equals a held directory prefix names it,
+whether or not the directory holds a tracked file. An opening bracket, quote
+or backtick whose partner sits on a later token (`(AGENTS.md, rule 9)`) is
+stripped alone. External URLs and paths outside the checkout name
+nothing, an unknown location is never a refusal, and prose names a path only
+by accident: a bare word equal to a tracked directory name does name that
+directory (`prompts`, `templates` and `docs/adr` each resolve to the directory
+with its slash), so `see prompts.` is a held row. A row that names any
+held path is handed to the orchestrator before the call: the runner prints
+the row with its normalized held paths and the reason `runner-held path`,
+appends one dated `Hand steps for the orchestrator` listing — one bullet per
+row with its ID, held paths and reason — to `findings.md` before the attempt
+snapshot, and leaves the row's Status and `Broke a test` cells untouched. A
+row already listed there with the same held paths is reported again but not
+listed again. A held-only run judges "already listed" against the committed
+`findings.md` (`HEAD`), not the working tree: a listing a failed mixed run left
+uncommitted is committed by the next held-only run, and only a run whose held
+rows are all listed in `HEAD` commits nothing new and says so. The listing
+names the file each row's Status is edited in: `findings.md` or the loop
+record with its path. The listing is not a findings table: no later resolution
+reads its bullets as rows. When every selected row is held, the run makes no
+model call and repairs nothing; it runs the document gates over the listing,
+writes its own measured time line when the plan has a `## Time used` heading,
+and exits 0 after the existing checkpoint commits the listing under
+`docs(<change>): hand steps for the orchestrator <ids>`. A red document gate
+exits 1, commits nothing, adds no listing and returns `findings.md` to its
+state before the run. That commit is a
+hand-off record, never a repair: no test ran, and exit 0 does not say a row
+is fixed. A mixed batch dispatches only the committable rows, tells the model
+the held rows are not its work, ignores an answer line whose ids before its
+first colon are all held rows, whatever words surround them, fails a line that
+names a held row together with a taken one (the message names both), and names
+the held rows as hand steps in the commit body while the subject carries only
+the repaired IDs. The orchestrator books each handed row itself from the
+listing: `fixed — tests/<path>::<function>` with its `Broke a test` mark when
+a test shows the repair, `fixed — guard test — tests/<path>::<function>` only
+for a row taken as `taken — guard test — <reason>`, and only a row taken as
+`taken — not a test` may be booked `fixed — not a test — orchestrator hand
+edit <sha>`.
 
 After the model call, verification and answer check, repair checks every
 selected row against its resolved contents and location on disk. If a selected
