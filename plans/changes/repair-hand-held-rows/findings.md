@@ -505,3 +505,31 @@ Stage-2 call, 2026-11-22: review-loop · endpoint opencode-go · model glm-5.3-f
 Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5413 commits, 12 rules.
 
 Runner restoration, 2026-11-23: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5418 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +21 -11
+> - `scripts/stage2.py` +162 -48
+> - `tests/test_stage2.py` +113 -3
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:11933:28: ARG001 Unused function argument: `ctx`
+>       |
+> 11931 |     seen: list[str] = []
+> 11932 |
+> 11933 |     def green(_root: Path, ctx: object, _key: object, _tools: object = None) -> tuple[list[str], str]:
+>       |                            ^^^ ARG001
+> 11934 |         seen.append("gates")
+> 11935 |         return [], "document checks only, no tests ran; result: green"
+>       |
+>
+> Found 1 error.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T060607437338Z-54692eec.md
+> ```
