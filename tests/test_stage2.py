@@ -19864,6 +19864,282 @@ def test_proofs_accept_packing_unchanged_refs(world: World, proof: str) -> None:
     assert outcome is None, outcome
 
 
+MULTILINE_FETCH_HEAD = b"a" * 40 + b"\t\tbranch 'main' of origin\n" + b"b" * 40 + b"\tnot-for-merge\tbranch 'dev'\n"
+
+
+def root_ref_test(*statements: str) -> str:
+    """A named test that runs Python statements inside its private checkout, then asserts the fixed bytes."""
+    body = "".join(f"    {statement}\n" for statement in statements)
+    return (
+        "import os\nimport subprocess\nfrom pathlib import Path\n\n\ndef test_write():\n"
+        + body
+        + '    source = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        + '    assert "value = 2" in source\n'
+    )
+
+
+def plant_private_files(monkeypatch: pytest.MonkeyPatch, files: dict[str, bytes]) -> list[Path]:
+    """Write files into each private store after its setup and before the snapshots; return the destinations."""
+    original = stage2._private_repository
+    destinations: list[Path] = []
+
+    def preparing(root, destination, checkout):
+        original(root, destination, checkout)
+        destinations.append(destination)
+        for name, content in files.items():
+            (destination / ".git" / name).write_bytes(content)
+
+    monkeypatch.setattr(stage2, "_private_repository", preparing)
+    return destinations
+
+
+def write_root_ref_test(world: World, *statements: str) -> str:
+    (world.root / "tests" / "test_write.py").write_text(root_ref_test(*statements), encoding="utf-8")
+    return "tests/test_write.py::test_write"
+
+
+def filesystem_ignores_case(directory: Path) -> bool:
+    probe = directory / "CaseProbe"
+    probe.write_text("x", encoding="utf-8")
+    try:
+        return (directory / "caseprobe").exists()
+    finally:
+        probe.unlink()
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "ORIG_HEAD",
+        "orig_head",
+        "head",
+        "AUTO_MERGE",
+        "BISECT_EXPECTED_REV",
+        "NOTES_MERGE_PARTIAL",
+        "NOTES_MERGE_REF",
+        "MERGE_AUTOSTASH",
+        "FETCH_HEAD",
+        "MERGE_HEAD",
+        "REBASE-HEAD",
+        "Cherry_Pick_Head",
+    ],
+)
+def test_proofs_refuse_created_root_refs(world: World, tmp_path: Path, proof: str, name: str) -> None:
+    """A created root reference is refused and named, whatever its listed spelling."""
+    if name == "head" and filesystem_ignores_case(tmp_path):
+        pytest.skip("a case-insensitive filesystem cannot hold both HEAD and head")
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    selector = write_root_ref_test(world, f"Path('.git', {name!r}).write_bytes(b'x\\n')")
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and name in outcome and selector in outcome, (proof, name, outcome)
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_created_root_ref_by_git(world: World, proof: str) -> None:
+    """The F-10 case: `git update-ref ORIG_HEAD HEAD` inside the named test is refused."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    selector = "tests/test_write.py::test_write"
+    (world.root / "tests" / "test_write.py").write_text(
+        ref_writing_test(("update-ref", "ORIG_HEAD", "HEAD")), encoding="utf-8"
+    )
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "ORIG_HEAD" in outcome and selector in outcome, (proof, outcome)
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_ignore_non_root_look_alikes(world: World, proof: str) -> None:
+    """A non-ASCII look-alike or an unrelated name is no root reference."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    selector = write_root_ref_test(
+        world,
+        "Path('.git', 'BI\\u017fECT_EXPECTED_REV').write_bytes(b'x\\n')",
+        "Path('.git', 'NOT_A_ROOT_REF').write_bytes(b'x\\n')",
+        "Path('.git', 'HEAD_NOT').write_bytes(b'x\\n')",
+    )
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (proof, outcome)
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("mutation", ["later-line", "case-rename"])
+def test_proofs_refuse_changed_multiline_fetch_head(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, mutation: str
+) -> None:
+    """Changing only a later FETCH_HEAD line, or only a root reference's name case, is refused and named."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    plant_private_files(monkeypatch, {"FETCH_HEAD": MULTILINE_FETCH_HEAD})
+    if mutation == "later-line":
+        statement = (
+            "Path('.git', 'FETCH_HEAD').write_bytes(Path('.git', 'FETCH_HEAD').read_bytes().replace(b'dev', b'dex'))"
+        )
+        expected = "FETCH_HEAD"
+    else:
+        statement = "Path('.git', 'FETCH_HEAD').rename(Path('.git', 'fetch_head'))"
+        expected = "fetch_head"
+    selector = write_root_ref_test(world, statement)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and expected in outcome and selector in outcome, (proof, mutation, outcome)
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_refuse_deleted_root_refs(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """Deleting a pre-existing private ORIG_HEAD is refused and named."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    plant_private_files(monkeypatch, {"ORIG_HEAD": b"c" * 40 + b"\n"})
+    selector = write_root_ref_test(world, "Path('.git', 'ORIG_HEAD').unlink()")
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "ORIG_HEAD" in outcome and selector in outcome, (proof, outcome)
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_accept_unchanged_root_refs(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """Unchanged multi-line root references do not by themselves refuse a proof."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    destinations = plant_private_files(
+        monkeypatch, {"FETCH_HEAD": MULTILINE_FETCH_HEAD, "ORIG_HEAD": b"c" * 40 + b"\n"}
+    )
+    outcome = run_proof(world, proof, "tests/test_fix.py::test_fix" if proof == "fixed" else RED_SELECTOR, baseline)
+    assert outcome is None, (proof, outcome)
+    assert destinations and not destinations[0].parent.exists()
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+@pytest.mark.parametrize("kind", ["fifo", "symlink", "directory", "unreadable"])
+@pytest.mark.parametrize("when", ["before", "after"])
+def test_proofs_refuse_unsafe_root_refs(
+    world: World, monkeypatch: pytest.MonkeyPatch, proof: str, kind: str, when: str
+) -> None:
+    """A FIFO, link, directory or unreadable ORIG_HEAD is refused without blocking, and the store goes."""
+    if kind == "unreadable" and hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root reads unreadable files")
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    creation = {
+        "fifo": "os.mkfifo('.git/ORIG_HEAD')",
+        "symlink": "os.symlink('HEAD', '.git/ORIG_HEAD')",
+        "directory": "os.mkdir('.git/ORIG_HEAD')",
+        "unreadable": "Path('.git/ORIG_HEAD').write_bytes(b'x\\n'); os.chmod('.git/ORIG_HEAD', 0)",
+    }[kind]
+    if when == "before":
+        original = stage2._private_repository
+        destinations: list[Path] = []
+
+        def preparing(root, destination, checkout):
+            original(root, destination, checkout)
+            destinations.append(destination)
+            target = destination / ".git" / "ORIG_HEAD"
+            if kind == "fifo":
+                os.mkfifo(target)
+            elif kind == "symlink":
+                os.symlink("HEAD", target)
+            elif kind == "directory":
+                target.mkdir()
+            else:
+                target.write_bytes(b"x\n")
+                target.chmod(0)
+
+        monkeypatch.setattr(stage2, "_private_repository", preparing)
+        selector = write_root_ref_test(world, "pass")
+    else:
+        destinations = []
+        original = stage2._private_repository
+
+        def recording(root, destination, checkout):
+            original(root, destination, checkout)
+            destinations.append(destination)
+
+        monkeypatch.setattr(stage2, "_private_repository", recording)
+        selector = write_root_ref_test(world, creation)
+    expired = []
+
+    def deadline(_signum, _frame):
+        expired.append(True)
+        raise TimeoutError("root reference measurement blocked")
+
+    previous = signal.signal(signal.SIGALRM, deadline)
+    try:
+        signal.setitimer(signal.ITIMER_REAL, 20)
+        outcome = run_proof(world, proof, selector, baseline)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+    assert not expired, "root reference measurement blocked"
+    assert outcome is not None and "ORIG_HEAD" in outcome, (proof, kind, when, outcome)
+    assert destinations and not destinations[0].parent.exists()
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_proofs_ignore_source_root_ref_changes(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """A source FETCH_HEAD written during a proof neither refuses it nor is written by it."""
+    baseline = repair_world(world)
+    selector = plant_proof(world, proof)
+    source_ref = world.root / ".git" / "FETCH_HEAD"
+    original = stage2._private_repository
+
+    def preparing(root, destination, checkout):
+        original(root, destination, checkout)
+        source_ref.write_bytes(MULTILINE_FETCH_HEAD)
+
+    monkeypatch.setattr(stage2, "_private_repository", preparing)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is None, (proof, outcome)
+    assert source_ref.read_bytes() == MULTILINE_FETCH_HEAD
+
+
+@pytest.mark.parametrize("proof", ["baseline", "fixed"])
+def test_private_ref_snapshots_measure_root_refs(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
+    """Both private snapshots (before and after the named test) hold the root references as complete bytes."""
+    baseline = repair_world(world)
+    plant_proof(world, proof)
+    plant_private_files(monkeypatch, {"FETCH_HEAD": MULTILINE_FETCH_HEAD})
+    selector = write_root_ref_test(
+        world,
+        "Path('.git', 'ORIG_HEAD').write_bytes(b'x\\n')",
+        "Path('.git', 'FETCH_HEAD').write_bytes(Path('.git', 'FETCH_HEAD').read_bytes().replace(b'dev', b'dex'))",
+    )
+    original = stage2._proof_ref_targets
+    snapshots: list[dict] = []
+
+    def measuring(root):
+        result = original(root)
+        snapshots.append(result)
+        return result
+
+    monkeypatch.setattr(stage2, "_proof_ref_targets", measuring)
+    outcome = run_proof(world, proof, selector, baseline)
+    assert outcome is not None and "ORIG_HEAD" in outcome and "FETCH_HEAD" in outcome, (proof, outcome)
+    assert len(snapshots) == 2
+    before, after = snapshots
+    assert "ORIG_HEAD" not in before and "ORIG_HEAD" in after
+    assert before["FETCH_HEAD"] != after["FETCH_HEAD"]
+    assert before["HEAD"][0] in ("object", "symbolic")
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_proof_setup_ignores_source_root_refs(world: World, tmp_path: Path, linked: bool) -> None:
+    """Setup reads no source root reference: the private store starts with HEAD as its only one."""
+    baseline = repair_world(world)
+    source = world.root
+    if linked:
+        source = tmp_path / "linked"
+        git(world.root, "worktree", "add", "--detach", str(source), baseline)
+    gitdir = Path(git(source, "rev-parse", "--path-format=absolute", "--git-dir"))
+    (gitdir / "ORIG_HEAD").write_bytes(b"not an object id\n" + MULTILINE_FETCH_HEAD)
+    (gitdir / "FETCH_HEAD").write_bytes(MULTILINE_FETCH_HEAD)
+    destination = tmp_path / "private"
+    stage2._private_repository(source, destination, baseline)
+    names = [entry.name for entry in (destination / ".git").iterdir() if stage2._is_root_ref_name(entry.name)]
+    assert names == ["HEAD"], names
+    assert (gitdir / "FETCH_HEAD").read_bytes() == MULTILINE_FETCH_HEAD
+
+
 @pytest.mark.parametrize("proof", ["baseline", "fixed"])
 def test_proofs_refuse_fifo_refs_promptly(world: World, monkeypatch: pytest.MonkeyPatch, proof: str) -> None:
     """F-9: a nonregular ref is named and cleaned up without reading a blocking FIFO."""

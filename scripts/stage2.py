@@ -9729,6 +9729,16 @@ def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
     if not regular(store / "HEAD"):
         raise Refused("the private reference HEAD is missing")
     names.add("HEAD")
+    root_files: dict[str, tuple[str, str]] = {}
+    for entry in sorted(store.iterdir(), key=lambda item: item.name):
+        if entry.name == "HEAD" or not _is_root_ref_name(entry.name):
+            continue
+        if not regular(entry):
+            continue
+        try:
+            root_files[entry.name] = ("bytes", entry.read_bytes().hex())
+        except OSError as error:
+            raise Refused(f"the private root reference could not be read: {entry.name} ({error.strerror})") from error
     packed = store / "packed-refs"
     if regular(packed):
         for line in packed.read_text(encoding="utf-8").splitlines():
@@ -9746,7 +9756,32 @@ def _proof_ref_targets(root: Path) -> dict[str, tuple[str, str]]:
         else:
             target = _git_output(root, "rev-parse", "--verify", "-q", name).strip()
             snapshot[name] = ("object", target)
+    snapshot.update(root_files)
     return snapshot
+
+
+def _is_root_ref_name(name: str) -> bool:
+    """Whether a direct child of the Git directory is a root reference by the spec's ASCII-only rule."""
+    if not name.isascii():
+        return False
+    upper = name.upper()
+    if upper in _ROOT_REF_NAMES:
+        return True
+    return re.fullmatch(r"[A-Z_-]*_HEAD", upper) is not None
+
+
+_ROOT_REF_NAMES = frozenset(
+    {
+        "HEAD",
+        "AUTO_MERGE",
+        "BISECT_EXPECTED_REV",
+        "NOTES_MERGE_PARTIAL",
+        "NOTES_MERGE_REF",
+        "MERGE_AUTOSTASH",
+        "FETCH_HEAD",
+        "MERGE_HEAD",
+    }
+)
 
 
 def _proof_reference_guard(

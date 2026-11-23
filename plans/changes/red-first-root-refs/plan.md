@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-dk0h
@@ -47,18 +47,23 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_proofs_refuse_created_root_refs — a matching irregular, hyphenated or differently cased name is accepted, its listed spelling is missing, or a non-ASCII look-alike is refused.
-- 2: not yet written tests/test_stage2.py::test_proofs_refuse_changed_multiline_fetch_head — changing a later FETCH_HEAD line or only a root-reference name's case is accepted or unnamed.
-- 3: not yet written tests/test_stage2.py::test_proofs_refuse_deleted_root_refs — deletion of a pre-existing private ORIG_HEAD is accepted or unnamed.
-- 4: not yet written tests/test_stage2.py::test_proofs_accept_unchanged_root_refs — an unchanged multi-line FETCH_HEAD refuses an otherwise qualifying run.
-- 5: not yet written tests/test_stage2.py::test_proofs_refuse_unsafe_root_refs — FIFO, symlink or read failure is followed, blocks, is accepted, or prevents cleanup.
-- 6: not yet written tests/test_stage2.py::test_proofs_ignore_source_root_ref_changes — a concurrent source FETCH_HEAD write invalidates a private proof or the proof writes the source.
+- 1: tests/test_stage2.py::test_proofs_refuse_created_root_refs — a matching irregular, hyphenated or differently cased name is accepted, its listed spelling is missing, or a non-ASCII look-alike is refused.
+- 2: tests/test_stage2.py::test_proofs_refuse_changed_multiline_fetch_head — changing a later FETCH_HEAD line or only a root-reference name's case is accepted or unnamed.
+- 3: tests/test_stage2.py::test_proofs_refuse_deleted_root_refs — deletion of a pre-existing private ORIG_HEAD is accepted or unnamed.
+- 4: tests/test_stage2.py::test_proofs_accept_unchanged_root_refs — an unchanged multi-line FETCH_HEAD refuses an otherwise qualifying run.
+- 5: tests/test_stage2.py::test_proofs_refuse_unsafe_root_refs — FIFO, symlink or read failure is followed, blocks, is accepted, or prevents cleanup.
+- 6: tests/test_stage2.py::test_proofs_ignore_source_root_ref_changes — a concurrent source FETCH_HEAD write invalidates a private proof or the proof writes the source.
 - 7: tests/test_stage2.py::test_proofs_accept_packing_unchanged_refs — packing logically unchanged ordinary refs refuses the proof.
-- 8: not yet written tests/test_stage2.py::test_private_ref_snapshots_measure_root_refs — either snapshot misses creation or a later FETCH_HEAD line change.
-- 9: not yet written tests/test_stage2.py::test_proof_setup_ignores_source_root_refs — a source ORIG_HEAD or multi-line FETCH_HEAD is copied into the private store, or setup fails on either, or the private store starts with another root reference.
+- 8: tests/test_stage2.py::test_private_ref_snapshots_measure_root_refs — either snapshot misses creation or a later FETCH_HEAD line change.
+- 9: tests/test_stage2.py::test_proof_setup_ignores_source_root_refs — a source ORIG_HEAD or multi-line FETCH_HEAD is copied into the private store, or setup fails on either, or the private store starts with another root reference.
+
+## Runner route — 2026-11-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4).
 
 ## Time used
 
 2026-11-22 08:31:48–08:34:17 UTC, 149 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-22 08:39:49–08:41:47 UTC, 118 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-22 08:48:40–08:54:33 UTC, 353 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 21:29:34–21:31:15 UTC, 101 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

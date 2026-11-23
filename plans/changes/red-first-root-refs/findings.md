@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-22
 created: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-dk0h
@@ -56,3 +56,98 @@ Stage-2 call, 2026-11-22: draft · attempt 2 · route codex-repair · endpoint o
 > the attempt is saved at refs/stage2/attempts/red-first-root-refs/draft-attempt-2-20261122T084840266546Z (beac2538dbf1); `git diff 0b8664407e49 refs/stage2/attempts/red-first-root-refs/draft-attempt-2-20261122T084840266546Z` shows it.
 
 Stage-2 call, 2026-11-22: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 1171 files, 5361 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4) · leak check clean over 1188 files, 5575 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-root-refs/plan.md` +8 -8
+> - `scripts/stage2.py` +35 -0
+> - `tests/test_stage2.py` +276 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>     @pytest.mark.parametrize(
+>         "name",
+>         [
+>             "ORIG_HEAD",
+>             "orig_head",
+>             "head",
+>             "AUTO_MERGE",
+>             "BISECT_EXPECTED_REV",
+>             "NOTES_MERGE_PARTIAL",
+>             "NOTES_MERGE_REF",
+>             "MERGE_AUTOSTASH",
+>             "FETCH_HEAD",
+>             "MERGE_HEAD",
+>             "REBASE-HEAD",
+>             "Cherry_Pick_Head",
+>         ],
+>     )
+>     def test_proofs_refuse_created_root_refs(world: World, tmp_path: Path, proof: str, name: str) -> None:
+>         """A created root reference is refused and named, whatever its listed spelling."""
+>         if name == "head" and filesystem_ignores_case(tmp_path):
+>             pytest.skip("a case-insensitive filesystem cannot hold both HEAD and head")
+>         baseline = repair_world(world)
+>         plant_proof(world, proof)
+>         selector = write_root_ref_test(world, f"Path('.git', {name!r}).write_bytes(b'x\\n')")
+>         outcome = run_proof(world, proof, selector, baseline)
+> >       assert outcome is not None and name in outcome and selector in outcome, (proof, name, outcome)
+> E       AssertionError: ('baseline', 'REBASE-HEAD', None)
+> E       assert (None is not None)
+>
+> tests/test_stage2.py:19936: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> ___________ test_proofs_refuse_created_root_refs[REBASE-HEAD-fixed] ____________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/red-first-root-refs/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3466/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3466/popen-gw1/test_proofs_refuse_created_roo2')
+> proof = 'fixed', name = 'REBASE-HEAD'
+>
+>     @pytest.mark.parametrize("proof", ["baseline", "fixed"])
+>     @pytest.mark.parametrize(
+>         "name",
+>         [
+>             "ORIG_HEAD",
+>             "orig_head",
+>             "head",
+>             "AUTO_MERGE",
+>             "BISECT_EXPECTED_REV",
+>             "NOTES_MERGE_PARTIAL",
+>             "NOTES_MERGE_REF",
+>             "MERGE_AUTOSTASH",
+>             "FETCH_HEAD",
+>             "MERGE_HEAD",
+>             "REBASE-HEAD",
+>             "Cherry_Pick_Head",
+>         ],
+>     )
+>     def test_proofs_refuse_created_root_refs(world: World, tmp_path: Path, proof: str, name: str) -> None:
+>         """A created root reference is refused and named, whatever its listed spelling."""
+>         if name == "head" and filesystem_ignores_case(tmp_path):
+>             pytest.skip("a case-insensitive filesystem cannot hold both HEAD and head")
+>         baseline = repair_world(world)
+>         plant_proof(world, proof)
+>         selector = write_root_ref_test(world, f"Path('.git', {name!r}).write_bytes(b'x\\n')")
+>         outcome = run_proof(world, proof, selector, baseline)
+> >       assert outcome is not None and name in outcome and selector in outcome, (proof, name, outcome)
+> E       AssertionError: ('fixed', 'REBASE-HEAD', None)
+> E       assert (None is not None)
+>
+> tests/test_stage2.py:19936: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_proofs_refuse_created_root_refs[REBASE-HEAD-baseline]
+> FAILED tests/test_stage2.py::test_proofs_refuse_created_root_refs[REBASE-HEAD-fixed]
+> 2 failed, 56 passed, 2 skipped in 15.95s
+> ```
