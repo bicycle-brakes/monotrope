@@ -98,3 +98,18 @@ context: |
   Architecture change: a retry_after field in the lane status file, read by the lane watch.
 
 In the context of a parked draft that should be retried after five hours, facing an operating-system timer or a recorded time, we decided the runner records retry_after where every harness can read it and the lane watch starts the retry, to achieve a harness-neutral trigger without a process of its own, accepting that the retry waits for the next watch. — 2026-11-23
+
+## Q-5 · Who reviews a spec that Opus drafted
+
+asked: 2026-11-23
+answer: A — the phase-2a review stays with Opus 5.5 in a fresh session without the draft's history; the review record says visibly that draft and review came from the same vendor; the second view comes from the review loop's OpenCode Go models before any merge.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the reviewer of a spec drafted on the new Opus route.
+  Intention: since PR #432 (coding-harness-ttic) the Opus spec review is mandatory before implement; with the Stage-1 draft route Opus could review its own draft, and one model tends to miss its own blind spots.
+  Today: Codex or GLM drafts, Opus reviews.
+  Repository change: Options: A Opus reviews in a fresh session, marked same-vendor, the loop supplies the second view; B another model (for example DeepSeek through OpenCode Go) reviews in phase 2a, an ADR 0016 addendum; C the draft waits for Codex to read it before review.
+  Architecture change: none beyond the ADR 0016 addendum of Q-1.
+
+In the context of a spec drafted by the same model that reviews it, facing a same-vendor review, a different reviewer or a wait for Codex, we decided Opus reviews in a fresh session with a visible same-vendor mark and the loop supplies the second view, to achieve no extra stage when routes fail, accepting a phase-2a review without a second vendor for these drafts. — 2026-11-23
