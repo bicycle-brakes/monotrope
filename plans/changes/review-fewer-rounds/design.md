@@ -49,15 +49,17 @@ The merge of the decision PR decides this proposal.
   the declared eligible substitute list and preserve successful results.
 - The orchestrator triages the union and records group identities, origin,
   lens, severity, mechanism and disposition; the runner computes diagnostics
-  from that evidence. An incidental out-of-lens BLOCKER remains actionable,
+  from that evidence. Any incidental out-of-lens row remains actionable when accepted,
   but does not pollute any lens observation.
 - Eligible full changes have one independent free second round in shadow,
-  except after an all-repaired MINOR-only first round. Initial free seating is
-  the Q-14 three-model mixed-family roster; no fixed Terra lens seat is implied.
+  except after a nonempty accepted MINOR-only first round whose required
+  repairs are complete. Initial free seating draws three distinct families
+  with a recorded seed from the reachable pool, excluding Codex.
   A bounded change goes from the first round and repair to phase 6.
 - Phase 6 enforces a durable launch budget, a recorded night exception and the
-  one repair-specific maintainer authorization. Failed or unknown launches
-  cannot silently release reservations or reset the count.
+  repair-specific maintainer authorizations. The total exception budget is
+  unresolved in the spec and blocks implementation of this boundary. Failed
+  or unknown launches cannot release reservations or reset the count.
 - Markdownlint blocks only errors on lines written relative to the merge base
   with main; local and hosted callers use the same rule. Artifact formalities
   use their existing or planned checks without claiming semantic proof.
@@ -73,10 +75,11 @@ The merge of the decision PR decides this proposal.
   successful outputs and failures. The runner persists it under the existing
   run lock and refuses mismatched resume input.
 - Triage: raw row and source seat, accepted/rejected disposition, canonical
-  defect and mechanism IDs, reporting and primary lenses, and repair origin.
+  defect and mechanism IDs, separately recorded mechanism, trigger and invariant,
+  reporting and primary lenses, and repair origin.
   The orchestrator assigns these; the runner does not pretend to decide
   semantic identity. The record is released to `findings.md` after verdict.
-- Observation: per-lens f1, f2, S, singleton share, two-seat jackknife and
+- Observation: per-lens f1, f2, S, singleton share, seat-count-aware jackknife and
   Chao where defined; per-model/per-lens accepted share and call/verify
   measurements. The runner labels unavailable values and preserves failed
   attempts. It uses the observed number of seats, never a three-seat formula
@@ -123,7 +126,7 @@ flowchart LR
 **Changed**
 
 - New runs use central policy and bounded review; legacy runs keep their
-  frozen prior schedule.
+  frozen prior settings under the existing two-round house rule.
 
 **Removed**
 

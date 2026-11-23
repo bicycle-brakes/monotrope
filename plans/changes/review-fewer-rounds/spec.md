@@ -59,7 +59,9 @@ This is a proposal until its decision pull request merges.
   implementer family comes from its recorded model ID, not its provider.
 - **Complete shadow change:** a full, non-text-only, non-bounded change with
   every required focused and free-round seat, triage and phase-6 verdict
-  recorded; early-ended or stopped changes are reported but do not count.
+  recorded; a phase-6 stop with unresolved findings is a verdict. Early-ended
+  changes and runs stopped by the maintainer or an outage are reported but do
+  not count.
 - **Shadow:** record per-lens signals; eligible full changes receive the free
   second round except when the configured minor-only early end applies.
 
@@ -76,7 +78,7 @@ This is a proposal until its decision pull request merges.
    independent read-only calls, including for bounded changes: fixed
    `deepseek-v4.1-flash` and one randomly drawn reachable challenger.
    *Refuted by:* a missing seat, duplicate models, a challenger outside the
-   configured reachable pool, an unrecorded draw and seed, shared answers, or
+   configured reachable pool, an unrecorded independent per-lens draw and seed, shared answers, or
    any phase-4b call for a text-only change.
    *Basis:* decisions.md#Q-19, decisions.md#Q-24, decisions.md#Q-30.
 
@@ -106,7 +108,8 @@ This is a proposal until its decision pull request merges.
    *Basis:* decisions.md#Q-4, decisions.md#Q-3.
 
 7. When reviewer rows are triaged, their union retains every source row,
-   seat and lens, disposition, and an orchestrator-assigned defect group.
+   seat and lens, disposition, and an orchestrator-assigned defect group with
+   separately recorded mechanism, trigger and violated invariant.
    *Refuted by:* majority voting dropping a singleton, a rejected row counted
    as a capture, a missing source row, or unrelated defects grouped merely
    because they share a location or category.
@@ -123,7 +126,8 @@ This is a proposal until its decision pull request merges.
 9. While shadow mode is active, an eligible full change receives one free
    second round over the whole post-repair diff regardless of per-lens signals,
    except when round 1 brought at least one finding, all findings were MINOR,
-   and all are repaired.
+   and every MINOR requiring repair under criterion 13 is repaired; only
+   accepted findings count, including at least one accepted MINOR.
    *Refuted by:* focused lens prompts in round 2, a low singleton share alone
    skipping it, or a second round despite the configured minor-only early end.
    *Basis:* decisions.md#Q-3, decisions.md#Q-12, decisions.md#Q-19, decisions.md#Q-20, decisions.md#Q-24.
@@ -152,21 +156,24 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-6.
 
 13. When triage finds MINOR issues, logic, state, tests, security and false
-    statements require repair; maintainability and clear style go to weekly
-    clean-up unless fixed in an already required repair; taste is a PR limit.
+    statements and any MINOR outside the deferred categories require repair;
+    maintainability and clear style go to weekly clean-up unless fixed in an
+    already required repair; taste is a PR limit.
     *Refuted by:* leaving a logic MINOR unrepaired, maintainability alone
     requiring a repair, or treating a security defect as style.
     *Basis:* decisions.md#Q-6, decisions.md#Q-7, decisions.md#Q-28.
 
 14. When Markdown lint reports an error on a line written by the change
-    relative to the merge base with main, it blocks locally and in CI.
+    relative to the merge base of HEAD and the target base commit, it blocks
+    locally and in CI.
     *Refuted by:* a new-line error passing, an untouched legacy-line error
     blocking, or local and CI comparisons using different bases.
     *Basis:* decisions.md#Q-8, decisions.md#Q-29.
 
 15. When phase 6 reaches its configured first review and one re-check, it
     stops with unresolved rows and a concrete proposal, subject to the
-    documented night exception or one maintainer-authorized repair re-check.
+    documented night exception or a maintainer-authorized repair re-check;
+    the total number of exceptions remains an open decision below.
     *Refuted by:* an ordinary third review without either authorization, a
     night exception without one evidenced repaired mechanism, replaying an
     authorization, loss or release resetting the budget, or a stopped run
@@ -174,13 +181,14 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-5, decisions.md#Q-27.
 
 16. When two confirmed findings in phase-6 re-checks share a recorded
-    defective mechanism, the next repair instruction requires a mechanism fix.
+    defective mechanism, the next repair instruction for that mechanism,
+    including a night or maintainer-chosen repair, requires a mechanism fix.
     *Refuted by:* linked findings whose repair instruction permits only the
     latest case, or an unreviewed repair treated as reviewed.
     *Basis:* decisions.md#Q-5, decisions.md#Q-27.
 
-17. If a required seat fails, a declared eligible substitute is attempted
-    on the same complete input, and the failure and substitution are reported.
+17. If a required seat fails, one retry precedes eligible substitution on
+    the same complete input, and all attempts and substitutions are reported.
     *Refuted by:* a failed or truncated seat counted as clean, an undeclared
     or family-ineligible replacement, replaying successful seats, or completing
     a round without the required successful seats and full input.
@@ -207,10 +215,11 @@ This is a proposal until its decision pull request merges.
     threshold was approved here.
     *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-7, decisions.md#Q-12, decisions.md#Q-14.
 
-21. When a week has clear style or maintainability MINOR findings left standing,
-    the orchestrator gathers them in one clean-up bead for its own pull request.
-    *Refuted by:* clear findings being discarded, taste-only proposals being
-    required repairs, or style alone adding a round to their source change.
+21. When an ISO week closes, a report identifies every still-deferred clear
+    style or maintainability MINOR not named in that week’s clean-up bead,
+    for the orchestrator to gather into one bead and its own pull request.
+    *Refuted by:* an uncollected deferred source row omitted from the report,
+    a fixed row reported as outstanding, or a taste-only row included.
     *Basis:* decisions.md#Q-7, decisions.md#Q-28.
 
 22. When artefact formalities are removed from reviewer duties, the spec's
@@ -236,11 +245,11 @@ This is a proposal until its decision pull request merges.
     *Basis:* decisions.md#Q-4, decisions.md#Q-16.
 
 25. When the free second round runs under the initial policy, three distinct
-    models from several model families independently read the whole diff once,
-    with at most one member of the implementer's family.
-    *Refuted by:* fifteen repeated lens calls, fewer or more than three
-    required calls, shared answers, one family filling the roster, or two
-    implementer-family members.
+    models from three families independently read the whole diff, drawn with
+    a recorded seed from the reachable configured pool, excluding Codex and
+    permitting at most one member of the implementer’s family.
+    *Refuted by:* a missing seat, an ineligible or unrecorded draw, shared
+    answers, duplicate families, or two implementer-family members.
     *Basis:* decisions.md#Q-14, decisions.md#Q-8.
 
 26. When a bounded change completes its two-seat focused round and required repair,
@@ -248,17 +257,20 @@ This is a proposal until its decision pull request merges.
     *Refuted by:* scheduling a second loop round for a bounded change.
     *Basis:* decisions.md#Q-19.
 
-27. When a reviewer reports findings, each has a file and line as evidence.
-    *Refuted by:* accepting a finding without either location component.
+27. When a phase-4b reviewer reports findings, each accepted row has a file
+    and line as evidence, with line 0 for an absent item.
+    *Refuted by:* accepting a row without either location component, or
+    losing valid rows because another row lacks a location.
     *Basis:* decisions.md#Q-21.
 
-28. When a reviewer reports more than the configured finding cap, every
-    finding above that cap has severity MAJOR or BLOCKER.
+28. When a phase-4b reviewer reports findings, at most the configured number
+    of MINOR rows per complete seat answer are accepted, with MAJOR and
+    BLOCKER rows exempt and rows ordered by severity.
     *Refuted by:* accepting a sixth MINOR with the initial cap of five, or
     rejecting a sixth MAJOR solely because of the cap.
     *Basis:* decisions.md#Q-21, decisions.md#Q-24.
 
-29. When a reviewer prepares its response, it performs one self-check against
+29. When a phase-4b reviewer prepares its response, it performs one self-check against
     the code and drops findings it cannot evidence.
     *Refuted by:* a reviewer instruction omitting the check or asking it to
     retain a finding it cannot substantiate.
@@ -268,6 +280,58 @@ This is a proposal until its decision pull request merges.
     phase 6.
     *Refuted by:* any phase-4b reviewer call for a text-only change.
     *Basis:* decisions.md#Q-19.
+
+## Policy contract
+
+The central `review_loop` declaration has the following independently
+validated settings. Changing a valid value changes scheduling or the named
+behavior without editing code; invalid, unknown, duplicated, contradictory or
+unresolvable values fail before any model call. This initial contract supports
+one focused round and at most one free round; increasing these ranges is a
+separate change, not a silently accepted setting.
+
+| Key | Type and allowed values | Initial value and effect |
+|---|---|---|
+| `lenses` | non-empty ordered list of distinct declared lens IDs, with sourced questions | the five approved lenses; each gets a focused group |
+| `lens_seats` | integer 1–3 | 2; one fixed seat and remaining independently drawn distinct challengers |
+| `rounds` | integer 1–2 | 2; 1 omits the free round; 2 permits it under class, trigger and early-end rules |
+| `round_order` | ordered list `focused` or `focused, free`, containing at least `rounds` entries | `focused, free`; the first `rounds` entries run; invalid sequences fail |
+| `free_seats` | integer 1–3 | 3; independent free-round seats with distinct families, at most one implementer-family seat and none when only one seat |
+| `fixed_model` | admitted model ID with declared family and dated precision source | `deepseek-v4.1-flash`; fixed focused seat |
+| `challenger_pool` | non-empty list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set; filter by the availability report and draw independently per lens, excluding selected IDs |
+| `free_pool` | non-empty list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set excluding Codex; filter by availability and draw distinct models and families |
+| `substitutes` | ordered list of distinct admitted model IDs with known families | the admitted `opencode-go` `modelle` set in its declared order; filter by availability and eligibility |
+| `finding_cap` | integer 1–20 | 5 MINORs per consolidated seat answer |
+| `minor_early_end` | boolean | true; apply criterion 9; false disables this exception |
+| `mode` | `shadow` or `live` | `shadow`; `live` additionally requires a resolvable maintainer decision and calibration report |
+| `trigger` | `singleton_share` | singleton share; compare using the explicitly approved comparison and threshold in live mode |
+| `comparison` | `gt` or `ge` | `gt`; compares share to threshold, never jackknife completeness |
+| `threshold` | number 0–1 | 0.5 as shadow candidate only; live use needs explicit maintainer approval |
+| `phase6_rechecks` | integer 0–1 | 1 ordinary re-check after the initial review; exceptional checks follow criterion 15 |
+
+The validator checks all model references, families, source citations, and
+whether the settings can provide the requested distinct seats; runtime checks
+current reachability and waits if a complete roster is unavailable. Tests must
+change each key to a valid alternative and observe its effect at the policy
+boundary; where a key has only one supported value, test rejection of another
+value. For one seat no overlap estimator is reported; for two use criterion 8;
+for three use the same `S`, `f1`, `f2`, singleton share and first-order
+jackknife `S + 2*f1/3`, with Chao diagnostic only when `f2 > 0`. Missing or
+zero-denominator observations are explicit, not fabricated.
+
+A failed seat retries the same model once. A failed challenger is redrawn
+from remaining eligible reachable members of both the challenger pool and the
+declared substitute list; other seats try eligible substitutes in declared order. Attempts, draw seeds and order are recorded.
+When no candidate succeeds, the run persists a waiting state, resumes on the
+next invocation without replaying successful seats and is reported stopped
+after five hours; stopping does not count an incomplete run as clean.
+
+Phase-4b answer validation drops and reports only offending locationless or
+excess MINOR rows; valid rows and the successful seat remain. An absent item
+uses its expected path and line `0`. These answer-form rules do not change
+phase 6. CI uses the merge base of HEAD with the pull request's base commit;
+locally it uses `git merge-base HEAD origin/main` after fetching that base.
+The same base commit is required for equivalent results.
 
 ## Non-goals
 
@@ -328,9 +392,11 @@ three-inspector jackknife data, not a calibrated error rate for this repo. Zero
 accepted findings are weak evidence. During shadow both estimators are
 diagnostics; eligible full changes get the free second round subject to the
 minor-only early end. Bounded changes have two-seat overlap but do not get the free second round
-(Q-19 and Q-30). A failed seat is replaced from the declared list; when no
-eligible replacement succeeds, completion waits with the evidence retained. Existing legacy snapshots retain their old semantics until completed or
-explicitly restarted by the maintainer.
+(Q-19 and Q-30). A failed seat is retried and replaced under the policy contract; when no
+eligible replacement succeeds, completion waits with the evidence retained. Legacy snapshots are those created before this policy merges; their frozen
+settings remain authoritative and the existing two-round house rule applies
+until completion or an explicit restart. Legacy ladder settings remain solely
+for those snapshots, not as a second authority for fresh runs.
 
 ## Definition of Done
 
@@ -365,8 +431,25 @@ disclosed in the PR, and it applies to new runs after merge. The runtime list be
 
 ## Open decisions
 
-None open. The following reversible details make the answered rules
-observable and can be changed before implementation:
+[DECISION] **Additional final-review checks after a stop**
+
+Topic: Wie oft nach einem Stopp eine weitere Abschlussprüfung stattfinden darf.
+Intention: Eine reparierte Änderung soll geprüft sein, ohne die vereinbarte Begrenzung unbeabsichtigt aufzuheben.
+Today: Die beantwortete Frage Q-27 erlaubt nach einer gewählten Mechanismusreparatur genau eine weitere Prüfung; der vorläufige Befund S2-12 begrenzt alle Ausnahmen zusammen auf eine pro Änderung.
+Repository change: Die Ablaufsteuerung zählt Ausnahmen und lässt weitere Prüfungen entsprechend zu oder hält an.
+Architecture change: Der vorhandene Prüfablauf bleibt; nur seine dauerhaft gespeicherte Grenze wird festgelegt.
+
+Goal in one sentence: Festlegen, welche zusätzliche Abschlussprüfung nach einem erneuten Stopp möglich ist.
+Options: **Eine Ausnahme insgesamt** — nach einer Nacht- oder ausdrücklich gewählten Zusatzprüfung ist keine weitere möglich; **eine je bestätigter Reparatur** — jede erneute ausdrückliche Wahl erlaubt genau eine Prüfung dieser Reparatur.
+Recommendation: Eine je bestätigter Reparatur, weil Q-27 eine ausdrücklich gewählte Reparatur zur Prüfung zulässt und die Grenze danach wieder gilt.
+If you say "ok": Jede neue ausdrückliche Wahl einer Mechanismusreparatur erlaubt genau eine zugehörige Prüfung; die Nacht-Ausnahme bleibt einmalig und keine Freigabe ist wiederverwendbar.
+What is lost: Die andere Wahl hätte eine absolute Obergrenze für zusätzliche Prüfungen.
+Downside you accept: Eine Ausnahme insgesamt kann eine später gewählte Reparatur ungeprüft lassen; eine je bestätigter Reparatur erlaubt bei wiederholter Zustimmung weitere Prüfungen und Kosten.
+
+Welche dieser Folgen akzeptierst du?
+
+The following reversible details make the answered rules observable and can
+be changed before implementation:
 
 - `[DETAIL]` The appetite is 12 hours, including repairs: it is a stop, not
   a prediction; no recorded answer gives a different limit.
@@ -377,20 +460,26 @@ observable and can be changed before implementation:
   aggregate is still the best per-lens value. The report compares observed
   per-model and per-lens shares as accepted rows divided by all triaged rows,
   with sample counts and undefined for zero rows; the maintainer changes the
-  seat (Q-30). Compare only observations on the same lens and report an
-  observed overtake when the challenger share exceeds the fixed seat share.
+  seat (Q-30). Compare cumulative observations on the same lens since the
+  fixed seat was set; flag an overtake only when both models have at least
+  20 triaged rows on that lens and the challenger share is higher.
 - `[DETAIL]` Model family means weight origin, declared per model ID; an
   unknown implementer or reviewer family refuses seating. This distinguishes
-  OpenAI model IDs from their serving endpoint and makes Q-8 checkable.
+  OpenAI model IDs from their serving endpoint and makes Q-8 checkable. The
+  implementer is the recorded phase-4 implementer; repair models do not widen
+  the family restriction.
 - `[DETAIL]` The orchestrator assigns a stable defect ID and records raw row,
   reporting seat and lens, primary defect lens, disposition and mechanism in
   run evidence released into findings. A group requires the same mechanism,
-  trigger and violated invariant; each seat counts once per lens. A BLOCKER
-  outside its reporting lens is triaged and repaired but excluded from lens
-  observations. Semantic grouping is a human judgment, not machine proof.
+  trigger and violated invariant, recorded separately; a check rejects groups
+  with mismatched recorded values. Each seat counts once per lens. Any row
+  outside its reporting lens is triaged and repaired when taken but excluded
+  from lens observations. Semantic truth remains an orchestrator judgment.
 - `[DETAIL]` Complete review input may be split into bounded chunks, with
-  coverage and revision recorded for each seat; all chunks must succeed. This
-  avoids treating an oversized diff as permanently unreviewable or as clean.
+  coverage and revision recorded for each seat; all chunks must succeed. A
+  seat is one logical review even when it needs several physical model calls;
+  physical calls and cost are measured individually. The MINOR cap and
+  self-check apply to the consolidated seat answer.
 - `[DETAIL]` Undefined S=0 yields no positive live trigger and is reported
   as weak evidence; an incomplete seat is not a completed observation and
   must be substituted or retried before the round can proceed.
@@ -424,10 +513,14 @@ observable and can be changed before implementation:
   evidence, rather than inferred from a clock. The orchestrator links all
   unresolved rows to one mechanism ID and its repair revision before the
   night exception; a maintainer-authorized re-check separately records the
-  maintainer's actual choice and the repair revision (Q-27).
+  maintainer's actual choice and the repair revision (Q-27). The unresolved
+  overall exception budget above blocks implementing this boundary.
 - `[DETAIL]` A weekly collection uses ISO weeks and source row IDs, with
   explicit clear-style, maintainability and taste dispositions; this makes
-  omissions and duplicate collections reviewable.
+  omissions and duplicate collections reviewable. Deferred rows carry
+  `deferred — clean-up`; fixes update their disposition. A report command
+  compares a closed ISO week’s outstanding row IDs with IDs named in its
+  clean-up bead; only the orchestrator writes the bead.
 - `[DETAIL]` The formality inventory's minimum reference is Q-1's headers,
   status, card against decisions and time ledger. The orchestrator records a
   follow-up for any uncovered semantic check rather than claiming proof.
