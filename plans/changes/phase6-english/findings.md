@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-22
 created: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-tscc
@@ -62,3 +62,32 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 > Six-cell rows for `plans/changes/phase6-english/findings.md`, round 2, all dimension SPEC:
 
 Stage-2 call, 2026-11-22: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1171 files, 5339 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5536 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +35 -1
+> - `plans/changes/phase6-english/plan.md` +18 -17
+> - `scripts/stage2.py` +139 -6
+> - `tests/test_stage2.py` +408 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:10970:71: ARG005 Unused lambda argument: `rows`
+>       |
+> 10968 |     is bypassed and the German first verdict is accepted as it came, with no replacement at all."""
+> 10969 |     if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+> 10970 |         monkeypatch.setattr(stage2, "verdict_detected_german", lambda rows: False)
+>       |                                                                       ^^^^ ARG005
+> 10971 |     german_review_script(
+> 10972 |         world,
+>       |
+>
+> Found 1 error.
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1188 files, 5547 commits, 12 rules.
