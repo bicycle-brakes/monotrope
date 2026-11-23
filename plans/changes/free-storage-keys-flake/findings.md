@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-068l
@@ -56,3 +56,29 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | F-18 | MINOR | SPEC | base | spec.md AC3 (refuted by "a run with a gap in that load"), AC4 ("load") | Cannot go red as written. The refuting state is a busy process that started after a run began, or that died during it. AC4 asks only that "load" be recorded. It does not ask when each busy process started and stopped, or whether each was still alive when every run ended. A record saying "8 busy processes" therefore looks the same whether the load ran the whole time or had a gap. AC3's gap refutation cannot be checked from the evidence. | Opus | in spec — [DETAIL] decided by the orchestrator: the record lists each busy process's start and end time and requires every one alive at the end of every run it covers. Reason: makes a gap in the load refutable | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1165 files, 5246 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5524 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; make the change the plan names
+> - Runner cheap checks before post-run verification: the criterion ledger names tests that do not stand, and this attempt owes them: `tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving` (not yet written)
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1188 files, 5527 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; make the change the plan names
+> - Runner cheap checks before post-run verification: the criterion ledger names tests that do not stand, and this attempt owes them: `tests/test_stage2_swarm.py::test_free_storage_key_flake_forced_interleaving` (not yet written)
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1188 files, 5531 commits, 12 rules.
