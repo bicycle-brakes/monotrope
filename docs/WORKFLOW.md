@@ -1976,7 +1976,8 @@ model call and repairs nothing; it runs the document gates over the listing,
 writes its own measured time line when the plan has a `## Time used` heading,
 and exits 0 after the existing checkpoint commits the listing under
 `docs(<change>): hand steps for the orchestrator <ids>`. A red document gate
-exits 1, commits nothing and leaves no listing behind. That commit is a
+exits 1, commits nothing, adds no listing and returns `findings.md` to its
+state before the run. That commit is a
 hand-off record, never a repair: no test ran, and exit 0 does not say a row
 is fixed. A mixed batch dispatches only the committable rows, tells the model
 the held rows are not its work, ignores an answer line whose ids before its

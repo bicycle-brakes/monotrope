@@ -766,3 +766,13 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Orchestrator hand finish, 2026-11-23: the Sonnet repair of P6-1..P6-5 passed the full `make verify` inside the attempt (runner record above) and failed only the red-first proof of P6-2: on the pre-repair code `test_repair_hand_step_listing_names_the_file_of_each_row` fails with a TypeError (the listing function gains the row's place as a new argument), not with an assertion failure, which the proof requires. The test does fail on the old code and passes on the new one, so the orchestrator commits the attempt's tree unchanged and books P6-2 with that note. Named here and in the pull request as a hand finish (AGENTS.md rule 9).
+
+## Phase 6 — Opus 5.5, 2026-11-23 (re-check of P6-1..P6-5)
+
+Phase 6 verdict: Opus 5.5 reviewer agent, 2026-11-23
+
+Re-check by Opus 5.5 through Claude Code's read-only `reviewer` agent at HEAD `466beadb`. Verdict: P6-1 to P6-5 fixed (`scripts/stage2.py:11922-11927`, `:11952`; `:9723-9757`, `:11942`; `:9630-9631`; spec.md lines 35, 45 and 59; tests `tests/test_stage2.py:11884-11900`, `:11903-11920`, `:11923-11930`); criteria 1, 4 and 11 hold as the spec words them. One new row, recorded unchanged in substance; the orchestrator fixed its wording by hand in the same commit as this record.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6R-1 | MINOR | DOCS | fix-r7 | docs/WORKFLOW.md | Line 1979 says a red document gate "exits 1, commits nothing and leaves no listing behind"; since the P6-1 fix a held-only run also enters the commit path when the listing is already in the working tree but not in HEAD, and on a red gate the rollback returns findings.md to its bytes before the run, which already hold the failed mixed run's uncommitted listing, so that listing stays. The behaviour fits the spec (exit 1, no commit; the next run retries); the sentence is false on this path. Proposed wording: "commits nothing, adds no listing and returns findings.md to its state before the run". | Opus 5.5 | fixed — not a test — orchestrator hand edit (this commit): docs/WORKFLOW.md takes the proposed wording | no |
