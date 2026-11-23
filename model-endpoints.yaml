@@ -121,12 +121,17 @@ endpunkte:
     abrechnung: abonnement
     darf_sehen: [framework]
     modelle:
+      - glm-5.4  # Z.ai launched GLM 5.4; the runner's GLM route (draft fallback) uses it since 2026-11-23 (maintainer); Flash stays glm-5.3-flash (no glm-5.4-flash)
       - glm-5.3
       - glm-5.3-flash
     # The subscription's end, not a retention or training reading: the runner warns
     # seven UTC days ahead and refuses every call after `valid_until`
     # (`stage2.SUBSCRIPTION_TERMS_ENDPOINTS`, bead coding-harness-dcu3).
     modelle_terms:
+      glm-5.4:
+        gelesen: "2026-11-23"
+        valid_until: "2026-12-08"
+        quelle: "maintainer's statement in the conversation, 2026-11-15: 2026-12-08 is the last day of the Z.ai subscription; GLM 5.4 named by the maintainer on 2026-11-23"
       glm-5.3:
         gelesen: "2026-11-15"
         valid_until: "2026-12-08"

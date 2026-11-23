@@ -217,8 +217,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The reviews have no fixed tuple: their model is the round's rung of the
 # `opencode-go` entry's ordered `modelle` list (the ladder, see `ladder`).
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
-# GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
-GLM = ("glm-coding-plan", "glm-5.3", "max")
+# GLM 5.4 (5.3 until 2026-11-23; Z.ai launched 5.4, maintainer), not Flash — no glm-5.4-flash exists: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
+GLM = ("glm-coding-plan", "glm-5.4", "max")
 # The endpoints whose models a subscription carries until a declared end date: each listed model
 # needs a dated, sourced `modelle_terms` record with `valid_until`, and no call runs after that UTC
 # day (bead coding-harness-dcu3). `opencode-go` keeps its fuller paid-terms rule (`terms_problem`).
