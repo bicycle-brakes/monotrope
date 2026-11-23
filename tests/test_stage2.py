@@ -33122,3 +33122,14 @@ def test_supersede_retries_with_audit_snapshot_after_manifest_interruption(
     except stage2.Refused as error:
         pytest.fail(f"the archived audit call should permit release: {error}")
     assert f"Loop rows: superseded by {stage2.record_key('demo', world.root)}" in findings.read_text(encoding="utf-8")
+
+
+def test_old_runner_reviews_before_the_merge_day_stay_legacy(world: World) -> None:
+    """Bead coding-harness-8b0u: a review the pre-merge runner wrote on 2026-11-22 carries no fingerprint
+    and must be read as a legacy block, not refused as "written on or after the fingerprint rule".
+    Planted fault: the legacy cutoff stays at 2026-11-19, before the fingerprinting runner reached main."""
+    assert dt.date(2026, 11, 23) == stage2.LEGACY_SPEC_REVIEW_DAY
+    world.write_findings(opus_review_block(world, day="2026-11-22", fingerprint=None))
+    admission = stage2.review_admission(world.root, "demo")
+    assert "on or after the fingerprint rule" not in (admission.left_out or "")
+    assert "on or after the fingerprint rule" not in (admission.review_problem or "")
