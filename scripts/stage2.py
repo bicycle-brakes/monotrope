@@ -4452,13 +4452,7 @@ def readable_review(answer: str) -> list[list[str]]:
     answer here and the stored block later, so an answer that is written is an answer that reads
     back: a row whose Severity is anything else, or a table line that is no row, fails the call.
     """
-    in_fence = False
     for line in answer.splitlines():
-        if line.strip().startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
         cells = split_row(line)
         if (line.strip().startswith("|") and (cells is None or len(cells) != 6)) or (
             cells is None and row_like_loose_line(line)

@@ -32167,6 +32167,20 @@ def test_r6r_2_prose_with_many_pipes_does_not_fail_the_call() -> None:
         pytest.fail(f"prose with pipes failed the call: {error}")
 
 
+def test_r6s_1_fenced_ambiguity_row_without_leading_pipe_is_unreadable() -> None:
+    """R6S-1: a fence does not hide a loose ambiguity row beside a valid row from the table-line checks."""
+    loose = "R-2 | MAJOR | SPEC | 7 | spec.md | [AMBIGUITY] unresolved | Opus 5.5 | open | — |"
+    for answer in (
+        rows(1) + "\n```\n" + loose + "\n```",
+        rows(1) + "\n```\n" + loose,
+    ):
+        try:
+            stage2.readable_review(answer)
+        except stage2.CallFailed:
+            continue
+        pytest.fail("a fenced ambiguity row lacking its leading pipe must make the answer unreadable")
+
+
 def test_review_restored_body_is_current(world: World) -> None:
     spec = world.root / "plans/changes/demo/spec.md"
     original = spec.read_text()
