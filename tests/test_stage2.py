@@ -19656,6 +19656,27 @@ def test_repair_where_paths_resolve_with_shared_rules(world: World) -> None:
             stage2.repair_scope([cell], "demo", world.root)
 
 
+def test_repair_scope_casefolds_uppercase_change_folder(world: World) -> None:
+    """L1-1. Planted fault: the change-folder entry is not casefolded, so an uppercase id never matches its own files."""
+    seed_tests(world)
+    scope = stage2.repair_scope([], "Demo", world.root)
+    try:
+        assert stage2.within_scope(Path("plans/changes/Demo/new.md"), scope)
+    except AssertionError:
+        pytest.fail("a new file under an uppercase change id's own folder is outside its scope")
+    assert all(entry == entry.casefold() for entry in scope)
+
+
+def test_repair_scope_bare_name_prefers_change_folder(world: World) -> None:
+    """L1-2. Planted fault: a bare name present in both places grants the repository-root file."""
+    (world.root / "dup.md").write_text("root\n", encoding="utf-8")
+    (world.root / "plans" / "changes" / "demo" / "dup.md").write_text("folder\n", encoding="utf-8")
+    git(world.root, "add", "dup.md", "plans/changes/demo/dup.md")
+    scope = stage2.repair_scope(["dup.md"], "demo", world.root)
+    assert "plans/changes/demo/dup.md" in scope
+    assert "dup.md" not in scope
+
+
 def test_repair_scope_ignores_untracked_ignored_files(world: World) -> None:
     """Criterion 9. Planted fault: an ignored cache triggers the guard, or an indexed ignored addition escapes it."""
     seed_tests(world)

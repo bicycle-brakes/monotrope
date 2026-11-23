@@ -9630,14 +9630,14 @@ def repair_scope_locations(cell: str, change: str, root: Path) -> list[tuple[str
         if not token or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", token):
             continue
         path = re.sub(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$", "", token)
+        if "/" not in token and f"{folder}{path}" in tracked:
+            grants.append((f"{folder}{path}", False))
+            continue
         if path in tracked:
             grants.append((path, False))
             continue
         if path.endswith("/") or any(name.startswith(f"{path}/") for name in tracked):
             grants.append((path if path.endswith("/") else f"{path}/", True))
-            continue
-        if "/" not in token and f"{folder}{path}" in tracked:
-            grants.append((f"{folder}{path}", False))
             continue
         if "/" in token or re.search(r"\.[\w-]+", token):
             raise Refused(
@@ -9657,7 +9657,7 @@ def repair_scope(cells: list[str], change: str, root: Path) -> frozenset[str]:
     (bead coding-harness-t83, S-3). Every entry is casefolded like the held prefixes; a file entry
     is exact, a directory entry carries its trailing slash.
     """
-    scope = {f"plans/changes/{change}/", "tests/"}
+    scope = {f"plans/changes/{change}/".casefold(), "tests/"}
     for cell in cells:
         for path, _descendants in repair_scope_locations(cell, change, root):
             scope.add(path.casefold())

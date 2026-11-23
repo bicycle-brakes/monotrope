@@ -390,3 +390,7 @@ Stage-2 call, 2026-11-23: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-23: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1177 files, 5443 commits, 12 rules.
 
 Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1177 files, 5444 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5446 commits, 12 rules.
+
+Runner restoration, 2026-11-23: repair · attempt 1 · route stage-1 — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
