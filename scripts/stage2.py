@@ -21,6 +21,7 @@ between the rule and the call.
     python3 scripts/stage2.py explore      <change>   # the swarm or GLM Flash by class, phase 1
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
+    python3 scripts/stage2.py --spec-review-inventory # which changes lack a current spec review (the morning inventory)
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
@@ -196,6 +197,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_adr_answers  # noqa: E402
 import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
+import check_interview_minimums  # noqa: E402
 import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
@@ -335,6 +337,25 @@ PHASE6_ANSWER_FORMAT = (
     )
     + f"\n{PHASE6_GUARD_EVIDENCE}"
 )
+
+
+# The spec review's answer instruction states the one severity set its reader takes (loop rows
+# L2-1 and L2-6 of mandatory-spec-review): a word of the reviewer's own would fail the call.
+def spec_review_answer_format(answer_format: str) -> str:
+    severity = (
+        "The severity cell is free text (BLOCKER, MAJOR or MINOR is the convention); the orchestrator\n"
+        "decides what is taken, so a word of your own is not a fault.\n"
+    )
+    if answer_format.count(severity) != 1:
+        raise ValueError("shared severity instruction must appear exactly once")
+    return answer_format.replace(
+        severity,
+        "The severity cell is exactly BLOCKER, MAJOR or MINOR, or begins with the mark `[AMBIGUITY]`;\n"
+        "any other severity makes the whole answer unreadable.\n",
+    )
+
+
+SPEC_REVIEW_ANSWER_FORMAT = spec_review_answer_format(ANSWER_FORMAT)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
 # evidence; phase 6 explicitly refuses malformed evidence even beside findings.
 GUARD_EVIDENCE_LINE = re.compile(
@@ -1187,6 +1208,38 @@ def split_row(line: str) -> list[str] | None:
     return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
 
 
+def loose_table_line(line: str) -> bool:
+    """Whether a line is a table line missing an edge pipe: six or more cells once optional edge pipes are removed.
+
+    `split_row` needs both edge pipes; a row that lost one would read as prose and could hide an open
+    ambiguity, so the spec-review readers treat such a line as unreadable.
+    """
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    return len(_PIPE.split(stripped)) >= 6
+
+
+def row_like_loose_line(line: str) -> bool:
+    """A loose table line that looks like a finding row: its second cell is a severity or it ends with a pipe.
+
+    Prose that quotes a shell pipeline or a regex alternation has many pipes but no severity cell and no
+    closing pipe; the call-time reader must not take it for a malformed row.
+    """
+    if not loose_table_line(line):
+        return False
+    stripped = line.strip()
+    ends_with_pipe = stripped.endswith("|") and not stripped.endswith("\\|")
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    cells = [cell.strip() for cell in _PIPE.split(stripped)]
+    return ends_with_pipe or (len(cells) > 1 and bool(review_severity(cells[1])))
+
+
 def _furniture(cells: list[str]) -> bool:
     """The header or the separator of a table.
 
@@ -1197,7 +1250,17 @@ def _furniture(cells: list[str]) -> bool:
     return cells[0].lower() == "id" or named or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
 
 
-def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[list[str]], str]:
+def review_severity(cell: str) -> bool:
+    """Whether a spec-review row's Severity cell is one the review reader knows (spec terms).
+
+    BLOCKER, MAJOR or MINOR, or the `[AMBIGUITY]` mark. This one test serves the call-time answer
+    and the stored block alike, so no answer is written that the stored reader then rejects.
+    """
+    stripped = cell.strip()
+    return stripped.upper() in SEVERITIES or stripped.startswith("[AMBIGUITY]")
+
+
+def parse_rows(answer: str, *, notes: list[str] | None = None, ambiguity: bool = False) -> tuple[list[list[str]], str]:
     """The six-cell rows of an answer and the text that is not a row.
 
     Six cells are known. A line of more cells that starts like a row (its second cell is a severity) holds a
@@ -1205,7 +1268,8 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
     pipe escaped; when a caller passes `notes`, that widening is named once per row, because an unescaped
     `|` before the finding moves the columns instead (R-25 of the review-swarm review). A decorative line of
     empty cells is no row and no text: it is dropped. Anything else that is a table line but no row stays
-    in the text, as it came.
+    in the text, as it came. With `ambiguity`, over-wide rows are rejected instead of folded
+    (the spec-review reader).
     """
     rows: list[list[str]] = []
     rest: list[str] = []
@@ -1218,7 +1282,7 @@ def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[lis
             continue
         elif len(cells) == 6:
             rows.append(cells)
-        elif len(cells) > 6 and cells[1].upper() in SEVERITIES:
+        elif len(cells) > 6 and not ambiguity and cells[1].upper() in SEVERITIES:
             rows.append([*cells[:5], " \\| ".join(cells[5:])])
             if notes is not None:
                 notes.append(cells[0])
@@ -3779,20 +3843,942 @@ def legacy_completed(status: str) -> bool:
     return any(marker in lowered for marker in LEGACY_FIXED)
 
 
-def spec_review(root: Path, change: str) -> None:
-    """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
+# ---------------------------------------------------------------------------
+# The mandatory spec review (bead coding-harness-ttic)
+# ---------------------------------------------------------------------------
 
-    The call is a headless Claude Code run with read-only tools and no session
-    kept: the reviewer is recorded by the rows alone, so phase 6 starts a fresh
-    Codex session where no phase-2a session was recorded.
+
+# The day the fingerprint rule took hold, fixed in code: an undigested block (one without a
+# `Spec fingerprint:` line) qualifies only when its heading day lies strictly before this day,
+# and only while it is current against the last committed spec change (spec criteria 11 and 12).
+LEGACY_SPEC_REVIEW_DAY = dt.date(2026, 11, 19)
+# A spec's body bytes: everything after the front matter header. The fingerprint and the legacy
+# currency compare exactly these bytes, so a front-matter-only edit never invalidates a review
+# and a body edit always does.
+FRONT_MATTER = re.compile(rb"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
+FINGERPRINT_LINE = re.compile(r"^Spec fingerprint: (sha256:[0-9a-f]{64})$", re.M)
+REVIEW_COMMIT_LINE = re.compile(r"^Spec review commit: ([0-9a-f]{40})$", re.M)
+PHASE2A_DAY = re.compile(r"^## Phase 2a — .+, (\d{4}-\d{2}-\d{2})$")
+# The runner call line a qualifying block carries directly above its heading (spec terms).
+SPEC_AUDIT_LINE = re.compile(
+    r"Stage-2 call, \d{4}-\d{2}-\d{2}: spec-review(?: · attempt [1-9]\d* · route [a-z0-9-]+)?"
+    r" · endpoint (?P<endpoint>[a-z0-9-]+) · model (?P<model>[A-Za-z0-9_./:+-]+)(?: · reason [^\r\n]+)?"
+    r" · leak check clean over \d+ files, \d+ commits, \d+ rules\."
+)
+NO_FINDING_ANSWER = "No finding."
+# An Opus call that follows a fallback review stands for the fallback's round, not for a new one.
+RECHECK_MARKER = "Opus re-check of the fallback review, same round"
+
+
+def spec_body_of(data: bytes) -> bytes:
+    """The spec's body bytes: everything after the front matter header."""
+    return FRONT_MATTER.sub(b"", data, count=1)
+
+
+def spec_body_bytes(spec: Path) -> bytes:
+    """The spec file's body bytes, read fresh."""
+    return spec_body_of(spec.read_bytes())
+
+
+def spec_body_fingerprint(spec: Path) -> str:
+    """The SHA-256 fingerprint of the spec's body bytes, as a review block records it."""
+    return "sha256:" + hashlib.sha256(spec_body_bytes(spec)).hexdigest()
+
+
+def spec_review_prompt(root: Path, change: str, body: bytes) -> str:
+    """The 2a prompt carrying exactly the spec body the review must read (spec criterion 10)."""
+    try:
+        decoded = body.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise Refused(f"plans/changes/{change}/spec.md cannot be read as UTF-8 ({error}).") from error
+    extra = "## The spec body under review\n\n" + decoded
+    return phase_prompt(root, "02a-spec-review.md", change, extra, answer_format=SPEC_REVIEW_ANSWER_FORMAT)
+
+
+def spec_review_call_config(root: Path) -> dict:
+    """The centrally configured spec-review call settings (spec criteria 13 and 15).
+
+    Defaults: a 30-minute call limit, a 30-second pause before the single retry, and no
+    fallback model - the fallback runs only when declared. The top-level `spec_review:`
+    block of `model-endpoints.yaml` overrides each in one place: `call_limit_minutes` (the
+    call limit in minutes), `pause_seconds` (the retry pause), `fallback_endpoint` (the
+    fallback reviews through the runner's own Pi) and `fallback_model`. The model is read
+    at call time, so a later configuration change never invalidates a written block: the
+    block records the model declared when it was written.
+    """
+    settings: dict = {
+        "timeout_seconds": 30 * 60,
+        "pause_seconds": 30,
+        "fallback_endpoint": OPENCODE,
+        "fallback_model": None,
+    }
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8"))
+        if data is None:
+            data = {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
+        raise Refused(f"model-endpoints.yaml cannot be read ({error}).") from error
+    if not isinstance(data, dict):
+        raise Refused("model-endpoints.yaml is not a field mapping; repair it.")
+    block = data.get("spec_review")
+    if block is None:
+        return settings
+    if not isinstance(block, dict):
+        raise Refused("the `spec_review:` block of model-endpoints.yaml is not a field mapping; repair it.")
+    minutes = block.get("call_limit_minutes")
+    if minutes is not None and (not isinstance(minutes, int) or isinstance(minutes, bool) or minutes <= 0):
+        raise Refused("spec_review's `call_limit_minutes` must be a positive whole number of minutes.")
+    if minutes is not None:
+        settings["timeout_seconds"] = minutes * 60
+    seconds = block.get("pause_seconds")
+    if seconds is not None and (not isinstance(seconds, int) or isinstance(seconds, bool) or seconds < 0):
+        raise Refused("spec_review's `pause_seconds` must be a whole number of seconds.")
+    if seconds is not None:
+        settings["pause_seconds"] = seconds
+    endpoint = block.get("fallback_endpoint")
+    if endpoint is not None:
+        if not isinstance(endpoint, str) or not endpoint.strip():
+            raise Refused("spec_review's `fallback_endpoint` must name an endpoint.")
+        if endpoint.strip() != OPENCODE:
+            raise Refused(f"spec_review's `fallback_endpoint` must be {OPENCODE}.")
+        settings["fallback_endpoint"] = endpoint.strip()
+    model = block.get("fallback_model")
+    if model is not None:
+        if not isinstance(model, str) or not model.strip():
+            raise Refused("spec_review's `fallback_model` must name a model id.")
+        settings["fallback_model"] = model.strip()
+    return settings
+
+
+@dataclass(frozen=True)
+class SpecReviewBlock:
+    """One `## Phase 2a` block of findings.md, read back for qualification and admission."""
+
+    heading: str
+    audit: str | None
+    rows: list[dict[str, str]]
+    rest: str
+    fingerprint: str | None
+    commit: str | None
+    table_readable: bool
+    clean: bool
+    bad_row: str | None = None
+
+    @property
+    def heading_day(self) -> str | None:
+        found = PHASE2A_DAY.match(self.heading)
+        return found.group(1) if found else None
+
+    @property
+    def audit_matches(self) -> bool:
+        """The audit line names spec-review and the same model as the heading (spec terms)."""
+        if self.audit is None:
+            return False
+        found = SPEC_AUDIT_LINE.fullmatch(self.audit)
+        if found is None:
+            return False
+        model = found.group("model")
+        if self.heading.startswith("## Phase 2a — Opus 5.5"):
+            return model == OPUS[1]
+        if self.heading.startswith("## Phase 2a — fallback "):
+            named = self.heading[len("## Phase 2a — fallback ") :].rsplit(",", 1)[0].strip()
+            named = named.removesuffix(f" ({RECHECK_MARKER})")
+            return named == model
+        return False
+
+    @property
+    def is_fallback(self) -> bool:
+        return self.heading.startswith("## Phase 2a — fallback ")
+
+    @property
+    def is_recheck(self) -> bool:
+        return RECHECK_MARKER in self.heading
+
+    @property
+    def readable_answer(self) -> bool:
+        return self.table_readable and (bool(self.rows) or self.clean)
+
+
+def _stored_rows(body_text: str) -> tuple[list[dict[str, str]], str | None]:
+    """Read review rows without joining cells; one malformed table line spoils the block."""
+    rows: list[dict[str, str]] = []
+    width: int | None = None
+    for line in body_text.splitlines():
+        cells = split_row(line)
+        if cells is None:
+            quoted = line.lstrip().startswith(">")
+            if line.strip().startswith("|") or (not quoted and loose_table_line(line)):
+                return [], line.strip()[:80]
+            continue
+        if _furniture(cells):
+            if cells[0].lower() == "id" or [c.lower() for c in cells[1:6]] == [c.lower() for c in ROW_COLUMNS[1:6]]:
+                width = len(cells)
+            elif width is not None and len(cells) != width:
+                return [], line.strip()[:80]
+            continue
+        if width is not None and len(cells) != width or len(cells) not in (6, 9):
+            return [], line.strip()[:80]
+        if not review_severity(cells[1]):
+            return [], line.strip()[:80]
+        rows.append(
+            {
+                "id": cells[0],
+                "severity": cells[1],
+                "finding": cells[5],
+                "status": cells[7] if len(cells) == 9 else "open",
+            }
+        )
+    return rows, None
+
+
+def spec_review_blocks(text: str) -> list[SpecReviewBlock]:
+    """Every `## Phase 2a` block of findings.md, in file order (spec terms).
+
+    The matching audit line must be the nearest non-blank line above the heading. The block is clean when it says no finding was
+    reported beside the quoted exact answer; anything else without rows is prose and does not
+    qualify.
+    """
+    blocks: list[SpecReviewBlock] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("## Phase 2a"):
+            continue
+        audit = None
+        preceding = next((item for item in reversed(lines[:index]) if item.strip()), "")
+        if preceding.startswith("Stage-2 call, "):
+            audit = preceding.strip()
+        body: list[str] = []
+        for following in lines[index + 1 :]:
+            if following.startswith(("## ", "Stage-2 call, ")):
+                break
+            body.append(following)
+        body_text = "\n".join(body).strip()
+        rows, bad_row = _stored_rows(body_text)
+        found = FINGERPRINT_LINE.search(body_text)
+        commit = REVIEW_COMMIT_LINE.search(body_text)
+        clean = (
+            not rows
+            and NOT_ROWS_NOTE in body_text
+            and any(quoted.strip() == "> No finding." for quoted in body_text.splitlines())
+        )
+        blocks.append(
+            SpecReviewBlock(
+                heading=line,
+                audit=audit,
+                rows=rows,
+                rest=body_text,
+                fingerprint=found.group(1) if found else None,
+                commit=commit.group(1) if commit else None,
+                table_readable=bad_row is None,
+                clean=clean,
+                bad_row=bad_row,
+            )
+        )
+    return blocks
+
+
+def open_ambiguity_rows(block: SpecReviewBlock) -> list[str]:
+    """The IDs of the block's open ambiguity rows (spec terms).
+
+    A row is open when its Status begins `open`; an answer quoted beside it does not close
+    it. The mark may sit in the Severity or the Finding cell.
+    """
+    return [
+        row["id"]
+        for row in block.rows
+        if (row["severity"].startswith("[AMBIGUITY]") or row["finding"].startswith("[AMBIGUITY]"))
+        and row["status"].lower().startswith("open")
+    ]
+
+
+def review_rounds(blocks: list[SpecReviewBlock]) -> int:
+    """How many spec-review rounds have run, from the qualifying blocks (spec criteria 3 and 17).
+
+    A fallback and its Opus re-check stand for one round: the re-check replaces the fallback's
+    review, so it adds no round of its own.
+    """
+    rounds = 0
+    awaiting_recheck = False
+    for block in blocks:
+        if block.is_recheck and awaiting_recheck:
+            awaiting_recheck = block.is_fallback
+            continue
+        rounds += 1
+        awaiting_recheck = block.is_fallback
+    return rounds
+
+
+def _git_bytes(root: Path, *args: str) -> bytes:
+    """A git command's stdout as the exact bytes (a committed spec body is read one way, never decoded)."""
+    try:
+        out = run_git(root, *args, text=False).stdout
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    return out if isinstance(out, bytes) else os.fsencode(out)
+
+
+def spec_body_versions(root: Path, change: str) -> list[tuple[int, bytes]]:
+    """The committed spec bodies, oldest first, each with the committer timestamp that introduced it.
+
+    Consecutive commits that leave the body bytes alone (front-matter-only edits) form one version.
+    """
+    path = f"plans/changes/{change}/spec.md"
+    lines = _git_output(root, "log", "--format=%H %ct", "--", path).splitlines()
+    versions: list[tuple[int, bytes]] = []
+    for line in reversed(lines):
+        commit, timestamp = line.split()
+        body = spec_body_of(_git_bytes(root, "show", f"{commit}:{path}"))
+        if not versions or versions[-1][1] != body:
+            versions.append((int(timestamp), body))
+    return versions
+
+
+def spec_last_commit_day(root: Path, change: str) -> dt.date | None:
+    """The UTC committer day of the latest committed spec body change."""
+    versions = spec_body_versions(root, change)
+    if not versions:
+        return None
+    return dt.datetime.fromtimestamp(versions[-1][0], dt.UTC).date()
+
+
+def body_edits_after_review(root: Path, change: str, block: SpecReviewBlock, disk: bytes) -> int | None:
+    """Count body changes after the review, including an uncommitted final draft, or None when unmeasurable.
+
+    A fingerprinted review equal to the disk body has no edits, whatever its commit (a rebase or a
+    squash merge may have dropped the commit). Otherwise the reviewed commit is the base when it is
+    an ancestor of HEAD and holds the fingerprinted body; if not, the newest committed version in
+    history with that fingerprint is. A legacy review (no fingerprint) counts the committed body
+    versions after the first whose UTC committer day follows its heading day, plus an uncommitted
+    body change.
+    """
+    path = f"plans/changes/{change}/spec.md"
+
+    def digest(body: bytes) -> str:
+        return "sha256:" + hashlib.sha256(body).hexdigest()
+
+    try:
+        if block.fingerprint is None:
+            day = block.heading_day
+            written = dt.date.fromisoformat(day) if day else None
+            if written is None:
+                return None
+            versions = spec_body_versions(root, change)
+            if not versions:
+                return None
+            after = sum(dt.datetime.fromtimestamp(stamp, dt.UTC).date() > written for stamp, _body in versions[1:])
+            return after + (versions[-1][1] != disk)
+        # An unchanged body needs no ancestry, but it must stand in committed history: a spec never
+        # committed stays refused with "commit the spec" (L4-1).
+        if block.fingerprint == digest(disk) and spec_body_versions(root, change):
+            return 0
+        body: bytes | None = None
+        commits: list[str] = []
+        if block.commit is not None:
+            # A commit that is not an object here (rebased away, or never real) falls through to
+            # the history search below instead of ending the count (R6-2).
+            try:
+                ancestor = run_git(root, "merge-base", "--is-ancestor", block.commit, "HEAD", allow={1: ""})
+            except Refused:
+                ancestor = None
+            if ancestor is not None and ancestor.returncode == 0:
+                shown = spec_body_of(_git_bytes(root, "show", f"{block.commit}:{path}"))
+                if digest(shown) == block.fingerprint:
+                    body = shown
+                    commits = _git_output(
+                        root, "rev-list", "--reverse", f"{block.commit}..HEAD", "--", path
+                    ).splitlines()
+        if body is None:
+            history = _git_output(root, "log", "--reverse", "--format=%H", "--", path).splitlines()
+            for index in range(len(history) - 1, -1, -1):
+                candidate = spec_body_of(_git_bytes(root, "show", f"{history[index]}:{path}"))
+                if digest(candidate) == block.fingerprint:
+                    body = candidate
+                    commits = history[index + 1 :]
+                    break
+        if body is None:
+            return None
+        edits = 0
+        for commit in commits:
+            next_body = spec_body_of(_git_bytes(root, "show", f"{commit}:{path}"))
+            edits += next_body != body
+            body = next_body
+        return edits + (body != disk)
+    except (Refused, ValueError):
+        return None
+
+
+def legacy_currency_problem(root: Path, change: str, day: dt.date) -> str | None:
+    """Why a legacy (undigested) spec-review block is no longer current, or None (spec criterion 12).
+
+    Its heading day must not predate the last committed spec-change day (the committer date
+    in UTC), and the spec body on disk must still be the committed body: an uncommitted body
+    edit makes the review stale, a front-matter-only edit does not.
+    """
+    committed = spec_last_commit_day(root, change)
+    if committed is None:
+        return "the spec has no committed change the review could be measured against"
+    if day < committed:
+        return f"it predates the spec's last committed change of {committed.isoformat()}"
+    try:
+        disk = spec_body_bytes(root / "plans" / "changes" / change / "spec.md")
+    except (OSError, UnicodeDecodeError) as error:
+        return f"the spec body cannot be read ({error})"
+    head = spec_body_of(_git_bytes(root, "show", f"HEAD:plans/changes/{change}/spec.md"))
+    if disk != head:
+        return "the spec body changed on disk without a commit after it"
+    return None
+
+
+def qualifying_reviews(text: str) -> tuple[list[SpecReviewBlock], str]:
+    """The change's qualifying spec-review blocks, in findings order, and the blocks left out.
+
+    Qualifying (spec terms): an Opus 5.5 or declared-fallback block with readable rows or the
+    exact `No finding.` answer, its matching runner call line directly above the heading, and
+    - written on or after the fixed rule day - the `Spec fingerprint:` line. An undigested
+    block qualifies only from before that day. Currency is no part of qualifying: every
+    qualifying block counts as a round, and `review_staleness` decides only whether the newest
+    one admits implement.
+    """
+    kept: list[SpecReviewBlock] = []
+    left_out: list[str] = []
+    for block in spec_review_blocks(text):
+        day = block.heading_day
+        named = day or "an undated block"
+        if not block.audit_matches:
+            left_out.append(f"{named} has no matching runner call line directly above its heading")
+            continue
+        if not block.readable_answer:
+            left_out.append(
+                f"{named} is no readable review (rows or the exact `No finding.` answer)"
+                + (f"; unreadable row: {block.bad_row}" if block.bad_row else "")
+            )
+            continue
+        if block.fingerprint is None:
+            if day is None:
+                left_out.append(f"{named} carries no fingerprint and no day")
+                continue
+            try:
+                written = dt.date.fromisoformat(day)
+            except ValueError:
+                left_out.append(f"{named} has an unreadable day")
+                continue
+            if written >= LEGACY_SPEC_REVIEW_DAY:
+                left_out.append(f"the block of {day} was written on or after the fingerprint rule and carries none")
+                continue
+        kept.append(block)
+    return kept, "; ".join(left_out)
+
+
+def review_staleness(root: Path, change: str, block: SpecReviewBlock, current: str) -> str | None:
+    """Why a qualifying block no longer stands for the spec as it is, or None (spec criteria 11 and 12).
+
+    A fingerprinted block is stale when its digest is not the body on disk; an undigested legacy
+    block is measured against the last committed spec change and the disk body.
+    """
+    if block.fingerprint is not None:
+        if block.fingerprint == current:
+            return None
+        return (
+            f"it names {block.fingerprint} and the spec body on disk hashes to {current}; "
+            "the spec body changed after the review"
+        )
+    day = block.heading_day
+    try:
+        written = dt.date.fromisoformat(day) if day else None
+    except ValueError:
+        written = None
+    if written is None:
+        return "it carries no fingerprint and no readable day"
+    return legacy_currency_problem(root, change, written)
+
+
+@dataclass(frozen=True)
+class ReviewAdmission:
+    """The outcome of the spec-review admission one change faces before a model starts."""
+
+    klass: str | None = None
+    class_problem: str | None = None
+    review_problem: str | None = None
+    left_out: str = ""
+    rounds: int = 0
+    recheck: bool = False
+
+
+def review_admission(root: Path, change: str) -> ReviewAdmission:
+    """Why the change may not start a model yet, or the admission that lets it (spec criteria 4-9, 18-19).
+
+    One check for every implement route and for the morning inventory: the class must be
+    stated and agreeing, a spike stands outside the review rule, and a bounded, feature or
+    architectural change needs a qualifying, current spec review with no open ambiguity -
+    after three rounds a changed spec body is admitted on the review it has, an open
+    ambiguity never is. A previously implemented change faces the same check again. A change
+    whose class is refused is measured for its review as well, so the inventory lists it in
+    every group whose check it fails; implement names the class first.
+    """
+    try:
+        klass = declared_class(root, change, None)
+    except Refused as error:
+        part = _review_part(root, change, None)
+        return ReviewAdmission(
+            class_problem=str(error),
+            review_problem=part.review_problem,
+            left_out=part.left_out,
+            rounds=part.rounds,
+            recheck=part.recheck,
+        )
+    if klass == "spike":
+        return ReviewAdmission(klass=klass)
+    return _review_part(root, change, klass)
+
+
+def _review_part(root: Path, change: str, klass: str | None) -> ReviewAdmission:
+    """The review half of the admission, for a change that is no spike."""
+    folder = root / "plans" / "changes" / change
+    findings = folder / "findings.md"
+    try:
+        text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+    except (OSError, UnicodeDecodeError) as error:
+        return ReviewAdmission(
+            klass=klass, review_problem=f"plans/changes/{change}/findings.md cannot be read ({error})."
+        )
+    try:
+        disk = spec_body_bytes(folder / "spec.md")
+    except (OSError, UnicodeDecodeError) as error:
+        return ReviewAdmission(klass=klass, review_problem=f"plans/changes/{change}/spec.md cannot be read ({error}).")
+    current = "sha256:" + hashlib.sha256(disk).hexdigest()
+    kept, left_out = qualifying_reviews(text)
+    if not kept:
+        detail = f" The blocks read were left out: {left_out}." if left_out else ""
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            review_problem=(
+                f"no qualifying spec review exists for {change}: run `python3 scripts/stage2.py spec-review "
+                f"{change}` first - a review qualifies as an Opus 5.5 or declared-fallback block with readable "
+                f"rows or the exact `No finding.` answer and its matching runner call line directly above it.{detail}"
+            ),
+        )
+    newest = kept[-1]
+    rounds = review_rounds(kept)
+    stale = review_staleness(root, change, newest, current)
+    edits = body_edits_after_review(root, change, newest, disk)
+    if newest.fingerprint is not None and edits is None:
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            rounds=rounds,
+            review_problem="the spec review is stale: its reviewed fingerprint or commit is in no commit in this history; "
+            "commit the spec, then rerun spec-review.",
+        )
+    recheck = stale is None and newest.is_fallback
+    can_run = review_round_open(root, change, rounds, recheck)
+    ambiguity = next(
+        (row for row in open_ambiguity_rows(newest) if can_run or not ambiguity_settled(root, change, row)), None
+    )
+    if ambiguity is not None:
+        if can_run:
+            remedy = "settle the row and review the spec again before a model starts."
+        else:
+            remedy = (
+                "no further review round can run, so the maintainer settles the row in decisions.md with a "
+                f"question headed `Q-<n> · Ambiguity {ambiguity}`, a non-empty `asked` and `answer`, "
+                "`status: answered` and `answered_by: maintainer`, or the change is re-sliced."
+            )
+        return ReviewAdmission(
+            klass=klass,
+            left_out=left_out,
+            rounds=rounds,
+            recheck=recheck,
+            review_problem=(
+                f"the newest qualifying spec review of {change} still has the open ambiguity row {ambiguity}; {remedy}"
+            ),
+        )
+    if rounds >= 3:
+        blocker = next(
+            (
+                row["id"]
+                for row in newest.rows
+                if row["severity"].strip().upper() == "BLOCKER" and row["status"].lower().startswith("open")
+            ),
+            None,
+        )
+        if blocker:
+            return ReviewAdmission(
+                klass=klass,
+                left_out=left_out,
+                rounds=rounds,
+                recheck=recheck,
+                review_problem=(
+                    f"the newest qualifying spec review of {change} has open BLOCKER row {blocker} "
+                    "after three rounds; the maintainer authorizes a fourth round or re-slices the change."
+                ),
+            )
+    if stale is not None:
+        edits = edits if rounds >= 3 else None
+        if edits is None or edits > 1:
+            if edits is None and rounds >= 3:
+                remedy = (
+                    f"the reviewed fingerprint is in no commit for plans/changes/{change}/spec.md; "
+                    if newest.fingerprint is not None
+                    else "the committed spec body versions after the review cannot be counted; "
+                ) + "commit the spec, then rerun spec-review."
+            elif can_run:
+                remedy = (
+                    f"Run `python3 scripts/stage2.py spec-review {change}` again first ({rounds} of three "
+                    "spec-review rounds have run)."
+                )
+            else:
+                remedy = (
+                    f"{rounds} spec-review rounds have run and the final draft after the third admits one spec "
+                    "body edit only; the maintainer authorizes a fourth round in decisions.md or the change "
+                    "is re-sliced."
+                )
+            return ReviewAdmission(
+                klass=klass,
+                left_out=left_out,
+                rounds=rounds,
+                recheck=recheck,
+                review_problem=f"the newest qualifying spec review of {change} is stale: {stale}. {remedy}",
+            )
+    return ReviewAdmission(klass=klass, left_out=left_out, rounds=rounds, recheck=recheck)
+
+
+def readable_review(answer: str) -> list[list[str]]:
+    """The rows of a readable spec-review answer; `CallFailed` on anything else (spec terms).
+
+    Readable: six-cell rows, or the exact answer `No finding.` Prose, a refusal, a failed
+    call, or one table line the reader cannot take as a row is not. The same reader (the
+    `review_severity` test and strict cell count) judges the
+    answer here and the stored block later, so an answer that is written is an answer that reads
+    back: a row whose Severity is anything else, or a table line that is no row, fails the call.
+    """
+    for line in answer.splitlines():
+        cells = split_row(line)
+        if (line.strip().startswith("|") and (cells is None or len(cells) != 6)) or (
+            cells is None and row_like_loose_line(line)
+        ):
+            raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {line.strip()[:80]}")
+    rows, rest = parse_rows(answer, ambiguity=True)
+    loose = [line for line in rest.splitlines() if split_row(line) is not None]
+    if loose:
+        raise CallFailed(f"the answer holds a table line that is no six-cell finding row: {loose[0].strip()[:80]}")
+    odd = [row[0] for row in rows if not review_severity(row[1])]
+    if odd:
+        raise CallFailed(
+            f"the answer's row {odd[0]} has a Severity that is none of BLOCKER, MAJOR, MINOR or an `[AMBIGUITY]` mark"
+        )
+    if rows:
+        return rows
+    if answer.strip() == NO_FINDING_ANSWER and not any(split_row(line) is not None for line in rest.splitlines()):
+        return []
+    raise CallFailed("the answer is neither six-cell findings nor exactly `No finding.`")
+
+
+def pause(seconds: int) -> None:
+    """The configured wait between a failed spec-review call and its single retry.
+
+    The wait happens inside `threading`'s own frames, the way the runner's step
+    timeouts wait inside `subprocess`'s: the runner acquires no clock reading
+    here, and the clock boundary (`clock_now`) stays the only reader.
+    """
+    threading.Event().wait(seconds)
+
+
+FOURTH_ROUND_TITLE = re.compile(r"fourth spec-review round\b", re.I)
+FOURTH_ROUND_GRANT = re.compile(r"[\"'`\s]*authori[sz]ed\b", re.I)
+
+
+def fourth_round_authorized(root: Path, change: str) -> bool:
+    """Whether the maintainer's answer in decisions.md releases this change's one fourth review round (spec criterion 3).
+
+    Only a question of this change counts, headed `Q-<n> · Fourth spec-review round` and answered
+    by the maintainer (the interview reader's own selection, `maintainer_answers`) with an answer
+    that begins `authorized`. It releases round four and nothing beyond it: after four rounds the
+    change is re-sliced. A note that merely quotes the rule, or an answer that declines, releases
+    nothing; no wording elsewhere in the file counts.
+    """
+    try:
+        text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(
+        FOURTH_ROUND_TITLE.match(record["title"]) and FOURTH_ROUND_GRANT.match(record["answer"])
+        for record in check_interview_minimums.maintainer_answers(text)
+    )
+
+
+def review_round_open(root: Path, change: str, rounds: int, recheck: bool) -> bool:
+    """Whether the `spec-review` verb may run another round: the one rule the verb and the admission share."""
+    return recheck or rounds < 3 or (rounds == 3 and fourth_round_authorized(root, change))
+
+
+def ambiguity_settled(root: Path, change: str, row_id: str) -> bool:
+    """Whether the maintainer settled an open ambiguity row in decisions.md (spec criterion 7, Q-10).
+
+    Only a question of this change counts, headed `Q-<n> · Ambiguity <row id>` and answered by the
+    maintainer. The admission reads it only when no further review round can run, so a review the
+    verb would refuse is never demanded.
+    """
+    try:
+        text = (root / "plans" / "changes" / change / "decisions.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    heading = re.compile(rf"Ambiguity {re.escape(row_id)}")
+    return any(
+        heading.fullmatch(record["title"]) and record.get("answer", "").strip()
+        for record in check_interview_minimums.maintainer_answers(text)
+    )
+
+
+def write_review_block(
+    ctx: Context,
+    endpoint: tuple[str, str, str | None],
+    result: object,
+    heading: str,
+    fingerprint: str | None,
+    commit: str,
+    rows: list[list[str]],
+    answer: str,
+    reviewer: str,
+) -> None:
+    """The runner's own spec-review evidence: audit line and block in one append.
+
+    One append puts the audit line directly above the heading, where the block's qualification
+    reads it; a failed call writes nothing, so no audit line stands without its block.
+    """
+    if not ctx.findings.exists():
+        ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+    parts = [f"{call_line('spec-review', endpoint, result)}\n{heading}"]
+    if fingerprint is not None:
+        parts.append(f"Spec fingerprint: {fingerprint}")
+    parts.append(f"Spec review commit: {commit}")
+    parts.append(answer_block(rows, answer, reviewer))
+    append(ctx.findings, "\n\n".join(parts))
+
+
+def require_committed_review_spec(root: Path, change: str) -> None:
+    """Refuse a review whenever its spec differs from the committed version."""
+    spec_path = f"plans/changes/{change}/spec.md"
+    tracked_at_head = _git_bytes(root, "ls-tree", "--name-only", "HEAD", "--", spec_path)
+    staged = _git_bytes(root, "diff", "--cached", "--name-only", "HEAD", "--", spec_path)
+    try:
+        disk = (root / spec_path).read_bytes()
+    except OSError as error:
+        raise Refused(f"{spec_path} cannot be read ({error}).") from error
+    if not tracked_at_head or staged or disk != _git_bytes(root, "show", f"HEAD:{spec_path}"):
+        raise Refused(f"{spec_path} differs from HEAD; commit the spec, then rerun spec-review.")
+
+
+def run_fallback_review(
+    ctx: Context, config: dict, opus_failure: CallFailed
+) -> tuple[bytes, str, list[list[str]], str, tuple[str, str, str | None], object]:
+    """The declared fallback review through Pi, after the Opus route failed twice (spec criteria 13-15).
+
+    The leak check runs first and a BLOCK still refuses - no fallback call starts. The
+    fallback reads the spec body fresh at its own call start, and the body on disk must still
+    be those bytes when the call ends. A failed or unreadable fallback fails the whole call.
+    """
+    if config["fallback_model"] is None:
+        raise CallFailed(
+            f"the Opus review produced no readable review ({opus_failure}); no fallback model is declared "
+            "in model-endpoints.yaml's `spec_review` block, so no fallback call starts."
+        )
+    endpoint = (str(config["fallback_endpoint"]), str(config["fallback_model"]), None)
+    if endpoint[0] != OPENCODE:
+        raise CallFailed(
+            f"the spec review's fallback endpoint must be {OPENCODE}, where the runner's Pi reviews; "
+            f"{endpoint[0]} is not."
+        )
+    problem = terms_problem(endpoint_entry(ctx.root), endpoint[1])
+    if problem is not None:
+        raise CallFailed(f"the fallback review is not admitted on its declared terms: {problem}")
+    require_committed_review_spec(ctx.root, ctx.change)
+    commit = _git_output(ctx.root, "rev-parse", "HEAD").strip()
+    body = spec_body_bytes(ctx.folder / "spec.md")
+    if body != spec_body_of(_git_bytes(ctx.root, "show", f"{commit}:plans/changes/{ctx.change}/spec.md")):
+        raise CallFailed("the spec changed while the review snapshot was read.")
+    prompt = spec_review_prompt(ctx.root, ctx.change, body)
+    result = checked_prompt(ctx, endpoint, prompt)
+    require_pi()
+    discovery = discover_free(ctx.root, allow_empty=True)
+    ctx.models_store = discovery.get("models_store")
+    require_committed_review_spec(ctx.root, ctx.change)
+    try:
+        answer = run_reviewer(
+            ctx,
+            endpoint[1],
+            prompt,
+            reviewer_key(),
+            free=False,
+            timeout_seconds=int(config["timeout_seconds"]),
+        )
+    except CallFailed as error:
+        raise CallFailed(
+            f"the Opus review produced no readable review ({opus_failure}) and the fallback review "
+            f"failed too ({error})."
+        ) from error
+    rows = readable_review(answer)
+    if spec_body_bytes(ctx.folder / "spec.md") != body:
+        raise CallFailed(
+            "the spec body changed during the fallback review; no block is written for bytes the reviewer did not read."
+        )
+    return body, commit, rows, answer, endpoint, result
+
+
+def spec_review(root: Path, change: str) -> None:
+    """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016, bead coding-harness-ttic).
+
+    The prompt carries exactly the spec body under review, and the block records its SHA-256;
+    the body on disk must still be those bytes when the call ends. A call that fails, runs
+    over the configured limit, or answers unreadably is retried once after the configured
+    pause; then the declared fallback reviews through Pi, its leak check first. A fallback
+    review is re-checked by Opus in the same round on the next call; a fourth round runs only
+    when decisions.md records the maintainer's authorization.
     """
     ctx = preflight(root, change, OPUS)
-    prompt = phase_prompt(root, "02a-spec-review.md", change)
-    begin_call(ctx, "spec-review", OPUS, prompt)
-    answer = run_work_model(ctx, prompt, OPUS, writable=False)
-    rows, _ = parse_rows(answer)
-    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
+    require_committed_review_spec(root, change)
+    config = spec_review_call_config(root)
+    try:
+        findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"plans/changes/{change}/findings.md cannot be read ({error}).") from error
+    kept, _left_out = qualifying_reviews(findings_text)
+    rounds = review_rounds(kept)
+    recheck = False
+    if kept:
+        newest = kept[-1]
+        try:
+            current = spec_body_fingerprint(ctx.folder / "spec.md")
+        except (OSError, UnicodeDecodeError) as error:
+            raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
+        recheck = review_staleness(root, change, newest, current) is None and newest.is_fallback
+    if not review_round_open(root, change, rounds, recheck):
+        raise Refused(
+            f"{rounds} spec-review rounds have run for {change}; a fourth round runs only when "
+            f"plans/changes/{change}/decisions.md holds a question headed `Q-<n> · Fourth spec-review round`, "
+            "with non-empty `asked` and `answer`, `status: answered` and `answered_by: maintainer`; "
+            "the answer begins `authorized`, and no round runs after "
+            "the fourth; otherwise the change is re-sliced."
+        )
+    spec = ctx.folder / "spec.md"
+    commit = _git_output(root, "rev-parse", "HEAD").strip()
+    try:
+        body = spec_body_bytes(spec)
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"plans/changes/{change}/spec.md cannot be read ({error}).") from error
+    if body != spec_body_of(_git_bytes(root, "show", f"{commit}:plans/changes/{change}/spec.md")):
+        raise CallFailed("the spec changed while the review snapshot was read.")
+    prompt = spec_review_prompt(root, change, body)
+    fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
+    limit = f"the spec review's limit of {config['timeout_seconds'] // 60:g} minutes"
+    result = checked_prompt(ctx, OPUS, prompt)
+    failure: CallFailed | None = None
+    rows: list[list[str]] = []
+    answer = ""
+    require_committed_review_spec(root, change)
+    try:
+        answer = run_work_model(
+            ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit
+        )
+        rows = readable_review(answer)
+    except CallFailed as error:
+        failure = error
+    if failure is not None:
+        print(
+            f"spec-review: the Opus call produced no readable review ({failure}); "
+            f"one retry follows after {config['pause_seconds']} seconds."
+        )
+        pause(int(config["pause_seconds"]))
+        result = checked_prompt(ctx, OPUS, prompt)
+        require_committed_review_spec(root, change)
+        try:
+            answer = run_work_model(
+                ctx, prompt, OPUS, writable=False, timeout=float(config["timeout_seconds"]), limit=limit
+            )
+            rows = readable_review(answer)
+            failure = None
+        except CallFailed as retry_error:
+            body, commit, rows, answer, fallback_endpoint, fallback_result = run_fallback_review(
+                ctx, config, retry_error
+            )
+            fingerprint = "sha256:" + hashlib.sha256(body).hexdigest()
+            marker = f" ({RECHECK_MARKER})" if recheck else ""
+            heading = f"## Phase 2a — fallback {config['fallback_model']}{marker}, {today()}"
+            write_review_block(
+                ctx,
+                fallback_endpoint,
+                fallback_result,
+                heading,
+                fingerprint,
+                commit,
+                rows,
+                answer,
+                str(config["fallback_model"]),
+            )
+            print(f"spec-review: the fallback review is appended to {ctx.findings.relative_to(root)}")
+            return
+    if spec_body_bytes(spec) != body:
+        raise CallFailed(
+            "the spec body changed during the review; no block is written for bytes the reviewer did not read."
+        )
+    heading = f"## Phase 2a — Opus 5.5, {today()}"
+    if recheck:
+        heading = f"## Phase 2a — Opus 5.5 ({RECHECK_MARKER}), {today()}"
+    write_review_block(ctx, OPUS, result, heading, fingerprint, commit, rows, answer, "Opus")
     print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
+
+
+def spec_review_inventory(root: Path) -> int:
+    """`--spec-review-inventory`: the morning inventory of missing spec reviews (spec criteria 16-17).
+
+    Every non-archived change folder with a `spec.md` - implemented changes included - is
+    measured with the same admission implement faces. Groups: changes whose class is missing,
+    invalid or disagreeing; changes failing the review check, the three-round exception
+    applied; and changes whose newest current qualifying review is a fallback, named for an
+    Opus re-check in the next day session - the re-check replaces the fallback review in the
+    same round. Spikes and folders without a spec stand outside. A change that cannot be read
+    is reported, never silently omitted: any error while measuring one change - a git launch
+    failure included - names that change in a group of its own, and the list goes on (review row L4-2).
+    """
+    base = root / "plans" / "changes"
+    class_refused: list[str] = []
+    review_refused: list[str] = []
+    rechecks: list[str] = []
+    unmeasured: list[str] = []
+    folders = []
+    if base.is_dir():
+        folders = sorted(entry for entry in base.iterdir() if entry.is_dir() and entry.name != "archive")
+    for folder in folders:
+        name = folder.name
+        if not (folder / "spec.md").is_file():
+            continue
+        try:
+            admission = review_admission(root, name)
+        except Exception as error:  # noqa: BLE001 - one change's failure is reported, the list goes on
+            unmeasured.append(f"{name} ({type(error).__name__}: {error})")
+            continue
+        if admission.class_problem is not None:
+            class_refused.append(f"{name} ({admission.class_problem})")
+        if admission.review_problem is not None:
+            review_refused.append(f"{name} ({admission.review_problem})")
+        if admission.recheck:
+            rechecks.append(name)
+    print("Spec-review inventory — changes without a current spec review:")
+    if class_refused:
+        print("\nClass refused (missing, invalid or disagreeing):")
+        print("\n".join(f"- {line}" for line in class_refused))
+    if review_refused:
+        print("\nReview missing, unreadable, stale or ambiguous:")
+        print("\n".join(f"- {line}" for line in review_refused))
+    if rechecks:
+        print("\nFallback review to re-check with Opus in the next day session (same round):")
+        print("\n".join(f"- {line}" for line in rechecks))
+    if unmeasured:
+        print("\nNot measured (an error while measuring the change):")
+        print("\n".join(f"- {line}" for line in unmeasured))
+    if not (class_refused or review_refused or rechecks or unmeasured):
+        print("\nNone. Every change with a spec holds a current qualifying review.")
+    return 0
 
 
 def recorded_2a_session(text: str) -> str | None:
@@ -9688,6 +10674,255 @@ def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
     return bool(locations) and all(location == "tests" or location.startswith("tests/") for location in locations)
 
 
+# The findings.md block a repair run appends for the rows handed to the orchestrator, and the reason
+# every hand step names (bead coding-harness-0zhf).
+HAND_STEP_HEADING = "## Hand steps for the orchestrator"
+HAND_STEP_REASON = "runner-held path"
+
+# A Where token's location suffix: `:line`, `:line-line`, `#L<line>` or `#L<line>-L<line>`, en dash included.
+_WHERE_LOCATION = re.compile(r"(?::[0-9]+(?:[-–][0-9]+)?|#L[0-9]+(?:[-–]L[0-9]+)?)$")
+# A Markdown link; its text and its target can each name a repository path (spec, Terms).
+_WHERE_LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+# Trailing punctuation prose leaves on a token: an unmatched closing quote or bracket, and punctuation.
+_WHERE_TRAILING = "\"'`>)}].,:;!?*"
+_WHERE_URL = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+
+@dataclass(frozen=True)
+class WhereTracking:
+    """The tracked names one `Where` reading shares: exact spellings, spellings by casefold, tracked directories."""
+
+    exact: frozenset[str]
+    spellings: dict[str, str]
+    directories: dict[str, str]
+
+
+def where_tracking(root: Path) -> WhereTracking:
+    """Read `git ls-files` once: every tracked path, and the tracked directories above it."""
+    tracked = [path for path in _git_output(root, "ls-files", "-z").split("\0") if path]
+    directories: dict[str, str] = {}
+    for path in tracked:
+        parts = path.split("/")
+        for index in range(1, len(parts)):
+            prefix = "/".join(parts[:index])
+            directories.setdefault(prefix.casefold(), prefix + "/")
+    return WhereTracking(frozenset(tracked), {path.casefold(): path for path in tracked}, directories)
+
+
+def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | None:
+    """One Where token's normalized repository path, or None when it names none (spec, Terms).
+
+    Matched wrappers come off whole, trailing punctuation and a location suffix come off the end, an
+    initial `./` goes, an absolute path inside the checkout becomes relative to the root, and `.` and
+    `..` collapse while the path stays inside that root. An exact or case-insensitive tracked match
+    answers with its tracked spelling; a token naming an existing directory that holds a tracked file
+    answers with that directory and its slash. Everything else - an external URL, an absolute path
+    outside the checkout, a path escaping the root, an untracked bare word - stays literal or names
+    nothing, and never refuses: classification must not raise where the strict `where_locations` does.
+    """
+    wrappers = {"`": "`", "*": "*", "_": "_", '"': '"', "'": "'", "(": ")", "<": ">", "[": "]"}
+    # Whole-token wrappers come off first; then prose punctuation after a wrapper (`AGENTS.md`. or
+    # "AGENTS.md",) is dropped and the unwrapping tried again, so the opening wrapper cannot survive.
+    while True:  # each pass shortens the token or breaks, so this ends
+        if len(token) >= 2 and token[0] in wrappers and token[-1] == wrappers[token[0]]:
+            token = token[1:-1]
+            continue
+        if token in tracking.exact:
+            break
+        trimmed = token.rstrip(".,;:!?")
+        if trimmed != token and len(trimmed) >= 2 and trimmed[0] in wrappers and trimmed[-1] == wrappers[trimmed[0]]:
+            token = trimmed[1:-1]
+            continue
+        break
+    # An opening wrapper whose closing partner sits on a later token (`(AGENTS.md, rule 9)` splits
+    # into `(AGENTS.md`, `rule`, `9)`) comes off alone, unless the whole token is an indexed name.
+    if token not in tracking.exact:
+        token = token.lstrip("`\"'([<")
+    if not token or _WHERE_URL.match(token):
+        return None
+    # Check the whole name first: punctuation may itself belong to an indexed filename.
+    if token in tracking.exact:
+        return token
+    folded = token.casefold()
+    if folded in tracking.spellings:
+        return tracking.spellings[folded]
+    stripped = _WHERE_LOCATION.sub("", token.rstrip(_WHERE_TRAILING))
+    if stripped.startswith("./"):
+        stripped = stripped[2:]
+    if stripped.startswith("/"):
+        try:
+            stripped = Path(stripped).resolve().relative_to(root.resolve()).as_posix()
+        except (ValueError, OSError):
+            return None  # an absolute path outside the checkout names no repository path
+    parts: list[str] = []
+    for part in stripped.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not parts:
+                return None  # the path escapes the repository root
+            parts.pop()
+        else:
+            parts.append(part)
+    collapsed = "/".join(parts)
+    if not collapsed:
+        return None
+    if collapsed in tracking.exact:
+        return collapsed
+    folded = collapsed.casefold()
+    if folded in tracking.spellings:
+        return tracking.spellings[folded]
+    directory = tracking.directories.get(folded)
+    # The canonical tracked spelling is checked on disk, so a case-variant token still answers with
+    # the tracked directory and its slash on a case-sensitive checkout.
+    if directory is not None and (root / directory.rstrip("/")).is_dir():
+        return directory
+    return collapsed
+
+
+def where_named_paths(cell: str, root: Path = REPO_ROOT, tracking: WhereTracking | None = None) -> list[str]:
+    """Every repository path a `Where` cell names, normalized; it refuses nothing (spec, Terms).
+
+    Unlike the strict `where_locations`, this reads the cell the way repair classification needs: a
+    Markdown link contributes its text and its target, prose punctuation around a token is stripped,
+    a tracked file is not required, and an unknown token stays literal instead of refusing. A cell
+    naming only an external URL, an outside path or bare prose names nothing.
+    """
+    tracking = where_tracking(root) if tracking is None else tracking
+    named: list[str] = []
+    for token in _WHERE_TOKEN_SPLIT.split(_WHERE_LINK.sub(lambda match: f" {match[1]} {match[2]} ", cell)):
+        path = _where_token_path(token, root, tracking)
+        if path is not None and path not in named:
+            named.append(path)
+    return named
+
+
+def repair_hand_rows(
+    root: Path, change: str, taken: list[tuple[str, list[str]]]
+) -> list[tuple[str, list[str], list[str]]]:
+    """The taken rows whose `Where` names a held path, each with its normalized held paths (spec, criterion 1).
+
+    The classification reads the checkpoint's own committed prefix map with its case-insensitive
+    prefix semantics and the change-folder exception - there is no second held list (plan, scope 1).
+    A row naming a committable path beside a held one is wholly held; a row naming no held path keeps
+    its eligibility, whatever else the cell says (spec, criterion 2).
+    """
+    held = _held_prefixes(root)
+    folder = f"plans/changes/{change}/".casefold()
+    tracking = where_tracking(root)
+    hand: list[tuple[str, list[str], list[str]]] = []
+    for place, row in taken:
+        held_paths: list[str] = []
+        for named in where_named_paths(row[4], root, tracking):
+            folded = named.casefold()
+            if folded.startswith(folder):
+                continue  # the checkpoint commits the change's own folder (its existing exception)
+            # A bare directory token names the prefix that ends in a slash, whether or not the
+            # directory holds a tracked file (L5-2).
+            spellings = (folded,) if folded.endswith("/") else (folded, folded + "/")
+            if not any(spelling.startswith(prefix) for prefix in held for spelling in spellings):
+                continue
+            if named not in held_paths:
+                held_paths.append(named)
+        if held_paths:
+            hand.append((place, row, held_paths))
+    return hand
+
+
+def hand_step_listing(
+    hand: list[tuple[str, list[str], list[str]]], day: str, record_path: str = "the loop record"
+) -> str:
+    """The dated bullet block the runner appends to findings.md once per invocation (spec, criteria 5, 12 and 15).
+
+    One bullet per row with its identifier, its normalized held paths and the reason. The booking
+    hint keeps the existing valid forms and opens `fixed — not a test — orchestrator hand edit <sha>`
+    only behind a retake as `taken — not a test`; no bare hand-edit form exists. It names the file
+    each row's Status is edited in: `findings.md`, or the loop record at `record_path` (P6-2).
+    """
+    in_record = [row[0] for place, row, _ in hand if place == "record"]
+    in_findings = [row[0] for place, row, _ in hand if place != "record"]
+    places = []
+    if in_findings:
+        places.append(f"{', '.join(in_findings)} in findings.md")
+    if in_record:
+        places.append(f"{', '.join(in_record)} in the loop record `{record_path}`")
+    bullets = "\n".join(
+        f"- {row[0]} — {', '.join(f'`{path}`' for path in held_paths)} — {HAND_STEP_REASON}"
+        for _, row, held_paths in hand
+    )
+    return (
+        f"{HAND_STEP_HEADING} — {day}\n\n"
+        "The runner handed the taken rows below to the orchestrator before any model call: each "
+        "row's `Where` names a path the runner does not commit. The runner left every Status and "
+        "`Broke a test` cell of these rows unchanged.\n\n"
+        f"{bullets}\n\n"
+        f"Each row's Status and `Broke a test` cells live in: {'; '.join(places)}.\n\n"
+        "Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its "
+        "`Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row "
+        "taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test "
+        "fits, retake the row as `taken — not a test — <reason>` by editing its Status in "
+        "the file named above by hand (correct its `Where` cell there first when `triage` refuses it); "
+        "only then book it as `fixed — not a test — orchestrator hand edit <sha>`."
+    )
+
+
+_HAND_BULLET = re.compile(rf"^- (\S+) — (.+) — {re.escape(HAND_STEP_REASON)}$")
+
+
+def listed_hand_steps(text: str) -> set[tuple[str, tuple[str, ...]]]:
+    """The (row id, held paths) pairs earlier hand-step blocks of a findings text already list.
+
+    Only bullets below a `Hand steps for the orchestrator` heading count, up to the next level-two
+    heading; the runner reads its own listing, never a table row (spec, criterion 13).
+    """
+    listed: set[tuple[str, tuple[str, ...]]] = set()
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = line.startswith(HAND_STEP_HEADING)
+            continue
+        match = _HAND_BULLET.match(line) if inside else None
+        if match:
+            listed.add((match[1], tuple(re.findall(r"`([^`]+)`", match[2]))))
+    return listed
+
+
+def _names_id(left: str, ident: str) -> bool:
+    """Whether the text before an answer line's first colon names `ident` as a whole token."""
+    return re.search(rf"(?<![\w-]){re.escape(ident)}(?![\w-])", left) is not None
+
+
+def without_held_answer_lines(
+    answer: str, held_ids: list[str], eligible_ids: Sequence[str] = ()
+) -> tuple[str, list[str]]:
+    """The answer without its lines for handed-off rows, and the problems of lines that mix ids.
+
+    A line whose ids before its first colon are all held is ignored, never booked, whatever words
+    surround them (spec, criterion 17): a held row's claim neither fails the attempt nor marks the
+    row, and the orchestrator books it by hand from the listing. A line naming a held id together
+    with an eligible one cannot be split, so it is a problem that names both.
+    """
+    if not held_ids:
+        return answer, []
+    kept: list[str] = []
+    problems: list[str] = []
+    for line in answer.splitlines():
+        left, sep, _rest = line.partition(":")
+        named_held = [ident for ident in held_ids if _names_id(left, ident)] if sep else []
+        if not named_held:
+            kept.append(line)
+            continue
+        named_eligible = [ident for ident in eligible_ids if _names_id(left, ident)]
+        if named_eligible:
+            problems.append(
+                f"an answer line names handed-off row(s) {', '.join(named_held)} together with taken row(s) "
+                f"{', '.join(named_eligible)}; answer each taken row on its own `<ID>: fixed — …` line and "
+                "leave the handed-off rows out"
+            )
+            kept.append(line)
+    return "\n".join(kept), problems
+
+
 def triage_status(decision: str, reason: str) -> str:
     """The canonical Status cell of a decision: the reason once, literal and already escaped pipes escaped once."""
     escaped = reason.replace("\\|", "|").replace("|", "\\|")
@@ -9907,8 +11142,8 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
     if found:
         return next(iter(found.values()))
     raise Refused(
-        f"no class is stated for {change}: pass --class <{'|'.join(CLASSES)}> or state `class:` in "
-        "research.md's header - a change must say which before phase 1 routes."
+        f"no class is stated for {change}: state `class:` in the header of research.md or spec.md "
+        "- a change must declare its class before routing."
     )
 
 
@@ -11185,6 +12420,13 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+    # The class statement and the current spec review (bead coding-harness-ttic): one admission
+    # for every route, checked before a model starts; a spike reaches the existing checks.
+    admission = review_admission(root, change)
+    if admission.class_problem is not None:
+        raise Refused(admission.class_problem)
+    if admission.review_problem is not None:
+        raise Refused(admission.review_problem)
     if stage2_off is None:
         key = read_secret("GLM_KEY")
         if key is None:
@@ -11404,6 +12646,60 @@ def document_gates() -> list[dict]:
     ]
 
 
+def document_gate_env(root: Path, change: str) -> dict[str, str]:
+    """The environment of a document check: the runner's, without any verify-admission marker.
+
+    Shared by the draft's check and the repair hand-off's check. The one tolerance of a draft is the
+    gate's own, set by this runner alone: with `TOLERATE_ENV` `adr-answers` reports this change's
+    missing answer and passes, so the exit code decides and no output is read (spec, criterion 13;
+    F-9, F-10). Nothing a document check starts carries or claims the verify admission: its
+    ownership, token and context variables are stripped, and `run_gates` enters no admission.
+    """
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+                check_adr_answers.TOLERATE_ENV: change,
+            }
+        ),
+        root,
+    )
+    return {
+        name: value
+        for name, value in env.items()
+        if name
+        not in (
+            verify_lock.LOCK_ENV,
+            verify_lock.TOKEN_ENV,
+            verify_lock.ADMISSION_ID_ENV,
+            verify_lock.ADMISSION_WAIT_ENV,
+        )
+    }
+
+
+def hand_step_gate_problems(root: Path, change: str, key: str | None = None) -> tuple[list[str], str]:
+    """The document gates over a held-only hand-off before its commit: (blocking problems, scope line).
+
+    The hand-off makes a repository commit but runs no model and no test, so the document subset
+    of the one gate list is its only check; a red gate blocks the commit (L3-2). The scope line
+    says plainly that nothing was repaired.
+    """
+    try:
+        gates = document_gates()
+    except (Refused, OSError, ValueError, yaml.YAMLError) as error:
+        return [f"the document gates could not be selected ({error})"], ""
+    gates = [gate for gate in gates if not gate["admission"]]
+    if not gates:
+        return ["no locally runnable document gates were selected; the hand-off check cannot run"], ""
+    problems, notes = run_gates(root, document_gate_env(root, change), key, gates)
+    scope = "hand-off only, no model call, nothing repaired; " + document_scope_text(
+        gates, "red" if problems else "green", notes
+    )
+    return problems, scope
+
+
 def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str] = ()) -> str:
     """The runner-owned evidence line of a draft's document check: gates only, never tests, never full green."""
     named = ", ".join(f"`{gate['id']}` ({gate['enforcement']})" for gate in gates) or "none"
@@ -11436,33 +12732,7 @@ def verify_draft(
     tampered = tool_problem(root, tools)
     if tampered:
         return [tampered], owed, not_completed
-    env = runner_env(
-        foreign_env(
-            {
-                "GIT_CONFIG_COUNT": "1",
-                "GIT_CONFIG_KEY_0": "commit.gpgsign",
-                "GIT_CONFIG_VALUE_0": "false",
-                # The one tolerance of a draft is the gate's own, set by this runner alone: with this
-                # variable `adr-answers` reports this change's missing answer and passes, so the
-                # exit code of the document check decides and no output is read (spec, criterion 13; F-9, F-10).
-                check_adr_answers.TOLERATE_ENV: ctx.change,
-            }
-        ),
-        root,
-    )
-    # Nothing a document check starts carries or claims the verify admission: its ownership,
-    # token and context variables are stripped here, and `run_gates` enters no admission.
-    env = {
-        name: value
-        for name, value in env.items()
-        if name
-        not in (
-            verify_lock.LOCK_ENV,
-            verify_lock.TOKEN_ENV,
-            verify_lock.ADMISSION_ID_ENV,
-            verify_lock.ADMISSION_WAIT_ENV,
-        )
-    }
+    env = document_gate_env(root, ctx.change)
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation, owed, not_completed
@@ -11694,6 +12964,7 @@ def repair_prompt(
     diagnostics: list[str],
     endpoint: tuple[str, str, str | None] = CODEX,
     inputs: dict[Path, bytes] | None = None,
+    held_rows: list[tuple[str, list[str], list[str]]] | None = None,
 ) -> str:
     """The implement contract with the repair block: the format, the must-runs, the baseline, the rows."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
@@ -11716,6 +12987,16 @@ def repair_prompt(
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
     ]
+    if held_rows:
+        # The model is told the held rows are not its work (spec, criterion 18); the rows stay
+        # readable in the findings record it already receives.
+        ids = ", ".join(row[0] for _, row, _ in held_rows)
+        extra.append(
+            "## Held rows — not your work\n\n"
+            f"The runner handed {ids} to the orchestrator before your call: each row's `Where` names "
+            "a path the runner does not commit. They are not your work: do not repair, answer or "
+            "book them, and answer only the taken rows above."
+        )
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
@@ -11732,6 +13013,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     or write, an older block's selected row included (bead coding-harness-3h96). A taken Status that
     already names a fix in the old hand-written form (`; fixed by`, `; fixed:`, `; repaired by`)
     refuses before any call.
+
+    A selected row whose `Where` names a path the checkpoint cannot commit is handed to the
+    orchestrator before any model call: the runner reports it with the reason `runner-held path`,
+    appends the dated hand-step listing to findings.md once, and leaves the row's Status and
+    `Broke a test` cells unchanged (bead coding-harness-0zhf). Every row held, the existing
+    checkpoint commits that listing and the run exits 0 with no model call; a mixed batch dispatches
+    only the committable rows, names the held ones in the commit body, and ignores answer lines that
+    mention them.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -11753,7 +13042,6 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         raise Refused(refusal)
     if not taken:
         raise Refused("no row is taken; nothing to repair.")
-    ids = [row[0] for _, row in taken]
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
         # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
@@ -11765,13 +13053,117 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
             "of marking it fixed."
         )
+    # The waiting, origin and legacy refusals above bind every selected row before any row is
+    # classified or handed off (spec, criterion 9).
+    hand = repair_hand_rows(root, change, taken)
+    hand_ids = [row[0] for _, row, _ in hand]
+    handed = set(hand_ids)
+    eligible = [(place, row) for place, row in taken if row[0] not in handed]
+    ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The scope is frozen from the rows as they stand, before any model runs: the plan is never a
     # source and an attempt's own plan, findings or row writes cannot enlarge it (spec, criteria 7
     # and 8; bead coding-harness-t83). Held paths keep their precedence at the checkpoint.
     scope = repair_scope([row[4] for _, row in taken], change, root)
-    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+
+    # A row already listed with the same held paths in an earlier block of this findings.md is
+    # reported again but never listed again, so a retry adds no duplicate block (L3-5).
+    listed = listed_hand_steps(current)
+    fresh = [item for item in hand if (item[1][0], tuple(item[2])) not in listed]
+    # "Already listed" for a held-only run is judged against the committed findings.md: a listing a
+    # failed mixed run left uncommitted in the tree still has to be committed by the next run (P6-1).
+    try:
+        committed = _git_output(root, "show", f"HEAD:{ctx.findings.relative_to(root).as_posix()}")
+    except Refused:
+        committed = ""
+    committed_listed = listed_hand_steps(committed)
+    fresh_committed = [item for item in hand if (item[1][0], tuple(item[2])) not in committed_listed]
+
+    def report_hand_steps() -> None:
+        for _, row, held_paths in hand:
+            print(f"repair: hand step {row[0]} — held path {', '.join(held_paths)} — {HAND_STEP_REASON}")
+
+    def write_hand_listing(producer: str) -> None:
+        # One dated listing of the rows not yet listed, appended once before the attempt snapshot:
+        # a retry and a checkpoint rollback put findings.md back to bytes that already carry it, so
+        # neither duplicates nor loses it (spec, criteria 5 and 10).
+        if fresh:
+            if not ctx.findings.exists():
+                ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+            append(
+                ctx.findings,
+                hand_step_listing(fresh, today(), str(record_dir(change, root) / "loop.md")),
+            )
+        report_hand_steps()
+
+    if hand and not eligible:
+        # Every selected row is held: no model call and no attempt. The listing is checked by the
+        # document gates before the one commit, and its time line is written when the plan carries a
+        # `## Time used` heading (L3-2). The existing checkpoint commits it after preflight, with its
+        # existing allowances for this change's findings and derived leftovers and its refusal of
+        # other dirty work (spec, criteria 4, 11 and 16), and the run exits 0.
+        if not fresh_committed:
+            report_hand_steps()
+            print("repair: every held row is already listed in findings.md · nothing new committed, no model call")
+            return
+        findings_before = ctx.findings.read_bytes() if ctx.findings.exists() else None
+        plan_before = ctx.plan.read_bytes() if ctx.plan.is_file() else None
+        started_wall, started_mono = utc_now(), monotonic_now()
+        try:
+            write_hand_listing("stage2-runner")
+            problems, scope = hand_step_gate_problems(root, change)
+            if problems:
+                raise CallFailed(
+                    "the hand-step listing failed the document gates; nothing was committed and no row was "
+                    "repaired:\n" + "\n".join(problems)
+                )
+            plan_text = ctx.plan.read_text(encoding="utf-8") if ctx.plan.is_file() else ""
+            if TIME_HEADING.search(plan_text):
+                persist_time_entry(
+                    root,
+                    ctx.plan,
+                    time_entry(
+                        "repair",
+                        1,
+                        "hand-off",
+                        "none",
+                        True,
+                        started_wall,
+                        utc_now(),
+                        max(0, round(monotonic_now() - started_mono)),
+                        [scope],
+                    ),
+                    plan_text,
+                    {},
+                    accepted=True,
+                    retry=False,
+                )
+            checkpoint(
+                root,
+                change,
+                baseline,
+                None,
+                ignored_before,
+                message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
+                keep=allowed,
+            )
+        except (CallFailed, Refused):
+            # A red gate, a failed time write or a failed checkpoint leaves no uncommitted listing
+            # behind: findings.md and the plan's time line return to their state before the run, so
+            # the next repair is not refused on them and lists and commits afresh (L5-1). Nothing is
+            # restored once a commit has landed.
+            if _git_output(root, "rev-parse", "HEAD").strip() == baseline:
+                if findings_before is None:
+                    ctx.findings.unlink(missing_ok=True)
+                else:
+                    restore_work_input(root, ctx.findings, findings_before)
+                if plan_before is not None:
+                    restore_work_input(root, ctx.plan, plan_before)
+            raise
+        print("repair: hand steps committed for the orchestrator · no model call · nothing repaired")
+        return
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
     key = None
     if stage2_off is None:
@@ -11782,6 +13174,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ]
     else:
         routes = [(SONNET, None, "stage-1", stage2_off)]
+    if hand:
+        write_hand_listing(producer_for(routes[0][0]))
     fixes: dict[str, str] = {}
     marks: dict[str, str] = {}
     rows_before = findings_rows(current)
@@ -11795,10 +13189,22 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
 
     def check(answer: str) -> list[str]:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
+        # Answer lines for handed-off rows are ignored: they neither fail the attempt nor book the
+        # row - the orchestrator books it from the listing (spec, criterion 17).
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
+        kept_answer, mixed = without_held_answer_lines(answer, hand_ids, ids)
         found, proven, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"], tools
+            ctx,
+            kept_answer,
+            eligible,
+            baseline,
+            key,
+            rows_before,
+            audits[-1] if audits else None,
+            standing["text"],
+            tools,
         )
+        problems = [*mixed, *problems]
         if not problems:
             fixes.clear()
             fixes.update(found)
@@ -11807,25 +13213,37 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         return problems
 
     def before_commit() -> None:
+        # Held rows keep the unchanged-cell guarantee: an attempt that edits one is refused.
         require_unchanged_repair_rows(ctx, taken, resolved)
-        mark_repaired_findings(ctx, taken, fixes, resolved=resolved)
+        mark_repaired_findings(ctx, eligible, fixes, resolved=resolved)
 
+    commit_message = f"fix({change}): repair taken findings {', '.join(ids)}"
+    if hand:
+        # The subject names only the repaired rows; the body names the held ones as hand steps
+        # (spec, criterion 14).
+        commit_message += "\n\nHand steps for the orchestrator: " + "; ".join(
+            f"{row[0]} — {HAND_STEP_REASON} {', '.join(held_paths)}" for _, row, held_paths in hand
+        )
     run_attempts(
         ctx,
         "repair",
         routes,
-        lambda diagnostics, endpoint, inputs: repair_prompt(ctx, baseline, taken, diagnostics, endpoint, inputs),
+        lambda diagnostics, endpoint, inputs: repair_prompt(
+            ctx, baseline, eligible, diagnostics, endpoint, inputs, held_rows=hand or None
+        ),
         baseline,
         key,
         ignored_before,
-        commit_message=f"fix({change}): repair taken findings {', '.join(ids)}",
+        commit_message=commit_message,
         closing=(
             "repair post-run checks failed after the allowed attempts; why each attempt failed and "
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
         answer_check=check,
         before_commit=before_commit,
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True, resolved=resolved),
+        after_commit=lambda: mark_repaired_record(
+            change, eligible, fixes, root, marks, lock_held=True, resolved=resolved
+        ),
         snapshot_findings=snapshot,
         restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
@@ -12450,7 +13868,9 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
+    parser.add_argument(
+        "verb", nargs="?", default="", help="the runner verb (`--spec-review-inventory` runs without one)"
+    )
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "row_status",
@@ -12532,6 +13952,11 @@ def main(argv: list[str] | None = None) -> int:
         help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
     parser.add_argument(
+        "--spec-review-inventory",
+        action="store_true",
+        help="no verb: report which changes lack a current spec review (the morning inventory)",
+    )
+    parser.add_argument(
         "--supersedes",
         action="append",
         default=None,
@@ -12572,6 +13997,39 @@ def _terminate(signum: int, _frame: object) -> None:
 def _run(args: argparse.Namespace) -> int:
     """The verb `main` parsed, with the runner's refusals mapped to their exit codes."""
     try:
+        if args.spec_review_inventory:
+            if args.verb or args.change:
+                raise Refused("--spec-review-inventory takes no verb and no change; it measures every change itself.")
+            if (
+                any(
+                    value is not None
+                    for value in (
+                        args.stage2_off,
+                        args.klass,
+                        args.seats,
+                        args.availability_reported,
+                        args.model,
+                        args.handover,
+                        args.stage_failed,
+                        args.reason,
+                        args.row_status,
+                        args.reason_text,
+                    )
+                )
+                or args.restart
+            ):
+                raise Refused("--spec-review-inventory takes no other option.")
+            refuse_repository_git(Path(args.root))
+            return spec_review_inventory(Path(args.root))
+        if not args.verb:
+            raise Refused("name a verb, or run --spec-review-inventory for the morning inventory.")
+        # Validate verbs here, after the verb-less inventory option has been handled.
+        known = sorted([*VERBS, "session", "prepare-explore"])
+        if args.verb not in known:
+            raise Refused(
+                f"`{args.verb}` is no verb of this runner; choose from {', '.join(known)}, "
+                "or run --spec-review-inventory without one."
+            )
         if (
             args.stage2_off is not None
             and not args.change
