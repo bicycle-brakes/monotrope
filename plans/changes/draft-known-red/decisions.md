@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-22
 created: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-83e
@@ -53,3 +53,18 @@ context: |
   Architecture change: ADR 0016 decision 9 amended by an addendum.
 
 In the context of a draft whose every route failed, facing a hand draft or a runner route, we decided to amend ADR 0016 so that --stage2-off runs the draft on Opus 5.5 at effort xhigh, to achieve night runs that draft without the orchestrator's hand, accepting more load on the runner account's Opus limits and an ADR addendum. — 2026-11-22
+
+## Q-2 · Automatic fall-through to Opus after GLM
+
+asked: 2026-11-23
+answer: A — automatic: when the GLM 5.3 draft attempt fails (call failure or red document check), the runner drafts on Opus 5.5 at effort `xhigh` by itself, visibly with its reason in findings.md; `--stage2-off [REASON]` stays available to start on Opus directly.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the Opus draft route runs on its own after GLM or only on command.
+  Intention: on 2026-11-23 Codex was usage-limited until 16:40 and GLM 5.3 answered unrecognized_model, so three lanes (isolated-attempts, doc-currency, leak-diff-tests-exemption) waited with their drafts; the maintainer decided on 2026-11-22 for coding-harness-s9r that a failed model call falls through to the next route.
+  Today: the draft's route list ends at GLM 5.3; --stage2-off is refused for draft.
+  Repository change: Options: A automatic fall-through to Opus after GLM, plus --stage2-off; B only on command (--stage2-off named as the next step); C skip GLM, Codex then Opus.
+  Architecture change: ADR 0016 decision 9 addendum (Q-1) gains the automatic route.
+
+In the context of drafts that stall when Codex and GLM fail, facing a manual or an automatic Opus route, we decided the draft falls through to Opus xhigh on its own after GLM, to achieve night runs whose drafts do not stall, accepting more load on the runner account's Opus limits. — 2026-11-23
