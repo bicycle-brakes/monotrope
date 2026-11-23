@@ -1950,8 +1950,11 @@ paths its `Where` cell names, read the way the checkpoint's own protection
 reads them — case-insensitive prefixes from the committed provenance map and
 the runner-held paths, with the change's own folder exempt. A token counts
 whether it stands bare, in backticks or as the text or target of a Markdown
-link, without a trailing line location, and a tracked directory counts with
-its trailing slash. External URLs and paths outside the checkout name
+link, without a trailing line location, and a directory counts with its
+trailing slash: a bare word that equals a held directory prefix names it,
+whether or not the directory holds a tracked file. An opening bracket, quote
+or backtick whose partner sits on a later token (`(AGENTS.md, rule 9)`) is
+stripped alone. External URLs and paths outside the checkout name
 nothing, an unknown location is never a refusal, and prose names a path only
 by accident: a bare word equal to a tracked directory name does name that
 directory (`prompts`, `templates` and `docs/adr` each resolve to the directory
@@ -1962,8 +1965,12 @@ appends one dated `Hand steps for the orchestrator` listing — one bullet per
 row with its ID, held paths and reason — to `findings.md` before the attempt
 snapshot, and leaves the row's Status and `Broke a test` cells untouched. A
 row already listed there with the same held paths is reported again but not
-listed again: a run whose held rows are all listed already commits nothing
-new and says so. The listing is not a findings table: no later resolution
+listed again. A held-only run judges "already listed" against the committed
+`findings.md` (`HEAD`), not the working tree: a listing a failed mixed run left
+uncommitted is committed by the next held-only run, and only a run whose held
+rows are all listed in `HEAD` commits nothing new and says so. The listing
+names the file each row's Status is edited in: `findings.md` or the loop
+record with its path. The listing is not a findings table: no later resolution
 reads its bullets as rows. When every selected row is held, the run makes no
 model call and repairs nothing; it runs the document gates over the listing,
 writes its own measured time line when the plan has a `## Time used` heading,

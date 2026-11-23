@@ -11881,6 +11881,55 @@ def test_repair_failed_handoff_commit_leaves_no_uncommitted_listing(
     assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
 
 
+def test_repair_held_only_run_commits_listing_left_by_failed_mixed_run(world: World) -> None:
+    """P6-1. Planted fault: a held-only run judges "already listed" against the working tree, so a
+    listing a failed mixed run left uncommitted stays uncommitted and the run exits 0."""
+    cells = [record_cells("L1-1", "taken — test_a", where="AGENTS.md"), record_cells("L1-2", "taken — test_b")]
+    held_world(world, cells, answer="L1-2: fixed — tests/test_fix.py::test_fix")
+    script_repair(world, [repair_step(plant={"AGENTS.md": "tampered\n"})], make=[{"stdout": "green\n"}])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert stage2.HAND_STEP_HEADING in world.text(), "the failed mixed run keeps its listing in the tree"
+    # The orchestrator settles the eligible row; only the held row is left.
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the held-only run commits the leftover listing"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert committed.count(stage2.HAND_STEP_HEADING) == 1
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+def test_repair_hand_step_listing_names_the_file_of_each_row(world: World) -> None:
+    """P6-2. Planted fault: the booking hint says `findings.md` for every row, though a taken row
+    can live in the loop record, whose Status a hand edit in findings.md never reaches."""
+    row_a = record_cells("L1-1", "taken — test_a", where="AGENTS.md")
+    row_b = record_cells("F-2", "taken — test_b", where="AGENTS.md")
+    text = stage2.hand_step_listing(
+        [("record", row_a, ["AGENTS.md"]), ("phase-6", row_b, ["AGENTS.md"])], "2026-11-23", "/state/loop.md"
+    )
+    assert "L1-1 in the loop record `/state/loop.md`" in text
+    assert "F-2 in findings.md" in text
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [row_a])
+    assert world.run("repair") == 0
+    block = hand_steps_of(world)
+    assert "L1-1 in the loop record" in block
+    assert str(world.record()) in block
+    assert "in findings.md" not in block
+
+
+def test_repair_where_strips_unmatched_leading_wrappers(world: World) -> None:
+    """P6-3. Planted fault: an opening wrapper whose closing partner sits on a later token stays on
+    the token, so `(AGENTS.md, rule 9)` names the literal `(AGENTS.md` and the row reaches the model."""
+    for cell in ("(AGENTS.md, rule 9)", '"AGENTS.md, rule 9"', "`AGENTS.md, rule 9`", "[AGENTS.md, rule 9]"):
+        named = stage2.where_named_paths(cell, world.root)
+        assert "AGENTS.md" in named, (cell, named)
+        hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L1-1", "taken — t", where=cell))])
+        assert [row[0] for _, row, _ in hand] == ["L1-1"], cell
+
+
 def test_repair_all_held_commits_only_handoff(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 11. Planted fault: a successful held-only run leaves findings uncommitted, or
     admits changes outside the existing checkpoint allowances."""

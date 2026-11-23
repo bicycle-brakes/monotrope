@@ -9625,6 +9625,10 @@ def _where_token_path(token: str, root: Path, tracking: WhereTracking) -> str | 
             token = trimmed[1:-1]
             continue
         break
+    # An opening wrapper whose closing partner sits on a later token (`(AGENTS.md, rule 9)` splits
+    # into `(AGENTS.md`, `rule`, `9)`) comes off alone, unless the whole token is an indexed name.
+    if token not in tracking.exact:
+        token = token.lstrip("`\"'([<")
     if not token or _WHERE_URL.match(token):
         return None
     # Check the whole name first: punctuation may itself belong to an indexed filename.
@@ -9716,13 +9720,23 @@ def repair_hand_rows(
     return hand
 
 
-def hand_step_listing(hand: list[tuple[str, list[str], list[str]]], day: str) -> str:
+def hand_step_listing(
+    hand: list[tuple[str, list[str], list[str]]], day: str, record_path: str = "the loop record"
+) -> str:
     """The dated bullet block the runner appends to findings.md once per invocation (spec, criteria 5, 12 and 15).
 
     One bullet per row with its identifier, its normalized held paths and the reason. The booking
     hint keeps the existing valid forms and opens `fixed — not a test — orchestrator hand edit <sha>`
-    only behind a retake as `taken — not a test`; no bare hand-edit form exists.
+    only behind a retake as `taken — not a test`; no bare hand-edit form exists. It names the file
+    each row's Status is edited in: `findings.md`, or the loop record at `record_path` (P6-2).
     """
+    in_record = [row[0] for place, row, _ in hand if place == "record"]
+    in_findings = [row[0] for place, row, _ in hand if place != "record"]
+    places = []
+    if in_findings:
+        places.append(f"{', '.join(in_findings)} in findings.md")
+    if in_record:
+        places.append(f"{', '.join(in_record)} in the loop record `{record_path}`")
     bullets = "\n".join(
         f"- {row[0]} — {', '.join(f'`{path}`' for path in held_paths)} — {HAND_STEP_REASON}"
         for _, row, held_paths in hand
@@ -9733,11 +9747,12 @@ def hand_step_listing(hand: list[tuple[str, list[str], list[str]]], day: str) ->
         "row's `Where` names a path the runner does not commit. The runner left every Status and "
         "`Broke a test` cell of these rows unchanged.\n\n"
         f"{bullets}\n\n"
+        f"Each row's Status and `Broke a test` cells live in: {'; '.join(places)}.\n\n"
         "Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its "
         "`Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row "
         "taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test "
         "fits, retake the row as `taken — not a test — <reason>` by editing its Status in "
-        "findings.md by hand (correct its `Where` cell there first when `triage` refuses it); "
+        "the file named above by hand (correct its `Where` cell there first when `triage` refuses it); "
         "only then book it as `fixed — not a test — orchestrator hand edit <sha>`."
     )
 
@@ -11902,6 +11917,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     # reported again but never listed again, so a retry adds no duplicate block (L3-5).
     listed = listed_hand_steps(current)
     fresh = [item for item in hand if (item[1][0], tuple(item[2])) not in listed]
+    # "Already listed" for a held-only run is judged against the committed findings.md: a listing a
+    # failed mixed run left uncommitted in the tree still has to be committed by the next run (P6-1).
+    try:
+        committed = _git_output(root, "show", f"HEAD:{ctx.findings.relative_to(root).as_posix()}")
+    except Refused:
+        committed = ""
+    committed_listed = listed_hand_steps(committed)
+    fresh_committed = [item for item in hand if (item[1][0], tuple(item[2])) not in committed_listed]
 
     def report_hand_steps() -> None:
         for _, row, held_paths in hand:
@@ -11914,7 +11937,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         if fresh:
             if not ctx.findings.exists():
                 ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
-            append(ctx.findings, hand_step_listing(fresh, today()))
+            append(
+                ctx.findings,
+                hand_step_listing(fresh, today(), str(record_dir(change, root) / "loop.md")),
+            )
         report_hand_steps()
 
     if hand and not eligible:
@@ -11923,7 +11949,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         # `## Time used` heading (L3-2). The existing checkpoint commits it after preflight, with its
         # existing allowances for this change's findings and derived leftovers and its refusal of
         # other dirty work (spec, criteria 4, 11 and 16), and the run exits 0.
-        if not fresh:
+        if not fresh_committed:
             report_hand_steps()
             print("repair: every held row is already listed in findings.md · nothing new committed, no model call")
             return

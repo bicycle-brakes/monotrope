@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-0zhf
@@ -32,7 +32,7 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
 
 **Taken row:** the current finding selected for repair by the existing resolver, whether in the active loop record or findings.
 
-**Named path:** a repository-relative path-like token in `Where`, including both the text and target of a Markdown link. Split the cell on whitespace, commas and semicolons; strip surrounding backticks, quotes and brackets and trailing punctuation. Remove a trailing `:line`, `:line-line`, `#L<line>` or `#L<line>-L<line>` location, including ranges with an en dash. An initial `./` is removed; absolute paths inside the checkout are made relative to its root. A relative link target is interpreted from the repository root, with `.` and `..` collapsed only when it remains inside that root; an external URL, an absolute path outside the checkout or a path escaping the root is not a named repository path. Case-insensitive matches to tracked paths use their tracked spelling; other paths retain their normalized spelling. A tracked file is not required. A token naming an existing directory containing at least one tracked file is matched as that directory followed by `/`, even when the token has no trailing slash; an untracked bare word remains literal.
+**Named path:** a repository-relative path-like token in `Where`, including both the text and target of a Markdown link. Split the cell on whitespace, commas and semicolons; strip surrounding backticks, quotes and brackets and trailing punctuation. Remove a trailing `:line`, `:line-line`, `#L<line>` or `#L<line>-L<line>` location, including ranges with an en dash. An initial `./` is removed; absolute paths inside the checkout are made relative to its root. A relative link target is interpreted from the repository root, with `.` and `..` collapsed only when it remains inside that root; an external URL, an absolute path outside the checkout or a path escaping the root is not a named repository path. Case-insensitive matches to tracked paths use their tracked spelling; other paths retain their normalized spelling. A tracked file is not required. A token naming an existing directory containing at least one tracked file is matched as that directory followed by `/`, even when the token has no trailing slash; a bare word that equals a held directory prefix names that directory, tracked or not; any other untracked bare word remains literal. An opening wrapper (bracket, quote, backtick) whose closing partner sits on a later token is stripped alone.
 
 ## Acceptance criteria
 
@@ -42,8 +42,8 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
    *Refuted by:* A pathless row, an unknown non-held path, or a non-held directory is handed off or refused solely because of its `Where`.
 3. When a batch contains both held and committable rows, the model receives only the committable taken rows for repair.
    *Refuted by:* The model receives a held row or does not receive an eligible committable row.
-4. If every taken row is held and the existing pre-call checks pass, repair makes no model call and exits 0 with the hand-step listing on standard output.
-   *Refuted by:* A model is called, the exit is nonzero, or standard output does not identify the rows and their held paths.
+4. If every taken row is held and the existing pre-call checks pass, repair makes no model call; it exits 0 with the hand-step listing on standard output when the repository's blocking document gates are green, and exits 1 without a commit when one is red.
+   *Refuted by:* A model is called, the exit is nonzero with green gates, a red gate still commits, or standard output does not identify the rows and their held paths.
 5. When held rows are classified, the runner reports each row's identifier, each named held path and the reason `runner-held path` in its answer and in a listing appended to `findings.md`.
    *Refuted by:* Either listing omits an affected row, a named held path, or the reason, including when no model call is made.
 6. While handing off held rows, the runner leaves their Status and `Broke a test` cells unchanged.
@@ -56,7 +56,7 @@ Before a repair attempt, separate taken findings whose named paths the runner ca
    *Refuted by:* A held row with a legacy completion marker bypasses the booking refusal or a waiting or invalid-origin row is bypassed.
 10. When repair hands off held rows, it appends one listing before the attempt loop and preserves that listing through a failed or rolled-back attempt.
     *Refuted by:* The listing disappears on rollback or is duplicated by retries in the same invocation.
-11. When every selected row is held, repair commits the hand-step listing without a model attempt.
+11. When every selected row is held and the blocking document gates are green, repair commits the hand-step listing without a model attempt, including a listing a failed mixed run left uncommitted; a red gate exits 1 with no commit.
     *Refuted by:* A successful handoff leaves the listing uncommitted or admits a pre-existing change that the existing preflight and checkpoint would refuse; the existing allowances for this change's findings and derived leftovers remain in force.
 12. When the runner writes a hand-step listing to `findings.md`, it uses a dated `Hand steps for the orchestrator` heading and one bullet per row with its identifier, normalized held paths and reason.
     *Refuted by:* The listing is a table, lacks the date, or loses a row identifier, path or reason.
