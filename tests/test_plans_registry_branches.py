@@ -204,7 +204,7 @@ def test_git_read_failure_credits_completed_reads(lab: Lab, monkeypatch: pytest.
     assert missing(verdict) == []
 
 
-def test_git_read_failure_in_a_non_repository_blocks(tmp_path: Path, lab: Lab, monkeypatch) -> None:
+def test_git_read_failure_in_a_non_repository_blocks(tmp_path: Path, monkeypatch) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
     monkeypatch.setattr(plans_registry, "REPO", plain)
