@@ -527,3 +527,102 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 Orchestrator hand finish, 2026-11-23: the Sonnet repair of loop rows L2-1..L2-14 (taken with one decided fix for the Where theme after repair-hand-held-rows merged: the scope reads Where cells through the shared classifier) failed its full `make verify` on one test only, `test_work_verbs_skip_escaped_scan_parent[repair-True]`: its grant was the bare directory word `src/deep`, which the decided rule no longer counts. The orchestrator wrote `src/deep/` in the test (a directory grants its tree only with its trailing slash); the runner code of the attempt is unchanged. 528 targeted tests green, full `make verify` green on 2026-11-23 (execution 969 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).
 
 Stage-2 call, 2026-11-23: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1188 files, 5465 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1188 files, 5466 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +6 -3
+> - `scripts/stage2.py` +38 -24
+> - `tests/test_stage2.py` +91 -3
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>                 ],
+>                 docs=[{"stdout": "green\n"}],
+>             )
+>             baseline = git(world.root, "rev-parse", "HEAD")
+> >           assert world.run("draft") != 0
+> E           AssertionError: assert 0 != 0
+> E            +  where 0 = run('draft')
+> E            +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3298/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').run
+>
+> tests/test_stage2.py:21319: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 4 commits, 1 rules, 1 prompt texts
+> draft: verified and committed · route codex · attempt 1
+> ________________ test_stage2_journal_paths_are_held[draft-add] _________________
+> [gw11] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3298/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> capsys = <_pytest.capture.CaptureFixture object at 0x1092fdc10>
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10930c050>
+> verb = 'draft', kind = 'add'
+>
+>     @pytest.mark.parametrize(
+>         ("verb", "kind"),
+>         [(verb, kind) for verb in ("implement", "repair", "draft") for kind in ("edit", "add", "case-variant")],
+>     )
+>     def test_stage2_journal_paths_are_held(
+>         world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, verb: str, kind: str
+>     ) -> None:
+>         """Criterion 1. Planted fault: a writing attempt commits or keeps a `docs/journal/` edit, addition or case variant.
+>     
+>         Every Stage-2 writing verb is covered: `draft` commits through its own call of the same
+>         checkpoint (L3-5). Under `STAGE2_PLANT_FAULT` the runner's held list loses the journal prefix.
+>         """
+>         if os.environ.get("STAGE2_PLANT_FAULT"):
+>             monkeypatch.setattr(
+>                 stage2, "RUNNER_HELD", tuple(prefix for prefix in stage2.RUNNER_HELD if prefix != "docs/journal/")
+>             )
+>         relative, content = {
+>             "edit": ("docs/journal/note.md", "written by the attempt\n"),
+>             "add": ("docs/journal/handover.md", "the attempt's own handover\n"),
+>             "case-variant": ("Docs/Journal/handover.md", "the attempt's own handover\n"),
+>         }[kind]
+>         if kind == "edit":
+>             (world.root / "docs" / "journal").mkdir(parents=True)
+>             (world.root / relative).write_text("# Handover\n", encoding="utf-8")
+>             git(world.root, "add", "-A")
+>             git(world.root, "commit", "--quiet", "-m", "seed journal note")
+>         if verb == "draft":
+>             draft_world(world)
+>             world.script(
+>                 codex=[
+>                     codex_ok(
+>                         "T1",
+>                         "drafted",
+>                         plant={
+>                             "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+>                             "plans/changes/demo/plan.md": PLAN_CARD,
+>                             relative: content,
+>                         },
+>                     )
+>                 ],
+>                 docs=[{"stdout": "green\n"}],
+>             )
+>             baseline = git(world.root, "rev-parse", "HEAD")
+> >           assert world.run("draft") != 0
+> E           AssertionError: assert 0 != 0
+> E            +  where 0 = run('draft')
+> E            +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3298/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').run
+>
+> tests/test_stage2.py:21319: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 4 commits, 1 rules, 1 prompt texts
+> draft: verified and committed · route codex · attempt 1
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[draft-edit]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[draft-case-variant]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[draft-add] - ...
+> 3 failed, 22 passed in 14.74s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-scope-guard/stage2/attempts/repair-scope-guard/attempt-1-20261123T141740930572Z-48b355bb.md
+> ```
+
+Orchestrator hand finish, 2026-11-23: the Sonnet repair of loop rows L3-1..L3-6 failed its post-run checks only on the new draft cases of `test_stage2_journal_paths_are_held`: they expected the draft to refuse a `docs/journal/` write, but the draft keeps only its change folder and puts such a write back before its commit (draft_keep), so it exits 0. The orchestrator rewrote the draft branch to assert what criterion 1 asks — no draft commit carries the journal path — and noted that the RUNNER_HELD plant does not reach the draft cases. The runner code of the attempt is unchanged. 517 targeted tests green, full `make verify` green on 2026-11-23 (execution 983 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9).

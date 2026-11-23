@@ -2094,9 +2094,12 @@ an attempt's own plan, findings or row writes cannot enlarge it. Both repair pro
 in words and forbid handover and journal writes — `docs/journal/` is held for the orchestrator, on
 the runner's held list beside the other held paths. Right after the call, before verification
 writes anything of its own, the runner compares every file git sees with the inventory taken right
-before that attempt's call, judging ignored files by the ignore rules the attempt started under (an
-edited `.gitignore` or `.git/info/exclude` cannot hide a new file). A failed attempt's new files
-outside the scope are removed before the next route starts. At the checkpoint: a new file outside the
+before that attempt's call, judging ignored files by the ignore rules the attempt started under: an
+edited `.gitignore` or `.git/info/exclude` cannot hide a new file, and removing an ignore line does
+not turn a file that already existed into the attempt's. The guard digests those two kinds of
+source only; an ignore rule set through `git config core.excludesFile` is outside it. A failed
+attempt's new files outside the scope are removed whatever failed - a check, a rejected answer or
+the last route - so the next route, or the next `repair` run, never starts with them. At the checkpoint: a new file outside the
 scope — an untracked non-ignored file, an indexed addition, an explicitly indexed ignored file or a
 rename destination — refuses the attempt on the held-path refusal path. The refusal names every
 offending path and the saved attempt under `refs/stage2/attempts/`, the baseline and the pre-call

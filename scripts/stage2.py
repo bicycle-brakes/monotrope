@@ -6809,15 +6809,19 @@ def attempt_new_files(
     rules_before: dict[str, str],
     ignored_before: dict[Path, tuple[int, int]] | None,
 ) -> set[Path]:
-    """The files this attempt added, judged by the ignore rules it started under.
+    """The files this attempt wrote, judged by the ignore rules it started under.
 
-    Normally an untracked ignored file is no new file (a cache). When an ignore rule file changed
-    during the attempt, every ignored file that did not exist before counts as new too, so the
-    attempt cannot hide a stray by listing it in `.gitignore` or `.git/info/exclude`.
+    `ignored_before` is the attempt's own pre-call snapshot of ignored files. Normally an untracked
+    ignored file is no new file (a cache). When an ignore rule file changed during the attempt, the
+    rules it started under decide: an ignored file that did not exist before counts as new, so the
+    attempt cannot hide a stray by listing it in `.gitignore` or `.git/info/exclude`; and a file
+    that already existed (ignored) is never new, so an attempt that removes an ignore line cannot
+    make the files it exposes its own (bead coding-harness-t83, L3-2).
     """
     after = file_inventory(root)
     new = after - before
     if ignored_before is not None and ignore_rules_state(root, after) != rules_before:
+        new -= set(ignored_before)
         new |= {path for path in ignored_snapshot(root) if path not in ignored_before and path not in before}
     return new
 
@@ -9487,6 +9491,8 @@ def checkpoint(
     scope_baseline: set[Path] | None = None,
     attempt_label: str | None = None,
     scope_new: set[Path] | None = None,
+    scope_rules: dict[str, str] | None = None,
+    scope_ignored: dict[Path, tuple[int, int]] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
@@ -9538,7 +9544,9 @@ def checkpoint(
         # (the rendered index, a stamp, its bytecode) is not the attempt's to answer for.
         try:
             if scope_new is None:
-                candidates = file_inventory(root) - scope_baseline
+                # No measurement from the call itself: judge against the pre-attempt inventory the
+                # same way (L3-3), with the rules and ignored files the caller froze, if any.
+                candidates = attempt_new_files(root, scope_baseline, scope_rules or {}, scope_ignored)
             else:
                 # Measured right after the call, before verification: what `make verify` or the
                 # targeted check itself writes is never the attempt's stray (L2-11). A candidate the
@@ -11887,10 +11895,12 @@ def run_attempts(
         scope_rules: dict[str, str] = {}
         scope_problem: str | None = None
         scope_new: set[Path] | None = None
+        scope_ignored: dict[Path, tuple[int, int]] | None = None
         if repair_scope is not None:
             try:
                 scope_before = file_inventory(root)
                 scope_rules = ignore_rules_state(root, scope_before)
+                scope_ignored = ignored_snapshot(root)
             except Refused as error:
                 scope_before = None
                 scope_problem = f"the repair scope guard could not read the file inventory before the call ({error})"
@@ -12111,7 +12121,7 @@ def run_attempts(
                 # The attempt's new files, measured before verification writes anything of its own
                 # (L2-11) and judged by the ignore rules the attempt started under (L2-3).
                 try:
-                    scope_new = attempt_new_files(root, scope_before, scope_rules, ignored_before)
+                    scope_new = attempt_new_files(root, scope_before, scope_rules, scope_ignored)
                 except Refused as error:
                     scope_problem = f"the repair scope guard could not read the file inventory after the call ({error})"
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
@@ -12239,24 +12249,6 @@ def run_attempts(
             problems = [*work_problems, *lifecycle_problems, *problems]
             if scope_problem is not None:
                 problems.append(scope_problem)
-            if problems and repair_scope is not None and scope_new is not None and attempt < len(routes):
-                # A failed attempt's new files outside the scope never reach the next route: that
-                # attempt's checkpoint would commit them through `git add -A` without naming them (L2-5).
-                try:
-                    outside = {
-                        path
-                        for path in scope_new
-                        if not within_scope(path, repair_scope) and not derived_leftover(root, path)
-                    }
-                    removed = remove_stray_files(root, outside)
-                except (Refused, OSError) as error:
-                    problems.append(f"the repair scope guard could not remove the attempt's new files ({error})")
-                else:
-                    if removed:
-                        problems.append(
-                            "the repair scope guard removed the attempt's new files outside its scope: "
-                            + ", ".join(f"`{name}`" for name in removed)
-                        )
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -12287,6 +12279,26 @@ def run_attempts(
                     restore_work_input(root, path, content)
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
+            if problems and repair_scope is not None and scope_new is not None:
+                # A failed attempt's new files outside the scope never survive it, whatever failed -
+                # a check, a rejected answer or the last route: the next route's checkpoint would
+                # commit them through `git add -A` without naming them (L2-5, L3-1, L3-4), and the
+                # next run would stop at preflight on them.
+                try:
+                    outside = {
+                        path
+                        for path in scope_new
+                        if not within_scope(path, repair_scope) and not derived_leftover(root, path)
+                    }
+                    removed = remove_stray_files(root, outside)
+                except (Refused, OSError) as error:
+                    problems.append(f"the repair scope guard could not remove the attempt's new files ({error})")
+                else:
+                    if removed:
+                        problems.append(
+                            "the repair scope guard removed the attempt's new files outside its scope: "
+                            + ", ".join(f"`{name}`" for name in removed)
+                        )
             if problems:
                 previous_failures = failed_test_ids(problems)
                 # The restore notes stand first, then the format line: the next model learns that its
@@ -12428,6 +12440,8 @@ def run_attempts(
                         repair_scope=repair_scope,
                         scope_baseline=scope_before,
                         scope_new=scope_new,
+                        scope_rules=scope_rules,
+                        scope_ignored=scope_ignored,
                         attempt_label=f"{verb}-attempt-{attempt}",
                     )
                 except CheckpointRolledBack as error:

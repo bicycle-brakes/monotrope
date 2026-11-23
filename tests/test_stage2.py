@@ -21275,10 +21275,20 @@ def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
 
 @pytest.mark.parametrize(
     ("verb", "kind"),
-    [(verb, kind) for verb in ("implement", "repair") for kind in ("edit", "add", "case-variant")],
+    [(verb, kind) for verb in ("implement", "repair", "draft") for kind in ("edit", "add", "case-variant")],
 )
-def test_stage2_journal_paths_are_held(world: World, capsys: pytest.CaptureFixture[str], verb: str, kind: str) -> None:
-    """Criterion 1. Planted fault: a writing attempt commits or keeps a `docs/journal/` edit, addition or case variant."""
+def test_stage2_journal_paths_are_held(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, verb: str, kind: str
+) -> None:
+    """Criterion 1. Planted fault: a writing attempt commits or keeps a `docs/journal/` edit, addition or case variant.
+
+    Every Stage-2 writing verb is covered: `draft` commits through its own call of the same
+    checkpoint (L3-5). Under `STAGE2_PLANT_FAULT` the runner's held list loses the journal prefix.
+    """
+    if os.environ.get("STAGE2_PLANT_FAULT"):
+        monkeypatch.setattr(
+            stage2, "RUNNER_HELD", tuple(prefix for prefix in stage2.RUNNER_HELD if prefix != "docs/journal/")
+        )
     relative, content = {
         "edit": ("docs/journal/note.md", "written by the attempt\n"),
         "add": ("docs/journal/handover.md", "the attempt's own handover\n"),
@@ -21289,6 +21299,34 @@ def test_stage2_journal_paths_are_held(world: World, capsys: pytest.CaptureFixtu
         (world.root / relative).write_text("# Handover\n", encoding="utf-8")
         git(world.root, "add", "-A")
         git(world.root, "commit", "--quiet", "-m", "seed journal note")
+    if verb == "draft":
+        draft_world(world)
+        world.script(
+            codex=[
+                codex_ok(
+                    "T1",
+                    "drafted",
+                    plant={
+                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                        "plans/changes/demo/plan.md": PLAN_CARD,
+                        relative: content,
+                    },
+                )
+            ],
+            docs=[{"stdout": "green\n"}],
+        )
+        baseline = git(world.root, "rev-parse", "HEAD")
+        # A draft keeps only its change folder (draft_keep): a journal write is either refused or
+        # put back before the commit; either way no draft commit carries it (criterion 1).
+        world.run("draft")
+        capsys.readouterr()
+        committed = git(world.root, "show", "--name-only", "--format=", f"{baseline}..HEAD")
+        assert "journal" not in committed.lower(), committed
+        if kind == "edit":
+            assert (world.root / relative).read_text(encoding="utf-8") == "# Handover\n"
+        else:
+            assert not (world.root / relative).exists()
+        return
     if verb == "repair":
         seed_tests(world)
         world.write_record([("L1-1", "taken — test_a", "no")])
@@ -21686,6 +21724,59 @@ def test_repair_failed_attempt_stray_is_removed_before_the_next_route(world: Wor
     assert "src/stray.txt" not in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
     assert not (world.root / "src" / "stray.txt").exists()
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_rejected_answer_removes_the_attempts_stray_before_the_next_route(world: World) -> None:
+    """L3-1. Planted fault: an attempt whose checks pass but whose answer is rejected leaves its stray for route 2."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(
+        stdout="L9-9: fixed — tests/test_fix.py::test_fix",
+        plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"},
+    )
+    script_repair(world, [first, repair_step()], make=[GREEN, GREEN])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 0
+    assert len(repair_calls(world)) == 2
+    assert "src/stray.txt" not in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert not (world.root / "src" / "stray.txt").exists()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_last_route_failure_removes_its_stray(world: World) -> None:
+    """L3-4. Planted fault: the last failed route leaves its out-of-scope file, so the next repair stops at preflight."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    bad = repair_step(
+        stdout="L9-9: fixed — tests/test_fix.py::test_fix",
+        plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"},
+    )
+    script_repair(world, [bad, bad, bad], make=[GREEN] * 3)
+    assert world.run("repair") == 1
+    assert len(repair_calls(world)) == 3
+    assert not (world.root / "src" / "stray.txt").exists(), "the last route's stray stayed in the worktree"
+
+
+def test_repair_scope_unhidden_ignored_files_are_not_new(world: World) -> None:
+    """L3-2. Planted fault: removing an ignore line makes an old ignored file the attempt's new file, refused and deleted."""
+    seed_tests(world)
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore caches")
+    (world.root / "cache").mkdir()
+    (world.root / "cache" / "old.bin").write_text("old\n", encoding="utf-8")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(
+        world,
+        [
+            repair_step(
+                plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, ".gitignore": "\n"},
+            ),
+        ],
+        make=[GREEN],
+    )
+    assert world.run("repair") == 0, "an exposed old ignored file was refused as the attempt's new file"
+    assert (world.root / "cache" / "old.bin").read_text(encoding="utf-8") == "old\n"
 
 
 def test_repair_scope_inventory_failure_fails_the_attempt_with_a_named_reason(
