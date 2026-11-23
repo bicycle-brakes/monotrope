@@ -49,3 +49,12 @@ Decided by the orchestrator by its recommendation, marked provisional; the plan 
 - [DETAIL] **S-7 (provisional agent decision):** the stamping step lives in a tracked script (scripts/hooks/stamp_staged.py) that the tracked pre-commit entry calls; the bd-generated hook gets one call line through the repository's hook installer, so a regenerated bd hook keeps it (tested).
 - [DETAIL] **S-8 (provisional agent decision):** 'future' uses the gate's own FUTURE threshold (later than tomorrow UTC); one definition.
 - [DETAIL] **S-9 (provisional agent decision):** the hook script travels into kit copies through scripts/kit/manifest.yaml beside check_frontmatter_current.py; the Definition of Done names the manifest entry.
+
+## Provisional agent decisions on spec review round 2 (2026-11-23, night run 2026-11-23-a)
+
+- [DETAIL] **S-10 (provisional agent decision):** an unreadable `updated:` refuses the commit (criterion 4); the spec drops the second reading.
+- [DETAIL] **S-11 (provisional agent decision):** criterion 12 measures the staged blobs (`git show :<path>`) with the gate's own functions, never the working tree.
+- [DETAIL] **S-12 (provisional agent decision):** after stamping the index, the hook writes the same stamp to the working copy only when the working copy equals the staged blob before stamping; otherwise it leaves the working copy and prints a one-line notice. Criterion 3 is amended to allow exactly that write.
+- [DETAIL] **S-13 (provisional agent decision):** a missing `python3` or PyYAML means the measurement cannot run: criterion 7 governs (commit goes through, reason on standard error).
+- [DETAIL] **S-14 (provisional agent decision):** a commit aborted after stamping for another reason keeps the stamped index; the stamp is idempotent and correct; criterion 8 covers stamping failures only.
+- [DETAIL] **S-15 (provisional agent decision):** the change does not rely on `bd hooks install` preserving foreign content: the repository's hook installer re-adds the call line, a test runs it after a regenerated bd hook, and the gate reports a hook without the line.
