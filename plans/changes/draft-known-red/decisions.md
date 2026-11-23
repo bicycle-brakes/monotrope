@@ -83,3 +83,18 @@ context: |
   Architecture change: none beyond the ADR 0016 addendum of Q-1.
 
 In the context of a draft whose every route failed, facing a stop, an in-call wait or a hand draft, we decided to stop and park the lane and to retry the draft after five hours, to achieve free lanes meanwhile and a retry once a five-hour limit has reset, accepting a lane that waits five hours when the limit was short. — 2026-11-23
+
+## Q-4 · Who starts the retry after five hours
+
+asked: 2026-11-23
+answer: A — when it parks the lane, the runner writes `retry_after: <time>` into the lane's status file in the state directory (readable by every harness) and names the time in its message and record; every lane watch (today the session watch, later the heartbeat of coding-harness-a6ns) reads the line and starts the draft once the time is reached.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the trigger of the five-hour retry decided in Q-3.
+  Intention: the runner only runs while a command runs; a wake mechanism without an awake session is planned in coding-harness-a6ns (advance verb, heartbeat); on 2026-11-23 the session watch alone left gaps.
+  Today: nothing schedules a retry.
+  Repository change: Options: A the runner writes retry_after into the lane's status file and the lane watch acts on it; B the runner registers an operating-system timer (launchd or at) when it parks; C only the message, a person or the watch remembers it.
+  Architecture change: a retry_after field in the lane status file, read by the lane watch.
+
+In the context of a parked draft that should be retried after five hours, facing an operating-system timer or a recorded time, we decided the runner records retry_after where every harness can read it and the lane watch starts the retry, to achieve a harness-neutral trigger without a process of its own, accepting that the retry waits for the next watch. — 2026-11-23
