@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-0n4s
@@ -45,3 +45,5 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | S-7 | MINOR | SPEC | base | Acceptance criterion 3 ("two-second reconciler budget"); Non-goals ("The test-only watchdog limit may be raised") | [AMBIGUITY] The spec doesn't say where the two-second budget in the session-start test comes from. Reading A: the test sets `BEADS_START_RECONCILE_TIMEOUT` and `BEADS_START_BUDGET_RESERVE` so the hook's own subtraction (beads-start.sh:121) gives 2.0, and the wrapper passes the hook's argv on to `main`. The hook's budget handover keeps a behavioural test. Reading B: the watchdog limit is raised as the non-goals allow, and the wrapper calls `main` with its own `--budget-seconds 2`, ignoring what the hook passed. Criterion 3 then passes even if the hook hands over a wrong budget or none. This test is currently the only one where the hook's timeout-minus-reserve value reaches the reconciler; `test_budget_bounds_are_scaled_through_the_environment` only checks that the variable name appears in the hook text (test_beads_start.py:681). Under reading B the reserve arithmetic has no test left. | Opus | in spec — [DETAIL] decided by the orchestrator: reading A — the session-start test sets BEADS_START_RECONCILE_TIMEOUT and BEADS_START_BUDGET_RESERVE so the hook's own subtraction yields 2.0 seconds, and the wrapper passes that value on unchanged. Reason: the hook's arithmetic stays under test | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1165 files, 5222 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5547 commits, 12 rules.
