@@ -9704,7 +9704,10 @@ def repair_hand_rows(
             folded = named.casefold()
             if folded.startswith(folder):
                 continue  # the checkpoint commits the change's own folder (its existing exception)
-            if not any(folded.startswith(prefix) for prefix in held):
+            # A bare directory token names the prefix that ends in a slash, whether or not the
+            # directory holds a tracked file (L5-2).
+            spellings = (folded,) if folded.endswith("/") else (folded, folded + "/")
+            if not any(spelling.startswith(prefix) for prefix in held for spelling in spellings):
                 continue
             if named not in held_paths:
                 held_paths.append(named)
@@ -9733,8 +9736,9 @@ def hand_step_listing(hand: list[tuple[str, list[str], list[str]]], day: str) ->
         "Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its "
         "`Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row "
         "taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test "
-        "fits, retake the row as `taken — not a test — <reason>` first; only then book it as "
-        "`fixed — not a test — orchestrator hand edit <sha>`."
+        "fits, retake the row as `taken — not a test — <reason>` by editing its Status in "
+        "findings.md by hand (correct its `Where` cell there first when `triage` refuses it); "
+        "only then book it as `fixed — not a test — orchestrator hand edit <sha>`."
     )
 
 
@@ -11924,6 +11928,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
             print("repair: every held row is already listed in findings.md · nothing new committed, no model call")
             return
         findings_before = ctx.findings.read_bytes() if ctx.findings.exists() else None
+        plan_before = ctx.plan.read_bytes() if ctx.plan.is_file() else None
         started_wall, started_mono = utc_now(), monotonic_now()
         try:
             write_hand_listing("stage2-runner")
@@ -11954,22 +11959,28 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
                     accepted=True,
                     retry=False,
                 )
+            checkpoint(
+                root,
+                change,
+                baseline,
+                None,
+                ignored_before,
+                message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
+                keep=allowed,
+            )
         except (CallFailed, Refused):
-            # A red gate or a failed time write leaves no listing behind: the next run lists afresh.
-            if findings_before is None:
-                ctx.findings.unlink(missing_ok=True)
-            else:
-                restore_work_input(root, ctx.findings, findings_before)
+            # A red gate, a failed time write or a failed checkpoint leaves no uncommitted listing
+            # behind: findings.md and the plan's time line return to their state before the run, so
+            # the next repair is not refused on them and lists and commits afresh (L5-1). Nothing is
+            # restored once a commit has landed.
+            if _git_output(root, "rev-parse", "HEAD").strip() == baseline:
+                if findings_before is None:
+                    ctx.findings.unlink(missing_ok=True)
+                else:
+                    restore_work_input(root, ctx.findings, findings_before)
+                if plan_before is not None:
+                    restore_work_input(root, ctx.plan, plan_before)
             raise
-        checkpoint(
-            root,
-            change,
-            baseline,
-            None,
-            ignored_before,
-            message=f"docs({change}): hand steps for the orchestrator {', '.join(hand_ids)}",
-            keep=allowed,
-        )
         print("repair: hand steps committed for the orchestrator · no model call · nothing repaired")
         return
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.

@@ -11839,6 +11839,48 @@ def test_repair_handoff_survives_failed_attempt_once(world: World, scenario: str
         assert world.text().count(stage2.HAND_STEP_HEADING) == 1, "a rollback must not lose the listing"
 
 
+def test_repair_held_prefix_directory_without_tracked_file_is_held(world: World) -> None:
+    """L5-2. Planted fault: a bare directory token naming a held prefix that holds no tracked file
+    stays a literal word, never matches the prefix ending in a slash, and the row reaches the model."""
+    (world.root / "provenance.yaml").write_text(
+        "paths:\n"
+        "  - {prefix: 'plans/', frontmatter: required}\n"
+        "  - {prefix: 'docs/frozen/', allowed: [human-decided]}\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a decided prefix without files")
+    for cell in ("docs/frozen", "Docs/Frozen/", "docs/frozen/"):
+        hand = stage2.repair_hand_rows(world.root, "demo", [("record", record_cells("L5-2", "taken — t", where=cell))])
+        assert [row[0] for _, row, _ in hand] == ["L5-2"], cell
+
+
+def test_repair_failed_handoff_commit_leaves_no_uncommitted_listing(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L5-1. Planted fault: a held-only run whose checkpoint fails leaves its listing in the tree, so
+    the next run reports a successful hand-off, commits nothing and the record never reaches a commit."""
+    world.script(codex=[codex_ok("TR1", "must not run")])
+    seed_tests(world)
+    write_cells_record(world, [record_cells("L1-1", "taken — test_a", where="AGENTS.md")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    real = stage2.checkpoint
+
+    def failing(*_args: object, **_kwargs: object) -> None:
+        raise stage2.Refused("the checkpoint failed")
+
+    monkeypatch.setattr(stage2, "checkpoint", failing)
+    assert world.run("repair") != 0
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    left = world.text() if world.findings.exists() else ""
+    assert stage2.HAND_STEP_HEADING not in left, "a failed run leaves no listing behind"
+    monkeypatch.setattr(stage2, "checkpoint", real)
+    capsys.readouterr()
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-parse", "HEAD") != baseline, "the next run commits the listing"
+    assert stage2.HAND_STEP_HEADING in git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+
+
 def test_repair_all_held_commits_only_handoff(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 11. Planted fault: a successful held-only run leaves findings uncommitted, or
     admits changes outside the existing checkpoint allowances."""

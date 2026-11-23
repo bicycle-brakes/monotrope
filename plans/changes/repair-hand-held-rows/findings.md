@@ -693,3 +693,41 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claud
 > 1 failed, 20 passed in 11.22s
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T093552541199Z-db00e679.md
 > ```
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex usage-limited until 2026-11-23 16:40; maintainer: repairs to Sonnet meanwhile · leak check clean over 1177 files, 5442 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-hand-held-rows/plan.md` +1 -1
+> - `scripts/stage2.py` +28 -17
+> - `tests/test_stage2.py` +41 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/repair-hand-held-rows/plan.md, plans/changes/repair-hand-held-rows/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:11869:18: ARG001 Unused function argument: `args`
+>       |
+> 11867 |     real = stage2.checkpoint
+> 11868 |
+> 11869 |     def failing(*args: object, **kwargs: object) -> None:
+>       |                  ^^^^ ARG001
+> 11870 |         raise stage2.Refused("the checkpoint failed")
+>       |
+>
+> tests/test_stage2.py:11869:34: ARG001 Unused function argument: `kwargs`
+>       |
+> 11867 |     real = stage2.checkpoint
+> 11868 |
+> 11869 |     def failing(*args: object, **kwargs: object) -> None:
+>       |                                  ^^^^^^ ARG001
+> 11870 |         raise stage2.Refused("the checkpoint failed")
+>       |
+>
+> Found 2 errors.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-hand-held-rows/stage2/attempts/repair-hand-held-rows/attempt-1-20261123T104532781251Z-e9f90ca8.md
+> ```
+
+Orchestrator hand finish, 2026-11-23: the Sonnet repair of loop rows L5-1..L5-4 (L5-1 with the maintainer's decided fix, answer A) failed its post-run checks only on test hygiene: two unused arguments (ruff ARG001) in the new L5-1 test, and that test read `findings.md` after the fix had correctly restored it to absent. The orchestrator renamed the arguments and let the test treat an absent file as empty; the runner code of the attempt is unchanged. Full `make verify` green on 2026-11-23 (execution 1054 s). Named here and in the pull request as a hand finish (AGENTS.md rule 9). Next: phase 6 with Opus instead of a sixth loop round (maintainer answer A).
