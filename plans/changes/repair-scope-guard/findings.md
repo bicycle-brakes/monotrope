@@ -846,3 +846,18 @@ Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5509 commits, 12 rules.
 
 Runner restoration, 2026-11-23: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5527 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-23
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-10 | BLOCKER | MAINT | implementation | scripts/stage2.py:6864 | If a repair creates an out-of-scope file, then a failing verification replaces that file’s parent directory with a symlink to a directory outside the worktree, cleanup follows the symlink and can delete the matching external file. Cleanup must refuse an unsafe parent before deleting attempt files. | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list — catches without switch: yes for implement and repair if the same list change is made directly; no for draft, because its separate journal check and restoration still protect the path.
+
+Phase 6 verdict: codex 01a20971-b99d-7a10-9300-67393ac6eb62, 2026-11-23
+Reviewer session: codex 01a20971-b99d-7a10-9300-67393ac6eb62 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
