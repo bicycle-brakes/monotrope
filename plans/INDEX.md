@@ -653,6 +653,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/review-fewer-rounds/decisions.md`](changes/review-fewer-rounds/decisions.md) | draft | none | 2026-11-09 | coding-harness-3rtn |
+| [`changes/review-fewer-rounds/design.md`](changes/review-fewer-rounds/design.md) | draft | none | 2026-11-10 | coding-harness-3rtn |
+| [`changes/review-fewer-rounds/findings.md`](changes/review-fewer-rounds/findings.md) | draft | none | 2026-11-10 | coding-harness-3rtn |
+| [`changes/review-fewer-rounds/plan.md`](changes/review-fewer-rounds/plan.md) | draft | none | 2026-11-10 | coding-harness-3rtn |
+| [`changes/review-fewer-rounds/research.md`](changes/review-fewer-rounds/research.md) | draft | none | 2026-11-09 | coding-harness-3rtn |
+| [`changes/review-fewer-rounds/spec.md`](changes/review-fewer-rounds/spec.md) | draft | none | 2026-11-10 | coding-harness-3rtn |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
