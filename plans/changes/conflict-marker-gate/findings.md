@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-05
 created: 2026-11-05
 last_reviewed: 2026-11-05
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-i76l
@@ -280,3 +280,247 @@ Stage-2 call, 2026-11-22: implement · attempt 2 · route flash-repair · endpoi
 > ```
 
 Stage-2 call, 2026-11-22: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1173 files, 5408 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1177 files, 5410 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/check_conflict_markers.py` +275 -0
+> - `scripts/kit/manifest.yaml` +6 -0
+> - `tests/test_check_conflict_markers.py` +504 -0
+> - `tests/test_pr_sync.py` +17 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_check_conflict_markers.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_check_conflict_markers.py:458:9: SIM108 Use ternary operator `covered = path.startswith(prefix) if prefix.endswith("/") else path == prefix or path.startswith(prefix + "/")` instead of `if`-`else`-block
+>     |
+> 456 |       for rule in manifest.get("rules", []):
+> 457 |           prefix = rule.get("prefix", "")
+> 458 | /         if prefix.endswith("/"):
+> 459 | |             covered = path.startswith(prefix)
+> 460 | |         else:
+> 461 | |             covered = path == prefix or path.startswith(prefix + "/")
+>     | |_____________________________________________________________________^ SIM108
+> 462 |           if covered and (best is None or len(prefix) > len(best.get("prefix", ""))):
+> 463 |               best = rule
+>     |
+>     = help: Replace `if`-`else`-block with `covered = path.startswith(prefix) if prefix.endswith("/") else path == prefix or path.startswith(prefix + "/")`
+>
+> Found 1 error.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1179 files, 5416 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_check_conflict_markers.py` +10 -11
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>
+> tests/test_check_conflict_markers.py:492: AssertionError
+> ______________ test_gate_goes_red_when_inspection_cannot_complete ______________
+> [gw1] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3255/popen-gw1/test_gate_goes_red_when_inspec0')
+>
+>     def test_gate_goes_red_when_inspection_cannot_complete(tmp_path: Path) -> None:
+>         """A non-repository root, a failed Git command and an unreadable tracked
+>         file each produce an unsuccessful exit that explains what was not
+>         measured; the controls pass."""
+>         passed = _run_gate(_repo(tmp_path / "control"))
+>         assert passed.returncode == 0, passed.stdout + passed.stderr
+>     
+>         nowhere = _run_gate(tmp_path / "nowhere")
+>         assert nowhere.returncode == 2, nowhere.stdout + nowhere.stderr
+>         assert "not a Git work tree" in nowhere.stdout
+>     
+>         plain_dir = tmp_path / "plain-dir"
+>         plain_dir.mkdir()
+>         bare = _run_gate(plain_dir)
+>         assert bare.returncode == 2, bare.stdout + bare.stderr
+>         assert "not a Git work tree" in bare.stdout
+>     
+>         real_git = shutil.which("git")
+>         assert real_git, "git must be on the path for these fixtures"
+>         refusing_dir = tmp_path / "shim-refusing"
+>         refusing_dir.mkdir()
+>         refusing = refusing_dir / "git"
+>         refusing.write_text(
+>             "#!/bin/sh\n"
+>             'for arg in "$@"; do\n'
+>             '  if [ "$arg" = "ls-files" ]; then\n'
+>             '    echo "shim: ls-files refused" >&2\n'
+>             "    exit 7\n"
+>             "  fi\n"
+>             "done\n"
+>             f'exec "{real_git}" "$@"\n',
+>             encoding="utf-8",
+>         )
+>         refusing.chmod(0o755)
+>         refusing_env = {**os.environ, "PATH": f"{refusing_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+>         committed = _repo(tmp_path / "committed")
+>         _write(committed, "docs/note.md", "readable\n")
+>         _commit(committed, "a readable file")
+>         shimmed = _run_gate(committed, env=refusing_env)
+>         assert shimmed.returncode == 2, shimmed.stdout + shimmed.stderr
+>         assert "not measured" in shimmed.stdout, "a failed Git command produced a successful report"
+>     
+>         delegating_dir = tmp_path / "shim-delegating"
+>         delegating_dir.mkdir()
+>         delegating = delegating_dir / "git"
+>         delegating.write_text(f'#!/bin/sh\nexec "{real_git}" "$@"\n', encoding="utf-8")
+>         delegating.chmod(0o755)
+>         passing_env = {**os.environ, "PATH": f"{delegating_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+>         passed_through = _run_gate(committed, env=passing_env)
+> >       assert passed_through.returncode == 0, passed_through.stdout + passed_through.stderr
+> E       AssertionError: BLOCK (1):
+> E           - git diff --check could not be read (  -a  --text    treat all files as text.)
+> E               the repository was not measured
+> E         
+> E       assert 2 == 0
+> E        +  where 2 = CompletedProcess(args=['/Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3', '/Us...heck could not be read (  -a  --text    treat all files as text.)\n      the repository was not measured\n', stderr='').returncode
+>
+> tests/test_check_conflict_markers.py:391: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[>>>>>>>- topic]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[=======-]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[>>>>>>>-!! longer]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[<<<<<<<-]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[=======- topic]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[<<<<<<<- topic]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[<<<<<<<-!! longer]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[>>>>>>>-]
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_committed_text_contains_markers[=======-!! longer]
+> FAILED tests/test_check_conflict_markers.py::test_only_tracked_text_and_exact_fixture_names_are_measured
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_git_diff_check_finds_a_fault
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_an_allowlist_entry_names_no_tracked_path
+> FAILED tests/test_check_conflict_markers.py::test_gate_goes_red_when_inspection_cannot_complete
+> 13 failed, 6 passed in 1.32s
+> ```
+
+Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1179 files, 5418 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/conflict-marker-gate/plan.md` +8 -8
+> - `scripts/check_conflict_markers.py` +23 -17
+>
+> Diagnostics:
+> ````text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/kit/manifest.yaml` is an input kind the targeted selector does not cover
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 90 lines of this gate left out …]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ..............................                                           [100%]
+> =================================== FAILURES ===================================
+> _____________ test_every_script_has_a_caller_or_a_declared_reason ______________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/.venv/bin/python3
+>
+>     def test_every_script_has_a_caller_or_a_declared_reason() -> None:
+>         """A tool without a caller cannot be told apart from a forgotten one.
+>     
+>         On 2026-08-14, nine of twenty-one scripts had none — and nowhere did it say
+>         which of them were intentional. Since then the rule is: every script —
+>         `*.py` as well as `*.sh` — stands either in a `run:` step (`ci.yml`, both
+>         jobs) or in `ci_gates.OHNE_AUFRUFER` with a reason (RB-G3).
+>     
+>         `ci_gates.py` itself is the caller of the local runner; it counts as wired
+>         as soon as `verify_all.sh` starts it.
+>         """
+>         from ci_gates import OHNE_AUFRUFER
+>     
+>         ci = CI_FILE.read_text(encoding="utf-8")
+>         runner = RUNNER.read_text(encoding="utf-8")
+>     
+>         heimatlos = _heimatlose_namen([p.name for p in _scripts()], ci, runner, OHNE_AUFRUFER)
+> >       assert not heimatlos, (
+>             "Without a caller and without a reason:\n  "
+>             + "\n  ".join(heimatlos)
+>             + "\n\nEither a step in ci.yml or a line in ci_gates.OHNE_AUFRUFER."
+>         )
+> E       AssertionError: Without a caller and without a reason:
+> E           check_conflict_markers.py
+> E         
+> E         Either a step in ci.yml or a line in ci_gates.OHNE_AUFRUFER.
+> E       assert not ['check_conflict_markers.py']
+>
+> tests/test_ci.py:3569: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=21809) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/conflict-marker-gate/tests/test_stage2.py:24881: DeprecationWarning: This process (pid=21810) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason
+> 1 failed, 6780 passed, 17 skipped, 5 warnings in 628.91s (0:10:28)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 53770 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> ````
