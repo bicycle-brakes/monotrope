@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -36,3 +36,99 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | S-7 | MINOR | SPEC | base | spec.md, Definition of Done, second bullet; criterion 1 | Missing: who writes the `prompts/03-plan.md` edit. `prompts/` is in `RUNNER_HELD`, so no phase-4 attempt can commit it. `test_the_plan_prompt_names_every_runner_held_path` (`tests/test_stage2.py:977`) checks drift in both directions, so adding `docs/journal/` to `RUNNER_HELD` turns that test red unless the prompt changes in the same tree. An implement attempt therefore cannot go green on its own. The spec says the two "move together" but does not say the prompt edit is the orchestrator's hand edit, or in what order the commits land. | Opus | in spec — [DETAIL] decided by the orchestrator: the orchestrator adds docs/journal/ to RUNNER_HELD and the matching line to prompts/03-plan.md in one hand commit on this branch before implement, so test_the_plan_prompt_names_every_runner_held_path stays green throughout; implement does the rest. Reason: prompts/ is runner-held, and splitting the pair turns that test red | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1153 files, 5135 commits, 12 rules.
+
+Stage-2 call, 2026-11-23: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1177 files, 5423 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +22 -0
+> - `plans/changes/repair-scope-guard/plan.md` +9 -9
+> - `scripts/stage2.py` +161 -7
+> - `tests/test_stage2.py` +314 -8
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> E           AssertionError: an ignored file stays on disk through the restore
+> E           assert False
+> E            +  where False = exists()
+> E            +    where exists = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3265/popen-gw1/test_repair_scope_ignores_untr0/repo/cache/pycache.bin').exists
+>
+> tests/test_stage2.py:16902: AssertionError
+> _______ test_repair_scope_refusal_restores_attempt_and_keeps_diagnostic ________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3265/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3265/popen-gw2/test_repair_scope_refusal_rest0/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x10b5271a0>
+>
+>     def test_repair_scope_refusal_restores_attempt_and_keeps_diagnostic(
+>         world: World, capsys: pytest.CaptureFixture[str]
+>     ) -> None:
+>         """Criterion 6 (bead coding-harness-t83): the refusal names the stray path and the saved attempt,
+>         restores the baseline and the pre-call findings, and stops the run without a retry."""
+>         seed_tests(world)
+>         world.write_record([("L1-1", "taken — test_a", "no")])
+>         script_repair(
+>             world,
+>             [
+>                 repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "s\n"}),
+>                 repair_step(plant={"src/app.py": "value = 3\n", "tests/test_fix.py": FIX_TEST}),
+>             ],
+>             make=[GREEN, GREEN],
+>         )
+>         baseline = git(world.root, "rev-parse", "HEAD")
+>         assert world.run("repair") == 1
+>         error = capsys.readouterr().err
+>         assert len(repair_calls(world)) == 1, "a refused scope guard started another route"
+>         assert len(world.calls("make")) == 1, "the refused run kept no second full check"
+>         assert "the repair left new files outside its scope" in error
+>         assert "`src/stray.txt`" in error
+>         assert "the attempt is saved at refs/stage2/attempts/demo/repair-attempt-1" in error
+>         assert git(world.root, "rev-parse", "HEAD") == baseline
+>         assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n"
+>         assert not (world.root / "src" / "stray.txt").exists()
+>         assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+>         saved = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo")
+>         assert any(name.startswith("refs/stage2/attempts/demo/repair-attempt-1-") for name in saved.split("\n")), saved
+>         # The restored baseline takes a fresh run: the record is re-seeded, the repair commits once.
+>         world.write_record([("L1-1", "taken — test_a", "no")])
+>         script_repair(world, [repair_step()], make=[GREEN])
+> >       assert world.run("repair") == 0, "the restored baseline takes a fresh repair"
+> E       AssertionError: the restored baseline takes a fresh repair
+> E       assert 1 == 0
+> E        +  where 1 = run('repair')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3265/popen-gw...s/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3265/popen-gw2/test_repair_scope_refusal_rest0/state')).run
+>
+> tests/test_stage2.py:16819: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 34 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: the repair left new files outside its scope: `plans/INDEX.md`. No commit was made; the attempt is saved at refs/stage2/attempts/demo/repair-attempt-1-20261123T070721558668Z (6ee754a750db); `git diff 2bdc341448ff refs/stage2/attempts/demo/repair-attempt-1-20261123T070721558668Z` shows it; the runner restored the worktree to 2bdc341448ff (undone: plans/INDEX.md, plans/changes/demo/plan.md, plans/changes/demo/research.md, src/app.py, tests/test_fix.py); rerun the verb or add --stage2-off.;  [… 170 characters left out …]
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_repair_prompts_state_scope_restrictions[endpoint1]
+> FAILED tests/test_stage2.py::test_repair_prompts_state_scope_restrictions[endpoint0]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[repair-case-variant]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[repair-edit]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[repair-add]
+> FAILED tests/test_stage2.py::test_repair_allows_new_paths_within_scope - Asse...
+> FAILED tests/test_stage2.py::test_repair_scope_guard_allows_existing_tracked_edits
+> FAILED tests/test_stage2.py::test_each_repair_retry_must_add_its_own_time_entry[False-2]
+> FAILED tests/test_stage2.py::test_each_repair_retry_must_add_its_own_time_entry[True-2]
+> FAILED tests/test_stage2.py::test_repair_scope_ignores_untracked_ignored_files[False]
+> FAILED tests/test_stage2.py::test_stage2_journal_paths_are_held[implement-case-variant]
+> FAILED tests/test_stage2.py::test_idle_retry_cannot_reuse_previous_work[repair]
+> FAILED tests/test_stage2.py::test_each_repair_retry_must_add_its_own_time_entry[True-3]
+> FAILED tests/test_stage2.py::test_each_repair_retry_must_add_its_own_time_entry[False-3]
+> FAILED tests/test_stage2.py::test_repair_scope_ignores_untracked_ignored_files[True]
+> FAILED tests/test_stage2.py::test_repair_scope_refusal_restores_attempt_and_keeps_diagnostic
+> 16 failed, 7 passed in 14.94s
+> ```
