@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -18,13 +18,19 @@ tags: [plan, review-loop]
 # Plan — review-fewer-rounds
 
 ```text
-For you:     Five focused lenses replace repeated unfocused rounds; one free second round uses three models, always for small changes and during shadow.
-Done when:   All 26 criteria have evidence, the answered policy is wired through the runner and gates, and make verify passes.
+For you:     Focused review replaces repeated rounds; small changes and repaired minor-only findings end earlier.
+Done when:   The spec criteria have evidence, the answered policy is wired through the runner and gates, and make verify passes.
 Appetite:    12 h of phase 4, repair rounds included; a stop, not an estimate.
 Not now:     A production trigger or threshold, the later calibration study, central configuration infrastructure or a dashboard.
 Pre-mortem:  suppose it failed: most likely because duplicate reports were counted as different defects and distorted the calibration evidence.
 Starts unless you say stop.
 ```
+
+**Draft blocked:** phase-2a findings in `findings.md` include unanswered
+ambiguities. This plan is not an implementation instruction until those are
+answered, the findings are settled, and the spec, design, plan and ADR are
+reconciled. The older detail below is historical, not an override of Q-16
+through Q-24 or the revised spec.
 
 ## Prerequisites and ownership
 
@@ -193,7 +199,11 @@ callers and fault-sensitive tests.
 - 23: not a test — phase-6 review checks that every immediate addition and its source finding are disclosed in the PR; an omitted addition refutes it
 - 24: not a test — orchestrator checks the central-skeleton merge commit before phase 4 and the PR file list for interim settings; pre-merge implementation or an interim policy refutes it
 - 25: not yet written tests/test_stage2_review_lenses.py::test_free_round_dispatches_three_independent_mixed_family_models — wrong count, shared output or invalid family mix reaches calls
-- 26: not yet written tests/test_stage2_review_lenses.py::test_small_changes_always_run_free_round_in_shadow_and_live — empty results or live thresholds skip the second round
+- 26: not yet written tests/test_stage2_review_lenses.py::test_bounded_change_skips_second_round — a bounded change gets a second loop round
+- 27: not yet written tests/test_stage2_review_lenses.py::test_findings_require_file_and_line — a finding without file or line is accepted
+- 28: not yet written tests/test_stage2_review_lenses.py::test_finding_cap_exempts_major_and_blocker — an excess MINOR passes or an excess MAJOR is rejected
+- 29: not yet written tests/test_stage2_review_lenses.py::test_reviewer_prompt_requires_one_self_check — the self-check or evidence requirement is absent
+- 30: not yet written tests/test_stage2_review_lenses.py::test_text_only_skips_review_loop — a text-only change calls a phase-4b reviewer
 
 ## Verification
 
@@ -260,3 +270,5 @@ public-source research dated 2026-11-09. No complete `research-swarm/v2`
 run is recorded; `neighbours: []` does not assert no adjacent specs exist.
 
 ## Time used
+
+2026-11-23 15:45:43–15:48:34 UTC, 171 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

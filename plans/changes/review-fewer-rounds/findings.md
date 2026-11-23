@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-10
 created: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -276,3 +276,5 @@ Stage-2 call, 2026-11-10: spec-review · endpoint claude-code-plan · model clau
 | S-19 | MINOR | SPEC | spec | Criterion 21 | [UNTESTABLE] The weekly clean-up is an orchestrator action outside the runner. Triage has no status that separates a clear style finding left standing from a taste limit, and "a week" has no defined start or end. So neither the input nor the state needed to show "clear findings being discarded" can be constructed. As written, the criterion is a statement of intent. | Opus | open | — |
 | S-20 | MINOR | SPEC | spec | Criterion 22; Formality inventory | [UNTESTABLE] "An omitted formality" needs a reference list to compare the inventory against. Reading A: the inventory is its own reference, so the criterion cannot go red. Reading B: the reference is the formality categories behind the measured 26% of 296 rows. Neither the spec nor the research lists those categories, so the refuting case cannot be built. Reading C: Q-1's four named formalities are the reference; the inventory already covers them, so the criterion is green by construction. | Opus | open | — |
 | S-21 | MINOR | SPEC | spec | Criterion 11; `[DETAIL]` "S=0 is undefined"; criterion 8 | [AMBIGUITY] Criterion 11's live evaluation is built in this change, but the spec gives no rule for a lens whose singleton share is undefined (S=0) or whose observation is incomplete. Reading A: undefined means not triggered (research's proposal), so a change with no accepted round-1 findings on any lens goes straight to phase 6. Reading B: undefined means triggered, leaning toward re-review as the Boundary's "zero accepted findings are weak evidence" suggests. Neither the configured comparison nor any listed declaration field covers this case. | Opus | open | — |
+
+Stage-2 call, 2026-11-23: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1190 files, 5481 commits, 12 rules.

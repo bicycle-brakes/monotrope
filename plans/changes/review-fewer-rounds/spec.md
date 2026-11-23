@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -21,8 +21,8 @@ neighbours: []
 
 # Spec — review-fewer-rounds
 
-Replace successive unfocused reviews with five focused lenses, one free second
-round during calibration, and a bounded final review (bead
+Replace successive unfocused reviews with configurable focused lenses, a
+conditional free second round, and a bounded final review (bead
 `coding-harness-3rtn`). Research: `research.md`; intent: `decisions.md`.
 This is a proposal until its decision pull request merges.
 
@@ -54,7 +54,8 @@ This is a proposal until its decision pull request merges.
   families review it once (Q-14).
 - **Small change:** class `bounded`, or a text-only change under the repository
   rule (Markdown outside `scripts/`, `tests/`, `prompts/` and `decisions/`).
-- **Shadow:** record per-lens signals, but always run the one free second round.
+- **Shadow:** record per-lens signals; eligible full changes receive the free
+  second round except when the configured minor-only early end applies.
 
 ## Acceptance criteria
 
@@ -67,13 +68,15 @@ This is a proposal until its decision pull request merges.
 
 2. When round 1 runs, each of the five lenses receives three independent
    read-only calls (best measured precision, cheap other lineage, and Codex
-   `gpt-6.1-terra` at effort `medium`), except that a small change receives
-   one reviewer per lens.
+   `gpt-6.1-terra` at effort `medium`) under the initial configuration, except
+   that a bounded change receives one reviewer per lens and a text-only change
+   skips the loop.
    *Refuted by:* a full change scheduling other than fifteen calls, a small
-   change scheduling other than five, repeated models within a trio, shared
+   bounded change scheduling other than five, a text-only change scheduling
+   any loop calls, repeated models within a trio, shared
    answers, an unmeasured precision claim, or a trio's wrong Codex effort or
    cheap seat sharing the precision seat's lineage.
-   *Basis:* decisions.md#Q-2.
+   *Basis:* decisions.md#Q-2, decisions.md#Q-19, decisions.md#Q-24.
 
 3. When a lens is seated, at most one reviewer belongs to the implementer's
    model family, and a sole reviewer belongs to another family.
@@ -82,10 +85,11 @@ This is a proposal until its decision pull request merges.
    *Basis:* decisions.md#Q-8.
 
 4. When review policy changes, one validated central declaration supplies
-   lenses, seats, round count/order, trigger/mode/threshold and phase-6 limit.
+   lenses, seats, round count/order, trigger/mode/threshold, finding cap,
+   minor-only early end and phase-6 limit.
    *Refuted by:* a second authoritative settings file, a code edit needed to
    change those values, or a prompt/test/doc independently fixing those values.
-   *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-12.
+   *Basis:* decisions.md#Q-4, decisions.md#Q-5, decisions.md#Q-12, decisions.md#Q-16, decisions.md#Q-24.
 
 5. If the central review declaration is missing, malformed or contradictory,
    review refuses before any model call with the offending field named.
@@ -115,12 +119,12 @@ This is a proposal until its decision pull request merges.
    three-reviewer estimate from a small change's one reviewer also refutes it.
    *Basis:* decisions.md#Q-2, decisions.md#Q-11, decisions.md#Q-12.
 
-9. While shadow mode is active, every change receives exactly one free
-   second round over the whole post-repair diff after round-1 triage and any
-   required repair, regardless of its per-lens stopping signals.
-   *Refuted by:* focused lens prompts in round 2, skipping it for zero or low
-   singleton counts, or separate second rounds per triggered lens.
-   *Basis:* decisions.md#Q-3, decisions.md#Q-12.
+9. While shadow mode is active, an eligible full change receives one free
+   second round over the whole post-repair diff regardless of per-lens signals,
+   except when round 1 brought only MINOR findings and all are repaired.
+   *Refuted by:* focused lens prompts in round 2, a low singleton share alone
+   skipping it, or a second round despite the configured minor-only early end.
+   *Basis:* decisions.md#Q-3, decisions.md#Q-12, decisions.md#Q-19, decisions.md#Q-20, decisions.md#Q-24.
 
 10. When ten complete shadow changes are available, the calibration report
     presents the singleton rule and logged estimator candidates against new
@@ -226,11 +230,12 @@ This is a proposal until its decision pull request merges.
     the first list without approval.
     *Basis:* decisions.md#Q-9, decisions.md#Q-10.
 
-24. While the central configuration skeleton has not merged, this change's
-    implementation waits without creating an interim policy file.
-    *Refuted by:* starting phase 4 against a proposed local schema or
-    creating a second authoritative policy source.
-    *Basis:* decisions.md#Q-4.
+24. While the central configuration skeleton has not merged, the review
+    policy lives in one validated section of an existing central file and can
+    later move unchanged to the central configuration.
+    *Refuted by:* requiring the skeleton before implementation, creating a
+    competing policy file, or duplicating authoritative settings in code.
+    *Basis:* decisions.md#Q-4, decisions.md#Q-16.
 
 25. When the free second round runs, exactly three distinct models from
     several model families independently read the whole diff once, with at
@@ -240,11 +245,31 @@ This is a proposal until its decision pull request merges.
     implementer-family members.
     *Basis:* decisions.md#Q-14, decisions.md#Q-8.
 
-26. When a small change completes round 1 and its required repair, it receives
-    exactly one free second round in both shadow and live modes.
-    *Refuted by:* zero findings, undefined overlap, a threshold or live mode
-    skipping its second round.
-    *Basis:* decisions.md#Q-15, decisions.md#Q-2.
+26. When a bounded change completes its focused round and required repair,
+    it proceeds to phase 6 without a free second round.
+    *Refuted by:* scheduling a second loop round for a bounded change.
+    *Basis:* decisions.md#Q-19.
+
+27. When a reviewer reports findings, each has a file and line as evidence.
+    *Refuted by:* accepting a finding without either location component.
+    *Basis:* decisions.md#Q-21.
+
+28. When a reviewer reports more than the configured finding cap, every
+    finding above that cap has severity MAJOR or BLOCKER.
+    *Refuted by:* accepting a sixth MINOR with the initial cap of five, or
+    rejecting a sixth MAJOR solely because of the cap.
+    *Basis:* decisions.md#Q-21, decisions.md#Q-24.
+
+29. When a reviewer prepares its response, it performs one self-check against
+    the code and drops findings it cannot evidence.
+    *Refuted by:* a reviewer instruction omitting the check or asking it to
+    retain a finding it cannot substantiate.
+    *Basis:* decisions.md#Q-22.
+
+30. When a text-only change reaches review, it skips phase 4b and goes to
+    phase 6.
+    *Refuted by:* any phase-4b reviewer call for a text-only change.
+    *Basis:* decisions.md#Q-19.
 
 ## Non-goals
 
@@ -252,12 +277,12 @@ This is a proposal until its decision pull request merges.
   completeness; collecting calibration data is included, conducting the
   subsequent ten-change evaluation is not phase 4 of this change; its report
   and decision handoff are included.
-- Choosing a production stopping threshold now, automatic promotion from
-  shadow, changing implement/repair routes, or replacing phase-6 review.
-- Building the central configuration infrastructure owned by the central
-  model/workflow configuration work item (`coding-harness-twvx`); this
-  change consumes and extends it, never creates a competing policy file.
-- A fourth reviewer per lens, majority voting, new model providers, a
+- Choosing a production stopping threshold now, changing implement/repair
+  routes, or replacing phase-6 review. The promotion procedure is unresolved
+  in the open spec-review findings.
+- Building the separate central configuration infrastructure; this change
+  uses a section of an existing central file in the meantime (Q-16).
+- Majority voting, new model providers, a
   dashboard, repository-wide Markdown cleanup or automatic tracker writes by
   reviewers/repair attempts; weekly style collection belongs to the orchestrator.
 
@@ -303,9 +328,9 @@ Three correlated models cannot establish review completeness. The research read
 on 2026-11-09 reports approximately 27% median underestimation for
 three-inspector jackknife data, not a calibrated error rate for this repo. Zero
 accepted findings are weak evidence. During shadow both estimators are
-diagnostics; shadow always runs the free second round. One-seat small changes
-cannot measure overlap; they always get the free second round, including in
-live mode (Q-15). Missing required seats pause completion rather than silently changing the frozen
+diagnostics; eligible full changes get the free second round subject to the
+minor-only early end. One-seat bounded changes cannot measure overlap and do
+not get the free second round (Q-19 and Q-20). Missing required seats pause completion rather than silently changing the frozen
 seating. Existing legacy snapshots retain their old semantics until completed or
 explicitly restarted by the maintainer.
 
@@ -317,9 +342,8 @@ explicitly restarted by the maintainer.
   `prompts/04b-review-loop.md`, `prompts/06-review.md`, central configuration,
   its validator, the new checks and generated `.github/workflows/ci.yml` and
   `plans/INDEX.md`, as enumerated in `plan.md`.
-- The central configuration skeleton has merged and its integration is
-  reconciled in the plan; the initial list and both round policies follow
-  the existing answers (Q-13 through Q-15).
+- The initial list and round policies follow the existing answers, including
+  the later superseding answers (Q-13, Q-16, Q-19 and Q-20).
 - Protected areas and non-goals remain untouched in the PR file list.
 - The PR closes the focused review work item (`coding-harness-3rtn`), with
   final trailer `Closes-Bead: coding-harness-3rtn`.
@@ -343,10 +367,31 @@ disclosed in the PR. The runtime list belongs to the central configuration.
 
 ## Open decisions
 
-None open for this draft. The later calibration decision chooses the live
-trigger and threshold; it is not an unanswered prerequisite for implementing
-the shadow policy. Implementation still waits for the merged central
-configuration skeleton (Q-4). No maintainer answer is written by this draft.
+The spec review of 2026-11-10 contains unresolved ambiguities S-1, S-3,
+S-4, S-7, S-8, S-11, S-13, S-15, S-17, S-18 and S-21 in `findings.md`.
+Their meanings and alternatives are recorded there. The later answers Q-16
+through Q-24 settle parts of the original scope but do not supply answers
+to all of these ambiguities. The draft is not ready for implementation.
+
+[DECISION] **End of the shadow period (S-8)**
+
+Topic: Wann die Erprobung der zweiten Prüfrunde endet.
+Intention: Der Ablauf braucht eine überprüfbare Regel für den Übergang.
+Today: Die vorhandenen Aussagen lassen zwei Lesarten zu.
+Repository change: Der Prüflauf dokumentiert und verwendet die gewählte Regel.
+Architecture change: Der Übergang von der Erprobung zum regulären Betrieb
+ändert sich; die unabhängige Abschlussprüfung bleibt bestehen.
+
+Goal in one sentence: Klarstellen, wer den Übergang aus der Erprobung auslöst.
+Options: (1) Bei klaren Daten automatisch wechseln; bei unklaren Daten fragen.
+(2) Immer vor dem Wechsel die Entscheidung des Maintainers einholen.
+Recommendation: Option 1 — sie entspricht der festgehaltenen Antwort Q-12.
+If you say "ok": Der Lauf wechselt bei klaren Daten automatisch und fragt sonst.
+What is lost: Option 2 gäbe dem Maintainer vor jedem Wechsel die letzte Kontrolle.
+Downside you accept: Option 1 kann ohne erneute persönliche Prüfung wechseln;
+Option 2 hält auch bei klaren Daten für eine Entscheidung an.
+
+Welche Einbuße akzeptierst du: Option 1 oder Option 2?
 
 I decide these reversible details and record why:
 
@@ -354,9 +399,9 @@ I decide these reversible details and record why:
   no interview answer supplies one, and the runner, gates and doctrine must
   move together. This is not a promise to finish within twelve hours.
 - `[DETAIL]` The proposed integration location is a `review_loop` section
-  of existing `model-endpoints.yaml`; the configuration prerequisite must
-  confirm it before phase 4. Reconcile the path here if that work chose
-  another canonical file; do not create both.
+  of existing `model-endpoints.yaml`; this existing central file is the
+  interim home under Q-16. Move the section when the central configuration
+  lands; do not create competing sources.
 - `[DETAIL]` Initial precision seat: `deepseek-v4.1-flash` on Q-2's
   2026-11-08 aggregate 91% accepted share, explicitly not per-lens evidence.
   Cheap other-lineage seat: `mimo-v2.6-flash`, declared 30,100 requests/5h
@@ -376,6 +421,6 @@ I decide these reversible details and record why:
   when it is outside the implementer family, otherwise the declared
   cheap other-family seat; refuse preparation if neither is admissible.
   This keeps its one-seat policy explicit without claiming per-lens data.
-- `[DETAIL]` Retain the change's existing ADR 0027 draft. Its reserved
-  number follows the recorded central-configuration dependency; do not
-  create ADR 0028 or revise historical ADR bodies.
+- `[DETAIL]` The checked-in branch already contains an ADR 0027 draft. Its
+  current body predates Q-16 through Q-24; the present runner instruction
+  permits only one new ADR file, so this draft is not silently rewritten.

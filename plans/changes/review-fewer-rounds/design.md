@@ -2,7 +2,7 @@
 title: "Design — review-fewer-rounds"
 category: design
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-23
 status: draft
 implementation_status: none
 date: 2026-11-10
@@ -23,6 +23,11 @@ Shape the focused-review experiment in `spec.md` from the fifteen answered
 records and dated research. The 2026-11-10 answers approve the initial
 questions (Q-13), seat one mixed-family trio in round 2 (Q-14), and always
 run that round for small changes (Q-15). This draft records no new approval.
+
+**Draft blocked:** the phase-2a review in `findings.md` contains unresolved
+ambiguities. The design below predates Q-16 through Q-24 and must be
+reconciled after those ambiguities are settled; it does not authorize
+implementation or override the revised spec.
 
 ## Alternatives
 
