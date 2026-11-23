@@ -12456,6 +12456,100 @@ def refuse_unreadable_statements(root: Path, change: str) -> None:
 
 
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
+WHAT_LABEL = "What:"
+WHAT_SENTENCES = 3
+# The adoption day of the `What:` line: a plan whose spec date is later is a subject plan. Set by the
+# orchestrator to the day this change's pull request is opened, never by a drafting attempt.
+WHAT_ADOPTION_DAY = dt.date(2026, 11, 23)
+WHAT_PROBLEM = (
+    "`plan.md`'s card must open with a non-blank `What:` line of at most three sentences that does not "
+    "repeat `For you:`"
+)
+WHAT_DATE_PROBLEM = (
+    "`plan.md`'s card does not open with a valid `What:` line and the spec date, which decides whether "
+    "`What:` is required, cannot be read"
+)
+
+
+def card_block(text: str) -> list[str] | None:
+    """The lines of the first fenced block before the first level-two heading, or None."""
+    body = re.sub(r"\A---\n.*?\n---\n", "", text, count=1, flags=re.S)
+    head = re.split(r"^## ", body, maxsplit=1, flags=re.M)[0]
+    lines = head.splitlines()
+    opening = next((i for i, line in enumerate(lines) if re.match(r"^(```|~~~)", line)), None)
+    if opening is None:
+        return None
+    block = []
+    for line in lines[opening + 1 :]:
+        if re.match(r"^(```|~~~)", line):
+            break
+        block.append(line)
+    return block
+
+
+def card_value(block: Sequence[str], label: str, first_only: bool = False) -> str | None:
+    """A label's value: its line's text after the label plus indented continuation lines, folded."""
+    start = 0 if first_only else next((i for i, line in enumerate(block) if line.startswith(label)), None)
+    if start is None or start >= len(block) or not block[start].startswith(label):
+        return None
+    parts = [block[start][len(label) :]]
+    for line in block[start + 1 :]:
+        if not line.strip() or not line[0].isspace():
+            break
+        parts.append(line)
+    return " ".join(" ".join(parts).split())
+
+
+def what_problem(text: str) -> str | None:
+    """Why a card does not open with a valid `What:` value, or None (spec, criteria 3 to 5)."""
+    block = card_block(text)
+    if block is None:
+        return WHAT_PROBLEM
+    what = card_value(block, WHAT_LABEL, first_only=True)
+    if not what:
+        return WHAT_PROBLEM
+    sentences = [part for part in re.split(r"(?<=[.!?])\s+", what) if part.strip()]
+    if len(sentences) > WHAT_SENTENCES:
+        return WHAT_PROBLEM
+    for_you = card_value(block, "For you:")
+    if for_you is not None and for_you.strip().casefold() == what.strip().casefold():
+        return WHAT_PROBLEM
+    return None
+
+
+def spec_date(root: Path, change: str, baseline: str | None) -> dt.date | None:
+    """The spec's date: from the spec committed at `baseline` when there is one, else the file on disk."""
+    rel = f"plans/changes/{change}/spec.md"
+    text: str | None = None
+    if baseline:
+        try:
+            listed = _git_output(root, "ls-tree", "--name-only", baseline, "--", rel).strip()
+            if listed:
+                text = _git_output(root, "show", f"{baseline}:{rel}")
+        except Refused:
+            return None
+    if text is None:
+        text = _read_quietly(root / rel)
+    header = re.match(r"\A---\n(.*?)\n---\n", text, flags=re.S)
+    if header is None:
+        return None
+    found = re.search(r"^date:[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*$", header.group(1), flags=re.M)
+    if found is None:
+        return None
+    try:
+        return dt.date.fromisoformat(found.group(1))
+    except ValueError:
+        return None
+
+
+def what_line_problems(root: Path, change: str, plan_text: str, baseline: str | None) -> list[str]:
+    """The `What:` problems of a card whose five fields are in order; the date is read only when needed."""
+    if what_problem(plan_text) is None:
+        return []
+    day = spec_date(root, change, baseline)
+    if day is None:
+        return [WHAT_DATE_PROBLEM]
+    return [WHAT_PROBLEM] if day > WHAT_ADOPTION_DAY else []
 
 
 def card_problem(text: str) -> str | None:
@@ -12464,17 +12558,9 @@ def card_problem(text: str) -> str | None:
     Below the frontmatter, before the first level-two heading, the first fenced block must hold
     lines beginning with the five `CARD_LABELS` in that order.
     """
-    body = re.sub(r"\A---\n.*?\n---\n", "", text, count=1, flags=re.S)
-    head = re.split(r"^## ", body, maxsplit=1, flags=re.M)[0]
-    lines = head.splitlines()
-    opening = next((i for i, line in enumerate(lines) if re.match(r"^(```|~~~)", line)), None)
-    if opening is None:
+    block = card_block(text)
+    if block is None:
         return CARD_PROBLEM
-    block = []
-    for line in lines[opening + 1 :]:
-        if re.match(r"^(```|~~~)", line):
-            break
-        block.append(line)
     walk = 0
     for label in CARD_LABELS:
         found = next((i for i in range(walk, len(block)) if block[i].startswith(label)), None)
@@ -12575,7 +12661,12 @@ def document_scope_text(gates: Sequence[dict], result: str, notes: Sequence[str]
 
 
 def verify_draft(
-    root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
+    root: Path,
+    ctx: Context,
+    key: str | None,
+    new_adrs: list[str],
+    tools: dict[str, str] | None = None,
+    baseline: str | None = None,
 ) -> tuple[list[str], bool, str]:
     """A draft attempt's post-run checks: the problems, whether the answer is owed, and the scope evidence.
 
@@ -12619,6 +12710,8 @@ def verify_draft(
         plan_text = _read_quietly(ctx.plan)
         if card_problem(plan_text) is not None:
             problems.append(CARD_PROBLEM)
+        else:
+            problems.extend(what_line_problems(root, ctx.change, plan_text, baseline))
         if not TIME_HEADING.search(plan_text):
             problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
     # The scope line is the check's own record of its outcome, so it stands only once the
@@ -12734,7 +12827,7 @@ def draft(root: Path, change: str) -> None:
                     restored,
                 ),
             )
-        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools)
+        problems, owed, scope = verify_draft(root, ctx, key, new_adrs, tools, baseline)
         if problems:
             # The scope evidence stands first, as in every verb's block; the next attempt starts on
             # the tree this one left, its files and diagnostics quoted below the audit line (criterion 21).

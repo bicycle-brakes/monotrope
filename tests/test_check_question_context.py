@@ -194,6 +194,80 @@ def test_plan_card_requires_preface_and_preserves_veto() -> None:
             _assert_plan_card_form(mutation)
 
 
+def _plan_prompt() -> str:
+    return (REPO / "prompts" / "03-plan.md").read_text(encoding="utf-8")
+
+
+def _card_lines(plan: str) -> list[str]:
+    return plan.split("```text\n", 1)[1].split("\n```", 1)[0].splitlines()
+
+
+def _assert_what_first(plan: str) -> None:
+    lines = _card_lines(plan)
+    assert lines[0].startswith("What:"), "What: must be the card's first field"
+    for line, field in zip(lines[1:6], ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:"), strict=True):
+        assert line.startswith(field), field
+
+
+def test_what_field_is_first_in_plan_card() -> None:
+    # Criterion 1. Planted fault: What: elsewhere in the card, or an existing field moved.
+    plan = _plan_prompt()
+    _assert_what_first(plan)
+    lines = _card_lines(plan)
+    what, for_you, done_when = lines[0], lines[1], lines[2]
+    without = plan.replace(what + "\n", "", 1)
+    moved = without.replace(lines[5] + "\n", lines[5] + "\n" + what + "\n", 1)
+    swapped = plan.replace(for_you + "\n" + done_when, done_when + "\n" + for_you, 1)
+    for mutation in (without, moved, swapped):
+        with pytest.raises(AssertionError):
+            _assert_what_first(mutation)
+
+
+def _what_instruction_parts(plan: str) -> list[str]:
+    text = " ".join(plan.lower().split())
+    parts = (
+        "present problem",
+        "plain-language",
+        "one concrete example",
+        "what changes",
+        "main risk",
+        "at most three short",
+        "indented continuation lines",
+    )
+    return [part for part in parts if part not in text]
+
+
+def test_what_field_requires_plain_explanation() -> None:
+    # Criterion 2. Planted fault: the instruction drops one of its parts or the sentence limit.
+    plan = _plan_prompt()
+    assert _what_instruction_parts(plan) == []
+    flattened = " ".join(plan.split())
+    for part in (
+        "present problem",
+        "plain-language",
+        "one concrete example",
+        "what changes",
+        "main risk",
+        "at most three short",
+    ):
+        stripped = re.sub(re.escape(part), "", flattened, flags=re.I)
+        assert part in _what_instruction_parts(stripped), part
+
+
+def _widening_paragraph(plan: str) -> str:
+    paragraph = next(item for item in plan.split("\n\n") if item.startswith("A card **widens**"))
+    return " ".join(paragraph.split())
+
+
+def test_what_field_is_in_scope_widening_rule() -> None:
+    # Criterion 9. Planted fault: What: leaves the widening rule, so an uncovered inclusion escapes approval.
+    paragraph = _widening_paragraph(_plan_prompt())
+    assert "`What:`" in paragraph and "includes" in paragraph
+    assert 'needs the maintainer\'s "ok" before phase 4 starts' in paragraph
+    # the planted fault: the same paragraph without What: no longer names it
+    assert "`What:`" not in paragraph.replace("`What:`", "")
+
+
 # --- AC 4 · the record keeps the context in its own field -------------------
 
 

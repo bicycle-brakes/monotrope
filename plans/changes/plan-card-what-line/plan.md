@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-kg8n
@@ -93,21 +93,26 @@ explanation, which no mechanical check establishes.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_question_context.py::test_what_field_is_first_in_plan_card — a missing or reordered field passes
-- 2: not yet written tests/test_check_question_context.py::test_what_field_requires_plain_explanation — the present problem, plain-language form, example, change, risk or sentence limit leaves the instruction
-- 3: not yet written tests/test_stage2.py::test_new_plan_card_requires_first_nonblank_what — a missing, blank or late What passes
-- 4: not yet written tests/test_stage2.py::test_new_plan_card_refuses_fourth_sentence — a four-sentence What passes
-- 5: not yet written tests/test_stage2.py::test_new_plan_card_rejects_copied_what — a wrapped For you: copied word for word into What:, with changed case or whitespace, passes
-- 6: not yet written tests/test_stage2.py::test_old_plan_cards_keep_five_field_check — a valid old card is refused
-- 7: not yet written tests/test_stage2.py::test_plan_card_refuses_unreadable_dates — an unreadable date lets a five-field card pass as old
-- 8: not yet written tests/test_stage2.py::test_subject_date_comes_from_base_spec — an attempt-edited backdate exempts the plan
-- 9: not yet written tests/test_check_question_context.py::test_what_field_is_in_scope_widening_rule — an uncovered inclusion escapes approval
-- 10: not yet written tests/test_run_report.py::test_appetite_survives_defective_what — a defective What hides the appetite
+- 1: tests/test_check_question_context.py::test_what_field_is_first_in_plan_card — a missing or reordered field passes
+- 2: tests/test_check_question_context.py::test_what_field_requires_plain_explanation — the present problem, plain-language form, example, change, risk or sentence limit leaves the instruction
+- 3: tests/test_stage2.py::test_new_plan_card_requires_first_nonblank_what — a missing, blank or late What passes
+- 4: tests/test_stage2.py::test_new_plan_card_refuses_fourth_sentence — a four-sentence What passes
+- 5: tests/test_stage2.py::test_new_plan_card_rejects_copied_what — a wrapped For you: copied word for word into What:, with changed case or whitespace, passes
+- 6: tests/test_stage2.py::test_old_plan_cards_keep_five_field_check — a valid old card is refused
+- 7: tests/test_stage2.py::test_plan_card_refuses_unreadable_dates — an unreadable date lets a five-field card pass as old
+- 8: tests/test_stage2.py::test_subject_date_comes_from_base_spec — an attempt-edited backdate exempts the plan
+- 9: tests/test_check_question_context.py::test_what_field_is_in_scope_widening_rule — an uncovered inclusion escapes approval
+- 10: tests/test_run_report.py::test_appetite_survives_defective_what — a defective What hides the appetite
 - 11: tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — the preface or veto is removed
-- 12: not yet written tests/test_stage2.py::test_valid_what_passes_without_spec_date — a valid What: gains a problem from a missing or malformed spec date
+- 12: tests/test_stage2.py::test_valid_what_passes_without_spec_date — a valid What: gains a problem from a missing or malformed spec date
+
+## Runner route — 2026-11-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash: Z.ai 5-hour limit until 22:33 CET (bead coding-harness-363r.4); Sonnet answers on the default profile again.
 
 ## Time used
 
 2026-11-22 08:36:34–08:39:16 UTC, 162 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-22 08:45:14–08:51:46 UTC, 391 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-22 08:57:20–09:03:23 UTC, 363 s — draft · attempt 3 · route glm · model glm-5.3 · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-23 21:09:30–21:12:28 UTC, 179 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

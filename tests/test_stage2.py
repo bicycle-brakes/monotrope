@@ -4813,6 +4813,7 @@ def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World
 PLAN_CARD = (
     "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n"
     "```text\n"
+    "What:        Drafting is slow today. One command now drafts the change. The risk is a wrong draft.\n"
     "For you:     one command drafts the change\n"
     "Done when:   the criteria hold\n"
     "Appetite:    8 h\n"
@@ -4820,6 +4821,35 @@ PLAN_CARD = (
     "Pre-mortem:  it failed\n"
     "```\n\n## Time used\n"
 )
+
+WHAT_OLD_CARD = PLAN_CARD.replace(
+    "What:        Drafting is slow today. One command now drafts the change. The risk is a wrong draft.\n", ""
+)
+
+
+def spec_with_date(day: str | None) -> str:
+    date_line = f"date: {day}\n" if day is not None else ""
+    return f"---\ntitle: Spec\nupdated: 2026-09-30\n{date_line}bead: demo-1\n---\n\n# Spec\n"
+
+
+def draft_problems(world: World, card: str, day: str | None, *, committed: bool = False) -> list[str]:
+    """Run the real draft verification over `card` with a spec dated `day`."""
+    spec_path = world.root / "plans/changes/demo/spec.md"
+    spec_path.write_text(spec_with_date(day), encoding="utf-8")
+    baseline = None
+    if committed:
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "spec at the base")
+        baseline = git(world.root, "rev-parse", "HEAD").strip()
+    world.plan.write_text(card, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root), baseline)
+    return problems
+
+
+def _after_adoption() -> str:
+    return (stage2.WHAT_ADOPTION_DAY + dt.timedelta(days=1)).isoformat()
+
 
 DECISIONS_HEADER = "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\n"
 DEMO_CONTEXT = (
@@ -5509,6 +5539,88 @@ def test_draft_docs_checks_preserve_preparation_and_artifact_guards(
     problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, new_adrs, stage2.tool_state(world.root))
     assert len(problems) == 1 and "more than one new ADR file" in problems[0], problems
     assert order == [], "the document check ran despite the rejected artefacts"
+
+
+def _what_card(what_lines: str, for_you: str = "one command drafts the change") -> str:
+    return PLAN_CARD.replace(
+        "What:        Drafting is slow today. One command now drafts the change. The risk is a wrong draft.\n",
+        what_lines,
+    ).replace("For you:     one command drafts the change\n", f"For you:     {for_you}\n")
+
+
+def test_valid_what_passes_without_spec_date(world: World) -> None:
+    # Criteria 12 and 3. Planted fault: the date is read before the card is judged.
+    for day in (None, "not-a-date", "2026-13-45"):
+        assert draft_problems(world, PLAN_CARD, day) == [], day
+    wrapped = _what_card("What:        Drafting is slow today.\n             One command now drafts it.\n")
+    assert draft_problems(world, wrapped, None) == []
+
+
+def test_new_plan_card_requires_first_nonblank_what(world: World) -> None:
+    # Criterion 3. Planted fault: a missing, blank or late What: passes a subject plan.
+    late = _after_adoption()
+    blank = _what_card("What:\n")
+    what_line = next(line for line in PLAN_CARD.split("\n") if line.startswith("What:"))
+    moved = WHAT_OLD_CARD.replace("Pre-mortem:  it failed\n", f"Pre-mortem:  it failed\n{what_line}\n")
+    for card in (WHAT_OLD_CARD, blank, moved):
+        assert stage2.what_problem(card) is not None
+        problems = draft_problems(world, card, late)
+        assert stage2.WHAT_PROBLEM in problems, (card, problems)
+    assert draft_problems(world, PLAN_CARD, late) == []
+
+
+def test_new_plan_card_refuses_fourth_sentence(world: World) -> None:
+    # Criterion 4. Planted fault: the sentence limit is not applied.
+    four = _what_card("What:        One. Two! Three? Four.\n")
+    three = _what_card("What:        One. Two! Three?\n")
+    assert stage2.WHAT_PROBLEM in draft_problems(world, four, _after_adoption())
+    assert draft_problems(world, three, _after_adoption()) == []
+
+
+def test_new_plan_card_rejects_copied_what(world: World) -> None:
+    # Criterion 5. Planted fault: the wrapped For you: value is not folded before comparing.
+    wrapped_for_you = "Drafting is slow.\n             One command fixes it."
+    copied = _what_card("What:        drafting is   SLOW. one command fixes it.\n", wrapped_for_you)
+    problems = draft_problems(world, copied, _after_adoption())
+    assert stage2.WHAT_PROBLEM in problems, problems
+    different = _what_card("What:        Something else entirely.\n", wrapped_for_you)
+    assert draft_problems(world, different, _after_adoption()) == []
+
+
+def test_old_plan_cards_keep_five_field_check(world: World) -> None:
+    # Criterion 6. Planted fault: an old card is refused for lacking What:.
+    adoption = stage2.WHAT_ADOPTION_DAY
+    before = (adoption - dt.timedelta(days=1)).isoformat()
+    for day in (before, adoption.isoformat()):
+        assert draft_problems(world, WHAT_OLD_CARD, day) == [], day
+        broken = WHAT_OLD_CARD.replace("Pre-mortem:  it failed\n", "")
+        assert stage2.CARD_PROBLEM in draft_problems(world, broken, day)
+    assert stage2.WHAT_PROBLEM in draft_problems(world, WHAT_OLD_CARD, _after_adoption())
+
+
+def test_plan_card_refuses_unreadable_dates(world: World) -> None:
+    # Criterion 7. Planted fault: an unreadable date lets a five-field card pass as old.
+    for day in (None, "yesterday", "2026-02-30"):
+        problems = draft_problems(world, WHAT_OLD_CARD, day)
+        assert stage2.WHAT_DATE_PROBLEM in problems, (day, problems)
+
+
+def test_subject_date_comes_from_base_spec(world: World) -> None:
+    # Criterion 8. Planted fault: the drafted spec's own date decides although the base holds one.
+    spec_path = world.root / "plans/changes/demo/spec.md"
+    spec_path.write_text(spec_with_date(_after_adoption()), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "spec at the base")
+    baseline = git(world.root, "rev-parse", "HEAD").strip()
+    # the attempt backdates the committed spec and writes a five-field card
+    spec_path.write_text(spec_with_date("2020-01-01"), encoding="utf-8")
+    world.plan.write_text(WHAT_OLD_CARD, encoding="utf-8")
+    ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root), baseline)
+    assert stage2.WHAT_PROBLEM in problems, problems
+    # without a baseline spec the drafted spec's own date decides
+    problems, _owed, _scope = stage2.verify_draft(world.root, ctx, None, [], stage2.tool_state(world.root))
+    assert stage2.WHAT_PROBLEM not in problems, problems
 
 
 def test_implement_and_fallback_repair_keep_full_verify_after_docs_draft(

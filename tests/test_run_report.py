@@ -56,7 +56,10 @@ def call_line(
     return f"Stage-2 call, 2026-10-28: {body}"
 
 
-CARD = "For you:     demo.\nDone when:   demo holds.\nAppetite:    {appetite}\nNot now:     demo.\nPre-mortem:  demo.\n"
+CARD = (
+    "What:        demo is slow. demo gets faster. demo may break.\n"
+    "For you:     demo.\nDone when:   demo holds.\nAppetite:    {appetite}\nNot now:     demo.\nPre-mortem:  demo.\n"
+)
 
 
 def plan_text(
@@ -907,6 +910,21 @@ def test_readable_appetite_survives_unrelated_card_defect(tmp_path: Path) -> Non
         text.replace("Not now:     demo.\nPre-mortem:  demo.", "Pre-mortem:  demo.\nNot now:     demo."),
     ):
         assert stage2.card_problem(defective) is not None
+        folder = make_change(tmp_path, "alpha", plan=defective)
+        out = "\n".join(run_report.change_block(folder, "alpha"))
+        assert "appetite: 7200 s" in out
+        assert "at or over half the appetite" in out
+
+
+def test_appetite_survives_defective_what(tmp_path: Path) -> None:
+    text = plan_text(appetite="2 hours", time_body=runner_line(seconds=3600))
+    what = "What:        demo is slow. demo gets faster. demo may break.\n"
+    assert what in text
+    for defective in (
+        text.replace(what, ""),
+        text.replace(what, "What:\n"),
+        text.replace(what, "What:        One. Two. Three. Four.\n"),
+    ):
         folder = make_change(tmp_path, "alpha", plan=defective)
         out = "\n".join(run_report.change_block(folder, "alpha"))
         assert "appetite: 7200 s" in out
