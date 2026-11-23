@@ -86,6 +86,10 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
    produces is written by hand instead. An existing side route becomes a bead and is folded in by its own change,
    never in passing. A rule of this kind takes hold through a check that goes red, not through prose. The kit carries
    it (`templates/agents-working-pace.md`) (maintainer, 2026-11-16).
+10. **Accepted minor limits.** A finding may be rejected as an accepted limit with a follow-up bead only when it is
+    MINOR, touches only display, messages or rare edge cases (never correctness or security), fixing it would void an
+    expensive measurement or review pass, and the pull request names the limit and the bead. Otherwise it is fixed
+    (maintainer, 2026-11-22).
 
 ## Communication and session continuity
 
