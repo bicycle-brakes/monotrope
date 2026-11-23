@@ -2353,3 +2353,142 @@ def test_completion_context_is_additive_and_old_history_reads(
     assert f"invalid run_end fields: admission_reused for run {broken_id}" in out, out
     assert f"invalid run_end fields: admission_requested for run {broken_id}" in out, out
     assert "incomplete (no completion recorded)" in out
+
+
+def test_two_slot_context_does_not_mix_holder_waits(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Two concurrent admissions each record their own context; neither run reads its peer's wait.
+
+    Planted fault (STAGE2_PLANT_FAULT=1): context resolution hands both holders
+    one shared record, so one run's completion carries the peer's admission
+    identity. The nested descendant of each holder, run while both holders are
+    live and without the fresh id in its environment, must resolve its own
+    ancestor's admission from the published record (reused), never the peer's.
+    """
+    state = tmp_path / "state"
+
+    code, out, _ = _run(capsys, "start")
+    assert code == 0
+    id_a = out.strip()
+    code, out, _ = _run(capsys, "start")
+    id_b = out.strip()
+
+    # Both completions run inside two real, simultaneous admissions: each
+    # child resolves its own context through `admission_context()` and records
+    # its completion. The barrier proves both slots were held at once.
+    body = """
+import json, os, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / "scripts"))
+import verify_duration, verify_lock
+name, peer = os.environ["PROBE_NAME"], os.environ["PROBE_PEER"]
+root = Path(os.environ["PROBE_DIR"])
+(root / ("ready-" + name)).write_text("1")
+deadline = time.time() + 30
+while not (root / ("ready-" + peer)).exists():
+    if time.time() > deadline:
+        sys.exit(3)
+    time.sleep(0.05)
+context = verify_lock.admission_context()
+if os.environ.get("PROBE_PLANT"):
+    # planted fault: context resolution hands both holders one shared record
+    context = verify_lock.AdmissionContext("shared-slot", 0.0, False)
+verify_duration.record_end(
+    os.environ["PROBE_RUN"],
+    os.environ["PROBE_VERDICT"],
+    segments=[(0.0, float(os.environ["PROBE_SECONDS"]))],
+    context=context,
+    admission_requested=True,
+)
+(root / ("context-" + name)).write_text(
+    json.dumps([context.admission_id, context.wait_seconds, context.reused])
+)
+# A nested descendant without the fresh id (as a runner clears it for nested
+# runs) resolves its ancestor's admission from the ownership record.
+import subprocess
+env = verify_lock.inherit_env(dict(os.environ))
+env.pop(verify_lock.ADMISSION_ID_ENV, None)
+env.pop(verify_lock.ADMISSION_WAIT_ENV, None)
+nested_probe = (
+    "import json, sys\\n"
+    "from pathlib import Path\\n"
+    "sys.path.insert(0, str(Path.cwd() / 'scripts'))\\n"
+    "import verify_lock\\n"
+    "c = verify_lock.admission_context()\\n"
+    "print(json.dumps([c.admission_id, c.wait_seconds, c.reused]))\\n"
+)
+nested = subprocess.run(
+    [sys.executable, "-c", nested_probe], env=env, capture_output=True, text=True, check=True
+).stdout
+(root / ("nested-" + name)).write_text(nested)
+(root / ("nested-done-" + name)).write_text("1")
+deadline = time.time() + 30
+while not (root / ("nested-done-" + peer)).exists():
+    if time.time() > deadline:
+        sys.exit(4)
+    time.sleep(0.05)
+"""
+
+    def entry(name: str, peer: str, run_id: str, verdict: str, seconds: str) -> subprocess.Popen[bytes]:
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(tmp_path),
+            "XDG_STATE_HOME": str(state),
+            verify_lock.FLOOR_ENV: "0",
+            "PROBE_NAME": name,
+            "PROBE_PEER": peer,
+            "PROBE_DIR": str(tmp_path),
+            "PROBE_RUN": run_id,
+            "PROBE_VERDICT": verdict,
+            "PROBE_SECONDS": seconds,
+        }
+        if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+            env["PROBE_PLANT"] = "1"
+        return subprocess.Popen(
+            [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", body],
+            cwd=REPO_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    first = entry("a", "b", id_a, "green", "1.0")
+    second = entry("b", "a", id_b, "red", "2.0")
+    assert first.wait(timeout=90) == 0, "the first admission failed or never overlapped its peer"
+    assert second.wait(timeout=90) == 0, "the second admission failed or never overlapped its peer"
+
+    ctx_a = json.loads((tmp_path / "context-a").read_text(encoding="utf-8"))
+    ctx_b = json.loads((tmp_path / "context-b").read_text(encoding="utf-8"))
+    assert ctx_a[0] and ctx_b[0] and ctx_a[0] != ctx_b[0], f"the holders share one admission identity: {ctx_a} {ctx_b}"
+    assert ctx_a[2] is False and ctx_b[2] is False, "a fresh admission was read as reused"
+
+    # Each nested descendant, with both holders live, reuses its own ancestor's
+    # admission through the published record, never the peer's.
+    nested_a = json.loads((tmp_path / "nested-a").read_text(encoding="utf-8"))
+    nested_b = json.loads((tmp_path / "nested-b").read_text(encoding="utf-8"))
+    assert nested_a[0] == ctx_a[0] and nested_a[2] is True, f"holder a's descendant lost its ancestor: {nested_a}"
+    assert nested_b[0] == ctx_b[0] and nested_b[2] is True, f"holder b's descendant lost its ancestor: {nested_b}"
+    assert nested_a[0] != nested_b[0], "a descendant resolved its peer's admission"
+
+    # The history keeps both completions apart, each with its own verdict,
+    # identity and wait.
+    ends = [event for event in _history(state) if event["event"] == "run_end"]
+    assert len(ends) == 2, ends
+    by_id = {event["run_id"]: event for event in ends}
+    assert by_id[id_a]["verdict"] == "green", by_id
+    assert by_id[id_b]["verdict"] == "red", by_id
+    assert by_id[id_a]["admission_id"] == ctx_a[0], by_id
+    assert by_id[id_a]["admission_wait_seconds"] == ctx_a[1], by_id
+    assert by_id[id_b]["admission_id"] == ctx_b[0], by_id
+    assert by_id[id_b]["admission_wait_seconds"] == ctx_b[1], by_id
+
+    # The reader attributes each run's own context; the peer's identity never
+    # appears in the other run's report.
+    code, out, _ = _run(capsys, "report", "--run", id_a)
+    assert code == 0
+    assert f"admission (final): {ctx_a[0]}" in out, out
+    assert ctx_b[0] not in out, out
+    code, out, _ = _run(capsys, "report", "--run", id_b)
+    assert code == 0
+    assert f"admission (final): {ctx_b[0]}" in out, out
+    assert ctx_a[0] not in out, out
