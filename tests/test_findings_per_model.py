@@ -252,10 +252,10 @@ def test_replace_attribution_source(tmp_path):
     "status",
     [
         "rejected — Same as L1-1",
-        "Duplicate of L2-2",
+        "rejected — Duplicate of L2-2",
         "rejected — repeat of F-3",
-        "REPEATS L1-1",
-        "repeat L1-1",
+        "rejected — REPEATS L1-1",
+        "rejected — repeat L1-1",
         "rejected — duplicate of L1-1 and L1-2: same shell",
     ],
 )
@@ -459,8 +459,8 @@ def test_gaps_produce_both_incomplete_outputs_and_nonzero(tmp_path, monkeypatch)
         RELEASE,
         lrow("L1-1", "hy3", "maybe later"),
         lrow("L1-2", "hy3", "rejected — same as L9-9"),
-        lrow("L1-3", "hy3", "duplicate of L1-4"),
-        lrow("L1-4", "hy3", "duplicate of L1-3"),
+        lrow("L1-3", "hy3", "rejected — duplicate of L1-4"),
+        lrow("L1-4", "hy3", "rejected — duplicate of L1-3"),
         "| L1-5 | MAJOR | too few cells |",
     )
     files = {findings_path("bad"): bad, findings_path("raw"): b"\xff\xfe not utf-8"}
@@ -931,3 +931,17 @@ def test_symbolic_remote_branch_reports(tmp_path, monkeypatch):
         assert code == 0
         assert chunks[-1].strip() == str(expected)
         assert jsonl(expected)[0]["commit"] == sha
+
+
+def test_bare_duplicate_status_is_incomplete(tmp_path, monkeypatch):
+    bad = doc(RELEASE, lrow("L1-1", "hy3", "fixed"), lrow("L1-2", "hy3", "duplicate of L1-1"))
+    root, _ = repo(tmp_path, {findings_path("bad"): bad})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    assert code != 0, "a bare duplicate status must make the report incomplete"
+    assert "Incomplete" in "".join(chunks) and "L1-2" in "".join(chunks)
+    records = jsonl(state / "coding-harness" / "findings-per-model" / "main.jsonl")
+    assert records[0]["complete"] is False
+    assert any(r["type"] == "gap" and r["id"] == "L1-2" for r in records)
+    assert not fr.known_status("duplicate of L1-1")
+    assert not fr.is_duplicate("duplicate of L1-1")

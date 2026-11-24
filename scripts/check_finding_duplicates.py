@@ -178,7 +178,8 @@ def rows_at(root: Path, rev: str | None, path: str) -> dict[str, list[RowCells]]
 
 def marks_duplicate(status: str) -> bool:
     """The row marks a duplicate: a marker naming a row id (a marker without an id is none, criterion 7)."""
-    return reader.is_duplicate(status)
+    # The gate also rejects malformed status cells that contain a duplicate marker.
+    return reader.is_duplicate(status) or reader.is_duplicate(f"rejected — {status}")
 
 
 def measure(root: Path, base: str, head: str | None = None) -> list[str]:

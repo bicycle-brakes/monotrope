@@ -163,9 +163,12 @@ DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repe
 _PIPE = re.compile(r"(?<!\\)\|")
 
 UNATTRIBUTED = "unattributed"
-DEFECT_PREFIXES = ("taken", "fixed", "closed —")
-QUESTION_PREFIXES = ("resolved", "answered", "in spec")
-KNOWN_STATUS_PREFIXES = ("open", "accepted limit —", *DEFECT_PREFIXES, *QUESTION_PREFIXES, "rejected")
+# One closed grammar for the whole status cell; suffixes carry historical reasons.
+STATUS_CELL = re.compile(
+    r"(?P<kind>accepted limit —|closed —|in spec|open|taken|fixed|resolved|answered|rejected)"
+    r"(?!\w)(?P<detail>.*)",
+    re.I | re.S,
+)
 OUTCOMES = ("raised", "defects_accepted", "questions_settled", "rejected")
 
 
@@ -387,58 +390,61 @@ def normalized_status(status: str) -> str:
     return " ".join(status.strip().lower().split())
 
 
-def starts_with_status(status: str, prefixes: tuple[str, ...]) -> bool:
-    """Match complete leading status words, not longer words sharing a prefix."""
-    return any(re.match(rf"{re.escape(prefix)}(?!\w)", status) for prefix in prefixes)
+def parse_status(status: str) -> tuple[str | None, list[str]] | None:
+    """Parse a complete status cell into its outcome and referenced duplicate IDs."""
+    cell = " ".join(status.strip().split())
+    match = STATUS_CELL.fullmatch(cell)
+    if not match:
+        return None
+    kind = match.group("kind").lower()
+    outcome = {
+        "taken": "defects_accepted",
+        "fixed": "defects_accepted",
+        "closed —": "defects_accepted",
+        "resolved": "questions_settled",
+        "answered": "questions_settled",
+        "in spec": "questions_settled",
+        "rejected": "rejected",
+    }.get(kind)
+    detail = match.group("detail")
+    ids = rf"{FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*"
+    # The canonical form ends its targets before the optional reason.
+    canonical = re.fullmatch(rf"\s*—\s*duplicate\s+of\s+(?P<ids>{ids})(?::.*)?", detail, re.I)
+    legacy = re.fullmatch(rf".*?{DUPLICATE_MARKER.pattern}\s+(?P<ids>{ids})(?![A-Za-z0-9._-]).*", detail, re.I)
+    duplicate = canonical if kind == "rejected" and canonical else legacy
+    targets = (
+        []
+        if duplicate is None
+        else [
+            target
+            for target in FINDING_ID.findall(duplicate.group("ids"))
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target)
+        ]
+    )
+    return outcome, sorted(set(targets))
 
 
 def status_outcome(status: str) -> str | None:
-    """The outcome bucket of a known status; None for raised-only statuses.
-
-    Callers that must tell an unknown status apart check ``known_status`` too.
-    """
-    lowered = normalized_status(status)
-    if starts_with_status(lowered, ("open", "accepted limit —")):
-        return None
-    if starts_with_status(lowered, DEFECT_PREFIXES):
-        return "defects_accepted"
-    if starts_with_status(lowered, QUESTION_PREFIXES):
-        return "questions_settled"
-    if starts_with_status(lowered, ("rejected",)):
-        return "rejected"
-    return None
+    """Return the outcome of a known status, or None for a raised-only status."""
+    parsed = parse_status(status)
+    return parsed[0] if parsed else None
 
 
 def known_status(status: str) -> bool:
-    """Whether the status is in the closed set (decisions F-27); duplicates are known."""
-    if DUPLICATE_MARKER.match(normalized_status(status)) and is_duplicate(status):
-        return True  # standalone historical duplicate form
-    return starts_with_status(normalized_status(status), KNOWN_STATUS_PREFIXES)
+    """Whether the complete status cell matches the closed grammar."""
+    return parse_status(status) is not None
 
 
 def duplicate_targets(status: str) -> list[str]:
-    """The row ids a duplicate marker names, deduplicated, in deterministic order."""
-    canonical = re.match(
-        rf"^rejected — duplicate of ({FINDING_ID.pattern}(?: and {FINDING_ID.pattern})*)(?:: |$)",
-        status,
-    )
-    if canonical:
-        return sorted(set(FINDING_ID.findall(canonical.group(1))))
-    targets: set[str] = set()
-    pattern = re.compile(
-        rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*)(?![A-Za-z0-9._-])",
-        re.I,
-    )
-    for match in pattern.finditer(status):
-        targets.update(
-            target for target in FINDING_ID.findall(match.group(1)) if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target)
-        )
-    return sorted(targets)
+    """Return the IDs referenced by a duplicate in a known status."""
+    parsed = parse_status(status)
+    return parsed[1] if parsed else []
 
 
 def is_duplicate(status: str) -> bool:
-    """A duplicate names another row id with a marker; a marker without an id is none."""
-    return bool(duplicate_targets(status))
+    """Whether a known status names another row as a duplicate."""
+    parsed = parse_status(status)
+    return bool(parsed and parsed[1])
 
 
 # ---------------------------------------------------------------------------
