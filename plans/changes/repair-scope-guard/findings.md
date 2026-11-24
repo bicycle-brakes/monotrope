@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -867,3 +867,20 @@ Orchestrator triage of the final re-check, 2026-11-23 (provisional agent decisio
 Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5552 commits, 12 rules.
 
 Runner restoration, 2026-11-23: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5607 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-11 | BLOCKER | SPEC | base | plans/changes/repair-scope-guard/spec.md; plans/changes/repair-scope-guard/plan.md | [DIVERGENT] The spec grants a directory’s descendants only when its Where cell ends in `/`; plan step 2 also grants descendants of an existing tracked directory without that suffix. The two instructions give different scopes to the same cell. [Criterion 8] | Codex | open | — |
+| P6-12 | MAJOR | SPEC | base | scripts/stage2.py:12339 | If an implement or repair attempt edits an existing tracked journal file and its verification fails on the final route, the runner leaves that journal edit in the worktree. The held-path check runs at the checkpoint, which a failed attempt never reaches; repair’s failed-attempt cleanup covers new files, not this edit. [Criterion 1] | Codex | open | — |
+| P6-13 | MAJOR | MAINT | fix-r5 | scripts/stage2.py:12339 | If a failed verification makes one stray’s parent unsafe, cleanup refuses the whole batch but the runner continues to another route. A second stray remains on disk and becomes part of that route’s starting inventory, so a passing retry can commit it without the scope guard reporting it. | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list, allowing journal changes past that protection — catches without switch: yes for implement and repair if the list is changed directly; no for draft because its separate journal check and restoration still protect the path.
+
+Phase 6 verdict: codex 01a20d4a-1a75-7cc1-a575-a97686b3c3fa, 2026-11-24
+Reviewer session: codex 01a20d4a-1a75-7cc1-a575-a97686b3c3fa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
