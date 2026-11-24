@@ -239,3 +239,63 @@ context: |
   Architecture change: none.
 
 In the context of the research bookkeeping, facing ninety handoff items, we decided on run bf9a45e8 and two neighbours, to achieve a focused spec, accepting that the dropped neighbours are not re-read. — 2026-11-24
+
+## Q-9 · Several lanes in one call (spec review S-1, S-2, S-15)
+
+asked: 2026-11-24
+answer: "A — the limit applies per lane: each lane gets at most the configured number of verify-bearing steps in one call; a failure or an open hand step stops only that lane and the driver goes on with the next listed lane; lanes run one after another. Parallel lanes come later through scripts/jobs.py (bead coding-harness-a6ns.1), one job per lane. Options put: per lane, only the lane stops, sequential (recommended); per call, the first failure stops everything; per lane, in parallel."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: one advance call over several lanes.
+  Intention: settle spec-review rows S-1, S-2 and S-15 of 2026-11-24.
+  Today: Q-7 set a limit of two verify-bearing steps without saying per what.
+  Repository change: the driver loop in scripts/lanes.py.
+  Architecture change: none.
+
+In the context of a call over several lanes, facing a shared or a per-lane limit, we decided on a per-lane limit, lane-local stops and sequential lanes, to achieve progress on every lane per call, accepting that later lanes wait for earlier ones until jobs.py runs them in parallel. — 2026-11-24
+
+## Q-10 · How a step starts, which verbs, which count (spec review S-3, S-5, S-10)
+
+asked: 2026-11-24
+answer: "A — each step is a child process `scripts/stage2.py <verb> <change>`, so each step has its own verify admission. The verbs advance may start and the verbs that count as verify-bearing are lists in the central setting; initial values: allowed repair, review, review-loop, release-loop, prepare-loop, implement; counted implement, repair, review. The per-lane limit is a key with range 1–5, initial 2; an invalid value refuses the call. Options put: child process with central lists (recommended); child process, only repair and review; import in the same process."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: starting a step.
+  Intention: settle spec-review rows S-3, S-5 and S-10 of 2026-11-24.
+  Today: verify-two-slots admits one verify per process.
+  Repository change: three keys in the central setting; child-process starts in scripts/lanes.py.
+  Architecture change: none beyond Q-1.
+
+In the context of starting runner steps, facing an in-process call or child processes, we decided on a child process per step with central allow and count lists, to achieve independent admissions and easy changes, accepting one process start per step. — 2026-11-24
+
+## Q-11 · Where the inputs come from (spec review S-4, S-6, S-7, S-13)
+
+asked: 2026-11-24
+answer: "A — bead coding-harness-hwll also writes the `next:` line into the loop record; the latest line governs and an unreadable line stops the lane; hwll defines the line's grammar. scripts/lanes.py owns a new lanes file in the runner state directory, `$XDG_STATE_HOME/coding-harness/lanes.yaml`, with change and worktree path per lane; it replaces the night run's free-text lanes file. Options put: next: in the record plus a new lanes file (recommended); next: read from the step's output."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the driver's inputs.
+  Intention: settle spec-review rows S-4, S-6, S-7 and S-13 of 2026-11-24.
+  Today: ADR 0021 prints `next:` to standard output only; the night lanes file is free text; the loop record key is `<change>@<digest of the repository root>`.
+  Repository change: hwll writes the line into loop.md; scripts/lanes.py defines lanes.yaml.
+  Architecture change: none.
+
+In the context of the driver's inputs, facing output parsing or recorded state, we decided on the recorded `next:` line and an own lanes file with worktree paths, to achieve inputs that survive a restart, accepting that hwll also writes the record. — 2026-11-24
+
+## Q-12 · Stops, park marks and exit codes (spec review S-8, S-9, S-11, S-12, S-14)
+
+asked: 2026-11-24
+answer: "A — the runner writes `next: hand <change> <rows>` for an open hand step (hwll) and advance stops there. A stopped lane gets a park mark with its reason in lanes.yaml and runs again only after the orchestrator clears it. Exit 0: every lane advanced or had nothing to do; 1: at least one lane stopped; 2: the call was refused; reasons on standard error and in the job record. 'Writes no lifecycle field' (Q-5) binds advance's own code, not the runner steps it starts. Criterion 8 becomes testable: lanes or steps taken from remote data (labels, comments, fetched files) are ignored. Options put: next: hand plus park mark (recommended); no park mark."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: recognising and remembering a stop.
+  Intention: settle spec-review rows S-8, S-9, S-11, S-12 and S-14 of 2026-11-24.
+  Today: a repair with only held rows exits 0; after a failure the same `next:` line remains.
+  Repository change: hwll's `next: hand` form; park marks in lanes.yaml; the exit contract of scripts/lanes.py.
+  Architecture change: none.
+
+In the context of failed or held steps, facing silent retries, we decided on a `next: hand` line and a park mark the orchestrator clears, to achieve no repeated failing step, accepting one more hand action per stopped lane. — 2026-11-24
