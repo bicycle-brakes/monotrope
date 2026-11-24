@@ -30,21 +30,21 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 ## Acceptance criteria
 
 1. When `python3 scripts/lanes.py advance` runs, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`, whose local entries name a change and its worktree, in file order.
-   *Refuted by:* A listed lane is omitted or an absent lane is selected.
+   *Refuted by:* The file entries are read in a different order or an entry is not read.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-9`, `decisions.md#Q-11`.
 2. When a change argument is supplied, only its listed lane is considered.
    *Refuted by:* Another or unlisted change runs.
    *Basis:* `decisions.md#Q-6`.
-3. If the lanes file is unreadable, malformed, contains duplicate changes or invalid worktree entries, or the requested change is unlisted, the call is refused before starting a step.
+3. If the lanes file is unreadable, malformed, contains duplicate changes, or the requested change is unlisted, the call is refused before starting a step.
    *Refuted by:* Any step starts or the call is not refused.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`.
-4. When a lane is considered, its runner record is selected using that lane’s worktree and each step runs in that worktree.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`, `decisions.md#Q-15`.
+4. When a lane is considered, its runner record is selected using that lane’s worktree and each step runs using that worktree’s own `scripts/stage2.py`.
    *Refuted by:* A record or execution belongs to another checkout.
    *Basis:* `decisions.md#Q-11`.
 5. When a lane has multiple recorded `next:` lines, the latest line governs under the grammar supplied by ladder-next-step.
    *Refuted by:* An earlier line overrides the latest.
    *Basis:* `decisions.md#Q-3`, `decisions.md#Q-11`.
-6. If the latest instruction is missing, unreadable, malformed, names another change or names a disallowed verb, the lane stops without starting that instruction.
+6. If an existing latest instruction is unreadable, malformed, names another change or names a disallowed verb, the lane stops without starting that instruction.
    *Refuted by:* The driver guesses or starts the instruction.
    *Basis:* `decisions.md#Q-3`, `decisions.md#Q-10`, `decisions.md#Q-11`.
 7. When a valid allowed instruction is read, the driver starts the exact verb and change as a separate `python3 scripts/stage2.py` child process.
@@ -56,8 +56,8 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 9. While the central counted list has its initial values, `implement`, `repair` and `review` count as verify-bearing steps.
    *Refuted by:* One of these is not counted or an unlisted verb is counted.
    *Basis:* `decisions.md#Q-10`.
-10. When a lane reaches the centrally configured per-lane limit of verify-bearing steps, it starts no further verify-bearing step in that call.
-   *Refuted by:* The lane starts more counted steps than its limit.
+10. When a lane reaches the centrally configured per-lane limit of verify-bearing steps, it starts no further step of any kind in that call and is treated as advanced without a park mark.
+   *Refuted by:* The lane starts any step after reaching its limit or receives a park mark for reaching it.
    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`.
 11. When the limit is not configured, it defaults to two per lane.
    *Refuted by:* The default differs from two.
@@ -65,7 +65,7 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 12. If the configured limit is not an integer from one through five, the call is refused before any step starts.
    *Refuted by:* An invalid value is accepted or a step starts.
    *Basis:* `decisions.md#Q-10`.
-13. When a step fails or the latest instruction is `next: hand <change> <rows>`, that lane stops even if the preceding repair exited successfully.
+13. When a step exits 1 or the latest instruction is `next: hand <change> <rows>`, that lane stops even if the preceding repair exited successfully.
    *Refuted by:* A subsequent step starts in the stopped lane.
    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`.
 14. When a lane stops, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
@@ -74,9 +74,9 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 15. When a lane stops, the driver proceeds to the next listed lane sequentially.
    *Refuted by:* A stop aborts the remaining lanes or lanes overlap.
    *Basis:* `decisions.md#Q-9`.
-16. When the call reports a stop, it writes the reason to standard error and the job record.
-   *Refuted by:* Either destination lacks the reason.
-   *Basis:* `decisions.md#Q-12`.
+16. When the call reports a stop, it writes the reason to standard error.
+   *Refuted by:* Standard error lacks the reason.
+   *Basis:* `decisions.md#Q-12`, `decisions.md#Q-16`.
 17. When every selected lane advances or has nothing to do, the call exits 0; if any lane stops it exits 1; if the call is refused it exits 2.
    *Refuted by:* An outcome has a different exit code.
    *Basis:* `decisions.md#Q-12`.
@@ -86,9 +86,37 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 19. When locally invoked, the driver ignores lanes and steps obtained from remote labels, comments, branch names or fetched files.
    *Refuted by:* Remote data selects a lane or step.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-12`.
-20. When the decision pull request is merged, ADR 0021 permits the separate driver to start allowed named steps while retaining the runner’s existing stops.
-   *Refuted by:* The ADR forbids that action or weakens a stop.
+20. When the decision pull request is merged, ADR 0021 permits the separate driver to start `repair`, `review`, `review-loop`, `release-loop`, `prepare-loop` and `implement` while retaining the runner’s existing stops.
+   *Refuted by:* The ADR omits a named verb, permits an additional verb without a further amendment, or weakens a stop.
    *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-10`.
+
+21. When a lane has no loop record or no `next:` line, it has nothing to do and receives no park mark.
+   *Refuted by:* The lane is parked or reported as a stop solely for the missing record or line.
+   *Basis:* `decisions.md#Q-13`.
+22. When a started instruction remains the latest instruction after a successful step, the lane ends for this call without repeating it.
+   *Refuted by:* The same instruction starts again in that call.
+   *Basis:* `decisions.md#Q-13`.
+23. When a lane is already parked, the driver skips it as having nothing to do and repeats its reason on standard error.
+   *Refuted by:* The lane runs, counts as a new stop, or its reason is absent from standard error.
+   *Basis:* `decisions.md#Q-13`.
+24. When a runner step exits 2, its lane ends for this call without a park mark.
+   *Refuted by:* The driver retries it in the call or parks the lane for that refusal.
+   *Basis:* `decisions.md#Q-14`.
+25. When advance works on a lane, it holds that lane's lock for the duration.
+   *Refuted by:* Two advance calls work on the same lane simultaneously.
+   *Basis:* `decisions.md#Q-14`.
+26. When advance writes the lanes file, it holds a file lock.
+   *Refuted by:* Concurrent writes lose a park mark or corrupt the file.
+   *Basis:* `decisions.md#Q-14`.
+27. If a selected lane's worktree path does not exist or is not a worktree of this repository, only that lane is parked.
+   *Refuted by:* The lane runs, is not parked, or the invalid path alone refuses the whole call.
+   *Basis:* `decisions.md#Q-15`.
+28. If either central verb list is absent, malformed, includes an unknown runner verb, or the counted list is not a subset of the allow list, the call is refused before a step starts.
+   *Refuted by:* An invalid list is accepted or any step starts.
+   *Basis:* `decisions.md#Q-15`.
+29. When the night routine is followed, it calls `scripts/lanes.py advance` using one machine-local lanes file shared by concurrent runs under the specified locks.
+   *Refuted by:* The routine prescribes the old per-run lanes file or hand-starts the next lane step.
+   *Basis:* `decisions.md#Q-11`, `decisions.md#Q-14`, `decisions.md#Q-16`.
 
 ## Non-goals
 
@@ -101,7 +129,7 @@ The runner's verb registries and stops remain intact. Held paths are edited only
 ## Definition of Done
 
 - `make verify` green after the dependency lands.
-- The decision pull request includes the ADR 0021 amendment and names bead coding-harness-z40g; its last commit carries `Closes-Bead: coding-harness-z40g`.
+- The decision pull request includes the night routine in `docs/WORKFLOW.md` and the ADR 0021 amendment and names bead coding-harness-z40g; its last commit carries `Closes-Bead: coding-harness-z40g`.
 - The protected areas and non-goals are checked against the pull request file list.
 - Special runs: none.
 

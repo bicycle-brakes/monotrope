@@ -28,15 +28,40 @@ Chosen: the separate driver, as the maintainer decided in `decisions.md` Q-2; th
 
 ## Interfaces
 
-The operator invokes the local driver with an optional change. The driver reads local lane membership and the latest instruction in the runner record for each named worktree; it starts allowed steps as separate runner child processes in that worktree. The dependency `ladder-next-step` owns the instruction grammar and records `next: hand` for held rows. The runner retains its checks, locks, commits and pushes. Stops are reported on standard error and in the job record.
+The operator invokes the local driver with an optional change. The driver reads local lane membership and the latest instruction in the runner record for each named worktree; it starts allowed steps as separate runner child processes in that worktree. The dependency `ladder-next-step` owns the instruction grammar and records `next: hand` for held rows. The runner retains its checks, locks, commits and pushes. Stops are reported on standard error; the future job launcher owns its own record.
 
 ## Data model
 
-The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider.
+The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider. A per-lane lock covers lane work, and a file lock serializes lanes-file writes. The night routine shares this machine-local file across runs.
 
 ## ADR draft
 
-The proposed amendment to ADR 0021 states: a separate local lane driver may start the runner's recorded, allowed next step in a child process; the runner's checks, locks and other stops remain in force. The maintainer chose an amendment of ADR 0021 and explicitly no new ADR (decisions.md Q-4). The runner instruction requiring a new ADR file conflicts with that answer; this draft does not claim that the maintainer changed it.
+**Proposed amendment to ADR 0021** (decisions.md Q-1, Q-4 and Q-15; effective only on merge).
+
+### Context
+
+At baseline `17d1e15f20c9`, the runner names a next step but does not start it; waiting for a hand start leaves lanes idle (research.md; decisions.md Q-1).
+
+### Decision Drivers
+
+- Continue authorized lane work without a hand start while retaining the runner's safeguards.
+
+### Considered Options
+
+- A separate driver starts the recorded step, preserving the runner's responsibilities but adding a local entry point.
+- The runner only names the step, preserving the current boundary but leaving lanes waiting for a person.
+
+### Decision
+
+Propose the separate local driver. It may start only `repair`, `review`, `review-loop`, `release-loop`, `prepare-loop` and `implement` as separate runner processes from the recorded instruction. Adding another verb requires a further amendment. The runner's existing checks, locks and stops remain effective.
+
+### Consequences
+
+The driver and machine-local lane state need maintenance; the runner remains the decision maker for the next step.
+
+### Validation
+
+The phase-6 review checks the amendment and retained stops; the driver tests check admission and child-process invocation.
 
 ## Architecture delta
 
