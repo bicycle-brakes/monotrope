@@ -28,15 +28,15 @@ Chosen: worktrees, as the maintainer decided in Q-1 and Q-10; containers remain 
 
 ## Interfaces
 
-The runner passes its module and attempt context to `scripts/stage2_attempts.py`; its command-line entry offers other harnesses the same leak, scope and lifecycle protections. The lifecycle returns an accepted result or a recorded failed state to the lane; the runner alone applies a checkpoint after verifying the lane HEAD.
+The runner passes its module and attempt context to `scripts/stage2_attempts.py`; its command-line entry offers other harnesses lifecycle operations only; each harness owns model execution and its policies. The lifecycle returns an accepted result or a recorded failed state to the lane; the runner alone applies a checkpoint after verifying the lane HEAD.
 
 ## Data model
 
-Attempt worktrees live under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, named with session and attempt identity. Failed states are Git refs under `refs/stage2/attempts/<change>/`; post-merge cleanup owns deletion. The lane's Python environment and Pi are linked read-only and both are checksummed before and after each attempt. Findings record route switches and reasons.
+Attempt worktrees live under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, named with invocation and attempt identity, with a process-id lock for orphan pruning. Failed states are Git refs under `refs/stage2/attempts/<change>/`; post-merge cleanup owns deletion. The lane's Python environment and Pi are permission-protected and both checksummed before and after each attempt; tampering is detected rather than prevented. A mismatch rebuilds Python and reinstalls Pi, and an ineffective restoration stops the run. Findings record route switches and reasons.
 
 ## ADR draft
 
-The proposed decision is `docs/adr/0026-isolated-attempts.md`; it partially supersedes ADR 0017 decision 2 upon merge.
+The existing proposed decision is `docs/adr/0026-isolated-attempts.md`; it partially supersedes ADR 0017 decision 2 upon merge. Its text must be aligned with decisions Q-17 through Q-21 by the orchestrator before the decision pull request.
 
 ## Architecture delta
 
@@ -54,7 +54,7 @@ flowchart LR
 - A protected, reusable attempt lifecycle and its direct entry; detached worktrees and retained refs.
 
 **Changed**
-- Implement, repair, draft and review use the lifecycle; isolation is enabled in stages.
+- Implement, repair, draft and phase-6 review use the lifecycle; repair is isolated first, the others only after the qualifying night. Spec-review and review-loop remain outside.
 - Post-merge cleanup removes the merged change's refs.
 
 **Removed**
