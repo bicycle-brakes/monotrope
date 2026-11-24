@@ -510,6 +510,8 @@ def test_records_are_schema_validated_and_atomic(state: Path, monkeypatch) -> No
     path = record_path(job_id)
     good = jobs.new_record(job_id, ["echo", "hi"], "/work", str(state / f"{job_id}.log"))
     for broken in (
+        {**good, "schema": True},
+        {**good, "schema": 1.0},
         {**good, "state": "sleeping"},
         {**good, "command": []},
         {**good, "groups": [{"pgid": "x", "pid": 1, "start": None}]},

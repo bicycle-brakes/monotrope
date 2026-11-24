@@ -114,7 +114,7 @@ SCHEMA: dict = {
         "error",
     ],
     "properties": {
-        "schema": {"enum": [1]},
+        "schema": {"type": "integer", "enum": [1]},
         "id": {"type": "string", "pattern": ID_PATTERN},
         "state": {"enum": list(STATES)},
         "command": {"type": "array", "minItems": 1, "items": {"type": "string"}},
