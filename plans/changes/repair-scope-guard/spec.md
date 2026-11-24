@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -62,6 +62,10 @@ The runner prevents repair attempts from committing new files outside their scop
 - Guard an orchestrator's hand repairs, change row selection or model routing, or change the repair's existing test and review requirements.
 - Use the plan as a source of repair scope, or protect arbitrary ignored files with this new-file guard.
 - Change the committed provenance map or create or amend an architecture decision record.
+
+## Boundary
+
+- The new-file inventory reads git's implicit global excludes file (`$XDG_CONFIG_HOME/git/ignore`, used when `core.excludesFile` is not set) as it stands when the inventory runs; it does not freeze that file. An attempt that edits a `.gitignore` so that a cache only the implicit global file ignores reads as a new file can therefore be refused as out of scope. This is an accepted limit (maintainer, 2026-11-24; phase-6 row P6-1 of that day); phase 6 rejects a row that describes only this case.
 
 ## Protected areas
 
