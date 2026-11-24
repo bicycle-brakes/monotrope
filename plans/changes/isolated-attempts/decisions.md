@@ -8,7 +8,7 @@ created: 2026-11-22
 last_reviewed: 2026-11-22
 updated: 2026-11-24
 supersedes: null
-superseded_by: null
+superseded_by: plans/changes/isolated-writing-attempts/decisions.md
 bead: coding-harness-s9r
 owner: framework-architect
 provenance: ai-drafted-reviewed
