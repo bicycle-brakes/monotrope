@@ -183,3 +183,59 @@ Stage-2 call, 2026-11-24: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-24: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1203 files, 5706 commits, 12 rules.
 
 Stage-2 call, 2026-11-24: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1203 files, 5706 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1203 files, 5710 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/jobs.py` +46 -17
+> - `tests/test_jobs.py` +17 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L2-3: no fixed line
+> - L2-4: no fixed line
+> - L2-5: no fixed line
+> - L2-8: no fixed line
+> - L2-9: no fixed line
+> - L2-10: no fixed line
+> - L2-11: no fixed line
+> - L2-12: no fixed line
+> - L2-13: no fixed line
+> - L2-15: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-1-20261124T203808038584Z-3ac41c26.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1203 files, 5710 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-2-20261124T203808038584Z-3ac41c26.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1203 files, 5710 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-3-20261124T203808038584Z-3ac41c26.md
+> ```

@@ -27,7 +27,7 @@ through the runner. It writes no lane or busy marker, schedules nothing and
 restarts nothing.
 
 Exit status: 0 success; 1 a start that failed; 2 a refusal (usage, missing tmux,
-a stop on a job that is not running).
+a stop on a job that is not running); 3 stop signalled but not yet recorded.
 """
 
 from __future__ import annotations
@@ -321,9 +321,28 @@ def alive(pid: int | None, start: str | None) -> bool:
 
 def is_runner_verb(argv: list[str]) -> bool:
     """True when the argument vector invokes scripts/stage2.py followed by a word that is not an option."""
-    for index, token in enumerate(argv):
+    verbs = {
+        "explore",
+        "draft",
+        "implement",
+        "repair",
+        "triage",
+        "spec-review",
+        "review-loop",
+        "release-loop",
+        "review",
+        "probe",
+        "prepare-loop",
+        "prepare-explore",
+        "session",
+    }
+    if not argv or not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(argv[0]).name):
+        return False
+    for index, token in enumerate(argv[1:], 1):
         if token == "scripts/stage2.py" or token.endswith("/scripts/stage2.py"):
-            return index + 1 < len(argv) and not argv[index + 1].startswith("-")
+            return index + 1 < len(argv) and argv[index + 1] in verbs
+        if not token.startswith("-") or token in {"-c", "-m", "--"}:
+            return False
     return False
 
 
@@ -466,15 +485,17 @@ def start(command: list[str], out: Callable[[str], None] = print) -> int:
     log = root / f"{job_id}.log"
     env_file = root / f"{job_id}.env"
     write_record(path, new_record(job_id, command, cwd, str(log)))
-    _atomic_write(env_file, json.dumps(env))
-    os.close(os.open(log, os.O_CREAT | os.O_WRONLY, 0o600))
     wrapper = [sys.executable, str(Path(__file__).resolve()), "_wrap", str(path)]
     try:
+        _atomic_write(env_file, json.dumps(env))
+        os.close(os.open(log, os.O_CREAT | os.O_WRONLY, 0o600))
         launch_window(job_id, cwd, wrapper)
-    except JobError as error:
+    except (JobError, OSError, subprocess.TimeoutExpired) as error:
         with contextlib.suppress(OSError):
             env_file.unlink()
-        _fail(path, str(error))
+        _kill_window(job_id)
+        with contextlib.suppress(JobError, OSError):
+            _fail(path, str(error))
         out(f"job {job_id} failed to start: {error}")
         return 1
     deadline = time.monotonic() + START_WAIT
@@ -497,7 +518,7 @@ def start(command: list[str], out: Callable[[str], None] = print) -> int:
         return 0
     with contextlib.suppress(OSError):
         env_file.unlink()
-    _kill_window(job_id)
+    # Let a late wrapper observe the failed record and kill its own session.
     out(f"job {job_id} failed to start: {record['error']}")
     return 1
 
@@ -597,8 +618,11 @@ def prune(root: Path | None = None, now: float | None = None) -> None:
     current = _now() if now is None else now
     for job_id, record in read_all(base):
         if record is None:
-            continue
-        if record["state"] == "finished":
+            try:
+                expired = (base / f"{job_id}.json").stat().st_mtime + KEEP_SECONDS < current
+            except OSError:
+                continue
+        elif record["state"] == "finished":
             expired = (record["ended_epoch"] or record["started_epoch"]) + KEEP_SECONDS < current
         elif record["started_epoch"] + KEEP_SECONDS < current:
             expired = record["state"] == "failed to start" or effective_state(record, current) == "lost"
@@ -665,6 +689,11 @@ def report_jobs(now: float | None = None) -> list[dict]:
     rows = []
     for job_id, record in read_all():
         if record is None:
+            try:
+                if (state_dir() / f"{job_id}.json").stat().st_mtime + KEEP_SECONDS < current:
+                    continue
+            except OSError:
+                continue
             rows.append({"id": job_id, "state": "unreadable"})
             continue
         state = effective_state(record, current)
@@ -715,12 +744,12 @@ def targets(record: dict) -> dict[int, str]:
     for group in record["groups"]:
         leader = by_pid.get(group["pid"])
         verified = leader is not None and group["start"] is not None and leader[2] == group["start"]
+        if not verified:
+            continue
         floor = _parse_start(group["start"])
         for pid, (_ppid, pgid, start) in by_pid.items():
-            if pgid != group["pgid"] or pid in found:
-                continue
             member = _parse_start(start)
-            if verified or (floor is not None and member is not None and member >= floor):
+            if pgid == group["pgid"] and floor is not None and member is not None and member >= floor:
                 found[pid] = start
     found.pop(record["wrapper_pid"], None)
     found.pop(os.getpid(), None)
@@ -765,7 +794,7 @@ def stop(job_id: str, out: Callable[[str], None] = print) -> int:
             return 0
         time.sleep(0.1)
     out(f"signalled {job_id}; the wrapper has not recorded its end yet")
-    return 0
+    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -804,9 +833,9 @@ def main(argv: list[str] | None = None) -> int:
     except Refused as error:
         print(f"jobs: {error}", file=sys.stderr)
         return 2
-    except JobError as error:
-        print(f"jobs: {error}", file=sys.stderr)
-        return 1
+    except (JobError, OSError, subprocess.TimeoutExpired) as error:
+        print(f"jobs: {str(error)[:300]}", file=sys.stderr)
+        return 2 if verb == "stop" else 1
 
 
 if __name__ == "__main__":

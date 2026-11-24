@@ -345,6 +345,8 @@ def test_start_record_contains_command_window_time_and_log(state: Path, tmp_path
     assert jobs.is_runner_verb(["python3", "scripts/stage2.py", "implement", "x"]) is True
     assert jobs.is_runner_verb(["python3", "/r/scripts/stage2.py", "--spec-review-inventory"]) is False
     assert jobs.is_runner_verb(["echo", "hi"]) is False
+    assert not jobs.is_runner_verb(["grep", "-n", "scripts/stage2.py", "draft"])
+    assert not jobs.is_runner_verb(["python3", "scripts/stage2.py", "unknown"])
 
 
 @pytest.mark.usefixtures("detached")
@@ -565,7 +567,7 @@ def test_start_waits_for_both_pids(monkeypatch, capsys) -> None:
     code, out = start_job(capsys, *SLEEPER)
     elapsed = time.monotonic() - began
     assert code == 0, out
-    assert elapsed >= 0.5, "success came before the wrapper could publish its ids"
+    assert 0.5 <= elapsed <= 10.0, "start must wait for both ids, at most ten seconds"
     record = jobs.read_record(record_path(started_id(out)))
     assert record["command_pid"] is not None and record["wrapper_pid"] is not None
 
@@ -620,3 +622,17 @@ def test_log_captures_streams_and_is_pruned(state: Path, monkeypatch, capsys) ->
     jobs.prune(state)
     assert not log.exists() and not record_path(job_id).exists(), "the log outlived its record"
     assert not orphan.exists(), "a log without a record was kept"
+
+
+def test_reused_recorded_group_is_never_targeted(monkeypatch):
+    """A reused group leader and its members are not the recorded job."""
+    old = "Mon Jan  1 00:00:00 2024"
+    new = "Tue Jan  2 00:00:00 2024"
+    record = {
+        "command_pid": 100,
+        "command_start": old,
+        "wrapper_pid": 101,
+        "groups": [{"pid": 200, "pgid": 200, "start": old}],
+    }
+    monkeypatch.setattr(jobs, "process_table", lambda: [(100, 1, 100, old), (200, 1, 200, new), (201, 200, 200, new)])
+    assert set(jobs.targets(record)) == {100}
