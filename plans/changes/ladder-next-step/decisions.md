@@ -161,3 +161,48 @@ context: |
   Architecture change: none.
 
 In the context of a spec changed after its third review, facing an unreviewed contract, we decided on one fourth spec review, to achieve a checked spec before phase 4, accepting one more Opus run — 2026-11-24
+
+## Q-8 · Ambiguity S-16
+
+asked: 2026-11-24
+answer: "B with a write — a successful `repair` replaces next.json with the instruction `review-loop <change>`; `triage`, `release-loop` (including `--stage-failed` and `--restart`) and the phase-6 release delete next.json, so no stale instruction survives a change of the run's rows or snapshot. Options put: repair rewrites, the others delete (recommended); the file stays until the next review-loop."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: when next.json stops being current.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of when next.json stops being current, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-9 · Ambiguity S-17
+
+asked: 2026-11-24
+answer: "Every round since the run's last restart counts for unrepaired taken rows, as the hold does today (scripts/stage2.py, the restart-bounded hold). Options put: every round since the restart (recommended); the last round only."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which rounds' taken rows count.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of which rounds' taken rows count, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-10 · Exit code of a failed instruction write (spec review S-18)
+
+asked: 2026-11-24
+answer: "A failed validation or publication of next.json exits 1 (a failed call), never 3 (clean) or 0. Options put: exit 1 (recommended)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the exit code when next.json cannot be written.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of the exit code when next.json cannot be written, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
