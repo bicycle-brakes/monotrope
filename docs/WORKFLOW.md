@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-23
+updated: 2026-11-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1905,6 +1905,28 @@ resumed reviewer; an Opus reviewer writes its own). Only then does
 round had, and the reviewer marks each row in its `Phase 6` column, `agree` or
 `disagree — <reason>`. Nothing is netted: the reviewer's view of the loop's
 rows is the information.
+
+The phase-6 verdict is requested in English (`Answer in English.` in
+`prompts/06-review.md`; bead coding-harness-tscc). The runner checks a valid
+verdict with one fixed, dependency-free heuristic over the combined Finding
+cells: German function words and words with ä, ö, ü or ß, outside paired
+backticks and double quotation marks and outside tokens with a slash, a dot
+between word characters, an underscore or a `:line` suffix. It is an
+approximation, not a language classifier, and it can miss short or mixed German
+prose. When a valid first verdict is detected as German, the runner saves that
+answer as protected local evidence below the worktree's git directory (it is not
+quoted in `findings.md` and goes with the worktree), then asks once, on the
+verdict's thread, for the same findings again in English in the same table form.
+The retry passes its own leak check and is audited as `review (language retry)`.
+A valid replacement is recorded unchanged, without comparing its findings to the
+first answer's, and the verdict block names the evidence file; a replacement
+still detected as German is kept with a notice. When the replacement is
+malformed or its call fails, or the evidence cannot be saved, the first verdict
+stands with a notice naming the failure and the loop marks resume the thread of
+the recorded verdict. A leak-check BLOCK on the retry is the exception: the
+review stops with no fallback verdict and no release. This retry is not the
+review loop's malformed-output retry above, and a malformed first verdict still
+gets the rejected-evidence record and no retry.
 
 A release needs a `Phase 6 verdict:` line written after the last released
 block and after the last `Loop restarted:` line, so a restarted or continued

@@ -597,6 +597,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
+| [`changes/close-budget-clock/decisions.md`](changes/close-budget-clock/decisions.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/close-budget-clock/findings.md`](changes/close-budget-clock/findings.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/close-budget-clock/plan.md`](changes/close-budget-clock/plan.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/close-budget-clock/research.md`](changes/close-budget-clock/research.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/close-budget-clock/spec.md`](changes/close-budget-clock/spec.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/detached-job-launcher/decisions.md`](changes/detached-job-launcher/decisions.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
 | [`changes/detached-job-launcher/research.md`](changes/detached-job-launcher/research.md) | draft | none | 2026-11-23 | coding-harness-a6ns.1 |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
@@ -644,6 +650,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/phase6-english/decisions.md`](changes/phase6-english/decisions.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/findings.md`](changes/phase6-english/findings.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/plan.md`](changes/phase6-english/plan.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/research.md`](changes/phase6-english/research.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/spec.md`](changes/phase6-english/spec.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/repair-hand-held-rows/decisions.md`](changes/repair-hand-held-rows/decisions.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/findings.md`](changes/repair-hand-held-rows/findings.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/plan.md`](changes/repair-hand-held-rows/plan.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
