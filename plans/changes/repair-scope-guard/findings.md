@@ -1075,7 +1075,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | P6-1 | MAJOR | SPEC | base | scripts/stage2.py:6788, scripts/stage2.py:6828 | Wenn Git seine standardmäßige globale Ignore-Datei verwendet, ohne dass `core.excludesFile` ausdrücklich gesetzt ist, friert der Runner diese Regeln nicht ein. Ändert ein Reparaturversuch eine `.gitignore` und erzeugt eine durch die globale Datei ignorierte Cache-Datei, überschreibt das temporäre Repository die globale Regel mit einer leeren Datei. Der Runner kann den erlaubten Cache als neue Datei außerhalb des Umfangs zurückweisen. [Kriterium 9] | Codex | rejected — accepted limit: named in spec.md, section Boundary (maintainer 2026-11-24); the implicit global excludes file is read as it stands, not frozen | — |
-| P6-2 | MAJOR | MAINT | fix-r6 | scripts/stage2.py:6810, scripts/stage2.py:12180 | Ändert ein Reparaturversuch eine Ignore-Regel und erzeugt eine Datei außerhalb seines Umfangs, kann die anschließende Inventur beim Anlegen oder Beschreiben des temporären Verzeichnisses mit `OSError` scheitern, etwa bei vollem Datenträger. Der Aufrufer fängt dort nur `Refused`; die Wiederherstellung wird übersprungen und die Datei bleibt im Arbeitsbaum. Ein fehlgeschlagener Messversuch muss den Ausgangszustand wiederherstellen oder eine sichere Wiederherstellung ausdrücklich verweigern. | Codex | taken — maintainer 2026-11-24, under the fail-closed decision for P6-1 of the previous round: every exception of the inventory (OSError and any other, not only Refused) goes through one choke point that restores the baseline or refuses the run; the out-of-scope file never stays | — |
+| P6-2 | MAJOR | MAINT | fix-r6 | scripts/stage2.py:6810, scripts/stage2.py:12180 | Ändert ein Reparaturversuch eine Ignore-Regel und erzeugt eine Datei außerhalb seines Umfangs, kann die anschließende Inventur beim Anlegen oder Beschreiben des temporären Verzeichnisses mit `OSError` scheitern, etwa bei vollem Datenträger. Der Aufrufer fängt dort nur `Refused`; die Wiederherstellung wird übersprungen und die Datei bleibt im Arbeitsbaum. Ein fehlgeschlagener Messversuch muss den Ausgangszustand wiederherstellen oder eine sichere Wiederherstellung ausdrücklich verweigern. | Codex | fixed — tests/test_stage2.py::test_repair_inventory_exception_restores_ignored_stray | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1083,3 +1083,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20f3f-c1af-7dd1-b331-5650db2abf0f, 2026-11-24
 Reviewer session: codex 01a20f3f-c1af-7dd1-b331-5650db2abf0f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5713 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

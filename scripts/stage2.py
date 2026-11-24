@@ -6811,6 +6811,19 @@ def attempt_new_files(
     rules_before: dict[str, bytes],
     ignored_before: dict[Path, tuple[int, int]] | None,
 ) -> set[Path]:
+    """Fail closed on every inventory error, so callers take the restoration path."""
+    try:
+        return _attempt_new_files(root, before, rules_before, ignored_before)
+    except Exception as error:
+        raise Refused(f"inventory failed: {error}") from error
+
+
+def _attempt_new_files(
+    root: Path,
+    before: set[Path],
+    rules_before: dict[str, bytes],
+    ignored_before: dict[Path, tuple[int, int]] | None,
+) -> set[Path]:
     """Judge newly appearing paths by the rules frozen at the start of the call."""
     after = file_inventory(root)
     new = after - before
@@ -7247,6 +7260,22 @@ def restore_baseline(
     ignored = f"ignored paths removed: {', '.join(removed)}" if removed else ""
     inner = "; ".join(part for part in (undone, ignored) if part)
     return f"the runner restored the worktree to {baseline[:12]} ({inner}); rerun the verb or add --stage2-off."
+
+
+def restore_after_inventory_failure(
+    root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None
+) -> str:
+    """Restore or explicitly refuse when an unmeasurable inventory makes a retry unsafe."""
+    try:
+        result = restore_baseline(root, baseline, keep, ignored_before)
+        touched, created = plan_baseline_restore(root, keep, ignored_before, baseline)
+        if touched or created:
+            raise RestorationRefused(f"restoration is incomplete after inventory failure: {result}")
+        return result
+    except RestorationRefused:
+        raise
+    except Exception as error:
+        raise RestorationRefused(f"restoration after inventory failure is refused: {error}") from error
 
 
 def time_log(path: Path) -> str:
@@ -9618,7 +9647,7 @@ def checkpoint(
             # An unreadable inventory fails this attempt like an unreadable held-path map: the edits
             # go first, so nothing the runner could not classify stays in the tree (L2-9).
             try:
-                restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
+                restored = restore_after_inventory_failure(root, baseline, set(keep or ()) - stamps, ignored_before)
             except RestorationRefused as safety_error:
                 preserve_attempt_failure(safety_error, error)
                 raise
@@ -12342,7 +12371,7 @@ def run_attempts(
                 # Without the post-call inventory no retry can safely inherit the tree: a stray
                 # would become part of the next attempt's baseline. Restore and stop this run.
                 try:
-                    restored = restore_baseline(root, baseline, allowed, ignored_before)
+                    restored = restore_after_inventory_failure(root, baseline, allowed, ignored_before)
                 except RestorationRefused as safety_error:
                     preserve_attempt_failure(safety_error, Refused(scope_problem))
                     raise

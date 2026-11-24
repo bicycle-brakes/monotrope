@@ -21948,6 +21948,35 @@ def test_repair_post_call_inventory_failure_cannot_leave_stray_for_retry(
     assert git(world.root, "rev-parse", "HEAD") == baseline
 
 
+@pytest.mark.parametrize("failure", [OSError("disk full"), RuntimeError("inventory failed")])
+def test_repair_inventory_exception_restores_ignored_stray(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: Exception
+) -> None:
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(plant={".gitignore": "src/stray.txt\n", "src/stray.txt": "stray\n"})
+    script_repair(world, [first, repair_step(), repair_step()], make=[GREEN] * 3)
+    original = stage2.tempfile.TemporaryDirectory
+
+    def fail_inventory(*args, **kwargs):
+        if kwargs.get("prefix") == "stage2-ignore-":
+            raise failure
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2.tempfile, "TemporaryDirectory", fail_inventory)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    try:
+        result = world.run("repair")
+    except type(failure) as error:
+        pytest.fail(f"inventory exception escaped without restoring the attempt: {error}")
+    assert result == 1
+    assert "could not read the file inventory after the call" in capsys.readouterr().err
+    assert len(repair_calls(world)) == 1
+    assert not (world.root / "src/stray.txt").exists()
+    assert not (world.root / ".gitignore").exists()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 def test_repair_scope_ignores_files_the_verification_itself_writes(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
