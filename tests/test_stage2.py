@@ -21895,6 +21895,33 @@ def test_repair_scope_inventory_failure_fails_the_attempt_with_a_named_reason(
     assert git(world.root, "rev-parse", "HEAD") == baseline
 
 
+def test_repair_post_call_inventory_failure_cannot_leave_stray_for_retry(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"})
+    script_repair(world, [first, repair_step(), repair_step()], make=[GREEN] * 3)
+    original = stage2.file_inventory
+    calls = 0
+
+    def flaky(root: Path, env: dict[str, str] | None = None) -> set[Path]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise stage2.Refused("git ls-files did not finish")
+        return original(root, env)
+
+    monkeypatch.setattr(stage2, "file_inventory", flaky)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 1
+    output = capsys.readouterr()
+    assert "could not read the file inventory after the call" in output.err
+    assert len(repair_calls(world)) == 1
+    assert not (world.root / "src/stray.txt").exists()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 def test_repair_scope_ignores_files_the_verification_itself_writes(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

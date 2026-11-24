@@ -1036,7 +1036,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | MAINT | base | scripts/stage2.py:12180, scripts/stage2.py:12356 | If the file inventory fails immediately after a repair creates an out-of-scope file, the attempt is rejected but its file is not removed because `scope_new` is unavailable. A retry then records that leftover as pre-existing and can commit it without a scope refusal. | Codex | taken — maintainer 2026-11-24: repair, then one more phase-6 re-check | — |
+| R1 | MAJOR | MAINT | base | scripts/stage2.py:12180, scripts/stage2.py:12356 | If the file inventory fails immediately after a repair creates an out-of-scope file, the attempt is rejected but its file is not removed because `scope_new` is unavailable. A retry then records that leftover as pre-existing and can commit it without a scope refusal. | Codex | fixed — tests/test_stage2.py::test_repair_post_call_inventory_failure_cannot_leave_stray_for_retry | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1044,3 +1044,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20e4f-d4a3-7283-8724-e649b99e50fa, 2026-11-24
 Reviewer session: codex 01a20e4f-d4a3-7283-8724-e649b99e50fa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5681 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

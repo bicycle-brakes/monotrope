@@ -12336,6 +12336,16 @@ def run_attempts(
                     restore_work_input(root, path, content)
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
+            scope_inventory_failed = scope_before is not None and scope_problem is not None and scope_new is None
+            if scope_inventory_failed:
+                # Without the post-call inventory no retry can safely inherit the tree: a stray
+                # would become part of the next attempt's baseline. Restore and stop this run.
+                try:
+                    restored = restore_baseline(root, baseline, allowed, ignored_before)
+                except RestorationRefused as safety_error:
+                    preserve_attempt_failure(safety_error, Refused(scope_problem))
+                    raise
+                problems.append(restored)
             if problems:
                 # A failed verification never reaches checkpoint's held-path rollback.
                 # Refuse journal edits here too, before a retry can inherit them.
@@ -12458,6 +12468,8 @@ def run_attempts(
                     f"{ctx.findings.relative_to(root)}"
                 )
                 terminal_failure.__cause__ = cannot_start
+            elif scope_inventory_failed:
+                terminal_failure = CallFailed(f"{scope_problem}; {restored}")
             logged = True
             persist_time_entry(
                 root,
@@ -12477,7 +12489,13 @@ def run_attempts(
                 baseline_time,
                 inputs_before,
                 accepted=not problems,
-                retry=bool(problems) and attempt < len(routes) and cannot_start is None and not exposed,
+                retry=(
+                    bool(problems)
+                    and attempt < len(routes)
+                    and cannot_start is None
+                    and not exposed
+                    and not scope_inventory_failed
+                ),
                 original=terminal_failure,
             )
             if terminal_failure is not None:
