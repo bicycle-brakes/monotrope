@@ -773,10 +773,10 @@ lines in `findings.md` keep the old file name as recorded.
 - Open after the answers of 2026-11-10 and answered the same day: who sits in
   the free second round (Q-14) and what triggers it on a small change (Q-15).
 
-## Q-37 · A fourth spec-review round
+## Q-37 · Fourth spec-review round
 
 asked: 2026-11-24
-answer: "Yes — one fourth spec-review round (Opus, phase 2a) of the draft a2eedca7, because Q-31 changed the spec after the third round. Options put: a fourth review (recommended); implement at once; re-slice Q-31 into its own bead."
+answer: "authorized — the maintainer answered yes: one fourth spec-review round (Opus, phase 2a) of the draft a2eedca7, because Q-31 changed the spec after the third round. Options put: a fourth review (recommended); implement at once; re-slice Q-31 into its own bead."
 answered_by: maintainer
 status: answered
 context: |
