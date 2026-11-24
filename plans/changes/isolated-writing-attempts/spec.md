@@ -36,97 +36,117 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* A writing verb starts its model outside that lifecycle.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-25`
 
-2. When an isolated attempt starts, it receives a detached worktree at its pinned commit: the lane HEAD for the first attempt, the saved failed state for a fall-through, or the clean baseline after a checksum rejection.
-   *Refuted by:* The attempt uses the lane checkout or a different base.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-10`, `decisions.md#Q-17`, `decisions.md#Q-24`
+2. When an isolated attempt starts, it is detached at lane HEAD and any saved failed tree is applied as uncommitted changes; after a checksum rejection its input is the rejected attempt’s own pinned starting state.
+   *Refuted by:* A fall-through uses an intermediate commit as HEAD, loses earlier saved work, or retains the rejected attempt’s work.
+   *Basis:* `decisions.md#Q-29`
 
-3. When an isolated attempt ends, the runner checks that the lane’s tracked and untracked files are unchanged except for runner-owned records, and rejects the attempt if they changed.
-   *Refuted by:* An attempt changes a lane file outside runner-owned records and is accepted, or the change is not detected.
-   *Basis:* `decisions.md#Q-2`, `decisions.md#Q-23`, `decisions.md#Q-24`
+3. When an isolated attempt ends, the runner compares the lane against its pre-attempt snapshot before landing or writing that attempt’s records; a tracked or untracked change outside the whole files findings.md and plan.md stops the run, names changed paths and is not reverted.
+   *Refuted by:* The runner misses a change, continues, reverts it, omits its path, or checks after landing or writing records.
+   *Basis:* `decisions.md#Q-26`, `decisions.md#Q-27`
 
 4. When an isolated attempt is created, its worktree is located beneath `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`.
-   *Refuted by:* An attempt is created under the lane or a harness-specific directory.
-   *Basis:* `decisions.md#Q-11`
+   *Refuted by:* An attempt is created anywhere outside that directory.
+   *Basis:* `decisions.md#Q-30`
 
-5. When worktrees are discovered or record keys scanned, attempt worktrees are excluded.
-   *Refuted by:* An attempt is treated as a lane or contributes a record key.
-   *Basis:* `decisions.md#Q-11`
+5. When worktrees are discovered or loop-record keys scanned, attempt worktrees are excluded.
+   *Refuted by:* An attempt is treated as a lane or contributes a loop-record key.
+   *Basis:* `decisions.md#Q-30`
 
-6. When the runner creates an isolated attempt, it records an invocation identifier and a process-id lock.
-   *Refuted by:* An isolated attempt has no identifier or process-id lock.
-   *Basis:* `decisions.md#Q-19`, `decisions.md#Q-25`
+6. When the runner creates an attempt, it records an invocation identifier and a lock containing the process id and start time in the attempts state directory.
+   *Refuted by:* An attempt lacks its identifier, lock, process id, start time or state-directory record.
+   *Basis:* `decisions.md#Q-30`, `decisions.md#Q-31`
 
-7. When the runner starts, it prunes attempts with a recorded dead process and reports unlocked attempts without removing them.
-   *Refuted by:* A live or unlocked attempt is removed, a dead attempt remains, or an unlocked attempt is not reported.
-   *Basis:* `decisions.md#Q-19`, `decisions.md#Q-22`, `decisions.md#Q-25`
+7. When the runner starts, it restores permissions after a crash, saves a dead attempt’s tree under attempt refs before pruning, and reports unlocked attempts without removing them; a process is dead when its id and start time no longer match a live process.
+   *Refuted by:* A live or unlocked attempt is removed, a dead tree is lost, a reused process id prevents pruning, an unlocked attempt is not reported, or permissions remain unrestored.
+   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-29`
 
-8. While an isolated attempt runs, file permissions make its linked lane environment and Pi read-only; checksums detect changes made despite those permissions.
-   *Refuted by:* Ordinary writes succeed through either link, or tampering with a linked target goes undetected.
-   *Basis:* `decisions.md#Q-13`, `decisions.md#Q-20`
+8. While an isolated attempt runs, both the lane’s real Python environment and Pi directories are linked and made read-only; their reproducible installed package versions and Pi version are checksummed before and after the attempt.
+   *Refuted by:* Either link or protection is absent, an ordinary write succeeds, or a change to the recorded versions is missed.
+   *Basis:* `decisions.md#Q-28`
 
-9. When either shared environment checksum differs after an attempt, the runner rejects it, deletes and rebuilds .venv, reinstalls Pi with tools/pi/install.sh, and stops if either restored checksum still differs.
-   *Refuted by:* A changed environment is accepted, a rebuild or reinstall is omitted, or an ineffective restoration continues.
-   *Basis:* `decisions.md#Q-13`, `decisions.md#Q-20`
+9. When a shared environment checksum differs, the runner rejects the attempt, restores write permissions, deletes and rebuilds `.venv`, reinstalls Pi and compares the resulting package versions and Pi version to the pre-attempt checksum; an ineffective restoration stops the run.
+   *Refuted by:* The changed environment is accepted, recovery is omitted, comparison uses timestamps or bytecode, or a still-different restoration continues.
+   *Basis:* `decisions.md#Q-28`
 
 10. When recovery runs, it does not traverse an attempt’s environment link.
    *Refuted by:* Recovery follows a link into the shared lane environment.
    *Basis:* `decisions.md#Q-13`
 
-11. When a writing model process fails by exit, time or usage limit, or empty answer, or its post-run checks are red, the next declared route, if one remains, starts from the saved state, or the clean baseline after an environment checksum rejection, in a new worktree when isolation is enabled, and the switch and reason are recorded in findings.
-   *Refuted by:* A failed call stops despite another route, loses saved state, or omits the reason.
-   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-14`, `decisions.md#Q-17`
+11. When a writing model fails by exit, time or usage limit, empty answer or a red post-run check, the next declared route starts from saved state if one remains, and the switch and reason are recorded in findings.
+   *Refuted by:* A remaining eligible route does not start, loses its permitted starting state, or lacks a recorded reason.
+   *Basis:* `decisions.md#Q-27`, `decisions.md#Q-29`
 
 12. When leak checking refuses a call, the run stops without fallback.
    *Refuted by:* Another route starts after a leak refusal.
    *Basis:* `decisions.md#Q-5`
 
-13. When restoration is refused or ineffective, or an internal runner failure occurs such as a moved HEAD, checkpoint rollback or an unstartable verification, the whole run stops without fallback.
-   *Refuted by:* Another route starts after a restoration refusal, ineffective restoration or internal runner failure.
-   *Basis:* `decisions.md#Q-14`, `decisions.md#Q-17`, `decisions.md#Q-20`
+13. When restoration is refused or ineffective, the lane changes, or an internal runner failure occurs including moved HEAD, checkpoint rollback or an unstartable verification, the whole run stops without fallback.
+   *Refuted by:* A further route starts after any such failure, including a missing Makefile or broken runner import.
+   *Basis:* `decisions.md#Q-27`
 
-14. When an isolated attempt ends, its worktree is removed and its failed state remains inspectable under the change’s attempt refs.
-   *Refuted by:* A completed attempt leaves a registered worktree or a failed state cannot be inspected.
-   *Basis:* `decisions.md#Q-12`
+14. When an isolated attempt ends, its worktree is removed and its saved state remains inspectable under the change’s attempt refs, including tracked changes, untracked files, modes and symlinks but excluding the environment links.
+   *Refuted by:* A completed worktree remains, saved state is lost or incomplete, or an environment link is saved.
+   *Basis:* `decisions.md#Q-29`
 
-15. When an isolated attempt is accepted, its checkpoint lands on the unchanged lane HEAD; if the lane moved or the model committed in its worktree, the run rejects the attempt and stops without rebasing or cherry-picking.
-   *Refuted by:* The checkpoint remains detached, overwrites a moved lane, or the run continues after a model commit.
-   *Basis:* `decisions.md#Q-15`, `decisions.md#Q-21`
+15. When an isolated attempt is accepted, exactly one checkpoint commit whose parent is the unchanged lane HEAD lands on the lane; a moved lane or model commit rejects the attempt and stops without rebase or cherry-pick.
+   *Refuted by:* The checkpoint has an intermediate parent, fails to land, overwrites a moved lane, or the run continues after a model commit.
+   *Basis:* `decisions.md#Q-29`
 
 16. When verification and held-path put-back run for an isolated attempt, they operate in the attempt worktree; the runner writes its audit line in the lane only after the attempt worktree exists, and writes a failed attempt’s block and switch reason immediately after that attempt.
    *Refuted by:* A check runs against the lane, an audit line precedes creation, or a failed attempt’s block or switch reason is delayed or missing.
    *Basis:* `decisions.md#Q-20`, `decisions.md#Q-24`
 
-17. When the lane has uncommitted or untracked changes other than runner-owned records, the runner refuses to start an attempt.
-   *Refuted by:* An attempt starts with such changes present.
-   *Basis:* `decisions.md#Q-24`
+17. When the lane has changes listed by `git status --porcelain` other than the runner-owned whole files findings.md and plan.md at the pre-attempt cleanliness check, the runner refuses to start an attempt; saved fall-through state is applied only after that check.
+   *Refuted by:* An attempt starts despite such a tracked or untracked change.
+   *Basis:* `decisions.md#Q-26`
 
-18. When runner-owned records are written in the lane, they travel in the next landing commit or the orchestrator’s records commit.
-   *Refuted by:* Those records are omitted from both commits.
-   *Basis:* `decisions.md#Q-20`, `decisions.md#Q-24`
+18. When the runner starts any attempt, it first commits pending runner-owned lane records in a records commit so the pinned lane is clean.
+   *Refuted by:* An attempt starts with pending records uncommitted or without those records in its pinned tree.
+   *Basis:* `decisions.md#Q-26`
 
-19. When the first pull request lands, repair is isolated and draft and implement use the same lifecycle with isolation disabled.
-   *Refuted by:* A writing verb bypasses the lifecycle or the first rollout isolates a different set.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-18`, `decisions.md#Q-25`
+19. When the first pull request lands, repair is isolated while draft and implement use the same lifecycle without a separate worktree, retaining invocation records, locks, lane checks, checksums and saved-state fall-through.
+   *Refuted by:* A writing verb bypasses the lifecycle, repair is not isolated, or a non-isolated verb omits a required lifecycle operation.
+   *Basis:* `decisions.md#Q-31`
 
-20. When the later rollout lands, draft and implement use isolated attempts.
-   *Refuted by:* Either writing verb remains unisolated after that rollout.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-18`, `decisions.md#Q-25`
+20. When draft and implement are isolated in the second pull request, the maintainer has first checked one night with at least three isolated repair runs and no lane damage or isolation-caused failure.
+   *Refuted by:* Either verb remains unisolated in the second pull request or it proceeds without that evidence.
+   *Basis:* `decisions.md#Q-31`
 
-21. When the runner writes or reads attempt records, lock files or the saved-state index, each is code-written JSON validated against a schema.
-   *Refuted by:* A malformed state record is accepted or a state file is not schema-validated JSON.
-   *Basis:* `decisions.md#Q-25`
+21. When the runner reads or writes an attempt record, lock or saved-state index, it uses schema-validated JSON in the attempts state directory; the record contains invocation id, change, verb, route, pinned base, worktree path, process id and start time, and state, while the index maps each attempt to its saved ref and base.
+   *Refuted by:* Malformed JSON or missing required fields is accepted, or state is stored inside a lane or attempt worktree.
+   *Basis:* `decisions.md#Q-30`
 
-22. When the doctrine describes failed writing calls, it permits the declared fallback and retains the leak refusal stop.
-   *Refuted by:* The doctrine still requires every failed writing call to stop or permits fallback after a leak refusal.
-   *Basis:* `decisions.md#Q-8`, `decisions.md#Q-14`, `decisions.md#Q-25`
+22. When the doctrine describes writing-call failures, `docs/WORKFLOW.md` section 4 and `AGENTS.md` describe the declared saved-state fallback and leak-refusal stop, and the new ADR partially supersedes ADR 0017 decision 2 and ADR 0016 decision 4.
+   *Refuted by:* Any named draft, implement or repair passage still requires baseline restoration or unconditional stop, or permits fallback after leak refusal, or either partial supersession is missing.
+   *Basis:* `decisions.md#Q-32`
 
-23. When an isolated attempt needs linked tools and the lane lacks its Python environment or pinned Pi installation, the runner refuses before the model call and names the setup remedy.
-   *Refuted by:* A model starts without a required dependency or the refusal omits its remedy.
-   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-18`
+23. When an isolated attempt starts, it refuses before the model call if either the lane’s Python environment or pinned Pi is missing and names the setup remedy.
+   *Refuted by:* A model starts without either dependency or the refusal omits `make venv` or `tools/pi/install.sh` as applicable.
+   *Basis:* `decisions.md#Q-28`
+
+24. When a time or usage limit ends a call, the next eligible route uses a different endpoint; implement has automatic Sonnet 5.5 fallback and repair's rung preconditions permit the switch.
+   *Refuted by:* The same endpoint is retried, implement lacks Sonnet, or repair's old preconditions block the different endpoint.
+   *Basis:* `decisions.md#Q-27`
+
+25. When an attempt ends, the runner restores the original write permissions on both real environment directories before recovery or return.
+   *Refuted by:* A successful, failed or rejected attempt leaves either directory read-only.
+   *Basis:* `decisions.md#Q-28`
+
+26. When the runner finishes an isolated attempt, its answer and diagnostics are stored by the runner in the lane's git directory and survive removal of the attempt worktree.
+   *Refuted by:* An answer or diagnostic is absent after removal or is stored only in the attempt worktree.
+   *Basis:* `decisions.md#Q-29`
+
+27. When a run ends with runner-owned records outside a records or landing commit, its last output line names the uncommitted records.
+   *Refuted by:* Such a run ends without naming each uncommitted record in its last output line.
+   *Basis:* `decisions.md#Q-26`
+
+28. When an isolated attempt ends, the runner compares fingerprints of shared Git hooks, config and this change's attempt refs to their pre-attempt values and stops before landing on a difference.
+   *Refuted by:* A changed hook, config or attempt ref goes undetected or landing proceeds after detection.
+   *Basis:* `decisions.md#Q-33`
 
 ## Non-goals
 
-Phase-6 review isolation, the lifecycle CLI for other harnesses, post-merge ref cleanup and the second-rollout evidence gate are separate follow-up changes (Q-25). Explore, the research swarm, spec-review and review-loop remain outside this lifecycle. Network isolation, blocking foreign reads, containers and micro-VMs remain later work. The lane is reachable through linked environment parents until a container layer; detection does not prevent this access.
+Phase-6 review isolation, the lifecycle CLI for other harnesses, post-merge ref cleanup and the second-rollout evidence gate are separate follow-up changes (Q-25). Explore, the research swarm, spec-review and review-loop remain outside this lifecycle. Network isolation, blocking foreign reads, containers and micro-VMs remain later work. The lane is reachable through linked environment parents until a container layer; ignored lane files and tampering with the whole runner-owned files are outside the lane comparison. The checksums detect changes to recorded package and Pi versions, not arbitrary byte tampering.
 
 ## Protected areas
 
@@ -134,11 +154,13 @@ Credentials, endpoint declarations and unrelated refs remain untouched. Held pat
 
 ## Definition of Done
 
-- `make verify` green; first and later rollout evidence recorded in their respective pull requests.
+- `make verify` green; the first pull request needs no isolation evidence; the second records the manually checked night specified in criterion 20.
 - `docs/WORKFLOW.md`, `AGENTS.md` and `docs/adr/0026-isolated-writing-attempts.md` move with the code; protected areas and non-goals remain untouched.
 - The final pull request closes `coding-harness-s9r` and its last commit carries `Closes-Bead: coding-harness-s9r`.
-- Special runs: none beyond the rollout evidence.
+- Special runs: one night of isolated repairs before the second rollout, as specified in criterion 20.
 
 ## Open decisions
+
+[DETAIL] Saved fall-through state is applied after the cleanliness check, including in non-isolated mode, so the check does not reject the state it must resume.
 
 [DETAIL] ADR 0026 is the next number in this checkout; renumber if another ADR lands first. This is reversible and Q-8 requires the next free number at merge.

@@ -32,11 +32,11 @@ The stage-2 runner passes its module and an attempt-specific context to the shar
 
 ## Data model
 
-Worktrees reside beneath `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, with invocation and attempt identities. Code writes and validates JSON schemas for attempt records, process locks and the saved-state index; invalid state is not trusted. Failed states remain under `refs/stage2/attempts/<change>/`. Linked Python and Pi environments are checksummed; changes reject the attempt and trigger recovery. Lane records are exempt from the lane snapshot and are committed with the landing or by the orchestrator.
+Worktrees reside beneath `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, with invocation and attempt identities. Code writes and validates JSON schemas for attempt records, process locks and the saved-state index; invalid state is not trusted. Failed states remain under `refs/stage2/attempts/<change>/`. Linked Python and Pi environments are checksummed; changes reject the attempt and trigger recovery. The runner commits pending whole-file lane records before each attempt, writes the attempt answer and diagnostics in the lane’s git directory, and reports records left uncommitted at run end. Saved state holds tracked and untracked changes, modes and symlinks, but excludes environment links; fallback applies it uncommitted atop lane HEAD. The index maps attempts to saved refs and starting bases; records carry invocation, change, verb, route, base, worktree, process identity and state. Process identity includes start time to detect PID reuse.
 
 ## ADR draft
 
-`docs/adr/0026-isolated-writing-attempts.md` proposes the writing-only decision and partially supersedes ADR 0017 decision 2.
+`docs/adr/0026-isolated-writing-attempts.md` proposes the writing-only decision and partially supersedes ADR 0017 decision 2 and ADR 0016 decision 4.
 
 ## Architecture delta
 
@@ -55,7 +55,7 @@ flowchart LR
 
 **Changed**
 
-- Writing verbs use one lifecycle; repair is isolated first, then draft and implement.
+- Writing verbs use one lifecycle; repair is isolated first, then draft and implement after the specified night of repair evidence.
 - Failed writing calls may continue through declared fallback routes.
 
 **Removed**
