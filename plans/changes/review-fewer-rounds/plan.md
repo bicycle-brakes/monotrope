@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -26,46 +26,19 @@ Pre-mortem:  suppose it failed: most likely because defect groups distort the ca
 Starts unless you say stop.
 ```
 
-**Prerequisite:** resolve the open exception-budget decision in `spec.md` and
-apply the third-round ambiguity rule before phase 4: if a maintainer answer
-changes the spec, obtain a recorded authorization for a fourth review or
-re-slice; reconcile the stale branch-local ADR
-0027 before a decision PR
-is complete. This draft attempt cannot edit that already tracked outside path;
-the orchestrator owns the reconciliation. The central configuration skeleton is not a prerequisite (Q-16). Reuse the
-per-model accepted-share measure of the findings-per-model change
-(`coding-harness-qut1`); if its implementation is absent at phase 4, first
+**Prerequisite:** The maintainer's answer Q-31 changes the spec after the
+third spec-review round. Before phase 4, obtain a recorded authorization for
+a fourth spec-review round or re-slice the change; do not invent that answer.
+The orchestrator must reconcile the existing branch-local ADR 0027 with the
+spec before the decision PR is complete. The central configuration skeleton is
+not a prerequisite (Q-16). Reuse the per-model accepted-share measure of the
+findings-per-model change (`coding-harness-qut1`); if absent at phase 4, first
 reconcile that dependency with the orchestrator rather than add a second
 authoritative calculation.
 
-## Provisional review decisions
-
-The maintainer can change any provisional choice: accepted MINORs count for
-the early end; only their required repairs must finish (S2-1/2). Draw one
-challenger per lens and three diverse non-Codex free-round seats with recorded
-seeds (S2-3/4). Validate the policy keys, ranges and effects in the spec
-(S2-5); compare singleton share, not jackknife, to the threshold (S2-6).
-Chunks are one logical seat but separately measured physical calls (S2-7).
-Cap MINORs and retain valid rows when dropping invalid ones; use line 0 for
-absent items, and leave phase 6's answer form unchanged (S2-8–10). The recorded
-phase-4 implementer defines the family (S2-11). The total extra re-check
-budget is unresolved because S2-12 conflicts with Q-27. Two re-check findings
-of the same mechanism require a mechanism repair (S2-13). Compare cumulative
-per-model shares after 20 rows each (S2-14). Legacy snapshots follow the
-existing two-round house rule; a phase-6 stop counts for calibration, while an
-outage or maintainer stop does not (S2-15/16). Out-of-lens findings remain
-actionable but do not enter observations (S2-17). Retry once, substitute or
-redraw from eligible substitutes, wait durably, and report stopped after five
-hours (S2-18). Report weekly deferred row IDs (S2-19). Other MINORs require
-repair unless classified as maintainability, style or taste (S2-20). Record
-mechanism, trigger and invariant separately (S2-21); use the target merge base
-locally and in CI (S2-22). Round 3 provisional choices: define policy data and
-references, use only the singleton trigger, retain non-admitted rows outside
-triage, report expired-term substitution, exclude OpenAI-family free seats,
-self-check each physical call, report no one-seat trigger, allow the night
-exception beyond zero ordinary re-checks, derive round order, refresh the free
-roster at round start, date the fixed-seat comparison, pin approved question
-texts and classify MINORs by defect nature (S3-1–13).
+The maintainer confirmed the review readings in Q-32–Q-36; Q-31 replaces the
+provisional S2-12 with one additional re-check per newly chosen mechanism
+repair and a single night exception. Their detailed behavior is in the spec.
 
 ## Implementation and ownership
 
@@ -115,7 +88,8 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    One-seat observations have no share or positive trigger; a family-ineligible
    sole fixed seat uses an eligible different-family substitute or waits. Collect one final
    repair, then fresh phase 6 with the configured budget and exceptions; a night exception can add one re-check
-   beyond a zero ordinary budget, subject to the unresolved overall limit.
+   beyond a zero ordinary budget; each new explicit maintainer choice permits
+   exactly one re-check of that repair, without replaying any authorization.
 4. Create `scripts/check_review_formalities.py` and
    `tests/test_check_review_formalities.py`; change `scripts/ci_gates.py`
    and `tests/test_ci.py`: gate new formalities and Markdownlint on lines
@@ -167,7 +141,7 @@ remain the only action entry points; legacy snapshots retain frozen settings und
 - 13: not yet written tests/test_stage2_review_lenses.py::test_minor_dispositions — a logic defect is left or maintainability alone causes repair
 - 14: not yet written tests/test_check_review_formalities.py::test_markdown_errors_only_on_written_lines_block — legacy line blocks or changed line passes
 - 14: not yet written tests/test_ci.py::test_formality_gate_uses_same_merge_base_locally_and_in_ci — hosted and local callers differ
-- 15: not yet written tests/test_stage2_review_lenses.py::test_review_budget_night_and_maintainer_authorization — an unauthorized call or replay is permitted
+- 15: not yet written tests/test_stage2_review_lenses.py::test_review_budget_night_and_maintainer_authorization — an unauthorized call or replay is permitted, a second night exception runs, or a newly chosen repair is denied its check
 - 16: not yet written tests/test_stage2_review_lenses.py::test_linked_phase_six_findings_require_mechanism_instruction — linked rows yield a case-only repair prompt
 - 17: not yet written tests/test_stage2_review_lenses.py::test_substitution_and_complete_chunk_coverage — a failed seat is counted clean or an ineligible replacement runs
 - 18: not yet written tests/test_stage2_review_lenses.py::test_model_lens_shares_and_measurement_provenance — failed calls or challenger comparison disappear
@@ -223,3 +197,4 @@ last two runs had report-format failures (research.md; follow-up
 2026-11-23 16:03:56–16:10:02 UTC, 365 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 16:17:24–16:21:50 UTC, 266 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 16:29:48–16:33:17 UTC, 210 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-24 13:38:31–13:41:22 UTC, 171 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

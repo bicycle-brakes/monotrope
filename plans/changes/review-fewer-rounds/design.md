@@ -2,7 +2,7 @@
 title: "Design — review-fewer-rounds"
 category: design
 created: 2026-11-10
-updated: 2026-11-23
+updated: 2026-11-24
 status: draft
 implementation_status: none
 date: 2026-11-10
@@ -19,7 +19,7 @@ tags: [design, review-loop]
 
 # Design — review-fewer-rounds
 
-This proposal implements the spec and the superseding answers through Q-30.
+This proposal implements the spec and the superseding answers through Q-36.
 The existing branch-local ADR 0027 still describes the older policy; the
 orchestrator must reconcile it before the decision PR is ready.
 
@@ -60,8 +60,8 @@ The merge of the decision PR decides this proposal.
   and the Codex endpoint.
   A bounded change goes from the first round and repair to phase 6.
 - Phase 6 enforces a durable launch budget, a recorded night exception and the
-  repair-specific maintainer authorizations. The total exception budget is
-  unresolved in the spec and blocks implementation of this boundary. Failed
+  repair-specific maintainer authorizations: each new explicit choice permits
+  one check of that repair, and the night exception is single-use (Q-31). Failed
   or unknown launches cannot release reservations or reset the count.
 - Markdownlint blocks only errors on lines written relative to the merge base
   with main; local and hosted callers use the same rule. Artifact formalities
@@ -102,7 +102,7 @@ The merge of the decision PR decides this proposal.
 
 `docs/adr/0027-focused-review-with-a-shadow-period.md` is already the one
 ADR added by this branch relative to its local `origin/main` reference. It
-must be reconciled with Q-16–Q-30 by the orchestrator: this draft attempt is
+must be reconciled with Q-16–Q-36 by the orchestrator: this draft attempt is
 restricted to the change folder and one *new* ADR file, and 0027 is already
 tracked. Creating 0028 here would leave two ADR additions for one decision.
 The existing ADR is not evidence that the current proposal is approved.

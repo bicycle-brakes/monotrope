@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-10
 last_reviewed: 2026-11-10
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -174,13 +174,15 @@ This is a proposal until its decision pull request merges.
 15. When phase 6 reaches its first review and configured ordinary re-check limit, it
     stops with unresolved rows and a concrete proposal, subject to the
     documented night exception or a maintainer-authorized repair re-check;
-    the total number of exceptions remains an open decision below; with zero ordinary
-    re-checks the night exception permits one re-check beyond that limit.
+    each new explicit maintainer choice of a mechanism repair permits exactly
+    one re-check of that repair, and the night exception permits one re-check
+    in total, including when the ordinary limit is zero.
     *Refuted by:* an ordinary third review without either authorization, a
     night exception without one evidenced repaired mechanism, replaying an
     authorization, loss or release resetting the budget, or a stopped run
-    reported as clean.
-    *Basis:* decisions.md#Q-5, decisions.md#Q-27.
+    reported as clean, or a newly authorized repair denied its one re-check
+    merely because an earlier authorization was used.
+    *Basis:* decisions.md#Q-5, decisions.md#Q-27, decisions.md#Q-31.
 
 16. When two confirmed findings in phase-6 re-checks share a recorded
     defective mechanism, the next repair instruction for that mechanism,
@@ -455,22 +457,7 @@ disclosed in the PR, and it applies to new runs after merge. The runtime list be
 
 ## Open decisions
 
-[DECISION] **Additional final-review checks after a stop**
-
-Topic: Wie oft nach einem Stopp eine weitere Abschlussprüfung stattfinden darf.
-Intention: Eine reparierte Änderung soll geprüft sein, ohne die vereinbarte Begrenzung unbeabsichtigt aufzuheben.
-Today: Die beantwortete Frage Q-27 erlaubt nach einer gewählten Mechanismusreparatur genau eine weitere Prüfung; der vorläufige Befund S2-12 begrenzt alle Ausnahmen zusammen auf eine pro Änderung.
-Repository change: Die Ablaufsteuerung zählt Ausnahmen und lässt weitere Prüfungen entsprechend zu oder hält an.
-Architecture change: Der vorhandene Prüfablauf bleibt; nur seine dauerhaft gespeicherte Grenze wird festgelegt.
-
-Goal in one sentence: Festlegen, welche zusätzliche Abschlussprüfung nach einem erneuten Stopp möglich ist.
-Options: **Eine Ausnahme insgesamt** — nach einer Nacht- oder ausdrücklich gewählten Zusatzprüfung ist keine weitere möglich; **eine je bestätigter Reparatur** — jede erneute ausdrückliche Wahl erlaubt genau eine Prüfung dieser Reparatur.
-Recommendation: Eine je bestätigter Reparatur, weil Q-27 eine ausdrücklich gewählte Reparatur zur Prüfung zulässt und die Grenze danach wieder gilt.
-If you say "ok": Jede neue ausdrückliche Wahl einer Mechanismusreparatur erlaubt genau eine zugehörige Prüfung; die Nacht-Ausnahme bleibt einmalig und keine Freigabe ist wiederverwendbar.
-What is lost: Die andere Wahl hätte eine absolute Obergrenze für zusätzliche Prüfungen.
-Downside you accept: Eine Ausnahme insgesamt kann eine später gewählte Reparatur ungeprüft lassen; eine je bestätigter Reparatur erlaubt bei wiederholter Zustimmung weitere Prüfungen und Kosten.
-
-Welche dieser Folgen akzeptierst du?
+None open. The maintainer settled the additional re-check question in decisions.md#Q-31.
 
 The following reversible details make the answered rules observable and can
 be changed before implementation:
@@ -542,8 +529,8 @@ be changed before implementation:
   evidence, rather than inferred from a clock. The orchestrator links all
   unresolved rows to one mechanism ID and its repair revision before the
   night exception; a maintainer-authorized re-check separately records the
-  maintainer's actual choice and the repair revision (Q-27). The unresolved
-  overall exception budget above blocks implementing this boundary.
+  maintainer's actual choice and the repair revision (Q-27, Q-31). Each choice
+  is single-use; a later explicit choice permits one check of its repair.
 - `[DETAIL]` A weekly collection uses ISO weeks and source row IDs, with
   explicit clear-style, maintainability and taste dispositions; this makes
   omissions and duplicate collections reviewable. Deferred rows carry
@@ -553,6 +540,6 @@ be changed before implementation:
 - `[DETAIL]` The formality inventory's minimum reference is Q-1's headers,
   status, card against decisions and time ledger. The orchestrator records a
   follow-up for any uncovered semantic check rather than claiming proof.
-- `[DETAIL]` The existing branch-local ADR draft 0027 predates Q-16–Q-30.
+- `[DETAIL]` The existing branch-local ADR draft 0027 predates Q-16–Q-36.
   This draft attempt cannot change an existing file outside the change folder;
   the orchestrator must reconcile it before a decision PR can be complete.
