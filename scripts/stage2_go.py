@@ -27,10 +27,15 @@ English technical terms, dated sources per value, as `modelle_terms` does):
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import datetime as dt
 import re
+import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 from urllib.parse import urlsplit
 
 import venv_guard  # noqa: F401
@@ -377,3 +382,142 @@ def assess(policy: AddressPolicy, model: str, definition: object) -> Assessment:
             "running on with this same-host move"
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# The console notice boundary: one printed occurrence per runner call
+#
+# The notice is durable evidence (ADR 0024 decision 3) and its console
+# announcement is noise control (bead coding-harness-zywb): within one runner
+# call, the first existing console print site that announces a complete
+# assessment notice prints it, on that site's own stream and wording, and every
+# later announcement of the same notice is suppressed. The boundary is called
+# only at existing print sites, never instead of one: an assessment that no
+# site would announce stays silent, and outside a runner call a direct call
+# prints as before.
+
+
+class ConsoleNoticeScope:
+    """One runner call's thread-safe console boundary for assessment notices.
+
+    The state is one set of announced notice texts, shared with the call's
+    concurrent workers through the context that opened the scope, and guarded
+    by one lock so simultaneous emitters choose exactly one printer. A
+    preparation holds its announcements until its report is known: the report
+    then shows the notice once and the held announcements of the same notice
+    are suppressed, while a notice the report does not show is flushed with its
+    first site's wording and stream, including on an early failure.
+    """
+
+    def __init__(self) -> None:
+        self._announced: set[str] = set()
+        self._lock = threading.Lock()
+        self._held: list[tuple[str, TextIO, str, str]] | None = None
+
+    def announce(
+        self, notice: str, *, stream: TextIO | None = None, prefix: str = "Address notice: ", suffix: str = ""
+    ) -> bool:
+        """Print `prefix + notice + suffix` once per invocation; return whether this call prints it.
+
+        While a preparation holds announcements, the chosen occurrence is
+        recorded in held order with its stream and wording instead of printed.
+        """
+        with self._lock:
+            if notice in self._announced:
+                return False
+            self._announced.add(notice)
+            if self._held is None:
+                print(f"{prefix}{notice}{suffix}", file=sys.stderr if stream is None else stream)
+            else:
+                self._held.append((notice, sys.stderr if stream is None else stream, prefix, suffix))
+            return True
+
+    def hold(self) -> None:
+        """Hold every later announcement until the preparation's report flush ends the hold."""
+        with self._lock:
+            if self._held is None:
+                self._held = []
+
+    def flush(self, reported: frozenset[str] | None = None) -> None:
+        """Print held announcements the preparation's report does not show; end the hold.
+
+        `reported` names the notices the report carries in its existing lines:
+        their held announcements are suppressed, every other held announcement
+        prints now, in held order, on its first site's stream and wording. A
+        `None` `reported` — an early failure before any report — prints every
+        held announcement. An assessment-only notice never entered the hold.
+        """
+        with self._lock:
+            held, self._held = self._held, None
+        for notice, stream, prefix, suffix in held or []:
+            if reported is not None and notice in reported:
+                continue
+            print(f"{prefix}{notice}{suffix}", file=stream)
+
+
+_console_scope: contextvars.ContextVar[ConsoleNoticeScope | None] = contextvars.ContextVar(
+    "go_console_notice_scope", default=None
+)
+
+
+@contextlib.contextmanager
+def console_notice_scope():
+    """Open one runner call's shared console notice boundary, closed on every exit.
+
+    The call's concurrent workers share the scope through the context they
+    inherit; a later invocation in the same process opens a fresh one and never
+    inherits this call's suppression.
+    """
+    scope = ConsoleNoticeScope()
+    token = _console_scope.set(scope)
+    try:
+        yield scope
+    finally:
+        _console_scope.reset(token)
+
+
+@contextlib.contextmanager
+def hold_console_notices():
+    """Hold a preparation's console announcements until its report is known.
+
+    Outside a runner call's scope there is nothing to hold: announcements print
+    as they happen, as they did before. On the way out the held announcements
+    are flushed when the report has not already flushed them — an exception
+    before the report prints every held one with its first site's wording and
+    stream.
+    """
+    scope = _console_scope.get()
+    if scope is None:
+        yield None
+        return
+    scope.hold()
+    try:
+        yield scope
+    finally:
+        scope.flush(None)
+
+
+def flush_held_console_notices(reported: list[str]) -> None:
+    """Print a preparation's held announcements its report does not show; end the hold."""
+    scope = _console_scope.get()
+    if scope is not None:
+        scope.flush(frozenset(reported))
+
+
+def announce_console_notice(
+    notice: str, *, stream: TextIO | None = None, prefix: str = "Address notice: ", suffix: str = ""
+) -> bool:
+    """Announce one assessment notice at an existing console print site.
+
+    Inside a runner call's scope the first announcement of this exact notice
+    text prints, on the announcing site's stream and wording, and every later
+    announcement of the same notice in that call is suppressed; outside a scope
+    the notice prints as before, so a direct call keeps its own output. The key
+    is the complete notice text — model and path pair or wire API — independent
+    of the site's prefix, suffix or stream.
+    """
+    scope = _console_scope.get()
+    if scope is None:
+        print(f"{prefix}{notice}{suffix}", file=sys.stderr if stream is None else stream)
+        return True
+    return scope.announce(notice, stream=stream, prefix=prefix, suffix=suffix)

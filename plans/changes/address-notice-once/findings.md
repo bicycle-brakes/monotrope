@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-zywb
@@ -286,3 +286,217 @@ Stage-2 call, 2026-11-23: implement · attempt 2 · route flash-repair · endpoi
 > ```
 
 Stage-2 call, 2026-11-23: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1188 files, 5580 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 1188 files, 5596 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/address-notice-once/plan.md` +13 -13
+> - `scripts/stage2.py` +23 -6
+> - `scripts/stage2_availability.py` +20 -3
+> - `scripts/stage2_go.py` +144 -0
+> - `tests/test_stage2_go_access.py` +510 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `scripts/stage2.py`, `tests/test_stage2_go_access.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2_go_access.py:1485:58: ARG001 Unused function argument: `monkeypatch`
+>      |
+> 1485 | def test_distinct_address_notices_each_print_once(world, monkeypatch, capsys):
+>      |                                                          ^^^^^^^^^^^ ARG001
+> 1486 |     """Criterion 2: distinct notices — another model, path pair, wire api or kind — are never suppressed.
+>      |
+>
+> Found 1 error.
+> ```
+
+Stage-2 call, 2026-11-24: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 1188 files, 5597 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/address-notice-once/plan.md` +13 -13
+> - `scripts/stage2.py` +2 -1
+> - `scripts/stage2_availability.py` +3 -1
+> - `tests/test_stage2_go_access.py` +30 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> >       assert (read.out + read.err).count(notice) == 2, "a direct call lost or shared another call's suppression"
+> E       AssertionError: a direct call lost or shared another call's suppression
+> E       assert 4 == 2
+> E        +  where 4 = <built-in method count of str object at 0x7ad6be8300>('opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move')
+> E        +    where <built-in method count of str object at 0x7ad6be8300> = ('Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inferenc...sh: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move\n' + 'Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inferenc...sh: the recorded base path is /zen/go/v1, the definition na [… 67 characters left out …]
+> E        +      where 'Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inferenc...sh: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move\n' = CaptureResult(out='Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definiti...h: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host mov [… 9 characters left out …]
+> E        +      and   'Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definition names /inferenc...sh: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host move\n' = CaptureResult(out='Address notice: opencode-go/deepseek-v4.1-flash: the recorded base path is /zen/go/v1, the definiti...h: the recorded base path is /zen/go/v1, the definition names /inference/go/v1; running on with this same-host mov [… 9 characters left out …]
+>
+> tests/test_stage2_go_access.py:1840: AssertionError
+> _____________ test_first_address_notice_preserves_text_and_stream ______________
+> [gw10] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3496/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10a67ce00>
+> capsys = <_pytest.capture.CaptureFixture object at 0x10acef1a0>
+>
+>     def test_first_address_notice_preserves_text_and_stream(world, monkeypatch, capsys):
+>         """Criterion 7: the first printed occurrence keeps its exact text and its site's stream.
+>     
+>         Fault: the first announcement was reworded, or a suppressed site's stream
+>         won — the notice moved between stdout and stderr.
+>         """
+>         model = TEST_LADDER[0]
+>         # The reviewer announces first: stderr keeps the line, stdout stays clean.
+>         state = loop_state(consumed=("free",))
+>         state["free"]["models_store"] = go_store(*(row(member, baseUrl=MOVED_BASE) for member in TEST_LADDER))
+>         world.write_record([RESUMED_NOTE], state=state)
+>         world.script(pi=[{"stdout": "No finding."}] * len(TEST_FLASH))
+>         notice = notice_for(world, model, baseUrl=MOVED_BASE)
+>         capsys.readouterr()
+>         assert world.run("review-loop") == 0
+>         read = capsys.readouterr()
+>         assert (read.out + read.err).count(notice) == 1
+>         assert f"Address notice: {notice}" in read.err, "the first announcement changed its text or stream"
+>         assert notice not in read.out, "the notice moved to stdout"
+>         # The dispatch announces first: activation saw a known path, the record moved back.
+>         rung = TEST_RUNGS[0]
+>         state = loop_state(consumed=("free", "flash"))
+>         state["free"]["models_store"] = go_store(*(row(member, baseUrl=MOVED_BASE) for member in TEST_LADDER))
+>         world.write_record([RESUMED_NOTE], state=state)
+>         edit_entry(world, lambda e: e["adresse"]["apis"]["openai-completions"].update(basis=MOVED_BASE))
+>         real_check = stage2.check_overlay
+>     
+>         def check_then_move(*args, **kwargs):
+>             real_check(*args, **kwargs)
+>             edit_entry(world, lambda e: e["adresse"]["apis"]["openai-completions"].update(basis=RECORDED_BASE))
+>     
+>         monkeypatch.setattr(stage2, "check_overlay", check_then_move)
+>         world.script(pi=[{"stdout": "No finding."}])
+> >       rung_notice = notice_for(world, rung, baseUrl=MOVED_BASE)
+>
+> tests/test_stage2_go_access.py:1704: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> w = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3496/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> model = 'mimo-v2.6-pro'
+> row_changes = {'baseUrl': 'https://opencode.ai/inference/go/v1'}
+> root = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3496/popen-gw10/test_first_address_notice_pres0/repo')
+> policy = AddressPolicy(host='opencode.ai', apis={'openai-completions': BaseRecord(api='openai-completions', base='https://opencode.ai/inference/go/v1', source='the synthetic test record (go-access-point)', read='2026-10-31')})
+> verdict = Assessment(definition={'id': 'mimo-v2.6-pro', 'name': 'mimo-v2.6-pro', 'provider': 'opencode-go', 'api': 'openai-compl... 'output': 0, 'cacheRead': 0, 'cacheWrite': 0}, 'contextWindow': 128000, 'maxTokens': 4096}, notice=None, problem=None)
+> @py_assert1 = None
+> @py_format3 = "the planted drift produced no notice\n>assert None\n{None = Assessment(definition={'id': 'mimo-v2.6-pro', 'name': 'mi...0, 'cacheRead': 0, 'cacheWrite': 0}, 'contextWindow': 128000, 'maxTokens': 4096}, notice=None, problem=None).notice\n}"
+>
+>     def notice_for(w, model: str, **row_changes: object) -> str:
+>         """The exact assessment notice for one row shape against this world's record."""
+>         root = getattr(w, "tree", w.root)
+>         policy = stage2_go.load_address_policy(root)
+>         verdict = stage2_go.assess(policy, model, row(model, **row_changes))
+> >       assert verdict.notice, "the planted drift produced no notice"
+> E       AssertionError: the planted drift produced no notice
+> E       assert None
+> E        +  where None = Assessment(definition={'id': 'mimo-v2.6-pro', 'name': 'mimo-v2.6-pro', 'provider': 'opencode-go', 'api': 'openai-compl... 'output': 0, 'cacheRead': 0, 'cacheWrite': 0}, 'contextWindow': 128000, 'maxTokens': 4096}, notice=None, problem=None).notice
+>
+> tests/test_stage2_go_access.py:1414: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_go_access.py::test_direct_calls_keep_notice_output
+> FAILED tests/test_stage2_go_access.py::test_first_address_notice_preserves_text_and_stream
+> ERROR tests/test_stage2_go_access.py::test_address_notice_audits_survive_console_deduplication
+> ERROR tests/test_stage2_go_access.py::test_assessment_only_notices_stay_silent
+> 2 failed, 9 passed, 2 errors in 12.41s
+> ```
+
+Stage-2 call, 2026-11-24: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 1188 files, 5597 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_stage2_go_access.py` +27 -17
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+>         w = session_world
+>         w.declare_go()
+>         catalog = w.bin / "node_modules/@earendil-works/pi-ai/dist/providers/data/opencode-go.json"
+>         data = json.loads(catalog.read_text(encoding="utf-8"))
+>         data["openai-completions"][f"chat:{GO_BARE}"]["baseUrl"] = MOVED_BASE
+>         catalog.write_text(json.dumps(data), encoding="utf-8")
+>     
+>         def refusing_confirm(*_args, **_kwargs):
+>             raise stage2.Refused("planted: the binding confirmation refused")
+>     
+>         monkeypatch.setattr(stage2_session, "confirm_binding", refusing_confirm)
+>         w.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+>         session_notice = notice_for(w, GO_BARE, baseUrl=MOVED_BASE)
+>         assert w.run(model=GO_MODEL) == 2
+>         read = capsys.readouterr()
+>         assert "planted" in read.err
+>         assert w.bindings == []
+>         assert session_notice not in read.out + read.err, "a refused binding printed its assessment-only notice"
+>         # Research preparation fails before its report: a catalog drift that no
+>         # probe would announce stays in the selection state, off the console.
+>         from test_stage2_research_availability import Fixture
+>     
+>         # The two world fixtures share one temporary directory, so the review world
+>         # is built by the fixture's own function in a directory beside it.
+>         research_dir = tmp_path / "research-world"
+>         research_dir.mkdir()
+>         world = stage2_world.__pytest_wrapped__.obj(research_dir, monkeypatch)
+>         fx = Fixture(world, monkeypatch)
+>         for item in fx.catalog.pi:
+>             if item["id"] == "nocost-model":
+>                 item["baseUrl"] = MOVED_BASE
+>         nocost = notice_for(world, "nocost-model", baseUrl=MOVED_BASE)
+>         real_launch = stage2.launch
+>         probes = 0
+>     
+>         def refuse_second_probe(command, *args, **kwargs):
+>             nonlocal probes
+>             if "--print" in command:
+>                 probes += 1
+>                 if probes == 2:
+>                     raise stage2.Refused("planted: the second probe refused")
+>             return real_launch(command, *args, **kwargs)
+>     
+>         monkeypatch.setattr(stage2, "launch", refuse_second_probe)
+>         capsys.readouterr()
+> >       assert fx.prepare() == 2
+>
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/tests/test_stage2_go_access.py:1902: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/tests/test_stage2_research_availability.py:258: in prepare
+>     return self.w.run("prepare-explore", "demo", *options)
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/tests/test_stage2.py:419: in run
+>     return stage2.main([*argv, *options, "--root", str(self.root)])
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2.py:13838: in main
+>     return _run(args)
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2.py:13934: in _run
+>     prepare_explore(Path(args.root), args.change, args.klass, args.seats)
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2.py:11056: in prepare_explore
+>     stage2_availability.prepare_research(root, change, sys.modules[__name__], klass, seat_choice(seats))
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2_availability.py:1037: in wrapped
+>     return prepare(root, change, runner, *args, **kwargs)
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2_availability.py:1204: in prepare_research
+>     chosen = {label: selection.fill(label, trio) for label, trio in seats.items()}
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2_availability.py:932: in fill
+>     if self.usable(endpoint, model, data_class) and self.reachable(endpoint, model, data_class):
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2_availability.py:898: in reachable
+>     self.key = self.runner.reviewer_key()
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/scripts/stage2.py:3182: in reviewer_key
+>     key = read_secret("OPENCODE_GO_KEY")
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> name = 'OPENCODE_GO_KEY'
+>
+> >   monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"session read a secret: {name}"))
+> E   Failed: session read a secret: OPENCODE_GO_KEY
+>
+> /Users/mikypiky/coding-harness/.claude/worktrees/address-notice-once/tests/test_stage2_session.py:331: Failed
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_go_access.py::test_assessment_only_notices_stay_silent
+> 1 failed, 12 passed in 12.14s
+> ```
