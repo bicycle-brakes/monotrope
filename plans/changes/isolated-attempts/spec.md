@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "2026-11-24"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, attempts]
 class: architectural
-adr_files: [docs/adr/0026-isolated-attempts.md]
+adr_files: []
 neighbours: [plans/changes/archive/2026-11-06-fail-fast-attempts/spec.md, plans/changes/archive/2026-11-06-restore-symlink-parent/spec.md, plans/changes/loop-record-other-worktree/spec.md, plans/changes/stage2-session/spec.md]
 ---
 

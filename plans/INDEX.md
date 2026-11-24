@@ -631,6 +631,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/isolated-attempts/research.md`](changes/isolated-attempts/research.md) | draft | none | 2026-11-22 | coding-harness-s9r |
 | [`changes/isolated-attempts/spec.md`](changes/isolated-attempts/spec.md) | draft | none | 2026-11-24 | coding-harness-s9r |
 | [`changes/isolated-writing-attempts/decisions.md`](changes/isolated-writing-attempts/decisions.md) | draft | none | 2026-11-22 | coding-harness-s9r |
+| [`changes/isolated-writing-attempts/findings.md`](changes/isolated-writing-attempts/findings.md) | draft | none | 2026-11-24 | coding-harness-s9r |
 | [`changes/isolated-writing-attempts/research.md`](changes/isolated-writing-attempts/research.md) | draft | none | 2026-11-22 | coding-harness-s9r |
 | [`changes/journal-citation-gate/decisions.md`](changes/journal-citation-gate/decisions.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/findings.md`](changes/journal-citation-gate/findings.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
