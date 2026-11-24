@@ -26,15 +26,7 @@ Pre-mortem:  suppose it failed: most likely because defect groups distort the ca
 Starts unless you say stop.
 ```
 
-**Prerequisite:** The maintainer's answer Q-31 changes the spec after the
-third spec-review round. Before phase 4, obtain a recorded authorization for
-a fourth spec-review round or re-slice the change; do not invent that answer.
-The orchestrator must reconcile the existing branch-local ADR 0027 with the
-spec before the decision PR is complete. The central configuration skeleton is
-not a prerequisite (Q-16). Reuse the per-model accepted-share measure of the
-findings-per-model change (`coding-harness-qut1`); if absent at phase 4, first
-reconcile that dependency with the orchestrator rather than add a second
-authoritative calculation.
+**Prerequisite:** The fourth spec review was authorized in Q-37 and its rows are settled in Q-38–Q-45. The orchestrator must reconcile the existing branch-local ADR 0027 with the spec before the decision PR is complete. The central configuration skeleton is not a prerequisite (Q-16). Reuse the per-model accepted-share measure of the findings-per-model change (`coding-harness-qut1`); if absent at phase 4, reconcile that dependency with the orchestrator rather than add a second calculation.
 
 The maintainer confirmed the review readings in Q-32–Q-36; Q-31 replaces the
 provisional S2-12 with one additional re-check per newly chosen mechanism
@@ -52,8 +44,8 @@ remain the only action entry points; legacy snapshots retain frozen settings und
 1. Create `scripts/stage2_review_policy.py` and
    `tests/test_stage2_review_policy.py`: validate one central declaration,
    model-family mapping including implementers, exact initial Q-13 questions and
-   sourced additions, per-lens and free-round substitutes, seat date and citation, live references,
-   configurable lenses/seats/rounds/cap/early-end/limits, independent round-2
+   sourced additions, nonempty per-lens substitutes initially in challenger-pool order and free replacements most expensive first by requests per five hours, seat date and citation, live references,
+   configurable lenses/seats/rounds/cap/early-end/limits, rejecting one round in shadow mode and matching machine-readable live approval values, independent round-2
    roster, shadow/live mode and resolvable calibration approval. Verify an
    edited setting changes actual scheduling. Unknown keys, duplicates,
    missing evidence and invalid family or endpoint references refuse.
@@ -75,16 +67,13 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    `tests/test_stage2.py` and `tests/test_stage2_availability.py`: use the
    existing preparation/launch/resume and security paths. Initially every
    full or bounded lens has fixed DeepSeek Flash plus a seeded random eligible
-   reachable challenger; expired terms are reported and seat 1 falls back to an
-   eligible per-lens substitute; text-only skips the loop. At most one implementer
-   family sits on a lens; substitutes are distinct and eligible. Resume
+   reachable challenger; expired terms or reported unreachability are reported and seat 1 falls back to an
+   eligible per-lens substitute; text-only skips the loop. At most one seat per implementer family sits on a lens; all implement attempts leaving edits determine those families; substitutes are distinct and eligible. Resume
    successful seats without replay and complete oversized input by checked
    chunks; retry once, then substitute in order or redraw an eligible
-   challenger from the substitute list. Persist a waiting state and report a
-   five-hour stop. Shadow runs the free round unless the accepted first-round
+   challenger from the union of its pool and the lens substitute list. Persist a waiting state, stop five hours after it was persisted and require fresh preparation after the stop. Shadow runs the free round unless the accepted first-round
    rows are nonempty, all MINOR and all required repairs are complete;
-   bounded changes skip it. Initial free seats are three seeded, independently
-   drawn distinct families excluding the OpenAI family and Codex endpoint.
+   bounded changes skip it. Initial free seats are up to three seeded, independently drawn distinct families excluding the OpenAI family and Codex endpoint; report a family shortfall.
    One-seat observations have no share or positive trigger; a family-ineligible
    sole fixed seat uses an eligible different-family substitute or waits. Collect one final
    repair, then fresh phase 6 with the configured budget and exceptions; a night exception can add one re-check
@@ -103,7 +92,7 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    to `docs/research/review-fewer-rounds-calibration.jsonl` (created by the
    first actual export, no invented samples) and summary. Record round-2
    provenance as pre-existing, repair-introduced or unknown; compare the
-   singleton candidate with estimator sensitivity analyses and identify
+   singleton-share threshold sensitivity with estimator diagnostics, treating undefined Chao as re-review and identify
    would-stop MAJOR/BLOCKER misses. Count only eligible complete full changes;
    report bounded, zero and incomplete cases separately. The maintainer owns
    any later live decision.
@@ -117,7 +106,7 @@ remain the only action entry points; legacy snapshots retain frozen settings und
    bead under the repository's single-writer rule and name it in the PR.
 7. Change `docs/WORKFLOW.md` and `docs/how-it-works.md` to describe the
    new policy and weekly ISO-week collection of clear style and maintainability
-   rows, with source IDs and one clean-up bead/PR. The orchestrator performs
+   rows, using merge ISO week and change-qualified source IDs, with one clean-up bead/PR. The orchestrator performs
    tracker writes; reviewers and foreign repairs do not. Update this change's
    `spec.md`, `design.md`, `plan.md`, `findings.md` and `decisions.md` only
    as their respective workflow steps require. Implement the closed-week
@@ -198,3 +187,4 @@ last two runs had report-format failures (research.md; follow-up
 2026-11-23 16:17:24–16:21:50 UTC, 266 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 16:29:48–16:33:17 UTC, 210 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-24 13:38:31–13:41:22 UTC, 171 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-24 14:34:08–14:37:13 UTC, 185 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner

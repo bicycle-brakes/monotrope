@@ -43,7 +43,7 @@ The merge of the decision PR decides this proposal.
   random draw and seed; the free round uses a fresh receipt and draw at its start.
   Expired terms remove a model from seating and are reported; an expired fixed
   seat uses the first eligible lens substitute. The pool is constrained by admission, reachability,
-  distinct IDs and the implementer-family rule. Missing eligible seats pause.
+  distinct IDs and the implementer-family rule. Missing focused seats pause; a free-round family shortfall is reported and the available families run (Q-38).
 - The runner invokes independent read-only reviewers through its existing
   admission and per-call leak checks. Every seat receives all diff chunks on
   the same revision; coverage is recorded. The initial policy uses two seats
@@ -51,11 +51,11 @@ The merge of the decision PR decides this proposal.
   the declared eligible substitute list and preserve successful results.
 - The orchestrator triages the union and records group identities, origin,
   lens, severity, mechanism and disposition; the runner computes diagnostics
-  from that evidence. Any incidental out-of-lens row remains actionable when accepted,
-  but does not pollute any lens observation.
+  from that evidence. Any incidental out-of-lens row counts under its primary lens and remains actionable when accepted,
+  and is excluded from the reporting lens observation when the lenses differ.
 - Eligible full changes have one independent free second round in shadow,
   except after a nonempty accepted MINOR-only first round whose required
-  repairs are complete. Initial free seating draws three distinct families
+  repairs are complete. Initial free seating draws up to three distinct families
   with a recorded seed from the reachable pool, excluding the OpenAI family
   and the Codex endpoint.
   A bounded change goes from the first round and repair to phase 6.
@@ -73,8 +73,8 @@ The merge of the decision PR decides this proposal.
   fixed model, effective date and dated precision citation, challenger pool, families,
   finding cap, early-end rule, diagnostics, shadow/live mode, threshold, live decision and calibration references, and
   phase-6 limits. Round order derives from the round count. The orchestrator edits this single validated declaration.
-- Run: policy snapshot, change class, implementation revision and model
-  family, availability receipt, each draw/seed, seat attempts, chunk coverage,
+- Run: policy snapshot, change class, implementation revision and all contributing implementer model
+  families, availability receipt, each draw/seed, seat attempts, chunk coverage,
   successful outputs and failures. The runner persists it under the existing
   run lock and refuses mismatched resume input.
 - Triage: every raw row and source seat, admission and accepted/rejected disposition, canonical
@@ -102,7 +102,7 @@ The merge of the decision PR decides this proposal.
 
 `docs/adr/0027-focused-review-with-a-shadow-period.md` is already the one
 ADR added by this branch relative to its local `origin/main` reference. It
-must be reconciled with Q-16–Q-36 by the orchestrator: this draft attempt is
+must be reconciled with Q-16–Q-45 by the orchestrator: this draft attempt is
 restricted to the change folder and one *new* ADR file, and 0027 is already
 tracked. Creating 0028 here would leave two ADR additions for one decision.
 The existing ADR is not evidence that the current proposal is approved.
@@ -135,3 +135,5 @@ flowchart LR
 **Removed**
 
 - Until-clean ladder scheduling for new-policy runs only.
+
+The policy rejects one round in shadow mode and matches live trigger, comparison and threshold to the machine-readable maintainer decision. Initial lens substitutes follow the recorded challenger-pool order; free replacements use fewest declared requests per five hours first. A failed challenger draws from the union of the challenger pool and lens substitutes; an unavailable fixed seat is substituted before calling. The five-hour wait starts when waiting is persisted, and a stopped run needs fresh preparation (Q-39, Q-40, Q-42, Q-45). Implementer families include every implement attempt that left edits; weekly deferred rows use the change merge week and change-qualified row IDs (Q-38, Q-44). Calibration compares singleton-share thresholds and records undefined Chao as re-review (Q-45).
