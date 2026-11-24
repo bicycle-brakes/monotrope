@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-7aso
@@ -51,7 +51,7 @@ For every reproduced in-scope fault, record the pre-fix failing regression and p
 - 1: not a test — phase-6 review checks all three attempts, the required searches and accessible evidence against each record.
 - 2: not a test — phase-6 review checks recorded commits, test-tree identity, selectors, interpreter, commands and historical runner diff for each available paired run.
 - 3: not a test — phase-6 review checks each measured mechanism has a self-contained regression, a recorded pre-fix failure and a post-fix comparison on available incident inputs; this is conditional on the investigation.
-- 4: not yet written tests/test_stage2.py::test_red_first_reports_actual_pytest_outcomes — a non-exit-1 refusal omits or misstates the exit, or substitutes generic session status for a recorded pass, empty selection, skip, xfail, XPASS or collection error.
+- 4: tests/test_stage2.py::test_red_first_reports_actual_pytest_outcomes — a non-exit-1 refusal omits or misstates the exit, or substitutes generic session status for a recorded pass, empty selection, skip, xfail, XPASS or collection error.
 - 5: tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — a qualifying assertion failure is refused.
 - 5: tests/test_stage2.py::test_red_first_accepts_pytest_failed_call_outcomes — a qualifying pytest failure is refused.
 - 6: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — a passing baseline is accepted.
@@ -60,17 +60,21 @@ For every reproduced in-scope fault, record the pre-fix failing regression and p
 - 7: tests/test_stage2.py::test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt — an interpreter startup error is accepted.
 - 7: tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes — a collection error is accepted.
 - 8: tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes — a skipped, xfailed or XPASS case is accepted.
-- 9: not yet written tests/test_stage2.py::test_red_first_keeps_baseline_code_attempt_tests_and_source_state — attempt production bytes reach the proof, attempt tests do not, or source refs, index or worktree change.
-- 10: not yet written tests/test_stage2.py::test_workflow_red_first_exit_contract — the workflow permits exit 2 or omits the exact exit-1 requirement.
+- 9: tests/test_stage2.py::test_red_first_keeps_baseline_code_attempt_tests_and_source_state — attempt production bytes reach the proof, attempt tests do not, or source refs, index or worktree change.
+- 10: tests/test_stage2.py::test_workflow_red_first_exit_contract — the workflow permits exit 2 or omits the exact exit-1 requirement.
 - 11: tests/test_stage2.py::test_fixed_proof_uses_current_file_tree — the fixed-code proof uses the wrong source tree.
 - 11: tests/test_stage2.py::test_fixed_code_proof_keeps_pytest_failed_red — the fixed-code proof accepts a failing test.
 - 11: tests/test_stage2.py::test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code — a non-passing test proves fixed code.
 - 11: tests/test_stage2.py::test_fixed_proof_names_refs_after_initial_tree_failure — ref interference is concealed after a tree failure.
-- 11: not yet written tests/test_stage2.py::test_fixed_code_proof_preserves_pass_and_refusal_contract — a passing fixed-code test is refused or a skipped, xfailed or failing test is accepted after a shared-helper repair.
+- 11: tests/test_stage2.py::test_fixed_code_proof_preserves_pass_and_refusal_contract — a passing fixed-code test is refused or a skipped, xfailed or failing test is accepted after a shared-helper repair.
 - 11: tests/test_stage2.py::test_guard_proof_requires_clean_green_without_the_switch — a non-passing clean guard leg is accepted.
 - 11: tests/test_stage2.py::test_guard_proof_preserves_outcome_and_execution_guards — a skipped or nonqualifying planted guard leg is accepted.
 - 11: tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — a valid clean and planted guard proof is refused.
-- 12: not yet written tests/test_stage2.py::test_red_first_protects_pre_record_pytest_diagnostics — a pre-record import error loses its exit or diagnostic, exceeds either cap, omits a required truncation marker, or leaks output after protection failure.
+- 12: tests/test_stage2.py::test_red_first_protects_pre_record_pytest_diagnostics — a pre-record import error loses its exit or diagnostic, exceeds either cap, omits a required truncation marker, or leaks output after protection failure.
+
+## Runner route — 2026-11-24
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Claude Code fails with unrecognized_model (bead coding-harness-b5pu; two failures on 2026-11-24); Sonnet as for detached-job-launcher (maintainer 2026-11-24).
 
 ## Time used
 
@@ -78,3 +82,4 @@ For every reproduced in-scope fault, record the pre-fix failing regression and p
 2026-11-21 10:36:17–10:39:31 UTC, 193 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 10:52:18–10:55:18 UTC, 179 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 11:14:17–11:17:22 UTC, 185 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-24 21:02:11–21:04:03 UTC, 112 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

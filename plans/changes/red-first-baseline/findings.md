@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-7aso
@@ -69,3 +69,36 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | S-22 | MINOR | SPEC | base | spec.md:57-58 | Criterion 12 requires a "bounded" terminal diagnostic but states no bound, in lines or characters, and names no stream. Its refutation covers only an exit-code-only report, exit 0 and an unprotected secret. A refusal that embeds pytest's whole output refutes nothing. One example is a recursive import traceback of thousands of lines, copied into findings.md and the retry prompt. So "bounded" can never go red. | Opus | in spec — [DETAIL] decided by the orchestrator: bound pre-record terminal diagnostics explicitly to combined stderr+stdout capped at 40 lines and 4,000 characters (tail-truncated with a truncation marker) and passed through existing diagnostic protection (fail-closed) | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1152 files, 5074 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash via Claude Code fails with unrecognized_model (bead coding-harness-b5pu; two failures on 2026-11-24); Sonnet as for detached-job-launcher (maintainer 2026-11-24) · leak check clean over 1206 files, 5716 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +4 -1
+> - `plans/changes/red-first-baseline/plan.md` +5 -5
+> - `scripts/stage2.py` +60 -2
+> - `tests/test_stage2.py` +126 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_stage2.py:21246:25: ARG001 Unused function argument: `text`
+>       |
+> 21245 |     # A protection failure withholds the output instead of showing it.
+> 21246 |     def fail_protection(text: str, key: str | None = None) -> str:
+>       |                         ^^^^ ARG001
+> 21247 |         raise stage2.Refused("cannot protect")
+>       |
+>
+> tests/test_stage2.py:21246:36: ARG001 Unused function argument: `key`
+>       |
+> 21245 |     # A protection failure withholds the output instead of showing it.
+> 21246 |     def fail_protection(text: str, key: str | None = None) -> str:
+>       |                                    ^^^ ARG001
+> 21247 |         raise stage2.Refused("cannot protect")
+>       |
+>
+> Found 2 errors.
+> ```

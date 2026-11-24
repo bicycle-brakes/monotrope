@@ -2063,7 +2063,10 @@ reword its reason so it names no fix instead of marking it fixed.
 **Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
-only when pytest exits 1 or 2 there. The repair prompt names the accepted
+only when pytest exits exactly 1 there, with a qualifying failure recorded. A refusal
+names the actual exit code and the first recorded outcome (pass, empty selection,
+collection error, skip, xfail or XPASS); when no case ran, it shows the protected tail of
+the combined output, at most 40 lines and 4,000 characters. The repair prompt names the accepted
 plan's standing ledger tests as pytest targets before handback, and commands Codex to run
 ruff and those standing tests itself; missing written entries remain owed, while missing unwritten
 entries are named but not owed; a file-only fallback delegates the same cheap checks to
