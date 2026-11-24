@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, lanes]
 class: architectural
 appetite: 8
-adr_files: [docs/adr/0021-review-swarms-until-clean.md]
+adr_files: [docs/adr/0021-review-swarms-until-clean.md, docs/adr/0026-local-lane-driver.md]
 neighbours: [plans/changes/adr-0021-consumed-ladder/spec.md, plans/changes/harness-decide-adr/spec.md]
 ---
 
@@ -29,7 +29,7 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 
 ## Acceptance criteria
 
-1. When `python3 scripts/lanes.py advance` runs, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`, whose local entries name a change and its worktree, in file order.
+1. When `python3 scripts/lanes.py advance` runs, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.json`, whose local entries name a change and its worktree, in file order and validates the JSON against its schema.
    *Refuted by:* The file entries are read in a different order or an entry is not read.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-9`, `decisions.md#Q-11`.
 2. When a change argument is supplied, only its listed lane is considered.
@@ -38,15 +38,15 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 3. If the lanes file is unreadable, malformed, contains duplicate changes, or the requested change is unlisted, the call is refused before starting a step.
    *Refuted by:* Any step starts or the call is not refused.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`, `decisions.md#Q-15`.
-4. When a lane is considered, its runner record is selected using that lane’s worktree and each step runs using that worktree’s own `scripts/stage2.py`.
+4. When a lane is considered, its instruction file beside the runner record is selected using that lane’s worktree and each step runs using that worktree’s own `scripts/stage2.py`.
    *Refuted by:* A record or execution belongs to another checkout.
    *Basis:* `decisions.md#Q-11`.
-5. When a lane has multiple recorded `next:` lines, the latest line governs under the grammar supplied by ladder-next-step.
-   *Refuted by:* An earlier line overrides the latest.
-   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-11`.
-6. If an existing latest instruction is unreadable, malformed, names another change or names a disallowed verb, the lane stops without starting that instruction.
+5. When a lane has a schema-valid `next.json` beside its runner record, the driver reads the instruction from that file, using the contract supplied by ladder-next-step.
+   *Refuted by:* The driver reads an instruction from `loop.md` or ignores the valid instruction file.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-20`.
+6. If an existing `next.json` is unreadable, schema-invalid, names another change or names a disallowed verb, the lane stops without starting that instruction.
    *Refuted by:* The driver guesses or starts the instruction.
-   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-10`, `decisions.md#Q-11`.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-10`, `decisions.md#Q-20`.
 7. When a valid allowed instruction is read, the driver starts the exact verb and change as a separate `python3 scripts/stage2.py` child process.
    *Refuted by:* A different step runs or the runner is called in-process.
    *Basis:* `decisions.md#Q-2`, `decisions.md#Q-10`.
@@ -65,7 +65,7 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 12. If the configured limit is not an integer from one through five, the call is refused before any step starts.
    *Refuted by:* An invalid value is accepted or a step starts.
    *Basis:* `decisions.md#Q-10`.
-13. When a step exits 1 or the latest instruction is `next: hand <change> <rows>`, that lane stops even if the preceding repair exited successfully.
+13. When a step exits 1 or the instruction requests hand action for held rows, that lane stops even if the preceding repair exited successfully.
    *Refuted by:* A subsequent step starts in the stopped lane.
    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`.
 14. When a lane stops for a failed step, hand instruction, invalid instruction or invalid worktree, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
@@ -87,12 +87,12 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
    *Refuted by:* The ADR omits a named verb, permits an additional verb without a further amendment, or weakens a stop.
    *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-10`.
 
-20. When a lane has no loop record or no `next:` line, it has nothing to do and receives no park mark.
-   *Refuted by:* The lane is parked or reported as a stop solely for the missing record or line.
+20. When a lane has no `next.json`, it has nothing to do and receives no park mark.
+   *Refuted by:* The lane is parked or reported as a stop solely for the missing instruction file.
    *Basis:* `decisions.md#Q-13`.
-21. When a started instruction remains the latest instruction after a successful step, the lane ends for this call without repeating it.
+21. When the content of `next.json`, including its written time, is unchanged after the step started from it succeeds, the lane ends for this call without repeating it.
    *Refuted by:* The same instruction starts again in that call.
-   *Basis:* `decisions.md#Q-13`.
+   *Basis:* `decisions.md#Q-13`, `decisions.md#Q-20`.
 22. When a lane is already parked, the driver skips it as having nothing to do and repeats its reason on standard error.
    *Refuted by:* The lane runs, counts as a new stop, or its reason is absent from standard error.
    *Basis:* `decisions.md#Q-13`.
@@ -102,9 +102,9 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 24. When advance works on a lane, it holds that lane's lock for the duration; if another call holds it, advance tries without blocking, skips the lane as nothing to do and reports the reason on standard error.
    *Refuted by:* Two calls work on the same lane simultaneously, or the second blocks, fails or omits the reason.
    *Basis:* `decisions.md#Q-14`, `decisions.md#Q-17`.
-25. When advance writes the lanes file, it holds a file lock.
-   *Refuted by:* Concurrent writes lose a park mark or corrupt the file.
-   *Basis:* `decisions.md#Q-14`.
+25. When advance writes the lanes file, it holds a file lock and atomically replaces the JSON file, including park marks.
+   *Refuted by:* Concurrent writes lose a park mark, corrupt the file, or expose a partially written file.
+   *Basis:* `decisions.md#Q-14`, `decisions.md#Q-20`.
 26. If a selected lane's worktree path does not exist or is not a worktree of this repository, only that lane stops and is parked, contributing exit 1 to the call.
    *Refuted by:* The lane runs, is not parked, does not contribute exit 1, or the invalid path alone refuses the whole call.
    *Basis:* `decisions.md#Q-15`, `decisions.md#Q-18`.
@@ -117,7 +117,7 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 
 ## Non-goals
 
-The driver reads lane and step inputs only from the local lanes file and loop record; remote labels, comments, branch names and fetched files do not select work. The `ladder-next-step` change (bead coding-harness-hwll) supplies the recorded instruction and its grammar before implementation here. This driver neither derives the next step nor adds a runner verb, workflow phase, external trigger, independent push, or lifecycle-field writer. Parallel lanes belong to the detached job launcher (bead coding-harness-a6ns.1). The thirteen-verb prose and its pinned tests stay unchanged.
+The driver reads lane and step inputs only from the local lanes file and `next.json` beside the loop record; remote labels, comments, branch names and fetched files do not select work. The `ladder-next-step` change (bead coding-harness-hwll) supplies the recorded instruction and its grammar before implementation here. This driver neither derives the next step nor adds a runner verb, workflow phase, external trigger, independent push, or lifecycle-field writer. Parallel lanes belong to the detached job launcher (bead coding-harness-a6ns.1). The thirteen-verb prose and its pinned tests stay unchanged.
 
 ## Protected areas
 
@@ -132,4 +132,4 @@ The runner's verb registries and stops remain intact. Held paths are edited only
 
 ## Open decisions
 
-[DETAIL] The eight-hour phase-4 appetite is a stop, chosen because no appetite was recorded. Duplicate or malformed lane entries refuse the call before any step, avoiding partial action on ambiguous configuration. The central configuration and lane format are specified in the plan; they are revisable implementation details.
+[DETAIL] The eight-hour phase-4 appetite is a stop, chosen because no appetite was recorded. Duplicate or malformed lane entries refuse the call before any step, avoiding partial action on ambiguous configuration. The central configuration and JSON lane schema are specified in the plan; they are revisable implementation details.

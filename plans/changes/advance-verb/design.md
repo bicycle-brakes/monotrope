@@ -28,11 +28,11 @@ Chosen: the separate driver, as the maintainer decided in `decisions.md` Q-2; th
 
 ## Interfaces
 
-The operator invokes the local driver with an optional change. The driver reads local lane membership and the latest instruction in the runner record for each named worktree; it starts allowed steps as separate runner child processes in that worktree. The dependency `ladder-next-step` owns the instruction grammar and records `next: hand` for held rows. The runner retains its checks, locks, commits and pushes. Stops are reported on standard error; the future job launcher owns its own record.
+The operator invokes the local driver with an optional change. The driver reads local lane membership and the schema-validated instruction in `next.json` beside the runner record for each named worktree; it starts allowed steps as separate runner child processes in that worktree. The dependency `ladder-next-step` owns the JSON instruction contract and records a hand instruction for held rows. The runner retains its checks, locks, commits and pushes. Stops are reported on standard error; the future job launcher owns its own record.
 
 ## Data model
 
-The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider. A per-lane lock covers lane work; contention is skipped without blocking and reported on standard error. A file lock serializes lanes-file writes. Runner refusal stops the lane without parking, while an invalid worktree stops and parks it; both contribute exit 1. The night routine shares this machine-local file across runs.
+The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.json`: a schema-validated JSON array of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes `next.json` and remains the next-step decider; its written time is part of the content compared after a step. A per-lane lock covers lane work; contention is skipped without blocking and reported on standard error. A file lock serializes atomic lanes-file replacements. Runner refusal stops the lane without parking, while an invalid worktree stops and parks it; both contribute exit 1. The night routine shares this machine-local file across runs.
 
 ## ADR draft
 
@@ -69,7 +69,7 @@ The phase-6 review checks the amendment and retained stops; the driver tests che
 flowchart LR
     operator["Person: operator"] --> driver["Component: local lane driver"]
     driver --> runner["Component: stage-2 runner"]
-    runner --> record["Container: runner next-step record"]
+    runner --> record["Container: runner JSON next-step instruction"]
     record --> driver
 ```
 
