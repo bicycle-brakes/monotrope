@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-0n4s
@@ -104,7 +104,7 @@ Stage-2 call, 2026-11-23: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | tests/test_close_merged_beads.py:660; tests/test_beads_start.py:620 | Both controlled-clock wrappers record imported module paths before calling the reconciler. The renderer `render_beads_export` is imported lazily during that call, so its path is absent from the record and never checked. A renderer loaded from outside the disposable copy can therefore pass the path assertion; every local dependency must resolve inside that copy. [Acceptance criterion 6] | Codex | taken — not a test — the defect sits in the test clock wrappers themselves, so no red-first proof on production code exists (provisional, night run 2026-11-23-a) | — |
+| F-1 | MAJOR | SPEC | base | tests/test_close_merged_beads.py:660; tests/test_beads_start.py:620 | Both controlled-clock wrappers record imported module paths before calling the reconciler. The renderer `render_beads_export` is imported lazily during that call, so its path is absent from the record and never checked. A renderer loaded from outside the disposable copy can therefore pass the path assertion; every local dependency must resolve inside that copy. [Acceptance criterion 6] | Codex | fixed — not a test — both wrappers record imports after reconciliation and require the renderer to be present; Ruff and all four standing ledger tests passed. | — |
 
 Phase 6 verdict: codex 01a20a50-71e9-79c2-b33e-db2acc40f4de, 2026-11-23
 Reviewer session: codex 01a20a50-71e9-79c2-b33e-db2acc40f4de — a fresh session reviewed: no phase-2a session was recorded
@@ -189,3 +189,7 @@ Stage-2 call, 2026-11-23: repair · attempt 3 · route stage-1 · endpoint claud
 > - F-1: tests/test_close_merged_beads.py::test_clock_wrappers_record_lazy_renderer: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/close-budget-clock/stage2/attempts/close-budget-clock/attempt-3-20261123T213024105639Z-583c3b64.md
 > ```
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5596 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/close-budget-clock/plan.md, plans/changes/close-budget-clock/spec.md — unchanged

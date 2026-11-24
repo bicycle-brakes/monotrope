@@ -618,14 +618,9 @@ MODE = @MODE@
 sys.path.insert(0, str(SCRIPTS))
 import reconciler_under_test as m
 
-files = {}
-for name in ("reconciler_under_test", "bead_render", "check_bead_export", "render_beads_export"):
-    mod = sys.modules.get(name)
-    if mod is not None:
-        files[name] = str(Path(mod.__file__).resolve())
 now = [0.0]
 m._monotonic = lambda: now[0]
-rec = {"close": [], "push": [], "delegate_timeouts": [], "bd": [], "files": files, "argv": sys.argv[1:]}
+rec = {"close": [], "push": [], "delegate_timeouts": [], "bd": [], "argv": sys.argv[1:]}
 real_run = subprocess.run
 SIMULATED = {"close": 1.2, "push": 0.7}  # durations of the third close and the push in slow mode
 
@@ -656,6 +651,12 @@ def run(argv, **kw):
 
 m.subprocess.run = run
 rc = m.main(sys.argv[1:])
+files = {}
+for name in ("reconciler_under_test", "bead_render", "check_bead_export", "render_beads_export"):
+    mod = sys.modules.get(name)
+    if mod is not None:
+        files[name] = str(Path(mod.__file__).resolve())
+rec["files"] = files
 rec["rc"] = rc
 OUT.write_text(json.dumps(rec))
 sys.exit(rc)
@@ -709,7 +710,12 @@ def _assert_clocked_record(ns: SimpleNamespace, record: dict) -> None:
     assert record["delegate_timeouts"] == [None] * 4, "a simulated timeout reached a delegate"
     assert record["rc"] == 1
     scripts = (ns.klon / "scripts").resolve()
-    assert record["files"], record
+    assert set(record["files"]) == {
+        "reconciler_under_test",
+        "bead_render",
+        "check_bead_export",
+        "render_beads_export",
+    }, record
     for name, path in record["files"].items():
         assert Path(path).parent == scripts, (name, path)
     tool = str((ns.klon / "tools" / "bd").resolve())
