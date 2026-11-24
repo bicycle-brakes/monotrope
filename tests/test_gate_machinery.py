@@ -720,3 +720,29 @@ def test_failed_branch_fetch_prevents_strict_registry(tmp_path: Path, monkeypatc
         assert code != 0, route
         # the registry check must not run after a failed fetch
         assert calls == [FETCH_CALL], route
+
+
+def test_real_strict_drift_gate_fetches_before_check(tmp_path: Path, monkeypatch, capsys) -> None:
+    import ci_gates
+
+    workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    generated = [
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("id") == "plans-registry-strict"
+    ]
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--commands", "--job", "drift", "--placement", "lokal", "--tsv"])
+    assert ci_gates.main() == 0
+    local = [
+        line.split("\t", 2)[2]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("plans-registry-strict\t")
+    ]
+    assert len(generated) == len(local) == 1
+    for route, command in (("generated", generated[0]), ("local", local[0])):
+        route_dir = tmp_path / route
+        route_dir.mkdir()
+        code, calls = _run_with_fake_tools(command, route_dir, fetch_exit=0)
+        assert code == 0
+        assert calls == [FETCH_CALL, CHECK_CALL], route
