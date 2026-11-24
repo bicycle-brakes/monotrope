@@ -640,26 +640,196 @@ def test_export_failure_is_preflight_failure(tmp_path: Path) -> None:
     assert not _closes(ns) and "dolt push" not in _calls(ns)
 
 
+# A fixture-only wrapper: it imports the disposable copy of the reconciler in a
+# fresh interpreter, replaces its clock seam with a controlled clock that
+# advances 0.5 s after each successful close, and records the timeouts the
+# reconciler requests. The simulated timeout is never applied to a delegate.
+CLOCK_WRAPPER = """\\
+import json, subprocess, sys
+from pathlib import Path
+
+SCRIPTS = Path(@SCRIPTS@)
+ROOT = Path(@ROOT@)
+OUT = Path(@OUT@)
+MODE = @MODE@
+sys.path.insert(0, str(SCRIPTS))
+import @MODULE@ as m
+
+now = [0.0]
+m._monotonic = lambda: now[0]
+rec = {"close": [], "push": [], "delegate_timeouts": [], "bd": [], "argv": sys.argv[1:]}
+real_run = subprocess.run
+SIMULATED = {"close": 1.2, "push": 0.7}  # durations of the third close and the push in slow mode
+
+
+def slow_delegate(argv, **kw):
+    kind = "push" if argv[1] == "dolt" else "close"
+    duration = SIMULATED[kind] if kind == "push" or len(rec["close"]) == 3 else 0.1
+    if kw.get("timeout") is not None and kw["timeout"] < duration:
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+    return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+def run(argv, **kw):
+    if Path(str(argv[0])).name != "bd":
+        return real_run(argv, **kw)
+    rec["bd"].append(str(Path(str(argv[0])).resolve()))
+    if argv[1] not in ("close", "dolt"):
+        return real_run(argv, **kw)
+    kind = "push" if argv[1] == "dolt" else "close"
+    rec[kind].append(kw.get("timeout"))
+    kw = {k: v for k, v in kw.items() if k != "timeout"}
+    rec["delegate_timeouts"].append(kw.get("timeout"))
+    erg = (slow_delegate if MODE == "slow" else real_run)(argv, **kw)
+    if kind == "close" and erg.returncode == 0:
+        now[0] += 0.5
+    return erg
+
+
+m.subprocess.run = run
+rc = m.main(sys.argv[1:])
+files = {}
+for name in ("@MODULE@", "bead_render", "check_bead_export", "render_beads_export"):
+    mod = sys.modules.get(name)
+    if mod is not None:
+        files[name] = str(Path(mod.__file__).resolve())
+rec["files"] = files
+rec["rc"] = rc
+OUT.write_text(json.dumps(rec))
+sys.exit(rc)
+"""
+
+
+def _clock_wrapper(scripts: Path, root: Path, out: Path, module: str, mode: str) -> str:
+    return (
+        CLOCK_WRAPPER.replace("@SCRIPTS@", repr(str(scripts)))
+        .replace("@ROOT@", repr(str(root)))
+        .replace("@OUT@", repr(str(out)))
+        .replace("@MODE@", repr(mode))
+        .replace("@MODULE@", module)
+    )
+
+
+def _run_clocked(ns: SimpleNamespace, tmp_path: Path, mode: str):
+    out = tmp_path / f"record-{mode}.json"
+    wrapper = tmp_path / f"wrapper-{mode}.py"
+    wrapper.write_text(_clock_wrapper(ns.klon / "scripts", ns.klon, out, "close_merged_beads", mode))
+    result = subprocess.run(
+        [sys.executable, str(wrapper), "--write", "--budget-seconds", "2"],
+        cwd=ns.klon,
+        env={**_env(ns), "CLOSE_MERGED_BD_TIMEOUT": "1.5"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    return result, json.loads(out.read_text())
+
+
+def _assert_clocked_record(ns: SimpleNamespace, record: dict) -> None:
+    assert record["close"] == [1.5, 1.5, 1.0], record
+    assert record["push"] == [0.5], record
+    assert record["delegate_timeouts"] == [None] * 4, "a simulated timeout reached a delegate"
+    assert record["rc"] == 1
+    scripts = (ns.klon / "scripts").resolve()
+    assert set(record["files"]) == {"close_merged_beads", "bead_render", "check_bead_export", "render_beads_export"}, (
+        record
+    )
+    for name, path in record["files"].items():
+        assert Path(path).parent == scripts, (name, path)
+    tool = str((ns.klon / "tools" / "bd").resolve())
+    assert record["bd"] and set(record["bd"]) == {tool}, record["bd"]
+
+
 def test_startup_budget_reserves_publication(tmp_path: Path) -> None:
-    """Close part of a slow batch, then publish after the close budget runs out."""
+    """Close part of a batch under a controlled clock, then publish after the budget runs out."""
     ns = _build(tmp_path)
-    stub = ns.klon / "tools" / "bd"
-    # Keep the per-close bound above the one-second admission floor. Five
-    # slow closes cannot all start within this budget, but some must finish.
-    stub.write_text(STUB.replace("  close)", "  close)\n    sleep 0.3"))
-    result = _run_script(ns, {**_env(ns), "CLOSE_MERGED_BD_TIMEOUT": "1.5"}, "--write", "--budget-seconds", "2")
-    assert result.returncode == 1
+    # A controlled delegate simulating a long third close and push, no sleeping:
+    # the simulated timeout is not applied, so the same outcome results.
+    slow, record = _run_clocked(ns, tmp_path, "slow")
+    assert slow.returncode == 1, (slow.stdout, slow.stderr)
+    _assert_clocked_record(ns, record)
+    assert "startup budget exhausted" in slow.stderr
+    assert "published: yes" in slow.stdout
+    assert not _closes(ns) and "dolt push" not in _calls(ns), "the controlled delegate reached the stub"
+
+    result, record = _run_clocked(ns, tmp_path, "real")
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    _assert_clocked_record(ns, record)
     assert "startup budget exhausted" in result.stderr
-    assert "dolt push" in _calls(ns), (result.stdout, result.stderr)
+    assert result.stderr.count("startup budget exhausted") == 2
     assert "published: yes" in result.stdout
+    assert "local closures: 3 (2 refused)" in result.stdout
     closed = [
         json.loads(line)["id"] for line in ns.render.read_text().splitlines() if json.loads(line)["status"] == "closed"
     ]
-    completed = set(closed) & set(DECLARED)
-    assert 0 < len(completed) < len(DECLARED), (result.stdout, result.stderr)
-    assert len(_closes(ns)) == len(completed), "every attempted close must finish before publication"
+    assert len(set(closed) & set(DECLARED)) == 3, (result.stdout, result.stderr)
+    assert len(_closes(ns)) == 3, "every attempted close must finish before publication"
     calls = _calls(ns)
+    assert "dolt push" in calls
     assert all(calls.index(close) < calls.index("dolt push") for close in _closes(ns))
+
+
+def _budget_module(monkeypatch):
+    spec = importlib.util.spec_from_file_location("seam_reconciler", REPO_ROOT / "scripts/close_merged_beads.py")
+    reconcile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reconcile)
+    monkeypatch.delenv("BEAD_RENDER", raising=False)
+    monkeypatch.setattr(reconcile, "resolve_checkout", lambda: (REPO_ROOT, REPO_ROOT / "tools" / "bd"))
+    monkeypatch.setattr(reconcile, "fetch_and_pin", lambda _root: "a" * 40)
+    monkeypatch.setattr(reconcile, "load_state", lambda: {MAIN: {"status": "open"}})
+    monkeypatch.setattr(reconcile, "collect_declarations", lambda *_args: ({MAIN: ("a" * 40, "done")}, []))
+    return reconcile
+
+
+def _timeouts(monkeypatch, reconcile, budget: str = "10") -> list[tuple[list[str], float | None]]:
+    calls: list[tuple[list[str], float | None]] = []
+
+    def run(argv, **kwargs):
+        calls.append((argv[1:3], kwargs.get("timeout")))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(reconcile.subprocess, "run", run)
+    reconcile.main(["--write", "--budget-seconds", budget])
+    return calls
+
+
+def test_budget_clock_seam_preserves_calculations(monkeypatch) -> None:
+    import time as real_time
+
+    reconcile = _budget_module(monkeypatch)
+
+    # The default seam delegates to the current time.monotonic at call time.
+    monkeypatch.setattr(real_time, "monotonic", lambda: 42.0)
+    assert reconcile._monotonic() == 42.0
+    monkeypatch.setattr(real_time, "monotonic", lambda: 43.0)
+    assert reconcile._monotonic() == 43.0
+
+    def scripted(values):
+        ticks = iter(values)
+        return lambda: next(ticks)
+
+    def forbidden() -> float:
+        raise AssertionError("a budget read bypassed the clock seam")
+
+    # Deadline, close and publication all read the seam, never time.monotonic.
+    monkeypatch.setattr(real_time, "monotonic", forbidden)
+    monkeypatch.setattr(reconcile, "_monotonic", scripted([0.0, 2.0, 9.5]))
+    assert _timeouts(monkeypatch, reconcile) == [(["close", MAIN], 8.0), (["dolt", "push"], 0.5)]
+
+    # The one-second boundary admits a close; just below it refuses, and the
+    # publication timeout keeps its 0.01 s lower bound.
+    monkeypatch.setattr(reconcile, "_monotonic", scripted([0.0, 9.0, 9.0]))
+    assert _timeouts(monkeypatch, reconcile) == [(["close", MAIN], 1.0), (["dolt", "push"], 1.0)]
+    monkeypatch.setattr(reconcile, "_monotonic", scripted([0.0, 9.01, 10.5]))
+    assert _timeouts(monkeypatch, reconcile) == [(["dolt", "push"], 0.01)]
+
+    # With the seam left at its default, the current time.monotonic drives the
+    # same calculations.
+    monkeypatch.undo()
+    reconcile = _budget_module(monkeypatch)
+    monkeypatch.setattr(real_time, "monotonic", scripted([0.0, 2.0, 9.5]))
+    assert _timeouts(monkeypatch, reconcile) == [(["close", MAIN], 8.0), (["dolt", "push"], 0.5)]
 
 
 def test_renderer_unexpected_exit_is_preflight_failure(tmp_path: Path) -> None:

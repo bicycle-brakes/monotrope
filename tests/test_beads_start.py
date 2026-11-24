@@ -602,10 +602,70 @@ def test_prime_failure_preserves_reconciliation_diagnostic(tmp_path: Path) -> No
     assert "publication failed" in result.stderr
 
 
-def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None:
-    ns = _project(tmp_path)
-    # Keep the close bound above the one-second admission floor. The batch
-    # must complete some closes before exhausting its budget and publishing.
+# A fixture-only entry script: it imports the disposable copy of the reconciler
+# (stored under another filename) in a fresh interpreter, replaces its clock seam
+# with a controlled clock that advances 0.5 s after each successful close, and
+# records the budget argument and the timeouts the reconciler requests. The
+# simulated timeout is never applied to a delegate. The real entry script's
+# `__main__` block is covered by the other integration tests.
+CLOCK_WRAPPER = """\\
+import json, subprocess, sys
+from pathlib import Path
+
+SCRIPTS = Path(@SCRIPTS@)
+OUT = Path(@OUT@)
+MODE = @MODE@
+sys.path.insert(0, str(SCRIPTS))
+import reconciler_under_test as m
+
+now = [0.0]
+m._monotonic = lambda: now[0]
+rec = {"close": [], "push": [], "delegate_timeouts": [], "bd": [], "argv": sys.argv[1:]}
+real_run = subprocess.run
+SIMULATED = {"close": 1.2, "push": 0.7}  # durations of the third close and the push in slow mode
+
+
+def slow_delegate(argv, **kw):
+    kind = "push" if argv[1] == "dolt" else "close"
+    duration = SIMULATED[kind] if kind == "push" or len(rec["close"]) == 3 else 0.1
+    if kw.get("timeout") is not None and kw["timeout"] < duration:
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+    return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+def run(argv, **kw):
+    if Path(str(argv[0])).name != "bd":
+        return real_run(argv, **kw)
+    rec["bd"].append(str(Path(str(argv[0])).resolve()))
+    if argv[1] not in ("close", "dolt"):
+        return real_run(argv, **kw)
+    kind = "push" if argv[1] == "dolt" else "close"
+    rec[kind].append(kw.get("timeout"))
+    kw = {k: v for k, v in kw.items() if k != "timeout"}
+    rec["delegate_timeouts"].append(kw.get("timeout"))
+    erg = (slow_delegate if MODE == "slow" else real_run)(argv, **kw)
+    if kind == "close" and erg.returncode == 0:
+        now[0] += 0.5
+    return erg
+
+
+m.subprocess.run = run
+rc = m.main(sys.argv[1:])
+files = {}
+for name in ("reconciler_under_test", "bead_render", "check_bead_export", "render_beads_export"):
+    mod = sys.modules.get(name)
+    if mod is not None:
+        files[name] = str(Path(mod.__file__).resolve())
+rec["files"] = files
+rec["rc"] = rc
+OUT.write_text(json.dumps(rec))
+sys.exit(rc)
+"""
+
+
+def _clocked_project(tmp_path: Path, name: str, mode: str) -> tuple[SimpleNamespace, Path]:
+    """A project with 15 eligible items whose entry script is the clock wrapper."""
+    ns = _project(tmp_path, name=name)
     for i in range(14):
         _commit(ns.origin, f"complete item {i}\n\nCloses-Bead: coding-harness-item-{i}")
     ns.render.write_text(
@@ -614,24 +674,75 @@ def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None
     )
     stub = ns.klon / "tools" / "bd"
     stub.write_text(
-        STUB.replace("  close)", "  close)\n    sleep 0.2").replace(
+        STUB.replace(
             "    ;;\n  dolt)", '    printf "completed-close %s\\n" "$2" >>"${BEADS_STUB_LOG:?}"\n    ;;\n  dolt)'
         )
     )
-    result = _start(
+    scripts = ns.klon / "scripts"
+    (scripts / "reconciler_under_test.py").write_bytes((scripts / "close_merged_beads.py").read_bytes())
+    out = tmp_path / f"record-{name}.json"
+    (scripts / "close_merged_beads.py").write_text(
+        CLOCK_WRAPPER.replace("@SCRIPTS@", repr(str(scripts)))
+        .replace("@OUT@", repr(str(out)))
+        .replace("@MODE@", repr(mode)),
+        encoding="utf-8",
+    )
+    return ns, out
+
+
+def _start_clocked(ns: SimpleNamespace) -> subprocess.CompletedProcess[str]:
+    return _start(
         ns,
         extra={
-            "BEADS_START_RECONCILE_TIMEOUT": "3",
-            "BEADS_START_BUDGET_RESERVE": "0.1",
+            "BEADS_START_RECONCILE_TIMEOUT": "100",
+            "BEADS_START_BUDGET_RESERVE": "98",
             "CLOSE_MERGED_BD_TIMEOUT": "1.5",
         },
     )
+
+
+def _assert_clocked_record(ns: SimpleNamespace, record: dict) -> None:
+    argv = record["argv"]
+    assert argv[0] == "--write" and argv[1] == "--budget-seconds", argv
+    assert float(argv[2]) == 2.0 and len(argv) == 3, argv
+    assert record["close"] == [1.5, 1.5, 1.0], record
+    assert record["push"] == [0.5], record
+    assert record["delegate_timeouts"] == [None] * 4, "a simulated timeout reached a delegate"
+    assert record["rc"] == 1
+    scripts = (ns.klon / "scripts").resolve()
+    assert set(record["files"]) == {
+        "reconciler_under_test",
+        "bead_render",
+        "check_bead_export",
+        "render_beads_export",
+    }, record
+    for name, path in record["files"].items():
+        assert Path(path).parent == scripts, (name, path)
+    tool = str((ns.klon / "tools" / "bd").resolve())
+    assert record["bd"] and set(record["bd"]) == {tool}, record["bd"]
+
+
+def test_startup_budget_reaches_publication_before_prime(tmp_path: Path) -> None:
+    # A controlled delegate simulating a long third close and push, no sleeping:
+    # the simulated timeout is not applied, so the budget outcome is unchanged.
+    slow, slow_out = _clocked_project(tmp_path, "slow", "slow")
+    result = _start_clocked(slow)
     assert result.returncode == 0, result.stderr
+    _assert_clocked_record(slow, json.loads(slow_out.read_text()))
+    assert "startup budget exhausted" in result.stderr
+    assert "abgebrochen" not in result.stderr
+    assert not _wrote(slow), "the controlled delegate reached the stub"
+    assert "prime --hook-json" in _calls(slow)
+
+    ns, out = _clocked_project(tmp_path, "real", "real")
+    result = _start_clocked(ns)
+    assert result.returncode == 0, result.stderr
+    _assert_clocked_record(ns, json.loads(out.read_text()))
     calls = _calls(ns)
     assert "dolt push" in calls, (calls, result.stderr)
     closes = [call.split()[1] for call in calls if call.startswith("close ")]
     completed = [call.split()[1] for call in calls if call.startswith("completed-close ")]
-    assert 0 < len(completed) < 15, (calls, result.stderr)
+    assert len(closes) == 3 and len(completed) == 3, (calls, result.stderr)
     assert completed == closes, "every attempted close must finish before publication"
     assert all(calls.index(f"completed-close {bid}") < calls.index("dolt push") for bid in completed)
     assert calls.index("dolt push") < calls.index("prime --hook-json")
