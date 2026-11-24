@@ -1094,8 +1094,8 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10812 | A Where cell naming `src/newdir/` permits a new file or symlink at `src/newdir` itself. The directory grant should cover descendants only, so that path must be refused unless separately named. [Criteria 3 and 8] | Codex | open | — |
-| P6-2 | BLOCKER | MAINT | base | docs/WORKFLOW.md:2100; scripts/stage2.py:6793 | [DIVERGENT] The workflow says a configured `core.excludesFile` is outside the frozen ignore rules, while the implementation snapshots and applies it. These give opposite answers about which rules judge a repair’s new files. | Codex | open | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10812 | A Where cell naming `src/newdir/` permits a new file or symlink at `src/newdir` itself. The directory grant should cover descendants only, so that path must be refused unless separately named. [Criteria 3 and 8] | Codex | taken — criteria 3 and 8: a Where cell naming a directory (trailing slash) grants its descendants only; a new file or symlink at the directory path itself is refused unless named separately | — |
+| P6-2 | BLOCKER | MAINT | base | docs/WORKFLOW.md:2100; scripts/stage2.py:6793 | [DIVERGENT] The workflow says a configured `core.excludesFile` is outside the frozen ignore rules, while the implementation snapshots and applies it. These give opposite answers about which rules judge a repair’s new files. | Codex | fixed — not a test — orchestrator hand edit d1c59301: docs/WORKFLOW.md now says a configured core.excludesFile is frozen and only the implicit global file is read as it stands, as the code does | no |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
