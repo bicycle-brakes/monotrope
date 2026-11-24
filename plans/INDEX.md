@@ -643,6 +643,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/phase6-english/decisions.md`](changes/phase6-english/decisions.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/findings.md`](changes/phase6-english/findings.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/plan.md`](changes/phase6-english/plan.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/research.md`](changes/phase6-english/research.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-english/spec.md`](changes/phase6-english/spec.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/repair-hand-held-rows/decisions.md`](changes/repair-hand-held-rows/decisions.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/findings.md`](changes/repair-hand-held-rows/findings.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/plan.md`](changes/repair-hand-held-rows/plan.md) | draft | none | 2026-11-21 | coding-harness-0zhf |

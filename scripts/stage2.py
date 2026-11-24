@@ -308,6 +308,29 @@ ANSWER_FORMAT = (
 FORMAT_REMINDER = (
     "Your previous answer was not in the required format, so it could not be read as findings; answer once more."
 )
+# The one asked-again call of phase 6 after a verdict detected as German (bead coding-harness-tscc): one
+# sentence, resumed on the verdict's own thread, which already holds the guard-evidence instructions.
+LANGUAGE_REMINDER = (
+    "Your previous verdict was not in English, so write the same findings again in English, in the same table form."
+)
+# The fixed German-detection heuristic of phase 6 (bead coding-harness-tscc): German function words, plus
+# any word with ä, ö, ü or ß, among the words of the combined Finding cells outside quotations, backticks and
+# code-like tokens. A verdict is German at GERMAN_MIN_WORDS such words and at least one in GERMAN_RATIO_DENOMINATOR
+# of all words. An approximation, not a language classifier: it can miss short or mixed German prose.
+GERMAN_WORDS = frozenset(
+    """
+    der die das den dem des ein eine einen einem einer eines und oder nicht ist sind wird werden wurde wurden
+    bei mit nach von vom zum zur auf aus für über durch ohne gegen unter zwischen vor im beim ins
+    kann können muss müssen soll sollte haben dass wenn dann auch aber als wie nur noch sich sie wir
+    kein keine keinen dieser diese dieses diesem diesen weil damit jedoch sowie obwohl dadurch trotzdem
+    stattdessen sondern bereits gibt gilt je
+    """.split()
+)
+GERMAN_MIN_WORDS = 3
+GERMAN_RATIO_DENOMINATOR = 8
+_QUOTED_SPAN = re.compile(r"`[^`]*`|\"[^\"]*\"|“[^”]*”|„[^“]*“|«[^»]*»")
+_CODE_LIKE_TOKEN = re.compile(r"/|\w\.\w|_|:\d+\W*$")
+_LETTER_WORD = re.compile(r"[^\W\d_]+")
 # Phase 6 alone records guard evidence beside its verdict (spec, criterion 9; ADR 0023): the
 # six-cell findings format stands unchanged, and every guard test the change adds or changes
 # gets one line of its own, separated from the verdict before the verdict is checked.
@@ -4828,6 +4851,117 @@ def rejected_review_block(answer: str, thread: str) -> str:
     )
 
 
+def german_score(text: str) -> tuple[int, int]:
+    """(German-looking words, all words) of `text`, after the exclusions of the phase-6 language check.
+
+    Paired backticks and double quotation marks (`"…"`, `“…”`, `„…“`, `«…»`) are removed first; then every
+    whitespace-delimited token with a slash, a dot between word characters, an underscore or a `:line`
+    suffix. Single quotes and apostrophes are no delimiters. A word counts when it is a listed German
+    function word (an all-capitals token never is) or contains ä, ö, ü or ß.
+    """
+    german = total = 0
+    for chunk in _QUOTED_SPAN.sub(" ", text).split():
+        if _CODE_LIKE_TOKEN.search(chunk):
+            continue
+        for word in _LETTER_WORD.findall(chunk):
+            total += 1
+            lowered = word.lower()
+            listed = lowered in GERMAN_WORDS and not (len(word) > 1 and word.isupper())
+            if listed or any(letter in lowered for letter in "äöüß"):
+                german += 1
+    return german, total
+
+
+def german_verdict(rows: list[list[str]]) -> bool:
+    """Whether the combined Finding cells (the sixth) of a valid verdict's rows are detected as German.
+
+    One score per answer. A verdict without finding rows, `No finding.` included, is never German.
+    """
+    german, total = german_score(" ".join(row[5] for row in rows))
+    return german >= GERMAN_MIN_WORDS and german * GERMAN_RATIO_DENOMINATOR >= total
+
+
+def phase6_rows(answer: str) -> list[list[str]] | None:
+    """The six-cell rows of a valid phase-6 answer (`[]` for exactly `No finding.`), or None when it is malformed.
+
+    Guard-evidence lines travel beside the verdict and never instead of it (spec, criterion 9); a line
+    that merely begins `Guard evidence:` is malformed evidence and refuses the answer.
+    """
+    _evidence, verdict_text = split_guard_evidence(answer)
+    if any(line.strip().startswith("Guard evidence:") for line in verdict_text.splitlines()):
+        return None
+    rows, _ = parse_rows(verdict_text)
+    if rows or verdict_text.strip() == "No finding.":
+        return rows
+    return None
+
+
+def one_line(error: object) -> str:
+    """A failure's text as one short line, safe to stand in a verdict block."""
+    return " ".join(str(error).split())[:300]
+
+
+def language_replacement(
+    ctx: Context, answer: str, rows: list[list[str]], thread: str, notices: list[str]
+) -> tuple[str, list[list[str]], str, str | None]:
+    """The one replacement of a verdict detected as German: (answer, rows, thread, the first thread it replaced).
+
+    The first answer is saved as protected local evidence before any replacement call; a save failure asks
+    for none and keeps the first verdict with a notice. The replacement resumes the verdict thread through
+    its own leak check and audit line (`review (language retry)`); a leak-check block (`Refused`) is not
+    caught here, so the review stops with no fallback verdict and no release. A valid replacement is recorded
+    unchanged, its findings never compared with the first answer's; a malformed or failed one leaves the
+    first verdict and thread standing, with a notice. The last item is the first thread only when the
+    returned verdict thread differs from it.
+    """
+    try:
+        # The token pairs the verdict thread with the UTC stamp of the one clock boundary (`clock_now`;
+        # a direct clock read here fails the runtime clock guard), so the exclusively created evidence
+        # file never collides with an earlier save for this change.
+        saved = save_answer_evidence(
+            ctx.root,
+            ctx.change,
+            f"phase6-language-{thread}-{clock_now().utc.strftime('%Y-%m-%dT%H-%M-%SZ')}",
+            1,
+            answer,
+            None,
+        )
+    except (CallFailed, Refused) as error:
+        notices.append(
+            "Language notice: the first verdict was detected as non-English, but its answer could not be saved as "
+            f"protected evidence ({one_line(error)}), so no replacement was asked for and the first verdict stands."
+        )
+        return answer, rows, thread, None
+    begin_call(ctx, "review (language retry)", CODEX, LANGUAGE_REMINDER)
+    try:
+        reply, reply_thread = run_codex(ctx, LANGUAGE_REMINDER, resume=thread, verb="review")
+    except CallFailed as error:
+        notices.append(
+            "Language notice: the first verdict was detected as non-English; the replacement call failed "
+            f"({one_line(error)}), so the first verdict stands. The first answer is kept as protected local "
+            f"evidence at {saved}."
+        )
+        return answer, rows, thread, None
+    replacement = phase6_rows(reply)
+    if replacement is None:
+        notice = (
+            "Language notice: the first verdict was detected as non-English; the replacement was malformed "
+            "(neither six-cell findings nor exactly `No finding.`), so the first verdict stands. The first "
+            f"answer is kept as protected local evidence at {saved}."
+        )
+        if reply_thread != thread:
+            notice += f" The malformed replacement came on thread {reply_thread}; thread {thread} is used."
+        notices.append(notice)
+        return answer, rows, thread, None
+    notices.append(
+        "Language notice: the first verdict was detected as German and is replaced by this one; the first "
+        f"answer is kept as protected local evidence at {saved} (not quoted here)."
+    )
+    if german_verdict(replacement):
+        notices.append("Language notice: this replacement was kept although it was detected as non-English.")
+    return reply, replacement, reply_thread, thread if reply_thread != thread else None
+
+
 def review_audit_only(before: bytes, after: bytes) -> bool:
     """Admit runner call lines under any heading, comparing all remaining input bytes.
 
@@ -4837,7 +4971,7 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     """
 
     call = re.compile(
-        rb"\n\nStage-2 call, \d{4}-\d{2}-\d{2}: [a-z][a-z0-9-]*(?: \(loop marks\))?"
+        rb"\n\nStage-2 call, \d{4}-\d{2}-\d{2}: [a-z][a-z0-9-]*(?: \((?:loop marks|language retry)\))?"
         rb"(?: \xc2\xb7 attempt [1-9]\d* \xc2\xb7 route [a-z0-9-]+)?"
         rb" \xc2\xb7 endpoint [a-z0-9-]+ \xc2\xb7 model [A-Za-z0-9_./:+-]+(?: \xc2\xb7 reason [^\r\n]+)?"
         rb" \xc2\xb7 leak check clean over \d+ files, \d+ commits, \d+ rules\.(?=\n|$)"
@@ -4926,7 +5060,8 @@ def review(root: Path, change: str) -> None:
     The full `make verify` of the current head must pass before the reviewer is called
     (`require_fresh_full_verification`). A re-check after an earlier `## Phase 6` block in
     `findings.md` starts a fresh read-only Codex session. The first phase-6 review resumes a recorded
-    Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread.
+    Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread. A valid
+    verdict detected as German gets one replacement on its thread (`language_replacement`).
     """
     ctx = preflight(root, change, CODEX)
     record = read_record(change, root)
@@ -4954,33 +5089,42 @@ def review(root: Path, change: str) -> None:
     require_fresh_full_verification(root, change)
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
-    _evidence, verdict_text = split_guard_evidence(answer)
-    malformed_evidence = any(line.strip().startswith("Guard evidence:") for line in verdict_text.splitlines())
-    rows, _ = parse_rows(verdict_text)
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
     # boundary): six-cell findings, or exactly `No finding.`. Guard-evidence lines travel beside
     # them and never instead of them (spec, criterion 9); `answer_block` below keeps the full
     # original answer, so the evidence stands verbatim before the verdict line. An empty, refused
     # or malformed answer records no verdict, releases nothing, and stands as rejected evidence
     # for the next attempt.
-    if malformed_evidence or (not rows and verdict_text.strip() != "No finding."):
+    rows = phase6_rows(answer)
+    if rows is None:
         append(ctx.findings, rejected_review_block(answer, thread))
         raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+    # A valid verdict detected as German gets one replacement on its own thread before anything is
+    # recorded or released (bead coding-harness-tscc).
+    first_thread = thread
+    notices: list[str] = []
+    replaced_thread: str | None = None
+    if german_verdict(rows):
+        answer, rows, thread, replaced_thread = language_replacement(ctx, answer, rows, thread, notices)
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
             answer_block(rows, answer, "Codex"),
+            *notices,
             f"Phase 6 verdict: codex {thread}, {today()}",
         ]
     )
+    reasons = []
     if recorded is None:
-        reason = "an earlier ## Phase 6 block makes this a re-check" if recheck else "no phase-2a session was recorded"
-        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: {reason}"
-    elif thread != recorded:
-        block += (
-            f"\nReviewer session: codex {thread} — a fresh session reviewed: "
-            f"the resume of {recorded} started a new thread"
+        reasons.append(
+            "an earlier ## Phase 6 block makes this a re-check" if recheck else "no phase-2a session was recorded"
         )
+    elif first_thread != recorded:
+        reasons.append(f"the resume of {recorded} started a new thread")
+    if replaced_thread is not None:
+        reasons.append(f"the language retry of {replaced_thread} started a new thread")
+    if reasons:
+        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: {'; '.join(reasons)}"
     append(ctx.findings, block)
     print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
 
