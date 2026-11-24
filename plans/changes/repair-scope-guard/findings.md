@@ -1048,3 +1048,18 @@ Reviewer session: codex 01a20e4f-d4a3-7283-8724-e649b99e50fa — a fresh session
 Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5681 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5692 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | MAINT | base | scripts/stage2.py:11955, scripts/stage2.py:12339 | If the pre-call file inventory fails temporarily, the runner still starts the repair. A new out-of-scope file from that attempt is neither measured nor removed; the next route includes it in its baseline and can commit it without a scope refusal. The runner must stop or restore before retrying when it cannot establish the inventory. | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list, allowing journal changes past that protection — catches without switch: yes, for the implement and repair cases if the same defect exists in the runner; the draft cases can still pass because draft separately restores paths outside its change folder.
+
+Phase 6 verdict: codex 01a20eeb-ecee-7853-b7ab-b9b3b094316c, 2026-11-24
+Reviewer session: codex 01a20eeb-ecee-7853-b7ab-b9b3b094316c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
