@@ -682,3 +682,14 @@ Reviewer session: codex 01a20eca-bb90-70a1-8eb7-1dd35d0ecbb0 — a fresh session
 Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5685 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5694 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `known_status` | A row with the standalone status `duplicate of L1-1` is treated as a duplicate and as having a known status. If `L1-1` exists, the report can mark both outputs complete and exit successfully, although that status is outside the specified closed set. It must identify the row as a gap and exit non-zero. [Criteria 7, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a20ef9-4fcc-72c1-b379-3bdb3c3cf0ff, 2026-11-24
+Reviewer session: codex 01a20ef9-4fcc-72c1-b379-3bdb3c3cf0ff — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
