@@ -60,6 +60,8 @@ Two dimensions, because a spec cannot see its own gaps:
 - **`MAINT`** — the eye of a maintainer who was not there: error handling, edge
   cases, contracts facing outward, security. Finds what the spec is silent about.
 
+Answer in English.
+
 Your answer **is** a table: one row per finding, `SPEC` and `MAINT` in the
 dimension column. Through the runner you answer in rows of six cells — `| ID |
 Severity | Dimension | Origin | Where | Finding |` — and the runner adds the
