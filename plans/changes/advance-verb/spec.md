@@ -68,7 +68,7 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 13. When a step exits 1 or the latest instruction is `next: hand <change> <rows>`, that lane stops even if the preceding repair exited successfully.
    *Refuted by:* A subsequent step starts in the stopped lane.
    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`.
-14. When a lane stops, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
+14. When a lane stops for a failed step, hand instruction, invalid instruction or invalid worktree, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
    *Refuted by:* A later call retries a parked lane without clearing it or the reason is missing.
    *Basis:* `decisions.md#Q-12`.
 15. When a lane stops, the driver proceeds to the next listed lane sequentially.
@@ -83,44 +83,41 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 18. When the driver writes state, its own code writes no document lifecycle field, including `status`, `implementation_status` or `updated`.
    *Refuted by:* The driver itself changes such a field.
    *Basis:* `decisions.md#Q-5`, `decisions.md#Q-12`.
-19. When locally invoked, the driver ignores lanes and steps obtained from remote labels, comments, branch names or fetched files.
-   *Refuted by:* Remote data selects a lane or step.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-12`.
-20. When the decision pull request is merged, ADR 0021 permits the separate driver to start `repair`, `review`, `review-loop`, `release-loop`, `prepare-loop` and `implement` while retaining the runner’s existing stops.
+19. When the decision pull request is merged, ADR 0021 permits the separate driver to start `repair`, `review`, `review-loop`, `release-loop`, `prepare-loop` and `implement` while retaining the runner’s existing stops.
    *Refuted by:* The ADR omits a named verb, permits an additional verb without a further amendment, or weakens a stop.
    *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-10`.
 
-21. When a lane has no loop record or no `next:` line, it has nothing to do and receives no park mark.
+20. When a lane has no loop record or no `next:` line, it has nothing to do and receives no park mark.
    *Refuted by:* The lane is parked or reported as a stop solely for the missing record or line.
    *Basis:* `decisions.md#Q-13`.
-22. When a started instruction remains the latest instruction after a successful step, the lane ends for this call without repeating it.
+21. When a started instruction remains the latest instruction after a successful step, the lane ends for this call without repeating it.
    *Refuted by:* The same instruction starts again in that call.
    *Basis:* `decisions.md#Q-13`.
-23. When a lane is already parked, the driver skips it as having nothing to do and repeats its reason on standard error.
+22. When a lane is already parked, the driver skips it as having nothing to do and repeats its reason on standard error.
    *Refuted by:* The lane runs, counts as a new stop, or its reason is absent from standard error.
    *Basis:* `decisions.md#Q-13`.
-24. When a runner step exits 2, its lane ends for this call without a park mark.
-   *Refuted by:* The driver retries it in the call or parks the lane for that refusal.
-   *Basis:* `decisions.md#Q-14`.
-25. When advance works on a lane, it holds that lane's lock for the duration.
-   *Refuted by:* Two advance calls work on the same lane simultaneously.
-   *Basis:* `decisions.md#Q-14`.
-26. When advance writes the lanes file, it holds a file lock.
+23. When a runner step exits 2, its lane stops for this call without a park mark and contributes exit 1 to the call.
+   *Refuted by:* The driver retries or parks the lane, or the refusal does not contribute exit 1.
+   *Basis:* `decisions.md#Q-14`, `decisions.md#Q-18`.
+24. When advance works on a lane, it holds that lane's lock for the duration; if another call holds it, advance tries without blocking, skips the lane as nothing to do and reports the reason on standard error.
+   *Refuted by:* Two calls work on the same lane simultaneously, or the second blocks, fails or omits the reason.
+   *Basis:* `decisions.md#Q-14`, `decisions.md#Q-17`.
+25. When advance writes the lanes file, it holds a file lock.
    *Refuted by:* Concurrent writes lose a park mark or corrupt the file.
    *Basis:* `decisions.md#Q-14`.
-27. If a selected lane's worktree path does not exist or is not a worktree of this repository, only that lane is parked.
-   *Refuted by:* The lane runs, is not parked, or the invalid path alone refuses the whole call.
-   *Basis:* `decisions.md#Q-15`.
-28. If either central verb list is absent, malformed, includes an unknown runner verb, or the counted list is not a subset of the allow list, the call is refused before a step starts.
+26. If a selected lane's worktree path does not exist or is not a worktree of this repository, only that lane stops and is parked, contributing exit 1 to the call.
+   *Refuted by:* The lane runs, is not parked, does not contribute exit 1, or the invalid path alone refuses the whole call.
+   *Basis:* `decisions.md#Q-15`, `decisions.md#Q-18`.
+27. If either central verb list is absent, malformed, includes an unknown runner verb, or the counted list is not a subset of the allow list, the call is refused before a step starts.
    *Refuted by:* An invalid list is accepted or any step starts.
    *Basis:* `decisions.md#Q-15`.
-29. When the night routine is followed, it calls `scripts/lanes.py advance` using one machine-local lanes file shared by concurrent runs under the specified locks.
+28. When the night routine is followed, it calls `scripts/lanes.py advance` using one machine-local lanes file shared by concurrent runs under the specified locks.
    *Refuted by:* The routine prescribes the old per-run lanes file or hand-starts the next lane step.
    *Basis:* `decisions.md#Q-11`, `decisions.md#Q-14`, `decisions.md#Q-16`.
 
 ## Non-goals
 
-The `ladder-next-step` change (bead coding-harness-hwll) supplies the recorded instruction and its grammar before implementation here. This driver neither derives the next step nor adds a runner verb, workflow phase, external trigger, independent push, or lifecycle-field writer. Parallel lanes belong to the detached job launcher (bead coding-harness-a6ns.1). The thirteen-verb prose and its pinned tests stay unchanged.
+The driver reads lane and step inputs only from the local lanes file and loop record; remote labels, comments, branch names and fetched files do not select work. The `ladder-next-step` change (bead coding-harness-hwll) supplies the recorded instruction and its grammar before implementation here. This driver neither derives the next step nor adds a runner verb, workflow phase, external trigger, independent push, or lifecycle-field writer. Parallel lanes belong to the detached job launcher (bead coding-harness-a6ns.1). The thirteen-verb prose and its pinned tests stay unchanged.
 
 ## Protected areas
 

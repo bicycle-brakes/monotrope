@@ -32,7 +32,7 @@ The operator invokes the local driver with an optional change. The driver reads 
 
 ## Data model
 
-The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider. A per-lane lock covers lane work, and a file lock serializes lanes-file writes. The night routine shares this machine-local file across runs.
+The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider. A per-lane lock covers lane work; contention is skipped without blocking and reported on standard error. A file lock serializes lanes-file writes. Runner refusal stops the lane without parking, while an invalid worktree stops and parks it; both contribute exit 1. The night routine shares this machine-local file across runs.
 
 ## ADR draft
 
