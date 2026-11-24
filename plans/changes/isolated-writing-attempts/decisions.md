@@ -621,3 +621,153 @@ context: |
   Architecture change: none beyond the spec text.
 
 In the context of hooks, config and refs every worktree shares, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-34 · Applying a saved failed tree (spec review 2a-43, 2a-44, 2a-45)
+
+asked: 2026-11-24
+answer: "Only the saved state of the previous failed attempt in the same runner invocation is applied; each saved state already holds the work it took over, so a new invocation starts from the clean lane HEAD. After a checksum rejection the next attempt starts at the current lane HEAD (after the records commit) with the saved state the rejected attempt had itself taken over, never the rejected attempt's own changes. The saved state is applied by a three-way merge onto the current lane HEAD; a conflict is an internal failure that stops the run under criterion 13 and keeps the saved state under the attempt refs. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how a fall-through starts from saved work.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of how a fall-through starts from saved work, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-35 · Non-isolated attempts in PR 1 (spec review 2a-46, 2a-47)
+
+asked: 2026-11-24
+answer: "Without isolation only criterion 17's check before the start runs, not criterion 3's comparison after the attempt. A failed non-isolated attempt's tree (tracked changes and new untracked files, not ignored ones) is saved under the attempt refs, then the lane is reset to the attempt's pinned start (tracked files restored, the new untracked files removed) so criterion 17 holds before the next route; a checksum rejection resets the same way. Non-isolated attempts get the checksums, not the read-only protection of criterion 8. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what the lifecycle does for draft and implement without isolation.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of what the lifecycle does for draft and implement without isolation, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-36 · Records of an accepted attempt (spec review 2a-48)
+
+asked: 2026-11-24
+answer: "The runner writes an accepted attempt's records before the checkpoint, so the landing commit carries them and the lane is clean after a green run; criterion 27 then fires only after failed runs. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where a successful attempt's records go.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of where a successful attempt's records go, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-37 · Attempt refs, order of save and check (spec review 2a-49)
+
+asked: 2026-11-24
+answer: "Criterion 28's comparison runs before the runner saves the ending attempt's state. Attempt refs are keyed per invocation (refs/stage2/attempts/<change>/<invocation-id>/...); a prune by another runner start saves a dead attempt only under that dead attempt's own invocation key and never touches the refs of a live invocation, and criterion 28 compares only the refs other than the current invocation's own. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the runner's own writes to the refs it checks.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of the runner's own writes to the refs it checks, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-38 · Read-only protection and its reversal (spec review 2a-50)
+
+asked: 2026-11-24
+answer: "Protection is applied recursively to every entry under the lane's real .venv and Pi directories, whose real paths the attempt record holds; reversal adds the owner's write bit back on every entry, so no original modes need storing. A second invocation that would start an attempt on a lane whose environment a live attempt holds read-only is refused. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how the environment is made read-only and made writable again.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of how the environment is made read-only and made writable again, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-39 · Layout of the attempts directory (spec review 2a-51)
+
+asked: 2026-11-24
+answer: "Attempts live under attempts/<repository-id>/<lane-digest>/<invocation-id>/ below the attempts directory; the attempt record names the repository root and the lane worktree; prune at a runner start touches only attempts of its own repository; attempt refs carry the lane digest beside the change, so two worktrees of one repository holding the same change never collide. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where attempts of different repositories and lanes live.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of where attempts of different repositories and lanes live, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-40 · State records the model could change (spec review 2a-52)
+
+asked: 2026-11-24
+answer: "After each attempt the runner compares its attempt record, lock, saved-state index and the change's loop record with the copy it keeps in memory and stops the run on any difference; a malformed or changed lock makes the attempt count as unlocked, which is reported and not removed. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the runner's own records beside the attempt worktree.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of the runner's own records beside the attempt worktree, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-41 · Which failures change route, and the route chains (spec review 2a-53, 2a-54, 2a-55)
+
+asked: 2026-11-24
+answer: "Only a failure of the runner's own setup stops the run; a check that cannot start because of the attempt's own tree (a deleted Makefile, a broken import in the attempt worktree) is a red post-run check and falls through, as do no-work and answer-check rejections. This amends Q-27's answer for 2a-4 and 2a-17. Implement: GLM Flash, one attempt, then Sonnet 5.5 after any failure, red checks included. Repair: Codex, Codex, then Sonnet 5.5 after any two failed Codex attempts of any kind. A checksum rejection moves to the next declared route. A usage limit is recognised by a per-endpoint list of limit signatures (exit status and message patterns) declared in model-endpoints.yaml; anything else is an ordinary failure, so a misclassification costs at most one attempt. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: unstartable checks, route chains and limit detection.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of unstartable checks, route chains and limit detection, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-42 · Recovery and the pinned Pi (spec review 2a-56, 2a-58)
+
+asked: 2026-11-24
+answer: "Recovery means every runner operation on an attempt after it ends (state saving, worktree removal, prune, permission reversal, rebuild and reinstall); each reaches the real directories through the recorded paths, never through the link. An installed Pi whose version differs from the pinned one counts as missing and is refused. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what recovery means and when Pi counts as missing.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of what recovery means and when Pi counts as missing, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-43 · Evidence for PR 2 and the worktree doctrine (spec review 2a-57, 2a-59)
+
+asked: 2026-11-24
+answer: "The maintainer records the night check before PR 2 in a decisions.md entry naming the three runner invocations, each with at least one isolated attempt. A new criterion requires AGENTS.md and docs/WORKFLOW.md to carry the harness-neutral exception that attempt worktrees live detached under the state directory, not under .claude/worktrees. Options put: the orchestrator's recommendations on Opus round two (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the night check before PR 2 and where worktrees may live.
+  Intention: settle spec-review round two (Opus, 2026-11-24) before the redraft and the third, last round.
+  Today: the reviewed spec leaves this open (findings.md, round two).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of the night check before PR 2 and where worktrees may live, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
