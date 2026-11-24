@@ -12,4 +12,4 @@ role_minutes:
   merge: 10  # The source-map merger.
   sentence: 5  # The public topic author.
   topics: 10  # Each of the eleven topic researchers.
-  judge: 15  # The final reconciliation judge.
+  judge: 30  # The final reconciliation judge (maintainer, 2026-11-24: 15 timed out on run 5 of artcraft-autocraft).
