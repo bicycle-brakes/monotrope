@@ -62,18 +62,15 @@ def full_commit(root: Path, rev: str) -> str:
 
 def branch_of(root: Path, rev_arg: str | None, sha: str) -> str | None:
     """The branch name the output file follows; None for a revision that is not a branch tip."""
-    if rev_arg is None or rev_arg == "HEAD":
-        done = git(root, "symbolic-ref", "--short", "-q", "HEAD")
-        if done.returncode == 0:
-            return done.stdout.decode().strip()
-        main = git(root, "rev-parse", "--verify", "refs/heads/main")
-        return "main" if main.returncode == 0 and main.stdout.decode().strip() == sha else None
-    if rev_arg == "origin/main":
-        tip = git(root, "rev-parse", "--verify", "refs/remotes/origin/main")
-        return "main" if tip.returncode == 0 and tip.stdout.decode().strip() == sha else None
-    tip = git(root, "rev-parse", "--verify", f"refs/heads/{rev_arg}")
-    if tip.returncode == 0 and tip.stdout.decode().strip() == sha:
-        return rev_arg
+    done = git(root, "rev-parse", "--symbolic-full-name", "--verify", rev_arg or "HEAD")
+    if done.returncode != 0:
+        return None
+    ref = done.stdout.decode().strip()
+    for prefix in ("refs/heads/", "refs/remotes/origin/"):
+        if ref.startswith(prefix):
+            tip = git(root, "rev-parse", "--verify", ref)
+            if tip.returncode == 0 and tip.stdout.decode().strip() == sha:
+                return ref[len(prefix) :]
     return None
 
 

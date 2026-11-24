@@ -152,9 +152,8 @@ CALL_LINE = re.compile(r"^Stage-2 call, (?P<date>\d{4}-\d{2}-\d{2}): (?P<rest>.*
 # A column-0 line meant as a call line: anything else in that shape is a gap.
 CALL_PREFIX = re.compile(r"Stage-2 call(?:[,:]| \d)")
 MODEL_FIELD = re.compile(r"·\s+model\s+(\S+)\s+·")
-# The runner's model-id grammar is shared; a digit, hyphen or vendor path
-# distinguishes a named model from a legacy vendor-only reviewer cell.
-MODEL_NAME = re.compile(r"(?=\S*(?:\d|-[A-Za-z0-9]|/))" + MODEL_ID.pattern)
+# Vendor-only labels found in legacy releases do not identify a model.
+LEGACY_REVIEWER_NAMES = frozenset({"glm", "codex"})
 # A row id in a first cell: tokens with a digit (`F-1`, `L2-2`, `RB-G7`, `2a-1`).
 ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
 # Duplicate targets use exactly the same grammar as readable row IDs.
@@ -764,7 +763,11 @@ def attribute_rows(parsed: Parsed, *, source: AttributionSource | None = None) -
             reviewer = ""
             if len(record.cells) == len(RELEASED_COLUMNS):
                 reviewer = record.cells[ROW_COLUMNS.index("Reviewer")]
-            if block.kind == "released" and MODEL_NAME.fullmatch(reviewer):
+            if (
+                block.kind == "released"
+                and MODEL_ID.fullmatch(reviewer)
+                and reviewer.lower() not in LEGACY_REVIEWER_NAMES
+            ):
                 model: str | None = reviewer
             else:
                 answer = chosen.attribute(replace(block.identity, reviewer=reviewer))

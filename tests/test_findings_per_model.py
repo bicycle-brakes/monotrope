@@ -173,7 +173,7 @@ def test_digitless_free_swarm_model_is_attributed():
     models = {finding.id: finding.model for finding in read(text).findings}
     assert models == {"L1-1": "space-bunny-free", "L1-2": "big-pickle"}
     vendor = doc(RELEASE, lrow("L1-3", "Codex", "open"), lrow("L1-4", "reviewer", "open"))
-    assert all(finding.model is None for finding in read(vendor).findings)
+    assert [finding.model for finding in read(vendor).findings] == [None, "reviewer"]
 
 
 # --- criterion 4 ---------------------------------------------------------------------
@@ -632,7 +632,7 @@ def test_legacy_loop_vendor_matches_unique_review_loop_model():
     assert model(loop, call("review-loop", "glm-5.3-flash"), review) is None
     assert model(call("review-loop", "gpt-6.1-sol"), review) is None
     assert model(call("repair", "glm-5.3"), review) is None
-    assert model(loop, review, reviewer="Other") is None
+    assert model(loop, review, reviewer="Other") == "Other"
 
 
 def test_historical_statuses_require_dash():
@@ -643,10 +643,10 @@ def test_historical_statuses_require_dash():
     assert fr.known_status("accepted limit — documented")
 
 
-def test_detached_main_tip_uses_main_output(tmp_path):
+def test_detached_main_tip_uses_revision_output(tmp_path):
     root, sha = repo(tmp_path, {"a": "one"})
     git(root, "checkout", "--detach", "-q")
-    assert fpm.output_relative(root, None, sha) == "main.jsonl"
+    assert fpm.output_relative(root, None, sha) == f"revisions/{sha}.jsonl"
     git(root, "checkout", "-q", "-b", "other")
     later = commit(root, {"a": "two"})
     git(root, "checkout", "--detach", "-q")
@@ -912,3 +912,22 @@ def test_deep_duplicate_chain_and_cycle_resolve_without_recursion_error(tmp_path
     cycle_records = jsonl(Path(cycle_chunks[-1].strip()))
     assert cycle_records[0]["complete"] is False
     assert any(r["type"] == "gap" and "duplicate cycle" in r["reason"] for r in cycle_records)
+
+
+def test_plain_model_ids_and_legacy_vendors():
+    text = doc(RELEASE, lrow("L1-1", "mercury", "open"), lrow("L1-2", "GLM", "open"))
+    result = read(text)
+    assert not result.gaps
+    assert [f.model for f in result.findings] == ["mercury", None]
+
+
+def test_symbolic_remote_branch_reports(tmp_path, monkeypatch):
+    root, sha = repo(tmp_path, {findings_path("c1"): doc(RELEASE, lrow("L1-1", "hy3", "open"))})
+    git(root, "update-ref", "refs/remotes/origin/feat/findings-per-model", sha)
+    state = tmp_path / "state"
+    expected = state / "coding-harness/findings-per-model/branches" / (b"feat/findings-per-model".hex() + ".jsonl")
+    for rev in ("origin/feat/findings-per-model", "refs/remotes/origin/feat/findings-per-model"):
+        code, chunks = run_report(root, rev, monkeypatch, state)
+        assert code == 0
+        assert chunks[-1].strip() == str(expected)
+        assert jsonl(expected)[0]["commit"] == sha
