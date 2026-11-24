@@ -787,3 +787,123 @@ context: |
   Architecture change: none.
 
 In the context of a spec changed after its third review, facing an unreviewed rule, we decided on one fourth spec review, to achieve a checked spec before 12 h of phase 4, accepting one more Opus run — 2026-11-24
+
+## Q-38 · Ambiguity S4-1
+
+asked: 2026-11-24
+answer: "B — every model whose implement attempt left edits in the reviewed diff counts as the implementer, so each such family is limited to one seat. When the family filter then leaves fewer families than the free round needs, the round runs with the families available and the report names the shortfall. Options put: B with a reported shortfall (recommended); A, the accepted attempt's model only; C, the first route's model."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Who counts as the phase-4 implementer.
+  Intention: settle spec-review ambiguity row S4-1 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-1).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-1, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-39 · Ambiguity S4-2
+
+asked: 2026-11-24
+answer: "A — the union: any eligible reachable model on the challenger pool or on the lens substitute list may replace a failed challenger. Options put: union (recommended); intersection."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Where a failed challenger's replacement comes from.
+  Intention: settle spec-review ambiguity row S4-2 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-2).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-2, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-40 · Ambiguity S4-3
+
+asked: 2026-11-24
+answer: "B — a seat 1 the availability report shows as unreachable is treated like a terms-expired one: its first eligible reachable substitute takes the seat and the substitution is reported. Options put: substitute and report (recommended); wait for a complete roster; call it, retry once, then substitute."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: An admitted but unreachable seat 1.
+  Intention: settle spec-review ambiguity row S4-3 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-3).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-3, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-41 · Ambiguity S4-7
+
+asked: 2026-11-24
+answer: "B — the orchestrator classifies each MINOR by the nature of the defect, as spec criterion 13 and the later answer to S3-13 say; the reviewer's label does not decide. This supersedes the reviewer-label clause of S2-20. Options put: the orchestrator (recommended); the reviewer's label."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Who classifies a MINOR row.
+  Intention: settle spec-review ambiguity row S4-7 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-7).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-7, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-42 · Ambiguity S4-8
+
+asked: 2026-11-24
+answer: "B — the validator refuses `rounds: 1` while shadow mode is on, as a contradictory setting; the key takes effect in live mode only. Options put: refuse the contradiction (recommended); `rounds` wins over shadow mode."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: `rounds: 1` in shadow mode.
+  Intention: settle spec-review ambiguity row S4-8 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-8).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-8, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-43 · Ambiguity S4-9
+
+asked: 2026-11-24
+answer: "B — an out-of-lens row counts for its primary lens, as observations already do, in criterion 18's shares, unique yield and overtake comparison. Options put: primary lens (recommended); the reporting lens."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Where an out-of-lens row counts.
+  Intention: settle spec-review ambiguity row S4-9 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-9).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-9, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-44 · Ambiguity S4-11
+
+asked: 2026-11-24
+answer: "B — a deferred row belongs to the ISO week in which its change merges into main; rows of a change that never merges are dropped with it. Source row IDs are qualified with the change name (`<change>/<row id>`). Options put: merge week (recommended); triage week."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: Which week a deferred row belongs to.
+  Intention: settle spec-review ambiguity row S4-11 of round four (2026-11-24); no further review round can run.
+  Today: the spec admits more than one reading (findings.md S4-11).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of spec-review row S4-11, facing two readings with different tests, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-45 · Round-four rows without an ambiguity mark (spec review S4-4, S4-5, S4-6, S4-10)
+
+asked: 2026-11-24
+answer: "S4-4: each lens's `substitutes` list initially holds the challenger pool in its recorded order; an empty list is invalid and the validator refuses it. Free-round replacements: always the most expensive free model first, measured by the declared `anfragen_5h` (fewest requests per five hours first). S4-5: a threshold applies to the singleton share; a lens above the threshold is re-reviewed; an undefined Chao value (f2 = 0) counts as re-review. S4-6: the approving decision states trigger, comparison and threshold in a machine-readable form, and the validator compares them with the configured values. S4-10: the five hours start at the persisted waiting state; after the stop a fresh preparation is required. Options put: the orchestrator's recommendations, with the maintainer's correction to S4-4 (most expensive free model first instead of cheapest)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the remaining round-four rows.
+  Intention: settle spec-review rows S4-4, S4-5, S4-6 and S4-10 of 2026-11-24 before the final draft.
+  Today: substitutes have no initial value; deepseek-v4.1-flash is admitted until 2026-11-30; thresholds, approval form and the five-hour start are undefined.
+  Repository change: the spec text of the final draft; the central review setting.
+  Architecture change: none.
+
+In the context of the last spec-review round, facing undefined substitutes, thresholds and timers, we decided on the answers above, to achieve a complete contract for phase 4, accepting the most expensive free model first in the free round. — 2026-11-24
