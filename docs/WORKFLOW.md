@@ -1768,7 +1768,8 @@ implementation diff: bounded hunks of source and test code against the merge
 base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
 not what OpenCode Go bills. The prompt carries the implementation diff up to
-the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
+the shared bound of `REVIEW_DIFF_MAX_LINES` (4000 lines); a cut, whether by
+that bound or by the free stage's own file or total limits, is recorded in the
 round, and a round over a cut diff never counts as clean (R-12, R-15). When
 every free member fails with a rate-limit (429) or unavailability error, the
 run drops the free stage and the Flash swarm takes the round in the same
@@ -1777,7 +1778,9 @@ coding-harness-pj98); the Flash round then has its own deadline, so that call
 can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
-declaration — with the paid rounds' read-only tools and the same bounded diff.
+declaration — with the paid rounds' read-only tools. The Flash swarm and the ladder rounds receive
+the full change diff, subject to the same shared 4000-line bound, not the free
+stage's implementation-only diff.
 One deadline of `REVIEWER_MINUTES` covers the round's members and every
 replacement (R-8).
 

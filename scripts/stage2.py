@@ -531,7 +531,7 @@ FREE_DIFF_MAX_TOTAL = 2000
 # (`CallFailed`) instead of ending in a summary it answers on. The pinned Pi 1.5.0 evidence is
 # `tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction`; the historical
 # `docs/research/2026-11-03-pi-context-overflow.md` measured Pi 1.2.0.
-REVIEW_DIFF_MAX_LINES = 2000
+REVIEW_DIFF_MAX_LINES = 4000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -3103,8 +3103,8 @@ def bounded_review_diff(diff: str) -> tuple[str, str | None]:
 
     The caller writes the second half into the round record: a clean answer over a cut diff is not a
     clean answer about the change, and the record must say which of the two it was. The free round is
-    bounded too (R-12 of the review-swarm review): it carries the same diff, and an uncapped prompt
-    would read as a limit that is none.
+    bounded too (R-12 of the review-swarm review): it carries its own selected diff (the implementation
+    diff, not the full change diff), and an uncapped prompt would read as a limit that is none.
     """
     # Split on "\n" only, as git counts: `splitlines()` also splits on CR and form feed, which inflates the
     # count and rewrites the kept part's line ends (O191-4).
