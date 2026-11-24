@@ -225,3 +225,63 @@ context: |
   Architecture change: none beyond Q-5.
 
 In the context of the research bookkeeping, facing ninety-two handoff items, we decided on the kit, permission and neighbour answers above, to achieve a focused spec, accepting tmux as a kit prerequisite. — 2026-11-24
+
+## Q-8 · What jobs.py starts and how it uses tmux (spec review S-1, S-2, S-3, S-6)
+
+asked: 2026-11-24
+answer: "A — `jobs.py start` runs any command (harness-independent, Q-1); the job record notes whether it is a runner verb. Jobs run in an own tmux server `coding-harness` (`tmux -L coding-harness`), started detached when absent, so a launch works without an open tmux and survives the end of the caller's process tree and of the caller's own tmux sessions. The launch is refused only when the tmux binary is missing. jobs.py passes the caller's working directory, PATH, virtual environment, XDG_STATE_HOME and HARNESS_VERIFY_* values explicitly. Options put: any command on an own tmux server (recommended); runner commands only."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the command and the tmux use of a job.
+  Intention: settle spec-review rows S-1, S-2, S-3 and S-6 of 2026-11-24.
+  Today: a tmux window inherits the tmux server's environment and start directory.
+  Repository change: scripts/jobs.py start.
+  Architecture change: an own tmux server for jobs.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-9 · Records, verify slot and display (spec review S-4, S-5, S-9, S-12)
+
+asked: 2026-11-24
+answer: "A — job records live in `$XDG_STATE_HOME/coding-harness/jobs/`, one per job; jobs.py does not import scripts/stage2.py. A job never inherits a held verify admission; it acquires its own. run_report reads the job records and deduplicates against its process recognition by process id. Finished records are kept 14 days; `jobs.py list` shows running jobs and those of the last 24 hours, `--all` shows all. Options put: own folder, own slot, 14 days (recommended); beside the loop records under coding-harness/stage2/. Refines Q-4."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the job records.
+  Intention: settle spec-review rows S-4, S-5, S-9 and S-12 of 2026-11-24.
+  Today: Q-4 said both 'beside the loop records' and '$XDG_STATE_HOME/coding-harness/'.
+  Repository change: record folder, retention, run_report reading.
+  Architecture change: none.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-10 · Stopping a job and its end record (spec review S-7, S-8)
+
+asked: 2026-11-24
+answer: "A — `jobs.py stop` ends the job's whole process tree, including children in their own sessions (through recorded process groups), and so frees its verify slot. A small wrapper in the window writes the end record: the exit code, or 'signal N' for a signal death. If the wrapper dies as well (tmux killed, reboot), `jobs.py list` marks the job 'lost' once its process id is gone without an end record. Options put: whole tree, wrapper, 'lost' (recommended); close the window only."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: stop and end of a job.
+  Intention: settle spec-review rows S-7 and S-8 of 2026-11-24.
+  Today: stage2's timed launches use start_new_session; closing a window leaves such children running.
+  Repository change: jobs.py stop and the wrapper.
+  Architecture change: none.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-11 · The rules the ADR changes, and when jobs.py is required (spec review S-10, S-11)
+
+asked: 2026-11-24
+answer: "A — the ADR quotes the exact non-goal sentences of night-heartbeat and night-stall-guard and exempts only detached runner jobs from them; a scheduler, a daemon and automatic restarts stay excluded. jobs.py is the required route for every runner verb that runs a full make verify; the harnesses' background mode stays allowed for short commands. Options put: quote the sentences, required for verify-bearing jobs (recommended); quote the sentences, jobs.py only offered. Refines Q-6."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the doctrine change.
+  Intention: settle spec-review rows S-10 and S-11 of 2026-11-24.
+  Today: night-heartbeat excludes 'a new scheduler, daemon, … automatic restart'; night-stall-guard excludes 'a scheduler, daemon, headless heartbeat architecture, automatic restart'.
+  Repository change: the ADR text; the AGENTS.md background-mode bullet.
+  Architecture change: as Q-5.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
