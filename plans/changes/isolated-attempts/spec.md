@@ -40,13 +40,13 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* The direct entry omits a lifecycle operation or starts a model.
    *Basis:* `decisions.md#Q-16`, `decisions.md#Q-19`
 
-3. When an isolated attempt starts, it receives a detached worktree at its pinned commit: the clean baseline for the first attempt, the saved failed state for a fall-through, or the clean baseline after a checksum rejection.
+3. When an isolated attempt starts, it receives a detached worktree at its pinned commit: the lane HEAD for the first attempt, the saved failed state for a fall-through, or the clean baseline after a checksum rejection.
    *Refuted by:* The attempt uses the lane checkout or a different base.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-10`, `decisions.md#Q-17`
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-10`, `decisions.md#Q-17`, `decisions.md#Q-24`
 
-4. When an isolated attempt changes its own files, the lane and subsequent runner prompt inputs remain unchanged until an accepted result is applied.
-   *Refuted by:* A failed attempt changes the lane or a later prompt input.
-   *Basis:* `decisions.md#Q-2`
+4. When an isolated attempt ends, the runner checks that the lane’s tracked and untracked files are unchanged except for runner-owned records, and rejects the attempt if they changed.
+   *Refuted by:* An attempt changes a lane file outside runner-owned records and is accepted, or the change is not detected.
+   *Basis:* `decisions.md#Q-2`, `decisions.md#Q-23`, `decisions.md#Q-24`
 
 5. When an isolated attempt is created, its worktree is located beneath the harness-neutral runner state directory.
    *Refuted by:* An attempt is created under the lane or a harness-specific directory.
@@ -56,9 +56,9 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* An attempt is treated as a lane or contributes a record key.
    *Basis:* `decisions.md#Q-11`
 
-7. When the runner starts, it removes attempt worktrees belonging to invocations whose recorded process no longer runs, and preserves those whose process still runs; each invocation has its own identifier and process-id lock file.
-   *Refuted by:* A dead invocation’s worktree remains or a live invocation’s worktree is pruned.
-   *Basis:* `decisions.md#Q-11`, `decisions.md#Q-19`
+7. When any harness creates an attempt, its invocation receives an identifier and a process-id lock file; pruning removes worktrees whose recorded process no longer runs, preserves live ones, and list and prune report worktrees without a lock without removing them automatically.
+   *Refuted by:* A harness creates an attempt without identity and lock, a dead invocation remains, a live or unlocked worktree is pruned, or an unlocked worktree is not reported.
+   *Basis:* `decisions.md#Q-11`, `decisions.md#Q-19`, `decisions.md#Q-22`
 
 8. When an isolated attempt needs linked tools and the lane lacks its Python environment or pinned Pi installation, the runner refuses before the model call and names the setup remedy; unisolated attempts do not acquire this requirement.
    *Refuted by:* A model starts without a dependency or the refusal omits its remedy.
@@ -116,13 +116,21 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* The old sole-entry or unconditional failed-call stop rule remains.
    *Basis:* `decisions.md#Q-8`, `decisions.md#Q-16`, `decisions.md#Q-19`
 
-22. When verification and held-path put-back run for an isolated attempt, they operate in the attempt worktree; runner-owned findings, time records and row marks are written in the lane after landing.
-   *Refuted by:* A check runs against the lane or a runner record is written in the attempt.
-   *Basis:* `decisions.md#Q-20`
+22. When verification and held-path put-back run for an isolated attempt, they operate in the attempt worktree; the runner writes its audit line in the lane only after the attempt worktree exists, and writes a failed attempt’s block and switch reason immediately after that attempt.
+   *Refuted by:* A check runs against the lane, an audit line precedes creation, or a failed attempt’s block or switch reason is delayed or missing.
+   *Basis:* `decisions.md#Q-20`, `decisions.md#Q-24`
+
+23. When the lane has uncommitted or untracked changes other than runner-owned records, the runner refuses to start an attempt.
+   *Refuted by:* An attempt starts with such changes present.
+   *Basis:* `decisions.md#Q-24`
+
+24. When runner-owned records are written in the lane, they travel in the next landing commit or the orchestrator’s records commit.
+   *Refuted by:* Those records are omitted from both commits.
+   *Basis:* `decisions.md#Q-20`, `decisions.md#Q-24`
 
 ## Non-goals
 
-Network isolation, blocking foreign reads, containers and micro-VMs are later work. Explore, the research swarm, spec-review and review-loop remain outside the lifecycle; their routing is unchanged. The second rollout waits for one night of first-stage use.
+Network isolation, blocking foreign reads, containers and micro-VMs are later work. The lane remains reachable through parents of linked environments until the container layer; the lane check detects changes rather than preventing them. Explore, the research swarm, spec-review and review-loop remain outside the lifecycle; their routing is unchanged. The second rollout waits for one night of first-stage use.
 
 ## Protected areas
 

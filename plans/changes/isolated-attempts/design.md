@@ -32,7 +32,7 @@ The runner passes its module and attempt context to `scripts/stage2_attempts.py`
 
 ## Data model
 
-Attempt worktrees live under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, named with invocation and attempt identity, with a process-id lock for orphan pruning. Failed states are Git refs under `refs/stage2/attempts/<change>/`; post-merge cleanup owns deletion. The lane's Python environment and Pi are permission-protected and both checksummed before and after each attempt; tampering is detected rather than prevented. A mismatch rebuilds Python and reinstalls Pi, and an ineffective restoration stops the run. Findings record route switches and reasons.
+Attempt worktrees live under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, named with invocation and attempt identity, with an invocation identifier and process-id lock for every harness. Pruning reports unlocked worktrees without removing them and removes only those with a recorded dead process. Failed states are Git refs under `refs/stage2/attempts/<change>/`; post-merge cleanup owns deletion. The lane's Python environment and Pi are permission-protected and both checksummed before and after each attempt; tampering is detected rather than prevented. A mismatch rebuilds Python and reinstalls Pi, and an ineffective restoration stops the run. The runner checks tracked and untracked lane files after each attempt, excluding its own records; link parents can still reach the lane until a container layer exists. The base is lane HEAD, and the runner refuses other dirty or untracked lane content. Findings record failures and route switches immediately; runner records join the next landing or an orchestrator records commit.
 
 ## ADR draft
 
