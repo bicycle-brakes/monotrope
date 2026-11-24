@@ -704,8 +704,8 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `parse_status` | A legacy status such as `rejected — same as L1-1 / L1-404` records only `L1-1` as a target. If `L1-404` is missing, the report produces no gap and can mark its output complete despite the unresolved reference. [Criterion 16] | Codex | open | — |
-| F6-2 | MINOR | SPEC | base | `tests/` | No test checks that both governing documents require a morning table and cutoff for main and every qualifying unmerged branch. Removing either instruction would leave the acceptance criterion without a failing test. [Criterion 17] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `parse_status` | A legacy status such as `rejected — same as L1-1 / L1-404` records only `L1-1` as a target. If `L1-404` is missing, the report produces no gap and can mark its output complete despite the unresolved reference. [Criterion 16] | Codex | taken — maintainer 2026-11-24, structural (extends the full-match status reader of 2026-11-24): in a legacy status every row ID of the target list after the marker, separated by ' / ', ', ' or ' and ', is a target and must resolve, otherwise a gap; a further row ID in the text after the list is a gap | — |
+| F6-2 | MINOR | SPEC | base | `tests/` | No test checks that both governing documents require a morning table and cutoff for main and every qualifying unmerged branch. Removing either instruction would leave the acceptance criterion without a failing test. [Criterion 17] | Codex | taken — criterion 17: a test pins the morning table and cutoff for main and every qualifying unmerged branch in both governing documents | — |
 
 Phase 6 verdict: codex 01a20f30-22de-7902-998d-72ca8dc6dad1, 2026-11-24
 Reviewer session: codex 01a20f30-22de-7902-998d-72ca8dc6dad1 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
