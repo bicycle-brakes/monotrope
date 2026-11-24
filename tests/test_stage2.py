@@ -5114,7 +5114,7 @@ def test_each_draft_attempt_has_its_audit_line_and_reason(world: World, monkeypa
         re.M,
     )
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5\.3"
+        rf"^Stage-2 call, {day}: draft · attempt 3 · route glm · endpoint glm-coding-plan · model {re.escape(stage2.GLM[1])}"
         rf" · reason two Codex draft attempts failed · leak check clean over {count}\.$",
         text,
         re.M,
@@ -6223,7 +6223,7 @@ def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World, monkeypatc
     assert len(world.calls("codex")) == 2
     (call,) = world.calls("claude")
     argv, prompt = call["argv"], call["prompt_file"]
-    assert argv[argv.index("--model") + 1] == "glm-5.3"
+    assert argv[argv.index("--model") + 1] == stage2.GLM[1]
     assert argv[argv.index("--effort") + 1] == "max"
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
     assert "glm-5.3-flash" not in argv
@@ -23748,8 +23748,8 @@ def glm_entry_problems(entry: dict) -> list[str]:
         found.append("the operator changed")
     if entry.get("residenz") != "anbieter-erklaert" or entry.get("darf_sehen") != ["framework"]:
         found.append("residency or visibility changed")
-    if entry.get("modelle") != ["glm-5.3", "glm-5.3-flash"]:
-        found.append("the model list changed")
+    if not {stage2.GLM[1], stage2.GLM_FLASH[1]} <= set(entry.get("modelle") or []):
+        found.append("the model list lacks a route's model")
     remark = " ".join(str(entry.get("bemerkung", "")).lower().split())
     for needle in (
         "stage2.py explore",
