@@ -97,7 +97,10 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
-from stage2_free import MODEL_ID
+# A catalog id the runner may select: third-party catalog text never carries a `|` or other markup into
+# the record's cells (DL-B-7 of the loop's deep review). Defined here, not in stage2_free.py, because this
+# reader travels with the kit and the runner modules do not; stage2_free.py imports it from here.
+MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
 
 # The runner's own row shapes (scripts/stage2.py writes them; the mirror is
 # pinned by tests/test_findings_per_model.py::test_row_shapes_match_the_runner).
