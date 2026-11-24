@@ -21695,6 +21695,16 @@ def test_repair_where_paths_resolve_with_shared_rules(world: World) -> None:
     assert directories == base | {"scripts/", "newdir/"}
 
 
+def test_repair_scope_directory_selectors_grant_descendants(world: World) -> None:
+    """A selector after a directory slash preserves the directory grant."""
+    seed_tests(world)
+    for selector in (":12", ":12-20", "#L12", "#L12-L20"):
+        for directory in ("scripts", "newdir"):
+            scope = stage2.repair_scope([f"`{directory}/{selector}`"], "demo", world.root)
+            assert stage2.within_scope(Path(f"{directory}/new.py"), scope), (directory, selector, scope)
+            assert not stage2.within_scope(Path(f"{directory}extra/new.py"), scope)
+
+
 def test_repair_scope_reads_cells_through_the_shared_classifier(world: World) -> None:
     """L2-4/L2-7/L2-12. Planted fault: the scope has a Where grammar of its own that drifts from the classifier."""
     seed_tests(world)

@@ -1017,7 +1017,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10750 | A taken Where cell containing `scripts/:12` grants no directory scope, although removing the line selector leaves `scripts/`. A repair that creates `scripts/new.py` is therefore refused even though the named directory grants its descendants. The same happens with an untracked directory such as `newdir/:12`. [Criterion 8] | Codex | taken — maintainer 2026-11-24: one more repair and re-check; a directory grant keeps its descendants after the line selector is removed (scripts/:12 grants scripts/) | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10750 | A taken Where cell containing `scripts/:12` grants no directory scope, although removing the line selector leaves `scripts/`. A repair that creates `scripts/new.py` is therefore refused even though the named directory grants its descendants. The same happens with an untracked directory such as `newdir/:12`. [Criterion 8] | Codex | fixed — tests/test_stage2.py::test_repair_scope_directory_selectors_grant_descendants | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1025,3 +1025,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20df9-3abe-7fa2-9f67-2a7d2232d439, 2026-11-24
 Reviewer session: codex 01a20df9-3abe-7fa2-9f67-2a7d2232d439 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5652 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

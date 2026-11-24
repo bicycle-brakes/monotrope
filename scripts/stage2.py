@@ -10750,7 +10750,7 @@ def repair_scope_locations(
     folder = f"plans/changes/{change}/"
     grants: list[tuple[str, bool]] = []
     for token, path in where_named_tokens(cell, root, tracking):
-        if token.rstrip(_WHERE_TRAILING).endswith("/"):
+        if _WHERE_LOCATION.sub("", token.rstrip(_WHERE_TRAILING)).endswith("/"):
             grants.append((path.rstrip("/") + "/", True))
         elif path.endswith("/"):
             continue  # a bare word naming a tracked directory is prose, not a grant
