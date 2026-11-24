@@ -1055,7 +1055,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | MAINT | base | scripts/stage2.py:11955, scripts/stage2.py:12339 | If the pre-call file inventory fails temporarily, the runner still starts the repair. A new out-of-scope file from that attempt is neither measured nor removed; the next route includes it in its baseline and can commit it without a scope refusal. The runner must stop or restore before retrying when it cannot establish the inventory. | Codex | open | — |
+| P6-1 | MAJOR | MAINT | base | scripts/stage2.py:11955, scripts/stage2.py:12339 | If the pre-call file inventory fails temporarily, the runner still starts the repair. A new out-of-scope file from that attempt is neither measured nor removed; the next route includes it in its baseline and can commit it without a scope refusal. The runner must stop or restore before retrying when it cannot establish the inventory. | Codex | taken — maintainer 2026-11-24, structural (second finding of this mechanism after R1): fail closed — whenever the runner cannot establish the file inventory, before or after a call, it stops the whole run without a further route and names the reason; no attempt or retry starts on an unmeasured baseline | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
