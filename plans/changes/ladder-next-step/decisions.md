@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-21
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -131,3 +131,33 @@ that last repair" is the existing phase-6 path (the full `make verify` before
 the reviewer and the reviewer's whole-diff read); no extra check is added
 ([DETAIL], decided by the orchestrator: the rule's own text names no other
 check).
+
+## Q-6 · The next-step instruction as a JSON file
+
+asked: 2026-11-24
+answer: "B — besides the standard-output line, the runner writes the current next-step instruction as a JSON file beside the loop record, `$XDG_STATE_HOME/coding-harness/stage2/<change>@<digest>/next.json`, atomically (temporary file, then replace) and validated against a declared schema: schema version, change, verb (`review`, `repair` or `hand`), the row ids for `hand`, the producing verb and the UTC time it was written. It is never written into loop.md or any other Markdown file; consumers such as `scripts/lanes.py advance` (bead coding-harness-z40g) read only this file. Maintainer rule of 2026-11-24: code before prose; Markdown only where it cannot be avoided. Options put: keep the line in loop.md behind one reader function (recommended at the time); the JSON file now (chosen); wait for bead coding-harness-5ane.11."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where the next-step instruction is kept.
+  Intention: make the instruction machine state instead of Markdown, following the state-first direction of bead coding-harness-5ane.11 (draft ADR in PR #445).
+  Today: the instruction exists only as a standard-output line; advance-verb Q-11 had planned a line in loop.md.
+  Repository change: review-loop (and the hand-step case of advance-verb Q-12) write next.json in the runner state directory; a schema file and its validator.
+  Architecture change: a new machine-state file in the runner state directory; no ADR in this pull request.
+
+In the context of the next-step instruction, facing Markdown parsed back as control state, we decided on a schema-validated JSON file beside the loop record, to achieve state that code reads without patterns, accepting a fourth spec review — 2026-11-24
+
+## Q-7 · Fourth spec-review round
+
+asked: 2026-11-24
+answer: "authorized — the maintainer answered yes on 2026-11-24: one fourth spec-review round (Opus, phase 2a) of the draft c0c8ea95, because Q-6 changes the spec after the third round. Options put: a fourth review for both lanes (recommended); re-slice the JSON instruction into its own change."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the changed spec is reviewed again.
+  Intention: the runner admits a spec change after round three only with this authorization.
+  Today: AGENTS.md phase 2a ends spec review after round three.
+  Repository change: none.
+  Architecture change: none.
+
+In the context of a spec changed after its third review, facing an unreviewed contract, we decided on one fourth spec review, to achieve a checked spec before phase 4, accepting one more Opus run — 2026-11-24
