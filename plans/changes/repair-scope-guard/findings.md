@@ -1087,3 +1087,19 @@ Reviewer session: codex 01a20f3f-c1af-7dd1-b331-5650db2abf0f — a fresh session
 Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5713 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5727 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10812 | A Where cell naming `src/newdir/` permits a new file or symlink at `src/newdir` itself. The directory grant should cover descendants only, so that path must be refused unless separately named. [Criteria 3 and 8] | Codex | open | — |
+| P6-2 | BLOCKER | MAINT | base | docs/WORKFLOW.md:2100; scripts/stage2.py:6793 | [DIVERGENT] The workflow says a configured `core.excludesFile` is outside the frozen ignore rules, while the implementation snapshots and applies it. These give opposite answers about which rules judge a repair’s new files. | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: `STAGE2_PLANT_FAULT=1` removes `docs/journal/` from the runner’s held-path list, allowing journal changes past that protection — catches without switch: yes; if the implementation itself lacks the prefix, the implement and repair assertions detect the missing refusal or retained change.
+
+Phase 6 verdict: codex 01a20fb4-a864-7913-8d33-16a031216504, 2026-11-24
+Reviewer session: codex 01a20fb4-a864-7913-8d33-16a031216504 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
