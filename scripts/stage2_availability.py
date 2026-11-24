@@ -32,7 +32,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 from collections import OrderedDict
@@ -530,8 +529,7 @@ def probe_go(
         raise stage2_go.DestinationRefused(verdict.problem)
     if verdict.notice:
         audit.append(f"address notice · {verdict.notice}")
-        # This site's announcement has always gone to stdout; the boundary keeps that stream.
-        stage2_go.announce_console_notice(verdict.notice, stream=sys.stdout)
+        print(f"Address notice: {verdict.notice}")
     destination = verdict.definition
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
         scratch = Path(tmp)
@@ -1020,20 +1018,11 @@ def _free_text(values: list[str]) -> str:
 
 
 def capture_preparation_warnings(prepare):
-    """Scope dispatch warning evidence to this preparation, shared by its receipt.
-
-    The preparation's console announcements of address notices are held until
-    its report is known: the report shows each notice once in its existing
-    lines and the held announcements of the same notice are suppressed, a
-    notice the report does not show is flushed with its first site's wording
-    and stream, and an early failure flushes every held announcement — an
-    assessment-only notice never announced at a console site prints on neither
-    path.
-    """
+    """Scope dispatch warning evidence to this preparation, shared by its receipt."""
 
     @functools.wraps(prepare)
     def wrapped(root, change, runner, *args, **kwargs):
-        with runner.capture_terms_warnings(), stage2_go.hold_console_notices():
+        with runner.capture_terms_warnings():
             return prepare(root, change, runner, *args, **kwargs)
 
     return wrapped
@@ -1261,9 +1250,6 @@ def prepare_research(
         block.get("intelligence_slugs") or {},
     )
     print(research_report(state))
-    # The report is the notice's one console line: held announcements it shows
-    # stay suppressed, held ones it does not show print now, once.
-    stage2_go.flush_held_console_notices((state.get("catalog") or {}).get("address_notices") or [])
     missing = [(label, number) for label, numbers in state["unfilled"].items() for number in numbers]
     if missing:
         names = ", ".join(f"{label} seat {number}" for label, number in missing)
@@ -1384,9 +1370,7 @@ def report(state: dict) -> str:
     # A receipt of an older runner holds no warning list; its absence is no
     # statement about current admission, which the round rechecks live.
     lines.extend(f"Terms warning: {warning}" for warning in available.get("terms_warnings", []))
-    # The section keeps each notice once, whatever the notices list carried.
-    notices = dict.fromkeys((state["free"] or {}).get("notices") or [])
-    lines.extend(f"Address notice: {notice}" for notice in notices)
+    lines.extend(f"Address notice: {notice}" for notice in (state["free"] or {}).get("notices") or [])
     lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
     # Escape untrusted controls per line, preserving only the runner's own separators.
     return "\n".join(
@@ -1523,9 +1507,6 @@ def prepare(root: Path, change: str, runner) -> None:
         **terms_evidence,
     }
     print(report(state))
-    # The report is the notice's one console line: held announcements it shows
-    # stay suppressed, held ones it does not show print now, once.
-    stage2_go.flush_held_console_notices((state["free"] or {}).get("notices") or [])
     for reason in state["availability"]["terms_skipped"]:
         print(f"Paid admission skipped: {reason}")
     if not runner.stages_of(state):

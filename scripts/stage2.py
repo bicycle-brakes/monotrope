@@ -2329,8 +2329,7 @@ def dispatch_go(
     verdict = stage2_go.assess(policy, model, destination)
     if verdict.notice:
         retain_address_notices([verdict.notice])
-        # This site's announcement has always gone to stdout; the boundary keeps that stream.
-        stage2_go.announce_console_notice(verdict.notice, stream=sys.stdout)
+        print(f"Address notice: {verdict.notice}")
     if verdict.problem:
         raise Refused(verdict.problem)
     entry = endpoint_entry(root)
@@ -2913,7 +2912,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
             listing = dropped_notice({model: ", ".join(fields) for model, fields in sorted(stripped.items())})
             print(f"review-loop: catalog fields not activated: {listing}", file=sys.stderr)
         for notice in notices:
-            stage2_go.announce_console_notice(notice, stream=sys.stderr)
+            print(f"Address notice: {notice}", file=sys.stderr)
         fresh = {
             str(model["id"])
             for model in store.get(rule["provider"], {}).get("models", [])
@@ -3347,7 +3346,7 @@ def run_reviewer(
         _dropped, notices = activate_overlay(agent, store, policy)
         retain_address_notices(notices)
         for notice in notices:
-            stage2_go.announce_console_notice(notice, stream=sys.stderr)
+            print(f"Address notice: {notice}", file=sys.stderr)
         home = scratch / "home"
         home.mkdir()
         check_overlay(agent, home, model, policy=policy)
@@ -13318,9 +13317,6 @@ def _review_round(
     audited = 0
     notes: list[str] = []
     malformed_blocks: list[str] = []
-    # The notes that are address notices in the round-note wording: their one
-    # console line goes out at the notice's first site, here or earlier.
-    address_notes: set[str] = set()
     try:
         key = reviewer_key()
         if not state["consumed"]:
@@ -13328,13 +13324,11 @@ def _review_round(
                 notes.append(f"Notice: {state['free']['skipped']}.")
             if state["free"].get("dropped"):
                 notes.append(f"Notice: free ids dropped: {dropped_notice(state['free']['dropped'])}.")
-            # The section keeps each notice once, whatever the notices list carried.
-            for notice in dict.fromkeys(state["free"].get("notices") or []):
+            for notice in state["free"].get("notices") or []:
                 # A same-host path move observed at discovery stays in the
                 # round's notes: the move is evidence, not a transient line.
                 notes.append(f"Notice: {notice}.")
-                address_notes.add(notes[-1])
-                stage2_go.announce_console_notice(notice, stream=sys.stderr, prefix="review-loop: Notice: ", suffix=".")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
             skipped = skipped_models(root)
             if skipped:
                 notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
@@ -13352,14 +13346,7 @@ def _review_round(
             if missing:
                 notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
             for note in notes:
-                if note in address_notes:
-                    # The notice's one console line went out at its first site; a
-                    # note echo of the same notice adds no second one.
-                    stage2_go.announce_console_notice(
-                        note[len("Notice: ") : -1], stream=sys.stderr, prefix="review-loop: Notice: ", suffix="."
-                    )
-                else:
-                    print(f"review-loop: {note}", file=sys.stderr)
+                print(f"review-loop: {note}", file=sys.stderr)
         # Terms are evaluated on every round, fresh, legacy or resumed ([DETAIL],
         # 2026-10-26): review_loop prints advance notice before admission checks.
         # Keep current warnings in the round notes too, so the record and the
@@ -13830,12 +13817,7 @@ def main(argv: list[str] | None = None) -> int:
         for signum in TERMINATING_SIGNALS:
             previous[signum] = signal.signal(signum, _terminate)
     try:
-        # One runner call, one console occurrence of each address notice: the
-        # boundary is open for the whole invocation, nested availability and
-        # research work included, and closed on every exit, so a later
-        # invocation in the same process starts without inherited suppression.
-        with stage2_go.console_notice_scope():
-            return _run(args)
+        return _run(args)
     except (KeyboardInterrupt, Terminated) as error:
         killed = kill_live()
         what = "terminated" if isinstance(error, Terminated) else "interrupted"
