@@ -359,3 +359,48 @@ context: |
   Architecture change: none.
 
 In the context of the change's scope, facing a reference to an unbuilt record and a stale routine, we decided to drop the job record and rewrite the night routine here, to achieve documentation that matches Q-11, accepting a larger documentation diff.  — 2026-11-24
+
+## Q-17 · Ambiguity S-29
+
+asked: 2026-11-24
+answer: "B — the driver tries a lane's lock without blocking; a lane another advance call holds is skipped as nothing to do for this call (exit 0 for that lane), with the reason on standard error. Options put: skip without blocking (recommended); block until free; refuse the call with exit 2."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: a lane lock held by another call.
+  Intention: settle spec-review round three (2026-11-24, fallback reviewer deepseek-v4.1-flash) before the final draft.
+  Today: criterion 25 demands a per-lane lock but no contention rule.
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of a lane lock held by another call, facing readings with different exit codes or tests, we decided as answered above, to achieve one testable reading, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-18 · Ambiguity S-30
+
+asked: 2026-11-24
+answer: "B — a lane that neither advanced nor had nothing to do is a stop and sets exit 1: a runner step that exits 2 stops its lane for this call without a park mark; an invalid worktree path stops its lane with a park mark. Options put: both count as stops, exit 1 (recommended); refusal exit 0, invalid worktree exit 0 as parked."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: exit codes for a refused step and an invalid worktree.
+  Intention: settle spec-review round three (2026-11-24, fallback reviewer deepseek-v4.1-flash) before the final draft.
+  Today: criterion 17 knows advanced, nothing to do and stopped only.
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of exit codes for a refused step and an invalid worktree, facing readings with different exit codes or tests, we decided as answered above, to achieve one testable reading, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-19 · Criterion 19 (spec review S-31)
+
+asked: 2026-11-24
+answer: "Criterion 19 becomes a statement of scope in the Non-goals: the driver reads only lanes.yaml and the loop record. The test tests/test_lanes.py::test_remote_ignored leaves the ledger. Options put: statement of scope (recommended); keep it as a criterion."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the untestable remote-data criterion.
+  Intention: settle spec-review round three (2026-11-24, fallback reviewer deepseek-v4.1-flash) before the final draft.
+  Today: criterion 19 has no input that can refute it.
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of the untestable remote-data criterion, facing readings with different exit codes or tests, we decided as answered above, to achieve one testable reading, accepting that the final draft is not reviewed again. — 2026-11-24
