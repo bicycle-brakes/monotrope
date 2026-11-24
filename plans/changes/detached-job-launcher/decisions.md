@@ -285,3 +285,48 @@ context: |
   Architecture change: as Q-5.
 
 In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-12 · Runner verbs and verify jobs (spec review S-13)
+
+asked: 2026-11-24
+answer: "A — a runner verb is a command whose argv invokes `scripts/stage2.py` with a known verb, as run_report.py recognises it. AC 9 becomes a statement of scope, not a criterion. AC 15 covers stage2 verbs that run a full `make verify` and a bare `make verify` alike. Options put: stage2.py with a known verb (recommended); jobs.py start itself as the runner verb."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what a runner verb is.
+  Intention: settle spec-review rows S-13 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: the term is undefined; four criteria depend on it.
+  Repository change: the job record's kind field and AC 15's check.
+  Architecture change: none.
+
+In the context of what a runner verb is, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
+
+## Q-13 · Stop, wrapper and process IDs (spec review S-14, S-15)
+
+asked: 2026-11-24
+answer: "B — stop ends the started command's process tree, descendants in separate sessions included; the wrapper is spared, writes `signal 15` as the end record and then exits. The record holds two named fields: the started command's PID (for de-duplication against process recognition) and the wrapper's PID (for the liveness test), plus the recorded process group. Options put: spare the wrapper, two PID fields (recommended); end the wrapper too."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: stopping a job and naming its processes.
+  Intention: settle spec-review rows S-14, S-15 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: AC 3 and AC 5 conflict for a stopped job; AC 4 names one unspecified PID.
+  Repository change: jobs.py stop and the record format.
+  Architecture change: none.
+
+In the context of stopping a job and naming its processes, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
+
+## Q-14 · Lost jobs and the inherited environment (spec review S-16, S-17)
+
+asked: 2026-11-24
+answer: "A — lost is a state of its own: plain `jobs.py list` shows a lost job until its record is pruned, 14 days after its start. The job receives `VIRTUAL_ENV` and the caller's PATH prefix; all four `HARNESS_VERIFY` admission values (LOCK_HELD, LOCK_TOKEN, ADMISSION_ID, ADMISSION_WAIT) are dropped. Options put: lost shown until pruned, all admission values dropped (recommended); lost hidden after 24 hours, lock pair only dropped."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: lost jobs and the job's environment.
+  Intention: settle spec-review rows S-16, S-17 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: AC 6 and AC 17 disagree on a lost job; AC 16 names no variables.
+  Repository change: jobs.py list and the environment the wrapper passes on.
+  Architecture change: none.
+
+In the context of lost jobs and the job's environment, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
