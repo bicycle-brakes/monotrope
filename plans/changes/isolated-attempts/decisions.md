@@ -441,3 +441,48 @@ context: |
   Architecture change: none.
 
 In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-22 · Foreign harnesses and prune (spec review 2a-15)
+
+asked: 2026-11-24
+answer: "A — the invocation id and the lock file are part of `create` for every harness, not only the runner. Prune removes only attempt worktrees whose recorded process no longer runs; a worktree without a lock file is reported by list and prune and never removed automatically. Options put: lock file part of create, unlocked worktrees reported only (recommended); prune everything without a live process."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what prune may remove.
+  Intention: settle spec-review rows 2a-15 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: criterion 7 gives only runner invocations an id and a lock file.
+  Repository change: the create and prune steps of the attempt module.
+  Architecture change: none.
+
+In the context of what prune may remove, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
+
+## Q-23 · The lane behind the environment link (spec review 2a-16)
+
+asked: 2026-11-24
+answer: "A — reaching the lane through the parent of the linked `.venv` or Pi stays possible until the container layer the Non-goals defer; the spec names it as a limit. In addition the runner checks after every attempt that the lane's tracked and untracked files are unchanged apart from its own records, and rejects the attempt otherwise, in line with Q-21 (detect, not prevent). Options put: named limit plus an after-attempt lane check (recommended); per-entry links, copy or read-only bind."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the lane reachable through the environment link.
+  Intention: settle spec-review rows 2a-16 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: `.venv` and the installed Pi are symlinked from the attempt worktree.
+  Repository change: an after-attempt lane check in the runner.
+  Architecture change: none.
+
+In the context of the lane reachable through the environment link, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
+
+## Q-24 · Records of a failed attempt and an unclean lane (spec review 2a-17, 2a-18)
+
+asked: 2026-11-24
+answer: "A — a failed attempt's block and the route-switch reason are written to the lane's findings.md right after the attempt; runner-owned records are exempt from 'the lane stays unchanged' and travel in the next landing commit or the orchestrator's records commit. The pinned base is the lane HEAD: the runner refuses to start an attempt when the lane has uncommitted or untracked changes other than its own records, and writes its audit line only after the attempt worktree exists. Options put: immediate runner records, refuse a dirty lane (recommended); write nothing before landing; commit the lane's bytes as the base."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: runner records and the attempt's base.
+  Intention: settle spec-review rows 2a-17, 2a-18 of 2026-11-24 (fallback reviewer deepseek-v4.1-flash).
+  Today: the audit line is written before the model starts; a lane may hold uncommitted edits.
+  Repository change: findings writes and a dirty-lane refusal in the runner.
+  Architecture change: none.
+
+In the context of runner records and the attempt's base, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
