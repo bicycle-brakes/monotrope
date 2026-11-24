@@ -242,7 +242,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MAJOR | SPEC | base | prompts/06-review.md; tests/test_stage2.py | The phase-6 verdict prompt does not tell the reviewer `Answer in English.`, so reviewers can continue to return German findings without receiving the requested instruction. The change also adds no test that would fail if the instruction were missing. [Criterion 1; Definition of Done] | Codex | open | — |
+| R-1 | MAJOR | SPEC | base | prompts/06-review.md; tests/test_stage2.py | The phase-6 verdict prompt does not tell the reviewer `Answer in English.`, so reviewers can continue to return German findings without receiving the requested instruction. The change also adds no test that would fail if the instruction were missing. [Criterion 1; Definition of Done] | Codex | taken | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
