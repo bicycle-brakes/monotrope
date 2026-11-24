@@ -689,7 +689,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `known_status` | A row with the standalone status `duplicate of L1-1` is treated as a duplicate and as having a known status. If `L1-1` exists, the report can mark both outputs complete and exit successfully, although that status is outside the specified closed set. It must identify the row as a gap and exit non-zero. [Criteria 7, 16] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `known_status` | A row with the standalone status `duplicate of L1-1` is treated as a duplicate and as having a known status. If `L1-1` exists, the report can mark both outputs complete and exit successfully, although that status is outside the specified closed set. It must identify the row as a gap and exit non-zero. [Criteria 7, 16] | Codex | taken — maintainer 2026-11-24, structural (mechanism found before: F6-1 of 2026-11-20, L1-2, L1-3, L2-1, L2-9, L2-12, L2-13, L2-15): one function reads every Status cell by a full match against the closed set of criterion 16, held in one place; a cell that does not match in full is a gap with a non-zero exit; known_status, status_outcome and is_duplicate use only that function, with no prefix test or free search; the bare form duplicate of X without rejected is a gap | — |
 
 Phase 6 verdict: codex 01a20ef9-4fcc-72c1-b379-3bdb3c3cf0ff, 2026-11-24
 Reviewer session: codex 01a20ef9-4fcc-72c1-b379-3bdb3c3cf0ff — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
