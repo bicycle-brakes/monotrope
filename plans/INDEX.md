@@ -625,8 +625,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/isolated-attempts/decisions.md`](changes/isolated-attempts/decisions.md) | draft | none | 2026-11-22 | coding-harness-s9r |
+| [`changes/isolated-attempts/design.md`](changes/isolated-attempts/design.md) | draft | none | 2026-11-24 | coding-harness-s9r |
 | [`changes/isolated-attempts/findings.md`](changes/isolated-attempts/findings.md) | draft | none | 2026-11-23 | coding-harness-s9r |
+| [`changes/isolated-attempts/plan.md`](changes/isolated-attempts/plan.md) | draft | none | 2026-11-24 | coding-harness-s9r |
 | [`changes/isolated-attempts/research.md`](changes/isolated-attempts/research.md) | draft | none | 2026-11-22 | coding-harness-s9r |
+| [`changes/isolated-attempts/spec.md`](changes/isolated-attempts/spec.md) | draft | none | 2026-11-24 | coding-harness-s9r |
 | [`changes/journal-citation-gate/decisions.md`](changes/journal-citation-gate/decisions.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/findings.md`](changes/journal-citation-gate/findings.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/journal-citation-gate/plan.md`](changes/journal-citation-gate/plan.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
