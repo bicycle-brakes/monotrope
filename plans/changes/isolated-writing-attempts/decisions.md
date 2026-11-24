@@ -501,3 +501,123 @@ context: |
   Architecture change: as in Q-1 for slice 1; the rest moves to follow-up changes.
 
 In the context of an isolation spec that grew with every review round, facing eight open ambiguities after round three, we decided to re-slice to the writing verbs with JSON state, to achieve a reviewable first change, accepting three follow-up changes. — 2026-11-24
+
+## Q-26 · Lane cleanliness and runner records (spec review 2a-1, 2a-2, 2a-3, 2a-11, 2a-13, 2a-14, 2a-23, 2a-29, 2a-34, 2a-40)
+
+asked: 2026-11-24
+answer: "Untracked means exactly what `git status --porcelain` lists; ignored paths (.venv, tools/pi/node_modules, caches) are outside criteria 3 and 17. Runner-owned records are a closed list of whole files named in the spec (findings.md, plan.md), no byte boundary inside a file; tampering through an escape stays the Non-goals limit. Before every attempt, the first one and every fall-through, the runner itself commits its pending lane records in a records commit, so the lane is clean, the attempt worktree pinned at the lane HEAD carries them, and criterion 17 holds at every attempt start; there is only one version of plan.md and findings.md at landing. Criterion 18 becomes observable: every record the runner wrote is in the runner's records commit before the next attempt or in its landing commit; a run that ends without either names the uncommitted records in its last output line. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the lane check and when runner records are committed.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of the lane check and when runner records are committed, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-27 · Stops and fall-through (spec review 2a-4, 2a-7, 2a-17, 2a-18, 2a-24, 2a-28, 2a-32)
+
+asked: 2026-11-24
+answer: "An unstartable verification (missing Makefile, broken runner import) is an internal failure and stops the whole run under criterion 13; it is not a red post-run check. A lane change detected by criterion 3 stops the whole run; the runner does not revert the lane, because it cannot attribute edits (an orchestrator edit may have happened meanwhile), and it names the changed paths. The lane check runs directly when the attempt ends, before the landing commit and before the runner writes that attempt's records, and compares against the lane snapshot taken before the attempt. The next declared route after a time or usage limit is the next rung on a different endpoint, never the same endpoint again; rung preconditions are rewritten accordingly, and implement gains Sonnet 5.5 (the --stage2-off route) as its automatic next route. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which failures stop the run and which change route.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of which failures stop the run and which change route, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-28 · Shared environment: checksums, permissions, Pi (spec review 2a-5, 2a-6, 2a-15, 2a-16, 2a-30, 2a-36)
+
+asked: 2026-11-24
+answer: "The environment checksum covers only what a rebuild reproduces exactly: the installed package list with versions and the Pi version, not timestamps or bytecode; after a rebuild it is compared with the value taken before the attempt, so an ineffective restoration is detectable and a correct one passes. Read-only permissions are set on the lane's real .venv and Pi directories, not on the links; the runner restores the write bit after every attempt in every outcome, before a delete-and-rebuild, and at the next runner start after a crash (prune). Every isolated attempt links both .venv and Pi, because verification needs Pi; a lane without Pi is refused with a clear message (criterion 23). Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the linked .venv and Pi of an isolated attempt.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of the linked .venv and Pi of an isolated attempt, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-29 · Saved state, bases and evidence (spec review 2a-25, 2a-26, 2a-35, 2a-37, 2a-38)
+
+asked: 2026-11-24
+answer: "A fall-through worktree is detached at the lane HEAD with the saved failed tree applied as uncommitted changes, never on an intermediate commit; an accepted attempt lands as exactly one commit whose parent is the lane HEAD. The clean baseline after a checksum rejection is the rejected attempt's own pinned start, so only the rejected attempt's work is dropped and earlier routes' work stays. The saved state holds tracked changes, new untracked files, mode bits and symlinks, and explicitly excludes the .venv and Pi environment links. Each attempt's protected answer and diagnostics are written by the runner after the attempt ends into the lane's own git directory, out of the model's reach and surviving the worktree's removal. Prune saves a crashed attempt's tree under the attempt refs before removing its worktree; an attempt is dead when its recorded process id and process start time no longer match a live process. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what a failed attempt leaves and what the next one starts from.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of what a failed attempt leaves and what the next one starts from, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-30 · State records and their locations (spec review 2a-8, 2a-22, 2a-39, 2a-42)
+
+asked: 2026-11-24
+answer: "The invocation record, the process-id lock and the saved-state index live in the state directory beside the attempt worktrees, `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/`, outside the repository and every lane, so they never make a lane dirty and survive a worktree's removal. The spec defines their schemas: the attempt record holds invocation id, change, verb, route, pinned base, worktree path, process id with start time and state; the index maps each attempt to its saved ref and base. 'Record keys' in criterion 5 means the loop-record keys. Criterion 4 is refuted by any attempt location outside that attempts directory. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: where the attempt records live and what they hold.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of where the attempt records live and what they hold, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-31 · Isolation disabled and the rollout (spec review 2a-9, 2a-10, 2a-19, 2a-20, 2a-27, 2a-31)
+
+asked: 2026-11-24
+answer: "With isolation disabled only the separate worktree is skipped; checksums, the invocation record, the lock, the lane check and the fall-through from the saved state still run, so in PR 1 non-isolated draft and implement already keep the failed tree for the next route and checksum the lane's own .venv and Pi. PR 2 (isolated draft and implement, criterion 20) stays in this change, but it waits for the Q-18 condition, checked by hand: one night with at least three isolated repair runs and no lane damage or failure caused by isolation; PR 1 records no isolation evidence. The automated evidence gate stays in follow-up bead coding-harness-oekl. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what PR 1 does for draft and implement and what PR 2 waits for.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of what PR 1 does for draft and implement and what PR 2 waits for, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-32 · Doctrine sentences to change (spec review 2a-12, 2a-21, 2a-41)
+
+asked: 2026-11-24
+answer: "The spec names the sentences: docs/WORKFLOW.md section 4 ('a failed call stops the run without a fallback') and its draft ('a failed call is put back') and implement ('restores the worktree to the baseline commit … and exits 1') sentences; ADR 0017 decision 2 and ADR 0016 decision 4, both through the new ADR's partial supersession; and the AGENTS.md Stage-2 paragraph that cites ADR 0017 (an orchestrator edit). The leak-refusal stop stays in all of them. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which documents change with criterion 22.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of which documents change with criterion 22, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
+
+## Q-33 · The lane's shared git directory (spec review 2a-33)
+
+asked: 2026-11-24
+answer: "The runner fingerprints the shared git directory's hooks, config and the change's refs/stage2/attempts/ refs before and after each isolated attempt and stops the run on a difference, before any landing commit. Ignored files in the lane worktree are named in the spec as a known limit, like the environment-parent access in the Non-goals. Options put: the orchestrator's recommendations after comparing both deepseek fallback reviews and the Opus re-check (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: hooks, config and refs every worktree shares.
+  Intention: settle spec-review round one (deepseek fallback twice, Opus re-check, 2026-11-24) before the redraft and Opus round two.
+  Today: the reviewed spec leaves this open (findings.md, round one).
+  Repository change: the spec text of the redraft.
+  Architecture change: none beyond the spec text.
+
+In the context of hooks, config and refs every worktree shares, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round two reviews it again. — 2026-11-24
