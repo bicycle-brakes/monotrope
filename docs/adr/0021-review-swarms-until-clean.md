@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-11-20
+updated: 2026-11-24
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
@@ -148,6 +148,8 @@ the corrected order and automatic free admission.
    all-failed swarm completes no round. Explicitly rejected duplicates remain
    visible. The orchestrator decides and repairs before another review,
    requiring `make verify` green after repair as today.
+   *Amended by ADR 0025 (2026-11-08): a runner repair now passes a targeted
+   check, and one full `make verify` precedes phase 6.*
 7. **The repair brake and ladder bound are distinct escalations.** Two
    consecutive rounds each having accepted findings all caused by repairs
    (Origin `fix-r`) stop and go to the maintainer (Q-3). Exhausting eligible
