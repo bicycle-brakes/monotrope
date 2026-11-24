@@ -28,15 +28,15 @@ Chosen: the separate driver, as the maintainer decided in `decisions.md` Q-2; th
 
 ## Interfaces
 
-The operator invokes `scripts/lanes.py advance` with an optional change. The driver reads the local lanes file and the runner's authoritative next-step record, validates the instruction, and invokes `scripts/stage2.py` with the named verb and change. The runner retains locks, checks, commits and pushes; the driver reports stops. The exact record location and hand-step signal must follow the landed `ladder-next-step` contract, rather than being invented here.
+The operator invokes the local driver with an optional change. The driver reads local lane membership and the latest instruction in the runner record for each named worktree; it starts allowed steps as separate runner child processes in that worktree. The dependency `ladder-next-step` owns the instruction grammar and records `next: hand` for held rows. The runner retains its checks, locks, commits and pushes. Stops are reported on standard error and in the job record.
 
 ## Data model
 
-The driver owns the lanes-file parser and its local format. It reads the runner's existing record and writes no lifecycle fields; any lane log reports stops rather than becoming a second decision source. The central step limit defaults to two.
+The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`: an ordered list of change, worktree and optional park reason; a stop persists the reason until the orchestrator clears it. A central repository setting carries the allowed verbs, counted verbs and per-lane limit; the driver validates it before acting. The runner alone writes its loop record and remains the next-step decider.
 
 ## ADR draft
 
-The maintainer chose an amendment to `docs/adr/0021-review-swarms-until-clean.md` and no new ADR (`decisions.md` Q-4). The amendment must permit the separate driver to start the named step without changing the runner's existing stops. A new ADR draft conflicts with that recorded decision and the runner's instruction to create exactly one new ADR draft; this needs resolution before this design is final.
+The proposed amendment to ADR 0021 states: a separate local lane driver may start the runner's recorded, allowed next step in a child process; the runner's checks, locks and other stops remain in force. The maintainer chose an amendment of ADR 0021 and explicitly no new ADR (decisions.md Q-4). The runner instruction requiring a new ADR file conflicts with that answer; this draft does not claim that the maintainer changed it.
 
 ## Architecture delta
 

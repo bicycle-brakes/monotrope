@@ -29,41 +29,74 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 
 ## Acceptance criteria
 
-1. When invoked as `python3 scripts/lanes.py advance`, the driver reads its locally defined lanes file and considers its listed lanes.
-   *Refuted by:* a valid listed lane is ignored or a lane absent from the file is started.
-   *Basis:* `decisions.md#Q-2`, `decisions.md#Q-6`.
-2. When a change argument is supplied, the driver considers only that listed change.
-   *Refuted by:* another lane starts, or an unlisted target starts.
+1. When `python3 scripts/lanes.py advance` runs, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.yaml`, whose local entries name a change and its worktree, in file order.
+   *Refuted by:* A listed lane is omitted or an absent lane is selected.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-9`, `decisions.md#Q-11`.
+2. When a change argument is supplied, only its listed lane is considered.
+   *Refuted by:* Another or unlisted change runs.
    *Basis:* `decisions.md#Q-6`.
-3. When the runner's local record provides a valid `next: <verb> <change>` instruction, the driver starts that exact step through `scripts/stage2.py`.
-   *Refuted by:* a different step starts, or a valid instruction is merely printed.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-2`, `decisions.md#Q-3`.
-4. If the next instruction is missing, malformed, ambiguous, names another change, or is not a supported runner step, the driver stops that lane with a reason and starts no step from it.
-   *Refuted by:* a guessed or mismatched step starts, or the stop has no reason.
-   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-6`.
-5. When a call reaches its centrally configured maximum of verify-bearing steps, it starts no further verify-bearing step; the default maximum is two.
-   *Refuted by:* three such steps start under the default, or a configured lower bound is exceeded.
-   *Basis:* `decisions.md#Q-7`.
-6. If a step fails or leaves an open hand step, including a successful repair with held rows, the driver stops that lane and reports the reason.
-   *Refuted by:* a subsequent step starts for that lane or no reason is reported.
-   *Basis:* `decisions.md#Q-7`.
-7. When the driver runs, it writes no document lifecycle field.
-   *Refuted by:* the driver changes `status` or `implementation_status` in a document.
-   *Basis:* `decisions.md#Q-5`.
-8. When external state changes, it cannot trigger a step through the driver.
-   *Refuted by:* a webhook, label, comment or branch name starts a step without local invocation and input.
-   *Basis:* `decisions.md#Q-6`.
-9. When the decision pull request is merged, ADR 0021 permits the separate driver to start the runner's named next step while preserving the runner's other stops.
-   *Refuted by:* the ADR still forbids that driver action or weakens an existing stop.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`.
+3. If the lanes file is unreadable, malformed, contains duplicate changes or invalid worktree entries, or the requested change is unlisted, the call is refused before starting a step.
+   *Refuted by:* Any step starts or the call is not refused.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`.
+4. When a lane is considered, its runner record is selected using that lane’s worktree and each step runs in that worktree.
+   *Refuted by:* A record or execution belongs to another checkout.
+   *Basis:* `decisions.md#Q-11`.
+5. When a lane has multiple recorded `next:` lines, the latest line governs under the grammar supplied by ladder-next-step.
+   *Refuted by:* An earlier line overrides the latest.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-11`.
+6. If the latest instruction is missing, unreadable, malformed, names another change or names a disallowed verb, the lane stops without starting that instruction.
+   *Refuted by:* The driver guesses or starts the instruction.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-10`, `decisions.md#Q-11`.
+7. When a valid allowed instruction is read, the driver starts the exact verb and change as a separate `python3 scripts/stage2.py` child process.
+   *Refuted by:* A different step runs or the runner is called in-process.
+   *Basis:* `decisions.md#Q-2`, `decisions.md#Q-10`.
+8. While the central allow list has its initial values, only `repair`, `review`, `review-loop`, `release-loop`, `prepare-loop` and `implement` are allowed.
+   *Refuted by:* A listed verb is refused as disallowed or another verb is accepted.
+   *Basis:* `decisions.md#Q-10`.
+9. While the central counted list has its initial values, `implement`, `repair` and `review` count as verify-bearing steps.
+   *Refuted by:* One of these is not counted or an unlisted verb is counted.
+   *Basis:* `decisions.md#Q-10`.
+10. When a lane reaches the centrally configured per-lane limit of verify-bearing steps, it starts no further verify-bearing step in that call.
+   *Refuted by:* The lane starts more counted steps than its limit.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`.
+11. When the limit is not configured, it defaults to two per lane.
+   *Refuted by:* The default differs from two.
+   *Basis:* `decisions.md#Q-10`.
+12. If the configured limit is not an integer from one through five, the call is refused before any step starts.
+   *Refuted by:* An invalid value is accepted or a step starts.
+   *Basis:* `decisions.md#Q-10`.
+13. When a step fails or the latest instruction is `next: hand <change> <rows>`, that lane stops even if the preceding repair exited successfully.
+   *Refuted by:* A subsequent step starts in the stopped lane.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`.
+14. When a lane stops, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
+   *Refuted by:* A later call retries a parked lane without clearing it or the reason is missing.
+   *Basis:* `decisions.md#Q-12`.
+15. When a lane stops, the driver proceeds to the next listed lane sequentially.
+   *Refuted by:* A stop aborts the remaining lanes or lanes overlap.
+   *Basis:* `decisions.md#Q-9`.
+16. When the call reports a stop, it writes the reason to standard error and the job record.
+   *Refuted by:* Either destination lacks the reason.
+   *Basis:* `decisions.md#Q-12`.
+17. When every selected lane advances or has nothing to do, the call exits 0; if any lane stops it exits 1; if the call is refused it exits 2.
+   *Refuted by:* An outcome has a different exit code.
+   *Basis:* `decisions.md#Q-12`.
+18. When the driver writes state, its own code writes no document lifecycle field, including `status`, `implementation_status` or `updated`.
+   *Refuted by:* The driver itself changes such a field.
+   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-12`.
+19. When locally invoked, the driver ignores lanes and steps obtained from remote labels, comments, branch names or fetched files.
+   *Refuted by:* Remote data selects a lane or step.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-12`.
+20. When the decision pull request is merged, ADR 0021 permits the separate driver to start allowed named steps while retaining the runner’s existing stops.
+   *Refuted by:* The ADR forbids that action or weakens a stop.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-4`, `decisions.md#Q-10`.
 
 ## Non-goals
 
-Implementing the producer of `next:` belongs to `ladder-next-step` (bead coding-harness-hwll), which must land first. The driver is not a new workflow phase or stage-2 runner verb; it does not derive the next step, write lifecycle fields, push independently, or use external triggers. The thirteen-verb prose and its pinned tests stay unchanged.
+The `ladder-next-step` change (bead coding-harness-hwll) supplies the recorded instruction and its grammar before implementation here. This driver neither derives the next step nor adds a runner verb, workflow phase, external trigger, independent push, or lifecycle-field writer. Parallel lanes belong to the detached job launcher (bead coding-harness-a6ns.1). The thirteen-verb prose and its pinned tests stay unchanged.
 
 ## Protected areas
 
-The runner's verb registries and existing stop rules remain intact; only the runner's established entry point starts model work. Held paths are edited by the orchestrator, not a stage-2 implement attempt.
+The runner's verb registries and stops remain intact. Held paths are edited only by the orchestrator after the accepted implementation attempt.
 
 ## Definition of Done
 
@@ -74,4 +107,4 @@ The runner's verb registries and existing stop rules remain intact; only the run
 
 ## Open decisions
 
-[DETAIL] An eight-hour phase-4 appetite is a stop for this plan, chosen because no appetite was recorded. A missing or invalid instruction stops rather than inferring state, preserving the single decider.
+[DETAIL] The eight-hour phase-4 appetite is a stop, chosen because no appetite was recorded. Duplicate or malformed lane entries refuse the call before any step, avoiding partial action on ambiguous configuration. The central configuration and lane format are specified in the plan; they are revisable implementation details.
