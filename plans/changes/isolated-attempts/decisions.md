@@ -366,3 +366,78 @@ context: |
   Architecture change: a second protected entry point.
 
 In the context of an attempt module other harnesses should use, facing one public entry or two, we decided on an own command line for the module, to achieve modularity and portability across harnesses, accepting a second entry that must carry the same protections. — 2026-11-24
+
+## Q-17 · Fall-through base and trigger (spec review 2a-1, 2a-2, 2a-14)
+
+asked: 2026-11-24
+answer: "A — the next route starts in a new attempt worktree from the failed attempt's saved state (as flash-repair repairs Flash's work today); only after a rejection for a changed environment checksum does it start from the clean baseline. Only model failures (process exit, time or usage limit, empty answer) and red post-run checks fall through; runner-internal failures (moved HEAD, CheckpointRolledBack, make verify not startable) stop the run. Options put: build on the attempt state, model failures only (recommended); always the clean baseline."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what the next route builds on and what hands over to it.
+  Intention: settle spec-review rows 2a-1, 2a-2 and 2a-14 of 2026-11-24; Q-5 and Q-14 read differently.
+  Today: draft restarts at the clean baseline (scripts/stage2.py:12849-12857); run_attempts lets the next attempt start on the failed tree.
+  Repository change: the fall-through rule in scripts/stage2_attempts.py.
+  Architecture change: none beyond Q-14.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-18 · Which review verb, which pull request, what the first night must show (spec review 2a-3, 2a-4, 2a-12, 2a-13)
+
+asked: 2026-11-24
+answer: "A — only phase-6 `review` goes through the attempt module; `spec-review` and `review-loop` are named exemptions in the structural test (they read text the runner hands them; isolating the swarm would cost many concurrent worktrees without a real gain). PR 1 isolates repair; PR 2 brings draft, implement and review. PR 2 follows only when one night shows at least three isolated repair runs without lane damage and without a failure caused by the isolation; otherwise the run stops and reports to the maintainer. The refusal for a missing installed Pi applies only to isolated attempts that link Pi. The maintainer asked for a classification first; options then put: only phase-6 review in PR 2 (recommended); phase-6 review already in PR 1; all three review verbs. Narrows Q-9's 'review'."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the review verbs, the rollout and the PR 2 gate.
+  Intention: settle spec-review rows 2a-3, 2a-4, 2a-12 and 2a-13 of 2026-11-24.
+  Today: three verbs start a reviewer: spec-review, review-loop, review.
+  Repository change: exemptions in the structural test; an evidence gate for PR 2.
+  Architecture change: none.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-19 · What the attempt command offers, and orphan pruning (spec review 2a-5, 2a-6)
+
+asked: 2026-11-24
+answer: "A — the attempt module's command line offers the lifecycle steps (create, checksum, save state, land, remove, prune); a foreign harness does its own model work inside the worktree; the module starts no model, so model choice, leak check and endpoints stay in scripts/stage2.py. Every runner invocation gets an id in the worktree name plus a lock file with its process id; every runner start removes attempt worktrees whose process no longer runs. The maintainer asked which option serves modularity and portability; options then put: lifecycle steps (recommended); a second model launcher. Refines Q-16."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the attempt command and pruning.
+  Intention: settle spec-review rows 2a-5 and 2a-6 of 2026-11-24.
+  Today: the runner has no session id; Q-4's 'at the next start' was superseded by Q-11.
+  Repository change: the CLI of scripts/stage2_attempts.py; id and lock file per invocation.
+  Architecture change: the module is isolation only.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-20 · Protecting the shared environment, and where the runner writes (spec review 2a-7, 2a-8, 2a-10)
+
+asked: 2026-11-24
+answer: "A — detect, not prevent: write protection by file permissions plus checksums after the attempt; the spec states that tampering (for example chmod on the link target) is detected, not prevented; prevention is the later container layer. On a mismatch the runner deletes and rebuilds .venv and reinstalls Pi with tools/pi/install.sh; if the checksum still differs, the run stops. The runner's own records (findings.md, plan.md time records, row marks) are written in the lane after landing; verification and held-path put-back run in the attempt worktree. Options put: detect instead of prevent (recommended); an own .venv copy per attempt."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the shared .venv and Pi, and the runner's own writes.
+  Intention: settle spec-review rows 2a-7, 2a-8 and 2a-10 of 2026-11-24.
+  Today: make venv neither repairs a modified existing .venv nor touches tools/pi.
+  Repository change: restore by rebuild; record writes after landing.
+  Architecture change: none.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
+
+## Q-21 · Landing and ref clean-up (spec review 2a-9, 2a-11)
+
+asked: 2026-11-24
+answer: "A — if the lane moved during the attempt, the attempt is rejected and the run stops with the reason (no rebase, no cherry-pick); a commit by the model inside its worktree falls under today's moved-HEAD stop. Attempt refs are deleted when the last pull request with `Closes-Bead` merges; close_merged_beads also removes refs of changes whose folder is archived. Options put: reject and stop, refs after the last PR (recommended); land by rebase."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: landing an accepted attempt and deleting refs.
+  Intention: settle spec-review rows 2a-9 and 2a-11 of 2026-11-24.
+  Today: ADR 0017 stops on a moved HEAD (scripts/stage2.py:11924-11931); close_merged_beads acts on Closes-Bead.
+  Repository change: landing check; ref clean-up rule.
+  Architecture change: none.
+
+In the context of the spec-review rows of 2026-11-24, we decided as answered above, to achieve a spec without open readings, accepting the consequences named in the options — 2026-11-24
