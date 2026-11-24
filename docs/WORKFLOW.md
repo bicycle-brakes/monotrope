@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-23
+updated: 2026-11-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -2097,7 +2097,8 @@ writes anything of its own, the runner compares every file git sees with the inv
 before that attempt's call, judging ignored files by the ignore rules the attempt started under: an
 edited `.gitignore` or `.git/info/exclude` cannot hide a new file, and removing an ignore line does
 not turn a file that already existed into the attempt's. The guard digests those two kinds of
-source only; an ignore rule set through `git config core.excludesFile` is outside it. A failed
+source and a file named by `git config core.excludesFile`; git's implicit global excludes file,
+used when that key is unset, is read as it stands (the change's named Boundary). A failed
 attempt's new files outside the scope are removed whatever failed - a check, a rejected answer or
 the last route - so the next route, or the next `repair` run, never starts with them. At the checkpoint: a new file outside the
 scope — an untracked non-ignored file, an indexed addition, an explicitly indexed ignored file or a
