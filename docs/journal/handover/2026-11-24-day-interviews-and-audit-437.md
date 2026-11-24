@@ -65,7 +65,7 @@ New beads: epic coding-harness-5ane with 5ane.1..5ane.15 (audit follow-ups: P0 v
 
 ## Working state and parallel-session boundary
 
-- This session was the only tracker writer. Use `tools/bd` (pinned 1.3.4), never the bare `bd` on PATH (1.1.2): the bare one refuses with a schema-version message that looks like a broken database.
+- This session was the only tracker writer until the maintainer said "bitte schreibe keine beads mehr" (2026-11-24, end of session); since then it wrote no beads. Use `tools/bd` (pinned 1.3.4), never the bare `bd` on PATH (1.1.2): the bare one refuses with a schema-version message that looks like a broken database.
 - Worktree `.claude/worktrees/audit-verify` (detached at b9ce3ac0) was only for the audit check; it can be removed.
 - The runner jobs run detached with nohup; their logs are in the session scratchpad, their records in each change's findings.md.
 
