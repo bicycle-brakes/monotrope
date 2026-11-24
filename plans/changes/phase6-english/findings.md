@@ -295,3 +295,18 @@ Book each row from your own evidence as `fixed — tests/<path>::<function>`, se
 
 
 Orchestrator hand repair, 2026-11-24 (night run 2026-11-23-a): R-1 — `prompts/06-review.md` is a runner-held path, so the runner handed the row over. The orchestrator added `Answer in English.` before the answer-form paragraph and the test `tests/test_stage2.py::test_the_phase6_prompt_asks_for_english`; the test is red on the prompt without the sentence and green with it; 83 targeted prompt tests passed. A full `make verify` and the phase-6 re-check follow.
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5590 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+> 
+> Guard evidence: tests/test_stage2.py::test_phase6_german_verdict_retries_once_on_same_thread — fault: the German-verdict detector is replaced with a function that always returns false, causing the German verdict to be accepted without a retry — catches without switch: yes, the test checks that the retry occurs and its replacement is recorded.
+
+Phase 6 verdict: codex 01a20b56-8549-7251-9116-42cbad182f01, 2026-11-24
+Reviewer session: codex 01a20b56-8549-7251-9116-42cbad182f01 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
