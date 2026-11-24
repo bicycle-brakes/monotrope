@@ -2314,6 +2314,18 @@ delivery facility, instead of declaring the run ready. No scheduler adapter is
 introduced for this. The wake is time-based: it returns even when every
 lane looks busy, and lane idleness alone triggers nothing.
 
+**Detached runner jobs (ADR 0026).** Every runner verb and every bare
+`make verify` of a night run starts through `python3 scripts/jobs.py start
+-- <command>`, which runs it in its own window of the dedicated tmux server
+`coding-harness`, so the job outlives the orchestrating session. At each
+wake the session reads a job's completion with `python3 scripts/jobs.py
+list`: `running`, `finished` with its exit status or `signal N`, `lost`, or
+`failed to start`; the job's log lies beside its record in the jobs state
+directory, and `scripts/run_report.py` shows the same records. The launcher
+sends no completion notice of its own, so the 30-minute wake stays until
+`lanes.py advance` lands. Commands outside the runner keep the harness
+background mode.
+
 At each wake the session works one fixed order: rearm once for 30 minutes
 and retain the new handle before any lane work; read the lane file; check
 each lane's actual job completion and activity and each busy marker's
