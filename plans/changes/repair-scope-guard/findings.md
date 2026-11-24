@@ -1055,7 +1055,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | MAINT | base | scripts/stage2.py:11955, scripts/stage2.py:12339 | If the pre-call file inventory fails temporarily, the runner still starts the repair. A new out-of-scope file from that attempt is neither measured nor removed; the next route includes it in its baseline and can commit it without a scope refusal. The runner must stop or restore before retrying when it cannot establish the inventory. | Codex | taken — maintainer 2026-11-24, structural (second finding of this mechanism after R1): fail closed — whenever the runner cannot establish the file inventory, before or after a call, it stops the whole run without a further route and names the reason; no attempt or retry starts on an unmeasured baseline | — |
+| P6-1 | MAJOR | MAINT | base | scripts/stage2.py:11955, scripts/stage2.py:12339 | If the pre-call file inventory fails temporarily, the runner still starts the repair. A new out-of-scope file from that attempt is neither measured nor removed; the next route includes it in its baseline and can commit it without a scope refusal. The runner must stop or restore before retrying when it cannot establish the inventory. | Codex | fixed — tests/test_stage2.py::test_repair_pre_call_inventory_failure_stops_before_any_model_call | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1063,3 +1063,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20eeb-ecee-7853-b7ab-b9b3b094316c, 2026-11-24
 Reviewer session: codex 01a20eeb-ecee-7853-b7ab-b9b3b094316c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5695 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

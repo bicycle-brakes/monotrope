@@ -21895,6 +21895,32 @@ def test_repair_scope_inventory_failure_fails_the_attempt_with_a_named_reason(
     assert git(world.root, "rev-parse", "HEAD") == baseline
 
 
+def test_repair_pre_call_inventory_failure_stops_before_any_model_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(plant={"src/stray.txt": "stray\n"})
+    script_repair(world, [first, repair_step(), repair_step()], make=[GREEN] * 3)
+    original = stage2.file_inventory
+    calls = 0
+
+    def flaky(root: Path, env: dict[str, str] | None = None) -> set[Path]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise stage2.Refused("temporary inventory failure")
+        return original(root, env)
+
+    monkeypatch.setattr(stage2, "file_inventory", flaky)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert world.run("repair") == 2
+    assert "could not read the file inventory before the call" in capsys.readouterr().err
+    assert not repair_calls(world), "a model was called without a measured baseline"
+    assert not (world.root / "src/stray.txt").exists()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 def test_repair_post_call_inventory_failure_cannot_leave_stray_for_retry(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

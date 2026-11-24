@@ -11946,8 +11946,8 @@ def run_attempts(
             before, unmeasured = "", str(error)
         # The scope guard's own baseline: every path git sees right before the call, so the
         # checkpoint's new files are measured against this attempt's start, never a sibling's
-        # leftover (bead coding-harness-t83, S-1). An unreadable inventory fails the attempt with
-        # a named reason (L2-9), rather than silently skipping the guard.
+        # leftover (bead coding-harness-t83, S-1). Without a baseline no model may start: its
+        # new files could otherwise become the next route's baseline.
         scope_before: set[Path] | None = None
         scope_rules: dict[str, bytes] = {}
         scope_problem: str | None = None
@@ -11958,9 +11958,10 @@ def run_attempts(
                 scope_before = file_inventory(root)
                 scope_rules = ignore_rules_state(root, scope_before)
                 scope_ignored = ignored_snapshot(root)
-            except Refused as error:
-                scope_before = None
-                scope_problem = f"the repair scope guard could not read the file inventory before the call ({error})"
+            except (Refused, OSError) as error:
+                raise Refused(
+                    f"the repair scope guard could not read the file inventory before the call ({error})"
+                ) from error
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
@@ -12056,7 +12057,7 @@ def run_attempts(
             if endpoint == CODEX:
                 try:
                     head_now = _git_output(root, "rev-parse", "HEAD").strip()
-                except Refused as error:
+                except (Refused, OSError) as error:
                     raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
                 if head_now != baseline:
                     # A moved HEAD stops the run without a rewrite: resetting a commit the model made
