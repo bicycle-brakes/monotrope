@@ -299,3 +299,63 @@ context: |
   Architecture change: none.
 
 In the context of failed or held steps, facing silent retries, we decided on a `next: hand` line and a park mark the orchestrator clears, to achieve no repeated failing step, accepting one more hand action per stopped lane. — 2026-11-24
+
+## Q-13 · Empty, used and parked instructions (spec review S-16, S-18, S-24)
+
+asked: 2026-11-24
+answer: "A — no loop record or no `next:` line means nothing to do: exit 0, no park mark. An instruction the driver started in this call counts as used; if the latest line is still that instruction after the step, the lane ends for this call. A parked lane is skipped and counts as nothing to do; its reason is written to standard error again. Options put: nothing to do (recommended); count each case as a stop with exit 1 and a park mark."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: lanes without a fresh instruction.
+  Intention: settle spec-review rows S-16, S-18 and S-24 of 2026-11-24.
+  Today: release-loop deletes the loop record; a new lane has none; a step may leave the same `next:` line.
+  Repository change: the lane loop in scripts/lanes.py.
+  Architecture change: none.
+
+In the context of lanes with no new instruction, facing parked-by-default lanes or endless repeats, we decided that a missing, used or parked instruction means nothing to do, to achieve a bounded call without false stops, accepting that a stalled lane shows only on standard error.  — 2026-11-24
+
+## Q-14 · Failures, the limit and concurrent calls (spec review S-17, S-19, S-22)
+
+asked: 2026-11-24
+answer: "A — runner exit 1 is a failure and parks the lane. Exit 2 (a refusal, such as a held record lock) ends the lane for this call without a park mark. A lane at its limit starts no further step of any kind in this call and counts as advanced (exit 0, no mark). The driver holds a lock per lane while it works on it and writes lanes.yaml under a file lock. Options put: lock per lane (recommended); one lock for the whole call, a second call refused with exit 2."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: failed and refused steps, the limit, and parallel calls.
+  Intention: settle spec-review rows S-17, S-19 and S-22 of 2026-11-24.
+  Today: the runner exits 1 on failure and 2 on refusal; Q-9 plans one job per lane through scripts/jobs.py.
+  Repository change: per-lane lock and locked writes in scripts/lanes.py.
+  Architecture change: none.
+
+In the context of failed steps and overlapping calls, facing lost park marks or parked running lanes, we decided on park-on-failure, no park on refusal, a full stop at the limit and a lock per lane, to achieve safe parallel calls later, accepting one lock file per lane.  — 2026-11-24
+
+## Q-15 · Validating the inputs (spec review S-21, S-26, S-27, S-28)
+
+asked: 2026-11-24
+answer: "A — a worktree entry is valid only when the path exists and is a worktree of this repository; an invalid entry parks only its lane. An invalid central allow or counted list refuses the whole call with exit 2, like an invalid limit. The ADR 0021 amendment names the six initial verbs; adding a verb needs a further amendment. Each step runs the lane worktree's own scripts/stage2.py. Options put: strict and lane-local (recommended); form check only, bad list entries ignored, the ADR allows whatever the list holds."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: checking lanes.yaml and the central setting.
+  Intention: settle spec-review rows S-21, S-26, S-27 and S-28 of 2026-11-24.
+  Today: stage2.py takes its repository root from its own file path.
+  Repository change: validation in scripts/lanes.py; the ADR 0021 amendment text.
+  Architecture change: the ADR 0021 amendment lists its verbs.
+
+In the context of the driver's inputs, facing silent widening by a setting typo, we decided on strict, lane-local checks and an ADR that names its verbs, to achieve no new step without a decision, accepting an ADR amendment per new verb.  — 2026-11-24
+
+## Q-16 · Scope: job record and the night routine (spec review S-20, S-23)
+
+asked: 2026-11-24
+answer: "A — the job record is dropped from this change; reasons go to standard error only, and scripts/jobs.py (bead coding-harness-a6ns.1) adds its record when it lands. This change also rewrites the night routine in docs/WORKFLOW.md to call `scripts/lanes.py advance` with one lanes.yaml per machine, shared by concurrent runs under the Q-14 locks. Options put: WORKFLOW in, job record out (recommended); both out with a follow-up bead."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what this change covers.
+  Intention: settle spec-review rows S-20 and S-23 of 2026-11-24.
+  Today: no job record exists; docs/WORKFLOW.md still prescribes night/<run-id>/lanes.txt.
+  Repository change: docs/WORKFLOW.md night routine.
+  Architecture change: none.
+
+In the context of the change's scope, facing a reference to an unbuilt record and a stale routine, we decided to drop the job record and rewrite the night routine here, to achieve documentation that matches Q-11, accepting a larger documentation diff.  — 2026-11-24
