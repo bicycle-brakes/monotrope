@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-09
 created: 2026-11-09
 last_reviewed: 2026-11-09
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-3rtn
@@ -605,61 +605,151 @@ context: |
 
 In the context of Markdown errors in changed files, we decided on only changed lines block, to achieve small changes to large legacy files, accepting legacy errors stay until a clean-up — 2026-11-23
 
+## Q-31 · Extra phase-6 re-checks after a stop (the spec's open [DECISION])
+
+asked: 2026-11-24
+answer: "One per confirmed repair — every new explicit choice of a mechanism repair allows exactly one phase-6 re-check of that repair; the night exception stays a single one; no approval can be reused. This replaces the provisional S2-12 (at most one extra re-check per change in total). Options put: one per confirmed repair (recommended); one exception in total."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how many extra phase-6 checks may follow a stop.
+  Intention: a repaired change is checked without silently lifting the agreed limit.
+  Today: Q-27 allows one more check after a chosen mechanism repair; the provisional S2-12 capped all exceptions at one per change; the spec's draft of 2026-11-23 carried the conflict as a [DECISION] block.
+  Repository change: the runner counts the exceptions per confirmed repair.
+  Architecture change: none.
+
+In the context of extra phase-6 checks after a stop, facing an absolute cap or one check per chosen repair, we decided on one check per confirmed repair, to achieve that a chosen repair is always checked, accepting more checks and cost when the maintainer chooses repeatedly — 2026-11-24
+
+## Q-32 · Settings and their validation (the provisional decisions S-1, S-3, S2-5, S3-1, S3-9, S3-11)
+
+asked: 2026-11-24
+answer: "Confirmed as written — the provisional agent decisions S-1, S-3, S2-5, S3-1, S3-9, S3-11 below are the maintainer's answers. They were put to the maintainer as one bundle with a German summary of each point and the options 'confirm all' or 'change single points'; the maintainer confirmed all."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: settings and their validation.
+  Intention: turn the provisional agent decisions of the 2026-11-23 spec reviews into maintainer answers; the drafter does not count provisional decisions as answers.
+  Today: the decisions stood as provisional agent decisions under the maintainer's answer A of 2026-11-23.
+  Repository change: as each listed decision states.
+  Architecture change: none beyond Q-24 and Q-30.
+
+In the context of the open spec-review rows, facing provisional agent decisions, we decided to confirm S-1, S-3, S2-5, S3-1, S3-9, S3-11 as written, to achieve a spec without open ambiguities, accepting the readings as stated — 2026-11-24
+
+## Q-33 · Model choice, substitutes and the overtake measurement (the provisional decisions S2-3, S2-4, S2-11, S2-14, S2-18, S3-4, S3-5, S3-10)
+
+asked: 2026-11-24
+answer: "Confirmed as written — the provisional agent decisions S2-3, S2-4, S2-11, S2-14, S2-18, S3-4, S3-5, S3-10 below are the maintainer's answers. They were put to the maintainer as one bundle with a German summary of each point and the options 'confirm all' or 'change single points'; the maintainer confirmed all."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: model choice, substitutes and the overtake measurement.
+  Intention: turn the provisional agent decisions of the 2026-11-23 spec reviews into maintainer answers; the drafter does not count provisional decisions as answers.
+  Today: the decisions stood as provisional agent decisions under the maintainer's answer A of 2026-11-23.
+  Repository change: as each listed decision states.
+  Architecture change: none beyond Q-24 and Q-30.
+
+In the context of the open spec-review rows, facing provisional agent decisions, we decided to confirm S2-3, S2-4, S2-11, S2-14, S2-18, S3-4, S3-5, S3-10 as written, to achieve a spec without open ambiguities, accepting the readings as stated — 2026-11-24
+
+## Q-34 · The reviewers' answer form (the provisional decisions S2-7, S2-8, S2-9, S2-10, S3-3, S3-6)
+
+asked: 2026-11-24
+answer: "Confirmed as written — the provisional agent decisions S2-7, S2-8, S2-9, S2-10, S3-3, S3-6 below are the maintainer's answers. They were put to the maintainer as one bundle with a German summary of each point and the options 'confirm all' or 'change single points'; the maintainer confirmed all."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the reviewers' answer form.
+  Intention: turn the provisional agent decisions of the 2026-11-23 spec reviews into maintainer answers; the drafter does not count provisional decisions as answers.
+  Today: the decisions stood as provisional agent decisions under the maintainer's answer A of 2026-11-23.
+  Repository change: as each listed decision states.
+  Architecture change: none beyond Q-24 and Q-30.
+
+In the context of the open spec-review rows, facing provisional agent decisions, we decided to confirm S2-7, S2-8, S2-9, S2-10, S3-3, S3-6 as written, to achieve a spec without open ambiguities, accepting the readings as stated — 2026-11-24
+
+## Q-35 · Triage and repair rules (the provisional decisions S-4, S2-17, S2-1, S2-2, S2-19, S2-20, S2-21, S3-13)
+
+asked: 2026-11-24
+answer: "Confirmed as written — the provisional agent decisions S-4, S2-17, S2-1, S2-2, S2-19, S2-20, S2-21, S3-13 below are the maintainer's answers. They were put to the maintainer as one bundle with a German summary of each point and the options 'confirm all' or 'change single points'; the maintainer confirmed all."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: triage and repair rules.
+  Intention: turn the provisional agent decisions of the 2026-11-23 spec reviews into maintainer answers; the drafter does not count provisional decisions as answers.
+  Today: the decisions stood as provisional agent decisions under the maintainer's answer A of 2026-11-23.
+  Repository change: as each listed decision states.
+  Architecture change: none beyond Q-24 and Q-30.
+
+In the context of the open spec-review rows, facing provisional agent decisions, we decided to confirm S-4, S2-17, S2-1, S2-2, S2-19, S2-20, S2-21, S3-13 as written, to achieve a spec without open ambiguities, accepting the readings as stated — 2026-11-24
+
+## Q-36 · Trigger, shadow period and rollout (the provisional decisions S-11, S-13, S-21, S2-6, S2-13, S2-15, S2-16, S2-22, S3-2, S3-7, S3-8, S3-12)
+
+asked: 2026-11-24
+answer: "Confirmed as written — the provisional agent decisions S-11, S-13, S-21, S2-6, S2-13, S2-15, S2-16, S2-22, S3-2, S3-7, S3-8, S3-12 below are the maintainer's answers. They were put to the maintainer as one bundle with a German summary of each point and the options 'confirm all' or 'change single points'; the maintainer confirmed all."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: trigger, shadow period and rollout.
+  Intention: turn the provisional agent decisions of the 2026-11-23 spec reviews into maintainer answers; the drafter does not count provisional decisions as answers.
+  Today: the decisions stood as provisional agent decisions under the maintainer's answer A of 2026-11-23.
+  Repository change: as each listed decision states.
+  Architecture change: none beyond Q-24 and Q-30.
+
+In the context of the open spec-review rows, facing provisional agent decisions, we decided to confirm S-11, S-13, S-21, S2-6, S2-13, S2-15, S2-16, S2-22, S3-2, S3-7, S3-8, S3-12 as written, to achieve a spec without open ambiguities, accepting the readings as stated — 2026-11-24
+
 ## Provisional agent decisions on the spec-review ambiguities (2026-11-23)
 
 Maintainer's answer A of 2026-11-23: the orchestrator decides the smaller open ambiguities of the 2026-11-10 spec review by its recommendation, marked as provisional agent decisions; the maintainer sees the list on the plan card and may change any line. S-7, S-8, S-15, S-17 and S-18 go to the maintainer as questions.
 
-- [DETAIL] **S-1 (provisional agent decision):** resolved by Q-24 — no criterion, prompt, test or doc fixes the number of rounds, seats per round or lenses; criteria name the setting and test that a changed value takes effect.
-- [DETAIL] **S-3 (provisional agent decision):** Reading A — a seat's "best measured precision" is a dated citation in the central setting; the validator checks that the citation exists and names a measurement date; a stale or wrong value is a maintainer edit, not a red criterion. Reason: Q-24 makes seating an edited value; a runner that re-seats itself would contradict it.
-- [DETAIL] **S-4 (provisional agent decision):** Reading C — an out-of-lens BLOCKER is triaged and repaired like any row but enters no lens's observation, so the three-seat basis of each lens stays intact.
-- [DETAIL] **S-11 (provisional agent decision):** Reading A — an added check question is committed on the branch of the change whose phase 6 found it and reaches other lanes when that PR merges; "applies immediately" is reworded to "applies from the merge on".
-- [DETAIL] **S-13 (provisional agent decision):** Reading B — only changes with full three-seat lenses count toward the ten shadow changes; small changes are reported but do not count.
-- [DETAIL] **S-21 (provisional agent decision):** Reading A — a lens with an undefined singleton share (S=0) or an incomplete observation does not trigger the second round; the run reports it.
+- [DETAIL] **S-1 (confirmed by the maintainer, Q-32, 2026-11-24):** resolved by Q-24 — no criterion, prompt, test or doc fixes the number of rounds, seats per round or lenses; criteria name the setting and test that a changed value takes effect.
+- [DETAIL] **S-3 (confirmed by the maintainer, Q-32, 2026-11-24):** Reading A — a seat's "best measured precision" is a dated citation in the central setting; the validator checks that the citation exists and names a measurement date; a stale or wrong value is a maintainer edit, not a red criterion. Reason: Q-24 makes seating an edited value; a runner that re-seats itself would contradict it.
+- [DETAIL] **S-4 (confirmed by the maintainer, Q-35, 2026-11-24):** Reading C — an out-of-lens BLOCKER is triaged and repaired like any row but enters no lens's observation, so the three-seat basis of each lens stays intact.
+- [DETAIL] **S-11 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — an added check question is committed on the branch of the change whose phase 6 found it and reaches other lanes when that PR merges; "applies immediately" is reworded to "applies from the merge on".
+- [DETAIL] **S-13 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading B — only changes with full three-seat lenses count toward the ten shadow changes; small changes are reported but do not count.
+- [DETAIL] **S-21 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — a lens with an undefined singleton share (S=0) or an incomplete observation does not trigger the second round; the run reports it.
 
 ## Provisional agent decisions on spec review round 2 (2026-11-23)
 
 Under the maintainer's answer A of 2026-11-23 the orchestrator decides the rows of spec review round 2 by its recommendation, marked provisional; the plan card lists them for the maintainer.
 
-- [DETAIL] **S2-1 (provisional agent decision):** Reading A — "all repaired" means every MINOR that the MINOR rule requires to be repaired; deferred maintainability or style rows do not block the early end.
-- [DETAIL] **S2-2 (provisional agent decision):** Reading A — only accepted rows count; a rejected MAJOR or BLOCKER does not stop the early end.
-- [DETAIL] **S2-3 (provisional agent decision):** Reading A — one independent challenger draw per lens; each pick and the seed are recorded.
-- [DETAIL] **S2-4 (provisional agent decision):** The free second round's three models are drawn with a recorded seed from the reachable pool, three distinct families, Codex excluded, the implementer-family rule applied; the substitute list of Q-25 covers it. The pool is a Q-24 setting.
-- [DETAIL] **S2-5 (provisional agent decision):** The spec lists every setting key with type, allowed values or range, initial value and meaning: rounds per change 1–2, seats per lens 1–3, lenses as a non-empty list of declared lens ids, finding cap 1–20, early-end on or off, challenger pool and substitute list as lists of declared model ids. Values outside a range refuse at load; a test per key shows that a changed value takes effect.
-- [DETAIL] **S2-6 (provisional agent decision):** The trigger compares the singleton share directly with its threshold; no separate jackknife quantity.
-- [DETAIL] **S2-7 (provisional agent decision):** Reading A — a seat counts as one call however many bounded chunks its input uses.
-- [DETAIL] **S2-8 (provisional agent decision):** Count only MINOR rows: at most the cap of MINOR rows per answer, BLOCKER and MAJOR not capped; rows ranked by severity.
-- [DETAIL] **S2-9 (provisional agent decision):** Rows that break the answer form (no file and line, MINOR over the cap) are dropped and listed in the report; the rest of the answer stands; the seat does not count as failed. A finding about something absent cites the path where it belongs and the line `0`.
-- [DETAIL] **S2-10 (provisional agent decision):** Reading A — the answer-form rules apply to the phase-4b reviewers (round 1 and the free round); phase 6 keeps its form.
-- [DETAIL] **S2-11 (provisional agent decision):** Reading A — the implementer's family is the recorded phase-4 implementer model; repair models do not widen it.
-- [DETAIL] **S2-12 (provisional agent decision):** Reading A — at most one extra phase-6 re-check per change in total.
-- [DETAIL] **S2-13 (provisional agent decision):** Reading A — the mechanism-fix rule fires on two confirmed findings raised in phase-6 re-checks, as written.
-- [DETAIL] **S2-14 (provisional agent decision):** Reading B — the overtake is measured cumulatively per model and lens over all runs since the fixed seat was set, and flagged only when both models have at least 20 triaged rows on that lens.
-- [DETAIL] **S2-15 (provisional agent decision):** A loop already running when this change merges finishes under the two-round house rule of AGENTS.md (PR #436), not under the old loop-until-clean.
-- [DETAIL] **S2-16 (provisional agent decision):** "Stopped" means stopped by the maintainer or by an outage; a change that reached the phase-6 limit counts toward calibration.
-- [DETAIL] **S2-17 (provisional agent decision):** Out-of-lens rows of any severity are triaged and repaired when taken but enter no lens observation (extends S-4).
-- [DETAIL] **S2-18 (provisional agent decision):** A failed seat gets one retry of the same model, then the substitutes in list order (order recorded); a failed challenger is replaced by a new draw. If no substitute answers, the run records a waiting state; the next invocation resumes it; after 5 hours it is reported as stopped.
-- [DETAIL] **S2-19 (provisional agent decision):** A deferred row gets the Status prefix `deferred — clean-up`; a report command lists deferred rows of a closed ISO week that no clean-up bead names; criterion 21 is tested on a fixture of that command.
-- [DETAIL] **S2-20 (provisional agent decision):** A MINOR outside the listed classes (for example performance, a documentation omission) is repaired unless the reviewer marks it maintainability, style or taste.
-- [DETAIL] **S2-21 (provisional agent decision):** The reconciler records mechanism, trigger and violated invariant as separate fields, and the grouping check compares them.
-- [DETAIL] **S2-22 (provisional agent decision):** Locally the base is `git merge-base HEAD origin/main` after a fetch; in CI it is the PR base commit.
+- [DETAIL] **S2-1 (confirmed by the maintainer, Q-35, 2026-11-24):** Reading A — "all repaired" means every MINOR that the MINOR rule requires to be repaired; deferred maintainability or style rows do not block the early end.
+- [DETAIL] **S2-2 (confirmed by the maintainer, Q-35, 2026-11-24):** Reading A — only accepted rows count; a rejected MAJOR or BLOCKER does not stop the early end.
+- [DETAIL] **S2-3 (confirmed by the maintainer, Q-33, 2026-11-24):** Reading A — one independent challenger draw per lens; each pick and the seed are recorded.
+- [DETAIL] **S2-4 (confirmed by the maintainer, Q-33, 2026-11-24):** The free second round's three models are drawn with a recorded seed from the reachable pool, three distinct families, Codex excluded, the implementer-family rule applied; the substitute list of Q-25 covers it. The pool is a Q-24 setting.
+- [DETAIL] **S2-5 (confirmed by the maintainer, Q-32, 2026-11-24):** The spec lists every setting key with type, allowed values or range, initial value and meaning: rounds per change 1–2, seats per lens 1–3, lenses as a non-empty list of declared lens ids, finding cap 1–20, early-end on or off, challenger pool and substitute list as lists of declared model ids. Values outside a range refuse at load; a test per key shows that a changed value takes effect.
+- [DETAIL] **S2-6 (confirmed by the maintainer, Q-36, 2026-11-24):** The trigger compares the singleton share directly with its threshold; no separate jackknife quantity.
+- [DETAIL] **S2-7 (confirmed by the maintainer, Q-34, 2026-11-24):** Reading A — a seat counts as one call however many bounded chunks its input uses.
+- [DETAIL] **S2-8 (confirmed by the maintainer, Q-34, 2026-11-24):** Count only MINOR rows: at most the cap of MINOR rows per answer, BLOCKER and MAJOR not capped; rows ranked by severity.
+- [DETAIL] **S2-9 (confirmed by the maintainer, Q-34, 2026-11-24):** Rows that break the answer form (no file and line, MINOR over the cap) are dropped and listed in the report; the rest of the answer stands; the seat does not count as failed. A finding about something absent cites the path where it belongs and the line `0`.
+- [DETAIL] **S2-10 (confirmed by the maintainer, Q-34, 2026-11-24):** Reading A — the answer-form rules apply to the phase-4b reviewers (round 1 and the free round); phase 6 keeps its form.
+- [DETAIL] **S2-11 (confirmed by the maintainer, Q-33, 2026-11-24):** Reading A — the implementer's family is the recorded phase-4 implementer model; repair models do not widen it.
+- [DETAIL] **S2-12 (replaced by the maintainer's answer Q-31, 2026-11-24):** Reading A — at most one extra phase-6 re-check per change in total.
+- [DETAIL] **S2-13 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — the mechanism-fix rule fires on two confirmed findings raised in phase-6 re-checks, as written.
+- [DETAIL] **S2-14 (confirmed by the maintainer, Q-33, 2026-11-24):** Reading B — the overtake is measured cumulatively per model and lens over all runs since the fixed seat was set, and flagged only when both models have at least 20 triaged rows on that lens.
+- [DETAIL] **S2-15 (confirmed by the maintainer, Q-36, 2026-11-24):** A loop already running when this change merges finishes under the two-round house rule of AGENTS.md (PR #436), not under the old loop-until-clean.
+- [DETAIL] **S2-16 (confirmed by the maintainer, Q-36, 2026-11-24):** "Stopped" means stopped by the maintainer or by an outage; a change that reached the phase-6 limit counts toward calibration.
+- [DETAIL] **S2-17 (confirmed by the maintainer, Q-35, 2026-11-24):** Out-of-lens rows of any severity are triaged and repaired when taken but enter no lens observation (extends S-4).
+- [DETAIL] **S2-18 (confirmed by the maintainer, Q-33, 2026-11-24):** A failed seat gets one retry of the same model, then the substitutes in list order (order recorded); a failed challenger is replaced by a new draw. If no substitute answers, the run records a waiting state; the next invocation resumes it; after 5 hours it is reported as stopped.
+- [DETAIL] **S2-19 (confirmed by the maintainer, Q-35, 2026-11-24):** A deferred row gets the Status prefix `deferred — clean-up`; a report command lists deferred rows of a closed ISO week that no clean-up bead names; criterion 21 is tested on a fixture of that command.
+- [DETAIL] **S2-20 (confirmed by the maintainer, Q-35, 2026-11-24):** A MINOR outside the listed classes (for example performance, a documentation omission) is repaired unless the reviewer marks it maintainability, style or taste.
+- [DETAIL] **S2-21 (confirmed by the maintainer, Q-35, 2026-11-24):** The reconciler records mechanism, trigger and violated invariant as separate fields, and the grouping check compares them.
+- [DETAIL] **S2-22 (confirmed by the maintainer, Q-36, 2026-11-24):** Locally the base is `git merge-base HEAD origin/main` after a fetch; in CI it is the PR base commit.
 
 ## Provisional agent decisions on spec review round 3 (2026-11-23)
 
 Third and last spec review round (AGENTS.md phase 2a: the final draft after round three needs no new review). Decided by the orchestrator under the maintainer's answer A, marked provisional, listed on the plan card.
 
-- [DETAIL] **S3-1 (provisional agent decision):** Every datum the validator checks gets a key: `model_families` (model id -> family), `substitutes` per lens, `seat1_model` with `seat1_since` (date) and `seat1_citation`; unknown keys still refuse before any call.
-- [DETAIL] **S3-2 (provisional agent decision):** Reading A — this change builds only the `singleton_share` trigger; another trigger kind is a later change; the maintainer's end-of-shadow decision sets the mode, not a new rule.
-- [DETAIL] **S3-3 (provisional agent decision):** A dropped row (no location, MINOR over the cap) is "not admitted": it never reaches triage and is listed in the report; "accepted" stays the orchestrator's triage term.
-- [DETAIL] **S3-4 (provisional agent decision):** Pools contain only models whose data terms are valid on the day of run preparation; an expired model is skipped and named in the report; seat 1 with expired terms falls back to the first substitute and the report says so.
-- [DETAIL] **S3-5 (provisional agent decision):** The free pool excludes the endpoint `openai-codex` and every model of the OpenAI family; families come from `model_families`.
-- [DETAIL] **S3-6 (provisional agent decision):** Each physical call self-checks its own rows; the cap applies to the consolidated seat answer after merging the calls.
-- [DETAIL] **S3-7 (provisional agent decision):** Reading A — with one seat per lens no share exists, so no positive trigger; the round-2 decision then follows only the early-end and minor rules; the report says the estimator is off.
-- [DETAIL] **S3-8 (provisional agent decision):** Reading A — the night exception adds one check beyond the configured limit; with `phase6_rechecks: 0` phase 6 runs once and the night exception allows one re-check.
-- [DETAIL] **S3-9 (provisional agent decision):** `round_order` is derived from `rounds` and is no key of its own; the contract drops it.
-- [DETAIL] **S3-10 (provisional agent decision):** Reading B — the free round's three models are drawn when the free round starts, from the models reachable then; seed and picks are recorded.
-- [DETAIL] **S3-11 (provisional agent decision):** `seat1_since` (see S3-1) records when the fixed seat was set; the overtake window starts there.
-- [DETAIL] **S3-12 (provisional agent decision):** A check question is valid when it cites Q-13's approved list by its exact text or a phase-6 row id that resolves in a merged change; a reworded question needs a new citation.
-- [DETAIL] **S3-13 (provisional agent decision):** "Maintainability" is the nature of the defect, assigned by the orchestrator in triage, not the reporting lens.
+- [DETAIL] **S3-1 (confirmed by the maintainer, Q-32, 2026-11-24):** Every datum the validator checks gets a key: `model_families` (model id -> family), `substitutes` per lens, `seat1_model` with `seat1_since` (date) and `seat1_citation`; unknown keys still refuse before any call.
+- [DETAIL] **S3-2 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — this change builds only the `singleton_share` trigger; another trigger kind is a later change; the maintainer's end-of-shadow decision sets the mode, not a new rule.
+- [DETAIL] **S3-3 (confirmed by the maintainer, Q-34, 2026-11-24):** A dropped row (no location, MINOR over the cap) is "not admitted": it never reaches triage and is listed in the report; "accepted" stays the orchestrator's triage term.
+- [DETAIL] **S3-4 (confirmed by the maintainer, Q-33, 2026-11-24):** Pools contain only models whose data terms are valid on the day of run preparation; an expired model is skipped and named in the report; seat 1 with expired terms falls back to the first substitute and the report says so.
+- [DETAIL] **S3-5 (confirmed by the maintainer, Q-33, 2026-11-24):** The free pool excludes the endpoint `openai-codex` and every model of the OpenAI family; families come from `model_families`.
+- [DETAIL] **S3-6 (confirmed by the maintainer, Q-34, 2026-11-24):** Each physical call self-checks its own rows; the cap applies to the consolidated seat answer after merging the calls.
+- [DETAIL] **S3-7 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — with one seat per lens no share exists, so no positive trigger; the round-2 decision then follows only the early-end and minor rules; the report says the estimator is off.
+- [DETAIL] **S3-8 (confirmed by the maintainer, Q-36, 2026-11-24):** Reading A — the night exception adds one check beyond the configured limit; with `phase6_rechecks: 0` phase 6 runs once and the night exception allows one re-check.
+- [DETAIL] **S3-9 (confirmed by the maintainer, Q-32, 2026-11-24):** `round_order` is derived from `rounds` and is no key of its own; the contract drops it.
+- [DETAIL] **S3-10 (confirmed by the maintainer, Q-33, 2026-11-24):** Reading B — the free round's three models are drawn when the free round starts, from the models reachable then; seed and picks are recorded.
+- [DETAIL] **S3-11 (confirmed by the maintainer, Q-32, 2026-11-24):** `seat1_since` (see S3-1) records when the fixed seat was set; the overtake window starts there.
+- [DETAIL] **S3-12 (confirmed by the maintainer, Q-36, 2026-11-24):** A check question is valid when it cites Q-13's approved list by its exact text or a phase-6 row id that resolves in a merged change; a reworded question needs a new citation.
+- [DETAIL] **S3-13 (confirmed by the maintainer, Q-35, 2026-11-24):** "Maintainability" is the nature of the defect, assigned by the orchestrator in triage, not the reporting lens.
 
 ## Decided by the agent — the ADR number
 
