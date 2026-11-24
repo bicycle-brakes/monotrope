@@ -28,7 +28,7 @@ Chosen: tmux and durable records, as the maintainer chose in `decisions.md` Q-2 
 
 ## Interfaces
 
-- Caller → `scripts/jobs.py`: start accepts any argument vector and the caller environment, list reads records, stop identifies one job; arguments must retain their boundaries.
+- Caller → `scripts/jobs.py`: start accepts any argument vector and the whole caller environment except the four admission values, list reads records, stop identifies one job; arguments must retain their boundaries.
 - Launcher → tmux: the dedicated `coding-harness` server starts detached if absent; one unique window hosts a wrapper and the command; the wrapper owns terminal result publication after the launcher exits.
 - Wrapper → state store: a unique record and log persist under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/jobs/`; report reads them without writing lane state.
 - Command → verification: verification enters the existing `verify_lock` path itself with all four inherited admission values cleared; the launcher neither pre-acquires nor bypasses the admission.
@@ -36,7 +36,7 @@ Chosen: tmux and durable records, as the maintainer chose in `decisions.md` Q-2 
 
 ## Data model
 
-One JSON record per generated job ID stores the argument vector, runner-verb classification, working directory, started command PID, wrapper PID, recorded process group, window identity, start time, end time, exit code or signal, and log path. The launcher creates it before launch; the wrapper atomically publishes completion. A missing completion is not proof of success: list reports `lost` when the wrapper PID is gone. Stop ends the command tree but spares the wrapper to record `signal 15` and exit. Finished records are kept 14 days; the default list shows running jobs and the last 24 hours, lost records remain visible until pruned 14 days after start, and `--all` shows all retained records. The log captures both output streams. Distinct IDs and atomic replacement prevent simultaneous jobs from overwriting one another.
+One schema-validated, atomically published JSON record per generated job ID stores the argument vector, runner-verb classification, working directory, started command PID, wrapper PID, recorded process groups, each PID’s process start time, stop request, window identity, start time, end time, exit code or signal, and log path. The launcher creates it before launch; the wrapper atomically publishes completion. A missing completion is not proof of success: list reports `lost` when the wrapper PID is gone. The launcher passes the record path through the environment; stage2 adds its separately sessioned groups. Stop records its request before ending the command tree and recorded groups, spares the wrapper to record `signal 15`, and refuses finished, lost or identity-mismatched jobs. Finished records are kept 14 days; the default list shows running jobs and the last 24 hours, lost records remain visible until pruned 14 days after start, and `--all` shows all retained records. Start waits at most 10 seconds for both PIDs or records a failed start; the log captures both output streams and is pruned with its record. Distinct IDs and atomic replacement prevent simultaneous jobs from overwriting one another.
 
 ## ADR draft
 
@@ -60,8 +60,8 @@ flowchart LR
 
 **Changed**
 
-- The report also reads job state and deduplicates by started command PID; detached runner commands retain the existing verify admission.
+- The report and machine facts also read job state; the report deduplicates by started command PID and prints only the program name for other commands; detached runner commands retain the existing verify admission.
 
 **Removed**
 
-- Only the restriction on detached runner jobs in the two earlier night-run non-goals, once the decision is merged.
+- Only the restriction on detached runner verbs and make verify jobs in the three quoted earlier night-run non-goals, once the decision is merged.
