@@ -282,3 +282,13 @@ Kept from the loop record:
 > No finding.
 
 <!-- End of released loop record -->
+
+## Hand steps for the orchestrator — 2026-11-24
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- R-1 — `prompts/06-review.md` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: R-1 in findings.md.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.

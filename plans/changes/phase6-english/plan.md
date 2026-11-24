@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-tscc
@@ -77,3 +77,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM Flash: Z.ai 5
 2026-11-22 08:25:55–08:28:57 UTC, 182 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-23 20:49:18–20:55:36 UTC, 378 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-23 21:41:02–22:15:31 UTC, 2069 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-24 01:29:04–01:29:58 UTC, 54 s — repair · attempt 1 · route hand-off · model none · accepted · hand-off only, no model call, nothing repaired; document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
