@@ -204,6 +204,26 @@ def test_git_read_failure_credits_completed_reads(lab: Lab, monkeypatch: pytest.
     assert missing(verdict) == []
 
 
+def test_incomplete_search_reports_malformed_files_already_read(lab: Lab, monkeypatch: pytest.MonkeyPatch) -> None:
+    lab.branch("aaa", {"plans/changes/a/spec.md": "# No frontmatter\n"})
+    lab.branch("zzz", {"plans/changes/z/spec.md": artefact("demo-z")})
+    lab.fetch()
+    lab.tracker(["demo-z"])
+    real = subprocess.run
+
+    def fake(cmd, *args, **kwargs):
+        if cmd[0] == "git" and "ls-tree" in cmd and "refs/remotes/origin/zzz" in cmd:
+            raise subprocess.CalledProcessError(128, cmd)
+        return real(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(plans_registry.subprocess, "run", fake)
+    verdict = run(lab)
+    assert any("Branch search incomplete" in m for m in messages(verdict, Level.BLOCK))
+    assert "1 branch files with absent or unreadable frontmatter ignored" in messages(verdict, Level.INFO)
+    assert missing(verdict) == []
+    assert summary(verdict) == []
+
+
 def test_git_read_failure_in_a_non_repository_blocks(tmp_path: Path, monkeypatch) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()

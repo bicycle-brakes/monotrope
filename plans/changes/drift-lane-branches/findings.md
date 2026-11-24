@@ -288,8 +288,8 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | `scripts/plans_registry.py:_search_branches` and `check` | If an earlier branch contains a file with malformed frontmatter and a later branch read fails, the search records the malformed file but emits no INFO count for it. The incomplete-search BLOCK should coexist with the count for files already examined; only the complete-search summary must be omitted. [AC 6, AC 10] | Codex | taken — read 2026-11-24: plans_registry.check emits the malformed INFO only under `not incomplete` | — |
-| P6-2 | MAJOR | SPEC | base | `tests/test_gate_machinery.py:test_failed_branch_fetch_prevents_strict_registry` | The failed-fetch test exercises a hard-coded fixture command, not the declared strict drift gate. If the real gate replaces `&&` with `;`, a failed fetch still invokes the registry, while the fixture failure test and the real-command success test both pass. [AC 7] | Codex | taken — not a test: the fix points the failed-fetch test at the generated gate command instead of the STRICT_DRIFT_COMMAND seed | — |
+| P6-1 | MAJOR | SPEC | base | `scripts/plans_registry.py:_search_branches` and `check` | If an earlier branch contains a file with malformed frontmatter and a later branch read fails, the search records the malformed file but emits no INFO count for it. The incomplete-search BLOCK should coexist with the count for files already examined; only the complete-search summary must be omitted. [AC 6, AC 10] | Codex | fixed — tests/test_plans_registry_branches.py::test_incomplete_search_reports_malformed_files_already_read | — |
+| P6-2 | MAJOR | SPEC | base | `tests/test_gate_machinery.py:test_failed_branch_fetch_prevents_strict_registry` | The failed-fetch test exercises a hard-coded fixture command, not the declared strict drift gate. If the real gate replaces `&&` with `;`, a failed fetch still invokes the registry, while the fixture failure test and the real-command success test both pass. [AC 7] | Codex | fixed — not a test — the failed-fetch test now exercises the actual generated and local gate commands | — |
 
 Phase 6 verdict: codex 01a20c75-fd58-7dd1-92da-c7cfe8ab7592, 2026-11-24
 Reviewer session: codex 01a20c75-fd58-7dd1-92da-c7cfe8ab7592 — a fresh session reviewed: no phase-2a session was recorded
@@ -321,3 +321,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-24: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1189 files, 5597 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1189 files, 5601 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/drift-lane-branches/plan.md, plans/changes/drift-lane-branches/spec.md — unchanged

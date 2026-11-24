@@ -712,7 +712,7 @@ def test_strict_drift_gate_fetches_all_branches_before_registry(tmp_path: Path, 
 
 
 def test_failed_branch_fetch_prevents_strict_registry(tmp_path: Path, monkeypatch, capsys) -> None:
-    commands = _strict_drift_commands(tmp_path, monkeypatch, capsys)
+    commands = _real_strict_drift_commands(monkeypatch, capsys)
     for route, command in commands.items():
         route_dir = tmp_path / route
         route_dir.mkdir()
@@ -722,7 +722,7 @@ def test_failed_branch_fetch_prevents_strict_registry(tmp_path: Path, monkeypatc
         assert calls == [FETCH_CALL], route
 
 
-def test_real_strict_drift_gate_fetches_before_check(tmp_path: Path, monkeypatch, capsys) -> None:
+def _real_strict_drift_commands(monkeypatch, capsys) -> dict[str, str]:
     import ci_gates
 
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
@@ -740,7 +740,12 @@ def test_real_strict_drift_gate_fetches_before_check(tmp_path: Path, monkeypatch
         if line.startswith("plans-registry-strict\t")
     ]
     assert len(generated) == len(local) == 1
-    for route, command in (("generated", generated[0]), ("local", local[0])):
+    return {"generated": generated[0], "local": local[0]}
+
+
+def test_real_strict_drift_gate_fetches_before_check(tmp_path: Path, monkeypatch, capsys) -> None:
+    commands = _real_strict_drift_commands(monkeypatch, capsys)
+    for route, command in commands.items():
         route_dir = tmp_path / route
         route_dir.mkdir()
         code, calls = _run_with_fake_tools(command, route_dir, fetch_exit=0)

@@ -553,14 +553,14 @@ def check(branches: bool = False) -> Verdict:
                     f"{len(search.branches)} origin branches searched"
                     + (f"; branch-only on: {', '.join(sample)}" if sample else ""),
                 )
-                if search.malformed:
-                    verdict.info(
-                        f"{len(search.malformed)} branch files with absent or unreadable frontmatter ignored",
-                        "Counted once per branch and path; they are not artefacts.",
-                    )
             elif not incomplete:
                 verdict.info(
                     f"{len(laufend)} running beads checked, {len(ohne)} without artefact",
+                )
+            if search is not None and search.malformed:
+                verdict.info(
+                    f"{len(search.malformed)} branch files with absent or unreadable frontmatter ignored",
+                    "Counted once per branch and path; they are not artefacts.",
                 )
 
     # The index is generated and tracked — so it belongs in the same check as
