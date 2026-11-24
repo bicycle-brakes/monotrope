@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-7aso
@@ -185,3 +185,54 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-24: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5725 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5727 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +5 -7
+> - `tests/test_stage2.py` +14 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - P6-1: no fixed line
+> - P6-3: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-baseline/stage2/attempts/red-first-baseline/attempt-1-20261124T214522868386Z-c02575c1.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1206 files, 5727 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-baseline/stage2/attempts/red-first-baseline/attempt-2-20261124T214522868386Z-c02575c1.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1206 files, 5731 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-baseline/plan.md` +1 -0
+> - `tests/test_stage2.py` +3 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `tests/test_stage2.py`.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - P6-1: no fixed line
+> - P6-3: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-baseline/stage2/attempts/red-first-baseline/attempt-3-20261124T214522868386Z-c02575c1.md
+> ```

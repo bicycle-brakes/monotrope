@@ -21156,6 +21156,7 @@ def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dic
     ("source", "selector", "exit_code", "outcome"),
     [
         ("def test_out():\n    assert True\n", "tests/test_out.py::test_out", "0", "the named test passed"),
+        ("def test_out():\n    assert True\n", "tests/test_out.py::test_out", "5", "no test was selected"),
         (
             "import pytest\n\n\n@pytest.mark.skip\ndef test_out():\n    assert True\n",
             "tests/test_out.py::test_out",
@@ -21181,7 +21182,7 @@ def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dic
             "collection failed before any selected test ran",
         ),
     ],
-    ids=["pass", "skip", "xfail", "xpass", "collection-error"],
+    ids=["pass", "empty-selection", "skip", "xfail", "xpass", "collection-error"],
 )
 def test_red_first_reports_actual_pytest_outcomes(
     world: World, source: str, selector: str, exit_code: str, outcome: str
@@ -21190,6 +21191,10 @@ def test_red_first_reports_actual_pytest_outcomes(
     or names only a generic session status instead of the recorded outcome."""
     repair_world(world)
     (world.root / "tests" / "test_out.py").write_text(source, encoding="utf-8")
+    if outcome == "no test was selected":
+        (world.root / "tests" / "conftest.py").write_text(
+            "def pytest_collection_modifyitems(items):\n    items.clear()\n", encoding="utf-8"
+        )
     baseline = git(world.root, "rev-parse", "HEAD")
     refusal = stage2.red_first(world.root, baseline, selector, None)
     assert refusal is not None, refusal
@@ -21219,6 +21224,16 @@ def test_red_first_keeps_baseline_code_attempt_tests_and_source_state(world: Wor
     (world.root / "tests" / "test_red.py").write_text("def test_red():\n    assert True\n", encoding="utf-8")
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
     assert outcome is not None and "pytest ended 0" in outcome, outcome
+
+
+def test_red_first_retains_tail_of_single_long_diagnostic_line() -> None:
+    """Criterion 12 (coding-harness-7aso, finding P6-2). Planted fault: a single pre-record output line
+    longer than the character cap is dropped whole, leaving only the truncation marker."""
+    done = subprocess.CompletedProcess([], 4, "x" * 5000 + "conftest exploded", "")
+    shown = stage2._red_pre_record_diagnostic(done, None)
+    assert shown.startswith(stage2.RED_DIAGNOSTIC_MARKER)
+    assert shown.endswith("conftest exploded")
+    assert len(shown) <= 4000 and len(shown.splitlines()) <= 40
 
 
 def test_red_first_protects_pre_record_pytest_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

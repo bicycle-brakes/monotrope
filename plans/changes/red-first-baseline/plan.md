@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-7aso
@@ -71,10 +71,15 @@ For every reproduced in-scope fault, record the pre-fix failing regression and p
 - 11: tests/test_stage2.py::test_guard_proof_preserves_outcome_and_execution_guards — a skipped or nonqualifying planted guard leg is accepted.
 - 11: tests/test_stage2.py::test_guard_proof_uses_attempt_code_and_planted_switch — a valid clean and planted guard proof is refused.
 - 12: tests/test_stage2.py::test_red_first_protects_pre_record_pytest_diagnostics — a pre-record import error loses its exit or diagnostic, exceeds either cap, omits a required truncation marker, or leaks output after protection failure.
+- 12: tests/test_stage2.py::test_red_first_retains_tail_of_single_long_diagnostic_line — a single pre-record output line longer than the character cap is dropped whole, leaving only the truncation marker.
 
 ## Runner route — 2026-11-24
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Claude Code fails with unrecognized_model (bead coding-harness-b5pu; two failures on 2026-11-24); Sonnet as for detached-job-launcher (maintainer 2026-11-24).
+
+## Runner route — 2026-11-24
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
 
@@ -83,3 +88,6 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via
 2026-11-21 10:52:18–10:55:18 UTC, 179 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 11:14:17–11:17:22 UTC, 185 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-24 21:02:11–21:04:03 UTC, 112 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
+2026-11-24 21:45:38–22:16:41 UTC, 1863 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-24 22:16:59–22:53:39 UTC, 2199 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-24 22:53:58–23:49:07 UTC, 3309 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

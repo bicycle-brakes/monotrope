@@ -9813,14 +9813,12 @@ def _red_pre_record_diagnostic(done: subprocess.CompletedProcess, key: str | Non
     if len(lines) <= RED_DIAGNOSTIC_LINES and len(safe) <= RED_DIAGNOSTIC_CHARS:
         return safe
     kept = lines[-(RED_DIAGNOSTIC_LINES - 1) :]
-    while kept and len("\n".join([RED_DIAGNOSTIC_MARKER, *kept])) > RED_DIAGNOSTIC_CHARS:
+    while len(kept) > 1 and len("\n".join([RED_DIAGNOSTIC_MARKER, *kept])) > RED_DIAGNOSTIC_CHARS:
         kept = kept[1:]
-    if kept and len("\n".join([RED_DIAGNOSTIC_MARKER, *kept])) > RED_DIAGNOSTIC_CHARS:
-        kept = []
-    text = "\n".join([RED_DIAGNOSTIC_MARKER, *kept])
-    if len(text) > RED_DIAGNOSTIC_CHARS:
-        text = text[:RED_DIAGNOSTIC_CHARS]
-    return text
+    if kept:
+        available = RED_DIAGNOSTIC_CHARS - len(RED_DIAGNOSTIC_MARKER) - 1
+        kept[-1] = kept[-1][-available:]
+    return "\n".join([RED_DIAGNOSTIC_MARKER, *kept])
 
 
 def _remove_private(path: Path) -> str | None:
