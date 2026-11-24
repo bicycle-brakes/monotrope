@@ -1017,7 +1017,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10750 | A taken Where cell containing `scripts/:12` grants no directory scope, although removing the line selector leaves `scripts/`. A repair that creates `scripts/new.py` is therefore refused even though the named directory grants its descendants. The same happens with an untracked directory such as `newdir/:12`. [Criterion 8] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10750 | A taken Where cell containing `scripts/:12` grants no directory scope, although removing the line selector leaves `scripts/`. A repair that creates `scripts/new.py` is therefore refused even though the named directory grants its descendants. The same happens with an untracked directory such as `newdir/:12`. [Criterion 8] | Codex | taken — maintainer 2026-11-24: one more repair and re-check; a directory grant keeps its descendants after the line selector is removed (scripts/:12 grants scripts/) | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
