@@ -35,6 +35,10 @@ Runner jobs survive the launching session and remain observable (bead coding-har
 - Existing reporting recognises runner verbs from processes, and no mapped test proves survival after the orchestrator exits (same run and date, applicability).
 - A detached verify job can lose or contend with its admission if ownership is mishandled (same run and date, applicability).
 
+## Terms
+
+**Runner verb:** a command whose argument vector invokes `scripts/stage2.py` with a known verb, as recognised by `run_report.py`. Model starts by runner verbs remain routed through `scripts/stage2.py`; the launcher accepts arbitrary commands (decision Q-12).
+
 ## Acceptance criteria
 
 1. When `scripts/jobs.py start` receives any command, it starts that command in its own window on the dedicated `tmux -L coding-harness` server and the command survives termination of the caller's process tree and its own tmux sessions.
@@ -45,33 +49,29 @@ Runner jobs survive the launching session and remain observable (bead coding-har
    *Refuted by:* The command runs or the diagnostic does not identify tmux.
    *Basis:* `decisions.md#Q-7`, `decisions.md#Q-8`.
 
-3. When `jobs.py stop` targets a running job, it ends its entire process tree, including descendants in separate sessions, releases its verify admission, and leaves other jobs running.
-   *Refuted by:* A descendant or admission survives, or another job stops.
-   *Basis:* `decisions.md#Q-10`.
+3. When `jobs.py stop` targets a running job, it ends the started command’s process tree, including descendants in separate sessions, and leaves the wrapper alive to record `signal 15` and then exit; the verify admission is released and other jobs keep running.
+   *Refuted by:* A command descendant or admission survives, the wrapper cannot record `signal 15`, or another job stops.
+   *Basis:* `decisions.md#Q-10`, `decisions.md#Q-13`.
 
-4. When a job starts, its per-job record under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/jobs/` contains the command, whether it is a runner verb, process ID, tmux window, start time and log path.
+4. When a job starts, its per-job record under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/jobs/` contains the command, whether it is a runner verb, started command PID, wrapper PID, recorded process group, tmux window, start time and log path.
    *Refuted by:* A field or the location is wrong.
-   *Basis:* `decisions.md#Q-4`, `decisions.md#Q-8`, `decisions.md#Q-9`.
+   *Basis:* `decisions.md#Q-4`, `decisions.md#Q-8`, `decisions.md#Q-9`, `decisions.md#Q-13`.
 
 5. When a job ends, its wrapper records the end time and actual exit code or `signal N` for signal death, retaining the finished record for 14 days.
    *Refuted by:* The outcome is wrong or the record disappears before 14 days.
    *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`.
 
-6. When `jobs.py list` runs, it shows running jobs and jobs finished in the last 24 hours, while `--all` shows all retained records.
+6. When `jobs.py list` runs, it shows running jobs, retained lost jobs and jobs finished in the last 24 hours, while `--all` shows all retained records.
    *Refuted by:* A qualifying job is omitted or an older finished job appears without `--all`.
-   *Basis:* `decisions.md#Q-9`.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-14`.
 
-7. When `run_report.py` reports a running detached job, it reads its record and deduplicates it against process recognition by process ID.
+7. When `run_report.py` reports a running detached job, it reads its record and deduplicates it against process recognition by the started command PID.
    *Refuted by:* The job is omitted or counted twice when both sources identify it.
-   *Basis:* `decisions.md#Q-9`.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-13`.
 
 8. When a detached job runs verification, it obtains its own existing machine-wide admission, including the two-slot limit and memory floor, even if its caller holds an admission.
    *Refuted by:* It inherits a held admission, bypasses the gate or exceeds its limits.
    *Basis:* `decisions.md#Q-3`, `decisions.md#Q-9`.
-
-9. When a runner verb starts a model, the model invocation continues through `scripts/stage2.py`.
-   *Refuted by:* A runner verb introduced or changed by this work invokes a model outside that entry point.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-8`.
 
 10. When the launcher is installed through the kit, its mechanism and required dependencies are available in the destination repository.
     *Refuted by:* The installed kit cannot invoke the launcher because a required mechanism is absent.
@@ -93,17 +93,17 @@ Runner jobs survive the launching session and remain observable (bead coding-har
     *Refuted by:* The updated guidance removes the wake before advance lands.
     *Basis:* `decisions.md#Q-6`.
 
-15. When the background guidance is updated, it requires `jobs.py` for runner verbs that run a full `make verify`, permits harness background mode for short commands and retains the interim wake.
+15. When the background guidance is updated, it requires `jobs.py` for runner verbs that run a full `make verify` and for a bare `make verify`, permits harness background mode for short commands and retains the interim wake.
     *Refuted by:* Either route or the wake is omitted or contradicted.
-    *Basis:* `decisions.md#Q-11`, `decisions.md#Q-6`.
+    *Basis:* `decisions.md#Q-11`, `decisions.md#Q-6`, `decisions.md#Q-12`.
 
-16. When a job starts, it receives the caller's working directory, PATH, virtual environment, XDG_STATE_HOME and HARNESS_VERIFY_* values, except held-admission markers which must not be inherited.
-    *Refuted by:* The job observes a server value instead of a supplied caller value or inherits a held admission.
-    *Basis:* `decisions.md#Q-8`, `decisions.md#Q-9`.
+16. When a job starts, it receives the caller's working directory, PATH including its virtual-environment prefix, `VIRTUAL_ENV`, `XDG_STATE_HOME` and `HARNESS_VERIFY_*` values, excluding `HARNESS_VERIFY_LOCK_HELD`, `HARNESS_VERIFY_LOCK_TOKEN`, `HARNESS_VERIFY_ADMISSION_ID` and `HARNESS_VERIFY_ADMISSION_WAIT`.
+    *Refuted by:* The job observes a server value instead of a supplied caller value or inherits any of the four excluded admission values.
+    *Basis:* `decisions.md#Q-8`, `decisions.md#Q-9`, `decisions.md#Q-14`.
 
-17. If a job's process ID is gone without an end record, `jobs.py list` reports it as lost.
+17. If a job's wrapper PID is gone without an end record, `jobs.py list` reports it as lost until its record is pruned 14 days after its start.
     *Refuted by:* The vanished job remains running or is reported as successfully finished.
-    *Basis:* `decisions.md#Q-10`.
+    *Basis:* `decisions.md#Q-10`, `decisions.md#Q-13`, `decisions.md#Q-14`.
 
 18. When no dedicated tmux server exists, start creates it detached and launches the job without requiring an attached tmux session.
     *Refuted by:* A caller outside tmux cannot launch despite an available tmux binary.

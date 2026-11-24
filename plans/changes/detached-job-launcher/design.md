@@ -31,12 +31,12 @@ Chosen: tmux and durable records, as the maintainer chose in `decisions.md` Q-2 
 - Caller → `scripts/jobs.py`: start accepts any argument vector and the caller environment, list reads records, stop identifies one job; arguments must retain their boundaries.
 - Launcher → tmux: the dedicated `coding-harness` server starts detached if absent; one unique window hosts a wrapper and the command; the wrapper owns terminal result publication after the launcher exits.
 - Wrapper → state store: a unique record and log persist under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/jobs/`; report reads them without writing lane state.
-- Command → verification: verification enters the existing `verify_lock` path itself with inherited held-admission markers cleared; the launcher neither pre-acquires nor bypasses the admission.
+- Command → verification: verification enters the existing `verify_lock` path itself with all four inherited admission values cleared; the launcher neither pre-acquires nor bypasses the admission.
 - Kit → destination: launcher and its imports travel as mechanisms; tmux remains a host prerequisite.
 
 ## Data model
 
-One JSON record per generated job ID stores the argument vector, runner-verb classification, working directory, process ID, window identity, start time, end time, exit code or signal, and log path. The launcher creates it before launch; the wrapper atomically publishes completion. A missing completion is not proof of success: list reports `lost` when the recorded process is gone. Finished records are kept 14 days; the default list shows running jobs and the last 24 hours, and `--all` shows all retained records. The log captures both output streams. Distinct IDs and atomic replacement prevent simultaneous jobs from overwriting one another.
+One JSON record per generated job ID stores the argument vector, runner-verb classification, working directory, started command PID, wrapper PID, recorded process group, window identity, start time, end time, exit code or signal, and log path. The launcher creates it before launch; the wrapper atomically publishes completion. A missing completion is not proof of success: list reports `lost` when the wrapper PID is gone. Stop ends the command tree but spares the wrapper to record `signal 15` and exit. Finished records are kept 14 days; the default list shows running jobs and the last 24 hours, lost records remain visible until pruned 14 days after start, and `--all` shows all retained records. The log captures both output streams. Distinct IDs and atomic replacement prevent simultaneous jobs from overwriting one another.
 
 ## ADR draft
 
@@ -60,7 +60,7 @@ flowchart LR
 
 **Changed**
 
-- The report also reads job state and deduplicates by process ID; detached runner commands retain the existing verify admission.
+- The report also reads job state and deduplicates by started command PID; detached runner commands retain the existing verify admission.
 
 **Removed**
 
