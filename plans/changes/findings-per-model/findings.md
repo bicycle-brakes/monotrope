@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -713,3 +713,14 @@ Reviewer session: codex 01a20f30-22de-7902-998d-72ca8dc6dad1 — a fresh session
 Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5712 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5732 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | implementation | `scripts/check_finding_duplicates.py`, `marks_duplicate` | A newly added row with status `rejected — same as L1-1: see L2-2` passes the duplicate-form gate, although it names `L1-1` as a duplicate and does not use the required canonical form. The status parser rejects the trailing ID, so `marks_duplicate` returns false and the gate reports no finding. The report also marks this legacy status unreadable instead of recognizing the duplicate. [Criteria 7 and 9] | Codex | open | — |
+
+Phase 6 verdict: codex 01a20fe3-dadd-7523-b3fa-a0c20a3131db, 2026-11-25
+Reviewer session: codex 01a20fe3-dadd-7523-b3fa-a0c20a3131db — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
