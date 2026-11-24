@@ -330,3 +330,78 @@ context: |
   Architecture change: none.
 
 In the context of lost jobs and the job's environment, facing two readings with different builds, we decided as answered above, to achieve one testable reading for the redraft, accepting the limits named in the answer. — 2026-11-24
+
+## Q-15 · Ambiguity S-18
+
+asked: 2026-11-24
+answer: "B — `jobs.py stop` first writes a stop request into the job's JSON record; when the wrapper sees it, it records `signal 15` as the end, whatever exit status the command returned (a runner verb traps SIGTERM and exits 143). Options put: stop marker in the record (recommended); record the raw exit status."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the end record of a stopped job.
+  Intention: settle spec-review round three (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: stage2.py, verify_run.py and verify_lock.py trap SIGTERM and exit 128+N.
+  Repository change: the stop marker in the job record; the wrapper's end rule.
+  Architecture change: none beyond the ADR of Q-11.
+
+In the context of the end record of a stopped job, facing readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-16 · Ambiguity S-19
+
+asked: 2026-11-24
+answer: "B, narrowed — the ADR exempts exactly the two declared job kinds, runner verbs (`scripts/stage2.py` with a verb) and `make verify`; every other detached command stays under the quoted non-goals. Options put: the two declared kinds (recommended); every job jobs.py starts."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the reach of the ADR exemption.
+  Intention: settle spec-review round three (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: AC 13 exempts 'detached runner jobs' without defining them.
+  Repository change: the ADR text and the kind field of the record.
+  Architecture change: none beyond the ADR of Q-11.
+
+In the context of the reach of the ADR exemption, facing readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-17 · Ambiguity S-20
+
+asked: 2026-11-24
+answer: "B — every `scripts/stage2.py` verb, and `make verify`, is started through jobs.py; the harness background mode stays for commands outside the runner only. Options put: all runner verbs through jobs.py (recommended); background mode for everything that needs no full verify."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which commands must use jobs.py.
+  Intention: settle spec-review round three (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: AGENTS.md starts long runner jobs in the harness background mode.
+  Repository change: the guidance in AGENTS.md and docs/WORKFLOW.md (AC 15).
+  Architecture change: none beyond the ADR of Q-11.
+
+In the context of which commands must use jobs.py, facing readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-18 · Records, processes and environment (spec review S-21, S-22, S-23, S-24)
+
+asked: 2026-11-24
+answer: "Job records are schema-validated JSON written atomically by code (house rule 11, code before prose). S-21: jobs.py passes the record path to the command in an environment variable; scripts/stage2.py adds every process group it starts in its own session to that record; stop ends all recorded groups plus the process tree. S-22: every recorded PID is stored with its process start time; a PID whose start time differs counts as gone; stop on a finished, lost or mismatched job refuses with exit 2. S-23: a job is a runner verb when its argv runs `scripts/stage2.py` followed by a word that is not an option; jobs.py does not import stage2.py. S-24: the job receives the calling process's whole environment except the four HARNESS_VERIFY admission values, set explicitly per job, never the tmux server's environment. Options put: the orchestrator's recommendations, confirmed by the maintainer with the four critical points (S-21, S-22, S-24, S-25) explained."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: job records, process identity and environment.
+  Intention: settle spec-review round three (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the record format is open; groups started inside the command are known only in stage2's memory; a tmux server keeps its first caller's environment.
+  Repository change: the JSON record and its schema; stage2.py writes its process groups when a record path is given; jobs.py environment handling.
+  Architecture change: none beyond the ADR of Q-11.
+
+In the context of job records, process identity and environment, facing readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-19 · Report, ADR neighbours and lifecycle details (spec review S-25..S-29)
+
+asked: 2026-11-24
+answer: "S-25: run_report shows a job that is not a runner verb by its program name only, never its arguments. S-26: the ADR quotes and exempts night-heartbeat's 'runner process supervision' non-goal as well. S-27: start returns only when the record holds both PIDs, waiting at most 10 seconds; otherwise exit 1 and the record state 'failed to start'. S-28: the log holds the command's standard output and standard error and is pruned with its record; the 14 days run from the end, for a lost job from its start. S-29: the machine-facts jobs field reads the job records as well. Options put: the orchestrator's recommendations (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: reporting and lifecycle details.
+  Intention: settle spec-review round three (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: run_report prints only summary fields; the ADR names one non-goal per neighbour.
+  Repository change: run_report.py, machine_facts.py, the ADR text, jobs.py start and prune.
+  Architecture change: none beyond the ADR of Q-11.
+
+In the context of reporting and lifecycle details, facing readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
