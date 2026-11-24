@@ -404,3 +404,33 @@ context: |
   Architecture change: none.
 
 In the context of the untestable remote-data criterion, facing readings with different exit codes or tests, we decided as answered above, to achieve one testable reading, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-20 · Instruction and lanes file as JSON (amends Q-11, Q-13)
+
+asked: 2026-11-24
+answer: "B — the driver reads the next-step instruction only from `next.json` beside the loop record (bead coding-harness-hwll, its decision Q-6), never from loop.md; a missing file means nothing to do, an unreadable or schema-invalid file stops the lane. An instruction counts as used when the file's content (including its written time) is unchanged after the step the driver started from it. The lanes file is JSON, `$XDG_STATE_HOME/coding-harness/lanes.json`, schema-validated, written atomically under the Q-14 lock, park marks included; it replaces lanes.yaml. Maintainer rule of 2026-11-24: code before prose; Markdown only where it cannot be avoided. Options put: keep loop.md behind one reader function (recommended at the time); JSON now (chosen); wait for bead coding-harness-5ane.11."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the driver's state files.
+  Intention: replace the Markdown and YAML state of Q-11 with schema-validated JSON.
+  Today: Q-11 reads the latest `next:` line from loop.md and keeps lanes.yaml.
+  Repository change: scripts/lanes.py reads next.json and owns lanes.json with a schema.
+  Architecture change: none beyond Q-1.
+
+In the context of the driver's inputs, facing control state parsed from Markdown, we decided on JSON instruction and lanes files, to achieve inputs code reads without patterns, accepting a fourth spec review — 2026-11-24
+
+## Q-21 · Fourth spec-review round
+
+asked: 2026-11-24
+answer: "authorized — the maintainer answered yes on 2026-11-24: one fourth spec-review round (Opus, phase 2a) of the final draft a6479b39, because Q-20 changes the spec after the third round. Options put: a fourth review for both lanes (recommended); re-slice the JSON instruction into its own change."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the changed spec is reviewed again.
+  Intention: the runner admits a spec change after round three only with this authorization.
+  Today: AGENTS.md phase 2a ends spec review after round three.
+  Repository change: none.
+  Architecture change: none.
+
+In the context of a spec changed after its third review, facing an unreviewed contract, we decided on one fourth spec review, to achieve a checked spec before phase 4, accepting one more Opus run — 2026-11-24
