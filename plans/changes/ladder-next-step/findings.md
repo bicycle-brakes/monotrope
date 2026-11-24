@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-21
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -62,3 +62,5 @@ Stage-2 call, 2026-11-21: spec-review · endpoint claude-code-plan · model clau
 | S-15 | MINOR | SPEC | base | `spec.md` Acceptance criteria 8 and 10; `prompts/02a-spec-review.md:16-18` | `prompts/02a-spec-review.md:16-18` states that "The review loop between the two phases runs until a round is clean — a free-model swarm, a Flash swarm, then the paid ladder". Criterion 10 treats this same statement as false in `prompts/06-review.md`, and the S-11 decision aligns it in `prompts/04b-review-loop.md`, `docs/WORKFLOW.md` and `AGENTS.md`. Criterion 8 names three files and criterion 10 names one; neither names this prompt. The prompt can stay as written with every criterion green, while a loop can now reach phase 6 without a clean round. | Opus | in spec — [DETAIL] decided by the orchestrator: also align prompts/02a-spec-review.md:16-18 ('runs until a round is clean') in criterion 8/10 | — |
 
 Stage-2 call, 2026-11-21: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1152 files, 5063 commits, 12 rules.
+
+Stage-2 call, 2026-11-24: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1152 files, 5659 commits, 12 rules.

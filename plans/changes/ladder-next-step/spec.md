@@ -3,8 +3,8 @@ title: "Spec — ladder-next-step"
 status: draft
 implementation_status: none
 date: 2026-11-20
-last_reviewed: 2026-11-21
-updated: 2026-11-21
+last_reviewed: 2026-11-24
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -24,7 +24,7 @@ A consumed review ladder names the next action without stopping a lane for a new
 
 ## Problem
 
-At commit `8cfb9de8`, a run whose review stages are consumed refuses with the same message whether the last round's taken findings are repaired or still open; a session must inspect the record and apply the maintainer's rule by hand (`research.md`, "What exists today"). The workflow and reviewer prompts still describe this state as a stop for the maintainer, although the maintainer decided the next step on 2026-11-20 (`research.md`, "Doctrine texts carrying today's behavior"; `decisions.md` Q-1).
+At commit `8cfb9de8`, a run whose review stages are consumed refuses with the same message whether the last round's taken findings are repaired or still open; a session must inspect the record and apply the maintainer's rule by hand (`research.md`, "What exists today"). The workflow and reviewer prompts still describe this state as a stop for the maintainer, although the maintainer decided the next step on 2026-11-20 (`research.md`, "Doctrine texts carrying today's behavior"; `decisions.md` Q-1). On 2026-11-24 the maintainer chose a schema-validated JSON instruction beside the loop record so consumers can read machine state instead of parsing Markdown (`decisions.md` Q-6).
 
 ## Terms
 
@@ -37,7 +37,7 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
 2. When a consumed ladder's last round has a taken finding awaiting repair and the other applicable stops permit it, `review-loop` exits 0 with standard output exactly `next: repair <change>` and a newline, using the actual change name, including when that taken row has no `Broke a test` mark yet.
    *Refuted by:* a refusal for an unmarked taken row, another exit code, or any different, additional, missing or duplicated standard output.
 3. When a consumed ladder names a next step, it starts neither a reviewer nor a repair and does not reset, release or advance the run.
-   *Refuted by:* a model or repair call, a release, a fresh run, or changed run history caused by requesting the next step.
+   *Refuted by:* a model or repair call, a release, a fresh run, or changed loop history caused by requesting the next step; publishing the instruction in criterion 16 is allowed.
 4. When a consumed ladder is reconstructed from released history, the next step reflects the last completed round of that same run.
    *Refuted by:* a released repaired round naming repair, a released unrepaired round naming review, or a new stage being admitted.
 5. When a row has no decision, a fixed row lacks its evidence mark, or an origin, record-integrity, clean-round or repair-brake stop applies, the existing stop holds before a consumed-ladder next step is reported.
@@ -64,9 +64,24 @@ At commit `8cfb9de8`, a run whose review stages are consumed refuses with the sa
 15. When the next-step rule passes over unconsumed models because their admission fails, it names each passed-over model and its admission failure reason on standard error.
     *Refuted by:* omitting any passed-over model or its reason, or writing a diagnostic to standard output.
 
+16. When `review-loop` names a next step, it publishes a schema-validated `next.json` beside that run's loop record with the same change and verb as its standard-output line.
+    *Refuted by:* a missing or invalid file, a file in another run's state directory, or a change or verb that differs from the printed instruction.
+17. When a next-step record is validated, the declared schema requires schema version 1, the change name, a verb from `review`, `repair`, or `hand`, row identifiers for `hand`, the producing verb, and the UTC writing time.
+    *Refuted by:* accepting a missing or malformed required field, an unsupported version or verb, or a `hand` instruction without row identifiers; or rejecting a valid record for any of the three verbs.
+18. When `review-loop` publishes a next-step record, the producing verb is `review-loop`, the timestamp is the UTC time of publication, and the row identifiers are empty for `review` and `repair`.
+    *Refuted by:* a wrong producer, a non-UTC or stale timestamp, or row identifiers on a review or repair instruction.
+19. When a next-step record is published, it is written to a temporary file in the same directory and atomically replaces `next.json` only after schema validation.
+    *Refuted by:* direct truncation or partial visibility, publication of an invalid record, or a failed replacement leaving partial JSON at the destination.
+20. If validation or publication of the instruction fails, `review-loop` reports the failure and does not exit 0 or print a `next:` instruction.
+    *Refuted by:* a successful exit or next-step line when validation or replacement fails, or a failure with no diagnostic.
+21. When `review-loop` starts processing a run, it invalidates that run's previous next-step instruction before reporting a new outcome.
+    *Refuted by:* a prior instruction remaining readable as current after that invocation refuses, writes a round, or reaches a clean stop.
+22. When the next-step instruction is persisted, it is not written to `loop.md` or any other Markdown file.
+    *Refuted by:* any Markdown file gaining the instruction as machine state.
+
 ## Non-goals
 
-Starting the named verb automatically; changing the review ladder, its membership, restart authority, repair brake or clean-stop exit; adding a separate phase-6 check or changing the existing full verification and whole-diff review; resetting a run's history; changing the night-run wake or other consumers.
+Starting the named verb automatically; changing the review ladder, its membership, restart authority, repair brake or clean-stop exit; adding a separate phase-6 check or changing the existing full verification and whole-diff review; resetting a run's history; changing the night-run wake or other consumers; implementing the `hand` producer in the separate advance-verb change.
 
 ## Protected areas
 
@@ -75,7 +90,7 @@ Model declarations and terms, ADRs, tracker data and availability policy are out
 ## Definition of Done
 
 - `make verify` green.
-- `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, `prompts/02a-spec-review.md`, `prompts/06-review.md` and `AGENTS.md` move with the code; no ADR changes in this pull request. The consumed-ladder amendment of ADR 0021 is already in this worktree (commit `4755e255`); this change merges after that decision pull request (`decisions.md` Q-2).
+- The next-step schema and validator, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md`, `prompts/02a-spec-review.md`, `prompts/06-review.md` and `AGENTS.md` move with the code; no ADR changes in this pull request. The consumed-ladder amendment of ADR 0021 is already in this worktree (commit `4755e255`); this change merges after that decision pull request (`decisions.md` Q-2).
 - Protected areas untouched and non-goals unbuilt, shown by the pull request's file list.
 - The pull request closes `coding-harness-hwll` and its last commit carries `Closes-Bead: coding-harness-hwll`.
 - Special runs: none.
@@ -85,3 +100,5 @@ Model declarations and terms, ADRs, tracker data and availability policy are out
 None open. [DETAIL] The existing full verification and whole-diff review constitute the phase-6 check of the last repair; no additional reviewer task is implied (`decisions.md`, interview minimum). [DETAIL] The next-step line is the entire standard output and diagnostics go to standard error, so a caller can read it without parsing other messages (phase-2a S-2). [DETAIL] Exclusion diagnostics retain the existing all-paid-stages-excluded case and use current declaration reasons, avoiding a new snapshot contract (phase-2a S-3). [DETAIL] The phase-4 appetite is four hours including repairs: this bounded change alters an existing stop and its tests, and the limit provides a concrete stop for the implementer.
 
 [DETAIL] Apply the same current admission check to rungs and Flash members, and count only an admissible unconsumed rung as a replacement, so ineligible models cannot keep a spent run blocked (phase-2a S-12 and S-13). [DETAIL] Name each passed-over model and reason on standard error to preserve the reason for its exclusion while keeping standard output machine-readable (phase-2a S-14). [DETAIL] Align the spec-review prompt as well, so it describes both terminal paths consistently (phase-2a S-15).
+
+[DETAIL] Schema version 1 uses an empty row list for `review` and `repair` and a nonempty list for `hand`; the common shape lets the later hand producer use the same validator. A new invocation removes its prior instruction before computing its outcome so a refused or advanced run does not retain an obsolete instruction. The separate advance-verb change owns the `hand` producer; this change supplies its schema and validator (`decisions.md` Q-6).

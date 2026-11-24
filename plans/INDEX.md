@@ -621,9 +621,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/journal-citation-gate/spec.md`](changes/journal-citation-gate/spec.md) | draft | none | 2026-11-19 | coding-harness-x9ed |
 | [`changes/ladder-next-step/decisions.md`](changes/ladder-next-step/decisions.md) | draft | none | 2026-11-20 | coding-harness-hwll |
 | [`changes/ladder-next-step/findings.md`](changes/ladder-next-step/findings.md) | draft | none | 2026-11-20 | coding-harness-hwll |
-| [`changes/ladder-next-step/plan.md`](changes/ladder-next-step/plan.md) | draft | none | 2026-11-21 | coding-harness-hwll |
+| [`changes/ladder-next-step/plan.md`](changes/ladder-next-step/plan.md) | draft | none | 2026-11-24 | coding-harness-hwll |
 | [`changes/ladder-next-step/research.md`](changes/ladder-next-step/research.md) | draft | none | 2026-11-20 | coding-harness-hwll |
-| [`changes/ladder-next-step/spec.md`](changes/ladder-next-step/spec.md) | draft | none | 2026-11-21 | coding-harness-hwll |
+| [`changes/ladder-next-step/spec.md`](changes/ladder-next-step/spec.md) | draft | none | 2026-11-24 | coding-harness-hwll |
 | [`changes/loop-structure-first/research.md`](changes/loop-structure-first/research.md) | draft | none | 2026-10-14 | coding-harness-mvk |
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |

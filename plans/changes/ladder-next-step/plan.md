@@ -3,8 +3,8 @@ title: "Plan — ladder-next-step"
 status: draft
 implementation_status: none
 date: 2026-11-20
-last_reviewed: 2026-11-21
-updated: 2026-11-21
+last_reviewed: 2026-11-24
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -18,8 +18,8 @@ tags: [plan, stage-2, review-loop]
 # Plan — ladder-next-step
 
 ```text
-For you:     A consumed review ladder names whether to repair or proceed to review.
-Done when:   Both next steps and the existing safety stops are tested, and make verify is green.
+For you:     A consumed review ladder names whether to repair or proceed to review and saves that instruction as machine-readable state.
+Done when:   Both next steps, their saved instruction and the existing safety stops are tested, and make verify is green.
 Appetite:    4 hours of phase 4, including repairs; stop at the limit.
 Not now:     Automatically starting the next step or changing the ladder and its restart rules.
 Pre-mortem:  suppose it failed: most likely because released history is mistaken for a fresh run.
@@ -29,17 +29,20 @@ Starts unless you say stop.
 ## Files and steps
 
 1. `tests/test_stage2.py`: add the ledger's regression tests, exercising the CLI exit, both streams and side effects; adapt the existing spent-refusal assertions in `test_the_loop_stops_at_three_rounds`, `test_the_loop_stops_when_the_ladder_ends`, `test_round_history_survives_split_releases_and_config_edits`, and `test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung`.
-2. `scripts/stage2.py`: in the existing `review_loop` path, reconstruct the same run and last round, distinguish an unmarked `taken` row in that last round from an undecided or unmarked `fixed` row, and preserve all other refusals and the clean and repair-brake stops. For the next-step rule, evaluate unconsumed paid rungs and Flash members against the current declaration admission check, including expired, missing or malformed terms dates, dated skips, exclusions, removed models and unread retention or training terms: an inadmissible rung counts as consumed; a Flash stage remains eligible if any member is admissible or replaceable by an unconsumed admissible rung outside that stage, otherwise it counts as consumed. A cut last round cannot trigger the clean stop even with no accepted findings. Only for an exhausted run with at least one completed post-restart round, return normally after writing exactly the specified `next:` line to stdout; send any existing all-paid-excluded reasons computed from the current declaration to stderr, and name each unconsumed model passed over for failed admission with its reason on stderr. Do not invoke another verb or persist a state change; zero-round outages retain exit 2. Keep the unmarked-taken exception limited to this consumed path and preserve earlier-row and non-consumed safeguards.
-3. `docs/WORKFLOW.md`: update the phase table, verb exit description and review-loop doctrine with the next steps and the existing fresh verification and independent whole-diff review, preserving restart and other stops.
-4. After the accepted implementation attempt, the **orchestrator** edits held paths: `prompts/04b-review-loop.md` describes the next steps and verification sequence; `prompts/02a-spec-review.md` describes the clean and exhausted paths; `prompts/06-review.md` says the loop may finish on a consumed ladder after repair without changing the reviewer's task; `AGENTS.md` rewords its exhausted-ladder bullet as decided in `decisions.md` Q-3. Align the phase tables and loop descriptions in `AGENTS.md`, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md` and `prompts/02a-spec-review.md` so they no longer require a clean round on the exhausted path. The attempt must not edit the held paths.
-5. `plans/changes/ladder-next-step/spec.md`, `plans/changes/ladder-next-step/plan.md`, and `plans/changes/ladder-next-step/findings.md` hold the revised yardstick, plan and disposition of the spec-review rows; change them only if review requires it. `plans/INDEX.md`: regenerate through the repository's index writer if artifact headers make it stale.
+2. `scripts/stage2.py`: in the existing `review_loop` path, reconstruct the same run and last round, distinguish an unmarked `taken` row in that last round from an undecided or unmarked `fixed` row, and preserve all other refusals and the clean and repair-brake stops. For the next-step rule, evaluate unconsumed paid rungs and Flash members against the current declaration admission check, including expired, missing or malformed terms dates, dated skips, exclusions, removed models and unread retention or training terms: an inadmissible rung counts as consumed; a Flash stage remains eligible if any member is admissible or replaceable by an unconsumed admissible rung outside that stage, otherwise it counts as consumed. A cut last round cannot trigger the clean stop even with no accepted findings. Only for an exhausted run with at least one completed post-restart round, return normally after writing exactly the specified `next:` line to stdout; send any existing all-paid-excluded reasons computed from the current declaration to stderr, and name each unconsumed model passed over for failed admission with its reason on stderr. Do not invoke another verb or alter the loop history; publish the next-step state as described below and retain exit 2 for zero-round outages. Keep the unmarked-taken exception limited to this consumed path and preserve earlier-row and non-consumed safeguards.
+3. `scripts/next_step_schema.json`: declare a version-1 JSON schema with required fields `schema_version` (integer 1), `change` (nonempty string), `verb` (`review`, `repair` or `hand`), `row_ids` (array of nonempty strings; nonempty for `hand`, empty otherwise), `producer` (nonempty verb name), and `written_at` (UTC timestamp in RFC 3339 form ending in `Z`); reject unknown fields. `scripts/next_step.py`: supply the one shared validator against that declaration and an atomic state publisher; require real UTC timestamps and reject booleans as schema versions. Use only dependencies available to the existing runner, and expose validation for the later `hand` producer.
+4. `scripts/stage2.py`: under the run's existing record lock, remove any prior `next.json` at the start of processing; on the consumed path build and validate the record, then write a same-directory temporary file and replace the destination before emitting stdout. A validation, deletion or write failure reports an error and cannot report success. The instruction resides in `record_dir(change, root) / "next.json"`, including the existing `XDG_STATE_HOME` fallback and worktree digest; do not write it to Markdown. The producer is `review-loop`; do not add the separate `advance` producer.
+5. `tests/test_next_step.py`: test the schema and publisher directly, including all verbs, invalid fields, UTC, replacement failure, and absence of partial publication; `tests/test_stage2.py` exercises integration, output correspondence, isolation by run, and stale-instruction invalidation on all outcomes.
+6. `docs/WORKFLOW.md`: update the phase table, verb exit description and review-loop doctrine with the next steps and the existing fresh verification and independent whole-diff review, preserving restart and other stops.
+7. After the accepted implementation attempt, the **orchestrator** edits held paths: `prompts/04b-review-loop.md` describes the next steps and verification sequence; `prompts/02a-spec-review.md` describes the clean and exhausted paths; `prompts/06-review.md` says the loop may finish on a consumed ladder after repair without changing the reviewer's task; `AGENTS.md` rewords its exhausted-ladder bullet as decided in `decisions.md` Q-3. Align the phase tables and loop descriptions in `AGENTS.md`, `docs/WORKFLOW.md`, `prompts/04b-review-loop.md` and `prompts/02a-spec-review.md` so they no longer require a clean round on the exhausted path. The attempt must not edit the held paths.
+8. `plans/changes/ladder-next-step/spec.md`, `plans/changes/ladder-next-step/plan.md`, and `plans/changes/ladder-next-step/findings.md` hold the revised yardstick, plan and disposition of the spec-review rows; change them only if review requires it. `plans/INDEX.md`: regenerate through the repository's index writer if artifact headers make it stale.
 
-Do not edit ADRs, model declarations, tracker data or availability policy; the ADR 0021 amendment is a separate decision and this change merges after it. Do not start the named verb automatically or change the ladder, restart authority, repair brake, clean-stop exit, night-run wake or phase-6 review task.
+Do not edit ADRs, model declarations, tracker data, availability policy, `scripts/lanes.py` or other consumers; the ADR 0021 amendment is a separate decision and this change merges after it. Do not start the named verb automatically or change the ladder, restart authority, repair brake, clean-stop exit, night-run wake or phase-6 review task.
 
 ## Verification
 
 ```sh
-.venv/bin/python -m pytest -q -n 4 -p no:cacheprovider tests/test_stage2.py
+.venv/bin/python -m pytest -q -n 4 -p no:cacheprovider tests/test_stage2.py tests/test_next_step.py
 make verify
 ```
 
@@ -47,7 +50,7 @@ make verify
 
 - 1: not yet written tests/test_stage2.py::test_spent_ladder_names_review_after_repair — exit or exact stdout differs after a repaired last round.
 - 2: not yet written tests/test_stage2.py::test_spent_ladder_names_repair_for_taken_row — a marked or unmarked taken row refuses or yields the wrong exit or stdout.
-- 3: not yet written tests/test_stage2.py::test_spent_ladder_next_step_does_not_start_or_mutate — a reviewer or repair starts or the run changes.
+- 3: not yet written tests/test_stage2.py::test_spent_ladder_next_step_does_not_start_or_mutate — a reviewer or repair starts or loop history changes; the next-step file is allowed.
 - 4: not yet written tests/test_stage2.py::test_spent_ladder_next_step_after_release — reconstructed repaired or taken rows name the wrong action or admit a stage.
 - 5: not yet written tests/test_stage2.py::test_spent_ladder_preserves_prior_stops — an undecided row, unmarked fixed row, invalid origin or record, clean stop or repair brake is bypassed; non-consumed and earlier-row guards remain in force.
 - 6: not yet written tests/test_stage2.py::test_spent_ladder_retains_paid_exclusion_reasons — current all-excluded reasons are absent from stderr, appear on stdout, or remain after a declaration edit resolves them.
@@ -62,9 +65,18 @@ make verify
 
 - 15: not yet written tests/test_stage2.py::test_spent_ladder_reports_each_inadmissible_model — an omitted model or reason, or a diagnostic on stdout.
 
+- 16: not yet written tests/test_stage2.py::test_spent_ladder_publishes_matching_next_instruction — the file is absent, invalid, in the wrong run directory, or disagrees with stdout.
+- 17: not yet written tests/test_next_step.py::test_schema_validates_next_instruction — a required or malformed field, unsupported version or verb, or a hand instruction without row ids is accepted, or a valid verb is rejected.
+- 18: not yet written tests/test_stage2.py::test_next_instruction_has_producer_utc_time_and_no_rows — the producer, current UTC time or empty row list is wrong.
+- 19: not yet written tests/test_next_step.py::test_publisher_validates_and_atomically_replaces — invalid or partial JSON is published or a failed replacement damages the destination.
+- 20: not yet written tests/test_stage2.py::test_next_instruction_failure_does_not_report_success — validation or publication failure exits 0, emits the instruction, or lacks a diagnostic.
+- 21: not yet written tests/test_stage2.py::test_review_loop_invalidates_previous_instruction — a stale instruction remains after a refusal, new round or clean stop.
+- 22: not yet written tests/test_stage2.py::test_next_instruction_never_enters_markdown — a Markdown file gains the persisted instruction.
+
 ## Time used
 
 2026-11-20 14:51:43–14:54:03 UTC, 140 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 01:31:09–01:34:16 UTC, 186 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 10:33:16–10:36:36 UTC, 200 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-21 10:51:24–10:53:15 UTC, 111 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-24 15:37:51–15:40:37 UTC, 166 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
