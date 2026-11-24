@@ -434,3 +434,63 @@ context: |
   Architecture change: none.
 
 In the context of a spec changed after its third review, facing an unreviewed contract, we decided on one fourth spec review, to achieve a checked spec before phase 4, accepting one more Opus run — 2026-11-24
+
+## Q-22 · Writers of lanes.json and a cap on all steps (spec review S-32, S-33)
+
+asked: 2026-11-24
+answer: "S-32: scripts/lanes.py gets the subcommands `add`, `remove`, `clear` and `hold`; each writes lanes.json under the same lock as `advance`; lanes.json is never edited by hand (house rule 11); the night routine adds a lane when its work starts and removes the entry before its worktree is removed. S-33: besides the verify-bearing limit, every lane runs at most a configured number of steps of any kind per call, a key in the central setting, initial value 6, range 1-20; reaching it ends the lane for the call like the verify-bearing limit. Options put: the orchestrator's recommendations (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: who writes lanes.json and what bounds a call.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of who writes lanes.json and what bounds a call, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-23 · Ambiguity S-34
+
+asked: 2026-11-24
+answer: "A — the step that reaches a limit ends the lane before the driver reads the next.json it leaves; the lane counts as advanced, without a park mark; the next call reads the new file. Options put: end before reading (recommended); judge the new file first."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the step at the limit.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of the step at the limit, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-24 · Ambiguity S-35
+
+asked: 2026-11-24
+answer: "B — a missing lanes.json lists no lanes: the call has nothing to do and exits 0; an existing but unreadable or schema-invalid file still refuses with exit 2. Options put: missing means no lanes (recommended); missing refuses the call."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: a missing lanes file.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of a missing lanes file, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-25 · Mark reading and signal deaths (spec review S-36, S-37)
+
+asked: 2026-11-24
+answer: "S-36: a call reads a lane's entry and park mark again under that lane's lock when its turn comes, not only at call start. S-37: a step that ends by a signal (128+N) or without an exit code counts as a failed step and parks its lane. Options put: the orchestrator's recommendations (confirmed)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: when marks are read and how a killed step counts.
+  Intention: settle spec-review round four (Opus, 2026-11-24) before the final draft; no further review round can run.
+  Today: the reviewed spec leaves this open (findings.md, round four).
+  Repository change: the spec text of the final draft.
+  Architecture change: none.
+
+In the context of when marks are read and how a killed step counts, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
