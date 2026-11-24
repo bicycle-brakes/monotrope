@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -190,7 +191,106 @@ def _bestand_ramp(offen: set[str]) -> Ramp:
     )
 
 
-def check() -> Verdict:
+class _GitReadError(Exception):
+    """A Git read of the branch search failed; the search is then incomplete."""
+
+
+def _git_bytes(args: list[str], stdin: bytes | None = None) -> bytes:
+    try:
+        done = subprocess.run(
+            ["git", *args],
+            cwd=REPO,
+            input=stdin,
+            capture_output=True,
+            check=True,
+            timeout=120.0,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise _GitReadError(f"git {' '.join(args[:2])}: {exc}") from exc
+    return done.stdout
+
+
+def _origin_branches() -> list[str]:
+    """Origin remote-tracking branches (`origin/<name>`), sorted, without `origin/HEAD`."""
+    out = _git_bytes(["for-each-ref", "--format=%(refname)", "refs/remotes/origin/"])
+    refs = [line for line in out.decode("utf-8", "replace").splitlines() if line]
+    return sorted(r[len("refs/remotes/") :] for r in refs if r != "refs/remotes/origin/HEAD")
+
+
+def _branch_files(branch: str) -> list[tuple[str, str]]:
+    """`(path, blob id)` of every eligible artefact under plans/changes/ on a branch."""
+    out = _git_bytes(["ls-tree", "-r", "-z", "--full-tree", f"refs/remotes/{branch}", "--", "plans/changes"])
+    files: list[tuple[str, str]] = []
+    for entry in out.split(b"\0"):
+        if not entry:
+            continue
+        meta, _, raw_path = entry.partition(b"\t")
+        parts = meta.split()
+        if len(parts) != 3 or parts[1] != b"blob":
+            continue
+        path = raw_path.decode("utf-8", "replace")
+        name = path.rsplit("/", 1)[-1]
+        if not name.endswith(".md") or name == "INDEX.md" or name.startswith("_"):
+            continue
+        files.append((path, parts[2].decode("ascii")))
+    return files
+
+
+def _read_blobs(shas: list[str]) -> dict[str, str]:
+    """Blob texts through one batched `git cat-file`, without any checkout."""
+    if not shas:
+        return {}
+    out = _git_bytes(["cat-file", "--batch"], stdin=("\n".join(shas) + "\n").encode("ascii"))
+    texts: dict[str, str] = {}
+    pos = 0
+    for sha in shas:
+        end = out.find(b"\n", pos)
+        header = out[pos:end].split() if end != -1 else []
+        if len(header) != 3 or header[1] != b"blob":
+            raise _GitReadError(f"git cat-file: no blob for {sha}")
+        size = int(header[2])
+        start = end + 1
+        texts[sha] = out[start : start + size].decode("utf-8", "replace")
+        pos = start + size + 1
+    return texts
+
+
+class _BranchSearch:
+    """What a branch search found; `error` is set when it could not finish."""
+
+    def __init__(self) -> None:
+        self.branches: list[str] = []
+        self.matches: dict[str, set[str]] = {}
+        self.malformed: set[tuple[str, str]] = set()
+        self.error: str | None = None
+
+
+def _search_branches(wanted: set[str]) -> _BranchSearch:
+    result = _BranchSearch()
+    try:
+        result.branches = _origin_branches()
+        parsed: dict[str, str | None | bool] = {}  # blob id -> bead, None (no bead) or False (malformed)
+        for branch in result.branches:
+            files = _branch_files(branch)
+            fresh = sorted({sha for _, sha in files if sha not in parsed})
+            for sha, text in _read_blobs(fresh).items():
+                meta = parse_frontmatter(text)
+                if meta is None:
+                    parsed[sha] = False
+                else:
+                    parsed[sha] = str(meta["bead"]) if meta.get("bead") else None
+            for path, sha in files:
+                bead = parsed[sha]
+                if bead is False:
+                    result.malformed.add((branch, path))
+                elif isinstance(bead, str) and bead in wanted:
+                    result.matches.setdefault(bead, set()).add(branch)
+    except (_GitReadError, ValueError) as exc:
+        result.error = str(exc)
+    return result
+
+
+def check(branches: bool = False) -> Verdict:
     verdict = Verdict()
     found = artefacts()
     try:
@@ -416,18 +516,52 @@ def check() -> Verdict:
             )
         else:
             ohne = sorted(laufend - beads_mit_artefakt)
-            ramp = _bestand_ramp(set(ohne))
-            for bid in ohne:
-                verdict.drift(
-                    f"Bead '{bid}' is 'in_progress' but has no artefact under plans/changes/",
-                    "The tracker says work is going on here; the workflow never heard of it. "
-                    "Fix: `make change NAME=<name> BEAD=" + bid + "` -- or set the bead "
-                    "back to 'open' if nobody is working on it.",
-                    ramp=ramp if bid in BESTAND_OHNE_ARTEFAKT else None,
+            search: _BranchSearch | None = None
+            only_on_branches: dict[str, str] = {}
+            if branches and ohne:
+                search = _search_branches(set(ohne))
+                only_on_branches = {bid: min(brs) for bid, brs in search.matches.items()}
+                ohne = [bid for bid in ohne if bid not in only_on_branches]
+            incomplete = search is not None and search.error is not None
+            no_refs = search is not None and not incomplete and not search.branches
+            if search is not None and incomplete:
+                verdict.block(
+                    f"Branch search incomplete: {len(ohne)} running beads still unresolved",
+                    f"A Git read failed ({search.error}); beads without an artefact in the checked tree "
+                    "cannot be told from work on a branch, so none is reported as missing.",
                 )
-            verdict.info(
-                f"{len(laufend)} running beads checked, {len(ohne)} without artefact",
-            )
+            elif no_refs:
+                verdict.info(
+                    "no origin remote-tracking branches to search",
+                    "Only the checked tree decides; fetch the origin branches to recognise work on them.",
+                )
+            if not incomplete:
+                ramp = _bestand_ramp(set(ohne))
+                for bid in ohne:
+                    verdict.drift(
+                        f"Bead '{bid}' is 'in_progress' but has no artefact under plans/changes/",
+                        "The tracker says work is going on here; the workflow never heard of it. "
+                        "Fix: `make change NAME=<name> BEAD=" + bid + "` -- or set the bead "
+                        "back to 'open' if nobody is working on it.",
+                        ramp=ramp if bid in BESTAND_OHNE_ARTEFAKT else None,
+                    )
+            if search is not None and not incomplete and not no_refs:
+                sample = sorted(only_on_branches.values())[:3]
+                verdict.info(
+                    f"{len(laufend)} running beads checked, {len(only_on_branches)} found only on branches, "
+                    f"{len(ohne)} without artefact anywhere",
+                    f"{len(search.branches)} origin branches searched"
+                    + (f"; branch-only on: {', '.join(sample)}" if sample else ""),
+                )
+            elif not incomplete:
+                verdict.info(
+                    f"{len(laufend)} running beads checked, {len(ohne)} without artefact",
+                )
+            if search is not None and search.malformed:
+                verdict.info(
+                    f"{len(search.malformed)} branch files with absent or unreadable frontmatter ignored",
+                    "Counted once per branch and path; they are not artefacts.",
+                )
 
     # The index is generated and tracked — so it belongs in the same check as
     # every other rendered file: `X == render(Y)`, otherwise it ages like any
@@ -476,6 +610,11 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--check", action="store_true", help="report hygiene, write nothing")
     mode.add_argument("--index", action="store_true", help="regenerate plans/INDEX.md")
     parser.add_argument("--strict", action="store_true", help="DRIFT blocks as well")
+    parser.add_argument(
+        "--branches",
+        action="store_true",
+        help="also look for running beads' artefacts on origin remote-tracking branches",
+    )
     args = parser.parse_args(argv)
 
     if args.index:
@@ -483,7 +622,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"written: {INDEX.relative_to(REPO)}")
         return 0
 
-    verdict = check()
+    verdict = check(branches=args.branches)
     print(verdict.render())
     return verdict.exit_code(strict=args.strict)
 
