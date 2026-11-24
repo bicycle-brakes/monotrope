@@ -5114,7 +5114,7 @@ def test_each_draft_attempt_has_its_audit_line_and_reason(world: World, monkeypa
         re.M,
     )
     assert re.search(
-        rf"^Stage-2 call, {day}: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5\.3"
+        rf"^Stage-2 call, {day}: draft · attempt 3 · route glm · endpoint glm-coding-plan · model {re.escape(stage2.GLM[1])}"
         rf" · reason two Codex draft attempts failed · leak check clean over {count}\.$",
         text,
         re.M,
@@ -6223,7 +6223,7 @@ def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World, monkeypatc
     assert len(world.calls("codex")) == 2
     (call,) = world.calls("claude")
     argv, prompt = call["argv"], call["prompt_file"]
-    assert argv[argv.index("--model") + 1] == "glm-5.3"
+    assert argv[argv.index("--model") + 1] == stage2.GLM[1]
     assert argv[argv.index("--effort") + 1] == "max"
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
     assert "glm-5.3-flash" not in argv
@@ -10574,8 +10574,354 @@ def test_phase6_exact_no_finding_still_releases_and_marks(world: World) -> None:
 
 
 # ---------------------------------------------------------------------------
+# The phase-6 verdict language (bead coding-harness-tscc)
+# ---------------------------------------------------------------------------
+
+# Finding cells of the recorded reviewer verdicts, copied unchanged from the findings of
+# `slip-counter` and `loop-record-other-worktree` (the named days are their block dates).
+GERMAN_VERDICTS = {
+    "slip-counter 2026-11-17": [
+        "[AMBIGUITY] Die Repository-Identität bleibt ungeklärt: Bei einem grünen gezielten Check in einem "
+        "Worktree und einem roten vollständigen Lauf desselben Stands in einem anderen Worktree ergeben sich je "
+        "nach Identität des einzelnen Worktrees oder des gemeinsamen Git-Repositories unterschiedliche "
+        "Zählungen. Die offene Phase-2a-Zeile S-1 ist in der aktuellen Spezifikation nicht aufgelöst. "
+        "[AC 1, 2, 5]",
+        "Ein roter gezielter Check, dessen geprüfter Baum sich während des Laufs ändert, wird als vollständig "
+        "behandelt: Die Stabilitätsprüfung erhöht den Zähler nur bei grünem Ergebnis. Der Bericht kann dadurch "
+        "mit null unzählbaren Läufen und Exit 0 enden, obwohl diesem Lauf eine stabile Vergleichsidentität "
+        "fehlt. [AC 4, 6; Boundary]",
+    ],
+    "slip-counter 2026-11-19": [
+        "Bei einem Bericht mit `--change X` wird ein gezielter Lauf mit unbekanntem Änderungsnamen nicht "
+        "ausgewählt und nicht als nicht zuordenbare Evidenz gemeldet. Enthält die Historie zusätzlich einen "
+        "vollständigen grünen Lauf für X, kann der Bericht mit Exit 0 vollständige Evidenz behaupten, obwohl der "
+        "unbekannte Lauf zu X gehören könnte. Der Bericht muss diesen Lauf als nicht zuordenbar diagnostizieren "
+        "und den Messwert als unvollständig kennzeichnen. [AC 8, 10; Boundary]"
+    ],
+    "slip-counter 2026-11-20": [
+        "Wenn eine vollständige Prüfung am Anfang Baum A und am Ende ausdrücklich Baum B aufzeichnet, behandelt "
+        "der Leser sie trotzdem als gültig. Nach einer grünen gezielten Prüfung von A und einem roten Abschluss "
+        "der vollständigen Prüfung meldet er dadurch einen Slip statt unvollständiger Evidenz. Auch wenn der "
+        "aktuelle Schreiber am Ende keinen Baum aufzeichnet, muss der Leser vorhandene Baumangaben an beiden "
+        "Enden vergleichen. [Gültiger Lauf; Akzeptanzkriterien 6 und 7]"
+    ],
+    "loop-record-other-worktree 2026-11-20": [
+        "Wenn ein anderer Worktree eine aktive, aber nicht lesbare `loop.md` hat und die bisherigen Findings "
+        "eine abgeschlossene Runde enthalten, meldet ein einfacher Neustart den Schlüssel nur und schreibt "
+        "anschließend eine Neustartzeile. Er muss stattdessen wegen des aktiven Fremddatensatzes verweigern und "
+        "auf `--supersedes` verweisen. [Kriterium 13]",
+        "Wenn ein dritter Worktree unmittelbar nach der Prüfung der vollständigen Schlüsselliste einen neuen "
+        "Loop-Datensatz anlegt, kann die Supersession trotzdem die ausgewählten Datensätze archivieren und "
+        "abrechnen. Der neue aktive Schlüssel bleibt unberücksichtigt, weil nur die ausgewählten Schlüssel "
+        "gesperrt werden; die Supersession müsste bei unvollständiger Schlüsselliste verweigern. [Kriterium 5]",
+    ],
+}
+ENGLISH_VERDICTS = {
+    "slip-counter 2026-11-20": [
+        "A targeted run with two conflicting starts, one naming tree X and the other tree Y, is reduced to its "
+        "first start. If a green targeted check on Y precedes that run and a red full run on Y follows it, the "
+        "conflicting run is treated as incompatible and the report still counts a slip. Its second start could "
+        "instead identify an intervening check on Y, so the affected runs must be incomplete and the slip "
+        "undecided. [AC 7]",
+        "Two start or completion records with the same JSON fields but different bytes, such as different "
+        "whitespace, are collapsed as duplicates because parsed dictionaries are compared. A run with those "
+        "distinct records can therefore count as valid and contribute a slip, although the validity rule permits "
+        "collapsing only byte-identical records. [AC 1, 6]",
+    ],
+    "loop-record-other-worktree 2026-11-20": [
+        "If worktree A was superseded by B, then later supersedes a record from C, A’s release before its first "
+        "new round can find B’s older archive first. It returns success and may append `Loop rows: superseded "
+        "by …` instead of refusing without changing findings. [Criterion 10]"
+    ],
+    "loop-record-other-worktree 2026-11-21": [
+        "If an earlier supersession archived round 10 in another worktree, a worktree whose findings do not "
+        "contain that restart can supersede an active record ending at round 3 and write “after round 3”. Its "
+        "next run starts at round 4, reusing an assigned number. The calculation omits the earlier archive. "
+        "[Criteria 2 and 4]",
+        "If a superseded worktree’s findings contain one released round and the archive contains round 7, a plain "
+        "restart correctly writes “after round 7”, but the next review-loop numbers its first round 2. "
+        "`rounds_run` ignores the plain restart floor, so the run can reuse a number and its stop checks can "
+        "ignore fresh rounds. [Criterion 17]",
+        "If another repository using the same state directory has an archive for a change with the same name, a "
+        "plain restart reads that unrelated archive. Its round numbers can raise this repository’s restart floor, "
+        "and an unreadable archive can block the restart entirely. Archives from other repositories must not "
+        "affect this change. [Criterion 9 and protected areas]",
+    ],
+}
+GERMAN_FINDING = GERMAN_VERDICTS["slip-counter 2026-11-20"]
+ENGLISH_FINDING = ENGLISH_VERDICTS["loop-record-other-worktree 2026-11-20"]
+
+
+def finding_rows(findings: list[str], prefix: str = "X") -> list[list[str]]:
+    return [[f"{prefix}{n}", "MAJOR", "SPEC", "base", "scripts/x.py:1", text] for n, text in enumerate(findings, 1)]
+
+
+def verdict_answer(findings: list[str], prefix: str = "X") -> str:
+    return "\n".join("| " + " | ".join(cells) + " |" for cells in finding_rows(findings, prefix))
+
+
+GERMAN_ANSWER = verdict_answer(GERMAN_FINDING)
+ENGLISH_ANSWER = verdict_answer(ENGLISH_FINDING, "E")
+
+
+def evidence_files(world: World) -> list[Path]:
+    git_dir = Path(git(world.root, "rev-parse", "--absolute-git-dir").strip())
+    return sorted((git_dir / "stage2" / "attempts" / "demo").glob("*.md"))
+
+
+def test_phase6_language_recognises_recorded_german_verdicts() -> None:
+    """Criterion 2. Planted fault: a recorded German verdict passes the heuristic undetected."""
+    for name, findings in GERMAN_VERDICTS.items():
+        assert stage2.german_verdict(finding_rows(findings)), f"{name} was not detected as German"
+    # One score per answer: the combined Finding cells of all rows, never one row alone.
+    assert stage2.german_verdict(finding_rows(GERMAN_VERDICTS["slip-counter 2026-11-17"]))
+
+
+def test_phase6_language_accepts_recorded_english_verdicts() -> None:
+    """Criterion 3. Planted fault: a recorded English verdict, or `No finding.`, is detected as German."""
+    for name, findings in ENGLISH_VERDICTS.items():
+        assert not stage2.german_verdict(finding_rows(findings)), f"{name} was detected as German"
+    assert not stage2.german_verdict([])
+
+
+def test_phase6_language_excludes_quotes_code_paths_and_identifiers() -> None:
+    """Criterion 4. Planted fault: excluded text (quotation, backticks, path, identifier, line suffix) is scored."""
+    base = "The reader treats a conflicting second start as valid and reports a slip."
+    german = "Die Prüfung und die Zählung nicht"
+    excluded = [
+        f"`{german}`",
+        f'"{german}"',
+        f"“{german}”",
+        f"„{german}“",
+        f"«{german}»",
+        "und/oder",
+        "der_die_das",
+        "Prüfung.py",
+        "stage2.py:4918",
+        "Zählung:42,",
+    ]
+    for extra in excluded:
+        assert stage2.german_score(f"{base} {extra}") == stage2.german_score(base), extra
+        assert not stage2.german_verdict(finding_rows([f"{base} {extra} {extra}"])), extra
+    # Single quotes and apostrophes are no delimiters: their German words count.
+    assert stage2.german_score(f"{base} '{german}'") != stage2.german_score(base)
+    assert stage2.german_verdict(finding_rows([german, german]))
+
+
+def run_language_review(world: World, steps: list[dict], *, record: bool = False) -> int:
+    if record:
+        world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(codex=steps)
+    commit_review_findings(world)
+    return world.run("review")
+
+
+def test_phase6_german_verdict_retries_once_on_same_thread(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. Planted fault (STAGE2_PLANT_FAULT=1): the language check is bypassed, German stands."""
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(stage2, "german_verdict", lambda _rows: False)
+    steps = [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER), codex_ok("T1", "L1-1: agree")]
+    assert run_language_review(world, steps, record=True) == 0
+    calls = world.calls("codex")
+    assert len(calls) == 3, "the German verdict was not replaced by exactly one retry"
+    assert calls[1]["argv"][:3] == ["exec", "resume", "T1"], "the retry did not resume the verdict thread"
+    assert calls[2]["argv"][:3] == ["exec", "resume", "T1"]
+    text = world.text()
+    assert "A’s release before" in text, "the replacement was not recorded"
+    assert "Prüfung" not in text, "the German first answer was recorded"
+    assert text.index(verdict_block(text)) < text.index(stage2.RELEASE_HEADING), "release came before the verdict"
+    assert text.index("review (language retry)") < text.index(stage2.RELEASE_HEADING)
+    assert not world.record().exists()
+
+
+def test_phase6_language_retry_requests_same_findings_in_english(world: World) -> None:
+    """Criterion 6. Planted fault: the reminder omits the English, the same findings or the same table form."""
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER)]) == 0
+    reminder = world.calls("codex")[1]["argv"][-1]
+    assert reminder == stage2.LANGUAGE_REMINDER
+    for part in ("in English", "same findings", "same table form"):
+        assert part in reminder, part
+    assert reminder.endswith(".") and ". " not in reminder, "the reminder is not one sentence"
+
+
+@pytest.mark.parametrize("replacement", [ENGLISH_ANSWER, "No finding.", verdict_answer(["Changed finding text."])])
+def test_phase6_valid_replacement_is_recorded_unchanged(world: World, replacement: str) -> None:
+    """Criterion 7. Planted fault: a replacement with other findings, or `No finding.`, is rejected or altered."""
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", replacement)]) == 0
+    text = world.text()
+    assert "Rejected phase-6 answer" not in text
+    assert len(world.calls("codex")) == 2, "a third call followed the valid replacement"
+    block = verdict_block(text)
+    if replacement == "No finding.":
+        assert "Codex reported no finding." in block
+    else:
+        for line in replacement.splitlines():
+            assert stage2.split_row(line)[5] in block, "the replacement's finding was changed"
+    assert "Prüfung" not in text and "Slip" not in text
+
+
+def test_phase6_second_german_verdict_is_kept_with_notice(world: World) -> None:
+    """Criterion 8. Planted fault: the notice is absent, or a third verdict call follows."""
+    second = verdict_answer(GERMAN_VERDICTS["slip-counter 2026-11-19"], "G")
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", second)]) == 0
+    assert len(world.calls("codex")) == 2, "a third call was made"
+    block = verdict_block(world.text())
+    assert "kept although it was detected as non-English" in block
+    assert "| G1 |" in block and "Änderungsnamen" in block, "the second answer is not the recorded verdict"
+
+
+def test_phase6_english_replacement_has_no_language_notice(world: World) -> None:
+    """Criterion 9. Planted fault: a non-English notice accompanies an English replacement."""
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER)]) == 0
+    block = verdict_block(world.text())
+    assert "non-English" not in block and "kept although" not in block
+
+
+def test_phase6_first_answer_is_retained_as_protected_evidence(world: World) -> None:
+    """Criterion 10. Planted fault: the notice names no retrievable file, or the first answer is quoted."""
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER)]) == 0
+    text = world.text()
+    named = re.search(r"protected local evidence at (/\S+\.md) ", verdict_block(text))
+    assert named, "the verdict block names no evidence file"
+    path = Path(named.group(1))
+    assert path.is_file() and path.read_text(encoding="utf-8").strip() == GERMAN_ANSWER.strip()
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path in evidence_files(world)
+    assert "Prüfung" not in text and GERMAN_FINDING[0][:40] not in text, "the first answer is quoted in findings"
+
+
+def test_phase6_retry_new_thread_is_recorded_and_used_for_marks(world: World) -> None:
+    """Criterion 11. Planted fault: the returned thread is rejected, or the verdict or marks use the first one."""
+    steps = [codex_ok("T1", GERMAN_ANSWER), codex_ok("T2", ENGLISH_ANSWER), codex_ok("T2", "L1-1: agree")]
+    assert run_language_review(world, steps, record=True) == 0
+    text = world.text()
+    assert re.search(r"^Phase 6 verdict: codex T2, ", text, re.M)
+    session = re.search(r"^Reviewer session: codex T2 — .*$", text, re.M)
+    assert session and "T1" in session.group(0), "the session record does not name both threads"
+    calls = world.calls("codex")
+    assert calls[1]["argv"][:3] == ["exec", "resume", "T1"]
+    assert calls[2]["argv"][:3] == ["exec", "resume", "T2"], "the marks did not resume the returned thread"
+
+
+@pytest.mark.parametrize(
+    ("step", "named"),
+    [
+        (codex_ok("T1", "No table here, and not exactly the sentence."), "malformed"),
+        (codex_ok("T2", "No table here, and not exactly the sentence."), "malformed"),
+        ({"stdout": "", "exit": 1}, "replacement call failed"),
+        ({"stdout": "", "answer": ENGLISH_ANSWER}, "replacement call failed"),
+    ],
+    ids=["malformed", "malformed-other-thread", "exit", "no-thread"],
+)
+def test_phase6_failed_replacement_keeps_first_verdict_with_reason(world: World, step: dict, named: str) -> None:
+    """Criterion 12. Planted fault: a failed replacement loses the first verdict, its notice, or the first thread."""
+    steps = [codex_ok("T1", GERMAN_ANSWER), step, codex_ok("T1", "L1-1: agree")]
+    assert run_language_review(world, steps, record=True) == 0
+    text = world.text()
+    block = verdict_block(text)
+    assert "| X1 |" in block and "Baum" in block, "the first verdict was lost"
+    notice = next(line for line in block.splitlines() if line.startswith("Language notice:"))
+    assert named in notice
+    if "T2" in json.dumps(step):
+        assert "T1" in notice and "T2" in notice, "a returned different thread is not named"
+    assert re.search(r"^Phase 6 verdict: codex T1, ", text, re.M)
+    assert world.calls("codex")[2]["argv"][:3] == ["exec", "resume", "T1"], "marks used another thread"
+
+
+def test_phase6_retry_leak_block_stops_without_fallback(world: World) -> None:
+    """Criterion 13. Planted fault: a blocked retry falls back to the first verdict or releases the loop rows."""
+    first = {**codex_ok("T1", GERMAN_ANSWER), "plant": {"src/leak.txt": f"{LEAK}\n"}}
+    assert run_language_review(world, [first, codex_ok("T1", ENGLISH_ANSWER)], record=True) == 2
+    text = world.text()
+    assert len(world.calls("codex")) == 1, "a replacement call followed the leak-check block"
+    assert not re.search(r"^Phase 6 verdict:", text, re.M) and "## Phase 6" not in text
+    assert stage2.RELEASE_HEADING not in text and world.record().exists()
+
+
+def test_phase6_language_retry_is_audited_and_leak_checked(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 16. Planted fault: the retry skips its leak check or has no `review (language retry)` line."""
+    checked: list[str] = []
+    verbs: list[str] = []
+    real_checked, real_begin = stage2.checked_prompt, stage2.begin_call
+
+    def spy_checked(ctx, endpoint, prompt, admission_problem=None):
+        checked.append(prompt)
+        return real_checked(ctx, endpoint, prompt, admission_problem)
+
+    def spy_begin(ctx, verb, endpoint, prompt, admission_problem=None):
+        verbs.append(verb)
+        return real_begin(ctx, verb, endpoint, prompt, admission_problem)
+
+    monkeypatch.setattr(stage2, "checked_prompt", spy_checked)
+    monkeypatch.setattr(stage2, "begin_call", spy_begin)
+    steps = [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER), codex_ok("T1", "L1-1: agree")]
+    assert run_language_review(world, steps, record=True) == 0
+    assert verbs == ["review", "review (language retry)", "review (loop marks)"]
+    assert stage2.LANGUAGE_REMINDER in checked, "the retry prompt was not leak-checked"
+    assert re.search(
+        r"^Stage-2 call, \d{4}-\d{2}-\d{2}: review \(language retry\) · endpoint openai-codex · "
+        r"model gpt-6\.1-terra · leak check clean over \d+ files, \d+ commits, \d+ rules\.$",
+        world.text(),
+        re.M,
+    )
+
+
+def test_phase6_language_retry_audit_is_allowed_without_allowing_other_edits() -> None:
+    """Criterion 17. Planted fault: the retry audit line blocks verification, or another edit passes beside it."""
+    before = b"## Phase 6 - Codex\n\nrow\n"
+    line = (
+        b"Stage-2 call, 2026-11-22: review (language retry) \xc2\xb7 endpoint openai-codex \xc2\xb7 "
+        b"model gpt-6.1-terra \xc2\xb7 leak check clean over 10 files, 20 commits, 12 rules.\n"
+    )
+    after = before + b"\n" + line
+    assert stage2.review_audit_only(before, after)
+    assert not stage2.review_audit_only(before, after + b"\nan extra edit\n")
+    assert not stage2.review_audit_only(before, after.replace(b"(language retry)", b"(other retry)"))
+
+
+def test_phase6_saves_first_answer_before_retry_even_when_blocked(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 18. Planted fault: retry admission precedes saving, or a leak-check block loses the first answer."""
+    real_begin = stage2.begin_call
+    saved_at_retry: list[int] = []
+
+    def spy_begin(ctx, verb, endpoint, prompt, admission_problem=None):
+        if verb == "review (language retry)":
+            saved_at_retry.append(len(evidence_files(world)))
+        return real_begin(ctx, verb, endpoint, prompt, admission_problem)
+
+    monkeypatch.setattr(stage2, "begin_call", spy_begin)
+    first = {**codex_ok("T1", GERMAN_ANSWER), "plant": {"src/leak.txt": f"{LEAK}\n"}}
+    assert run_language_review(world, [first, codex_ok("T1", ENGLISH_ANSWER)]) == 2
+    assert saved_at_retry == [1], "the first answer was not saved before the retry was admitted"
+    files = evidence_files(world)
+    assert len(files) == 1 and files[0].read_text(encoding="utf-8").strip() == GERMAN_ANSWER.strip()
+
+
+def test_phase6_evidence_save_failure_keeps_first_verdict(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 19. Planted fault: a save failure asks for a replacement or loses the verdict or notice."""
+
+    def failing_save(*_args, **_kwargs) -> str:
+        raise stage2.CallFailed("the answer evidence could not be saved (disk full)")
+
+    monkeypatch.setattr(stage2, "save_answer_evidence", failing_save)
+    assert run_language_review(world, [codex_ok("T1", GERMAN_ANSWER), codex_ok("T1", ENGLISH_ANSWER)]) == 0
+    assert len(world.calls("codex")) == 1, "a replacement was requested after the save failed"
+    block = verdict_block(world.text())
+    assert "could not be saved" in block and "disk full" in block
+    assert "| X1 |" in block and "Baum" in block, "the first verdict was lost"
+
+
+# ---------------------------------------------------------------------------
 # The GLM review loop (criteria 32-39)
 # ---------------------------------------------------------------------------
+
+
+def test_the_phase6_prompt_asks_for_english() -> None:
+    """Phase6-english R-1. Planted fault: the phase-6 prompt without the instruction to answer in English."""
+    review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
+    assert "Answer in English." in review
 
 
 def test_the_review_prompts_give_both_paths() -> None:
@@ -23748,8 +24094,8 @@ def glm_entry_problems(entry: dict) -> list[str]:
         found.append("the operator changed")
     if entry.get("residenz") != "anbieter-erklaert" or entry.get("darf_sehen") != ["framework"]:
         found.append("residency or visibility changed")
-    if entry.get("modelle") != ["glm-5.3", "glm-5.3-flash"]:
-        found.append("the model list changed")
+    if not {stage2.GLM[1], stage2.GLM_FLASH[1]} <= set(entry.get("modelle") or []):
+        found.append("the model list lacks a route's model")
     remark = " ".join(str(entry.get("bemerkung", "")).lower().split())
     for needle in (
         "stage2.py explore",

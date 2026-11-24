@@ -32,9 +32,9 @@ endpunkte:
   - name: glm-coding-plan
     residenz: anbieter-erklaert
     darf_sehen: [framework]
-    modelle: [glm-5.3, glm-5.3-flash]
+    modelle: [glm-5.4, glm-5.3-flash]
     modelle_terms:
-      glm-5.3: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
+      glm-5.4: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
       glm-5.3-flash: {gelesen: "2026-11-15", valid_until: "2099-01-01", quelle: "synthetic subscription terms"}
 """
 
@@ -298,7 +298,7 @@ def test_criterion_4_counts_only_cleared_routes_and_no_cost_figure_is_printed(tm
     code, out, _ = run(tmp_path, "run", capsys=capsys)
     assert code == 0
     assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
-    assert "not cleared: glm-coding-plan glm-5.3 — the endpoint glm-coding-plan states no data residency" in out
+    assert "not cleared: glm-coding-plan glm-5.4 — the endpoint glm-coding-plan states no data residency" in out
     assert (
         "- Criterion 1 (measured stage-2 runs, ADR 0007): 1 runs measured; rows marked Broke a test `yes` (any status): 0."
         in out
@@ -436,7 +436,7 @@ def test_criterion_4_drops_the_zai_routes_after_the_subscription_ends(tmp_path: 
     code, out, _ = run(tmp_path, "run", capsys=capsys)
     assert code == 0
     assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
-    for model in ("glm-5.3", "glm-5.3-flash"):
+    for model in ("glm-5.4", "glm-5.3-flash"):
         assert (
             f"  - not cleared: glm-coding-plan {model} — the Z.ai subscription for {model} expired on 2026-12-08; "
             "no further call runs on it"
@@ -464,7 +464,7 @@ def test_rev_before_the_zai_terms_counts_both_glm_routes_not_cleared(tmp_path: P
     code, out, _ = run(tmp_path, "run", "--rev", first, capsys=capsys)
     assert code == 0
     assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-terra)." in out
-    for model in ("glm-5.3", "glm-5.3-flash"):
+    for model in ("glm-5.4", "glm-5.3-flash"):
         assert f"  - not cleared: glm-coding-plan {model} — the model {model} has no dated reading" in out
 
     code, out, _ = run(tmp_path, "run", capsys=capsys)

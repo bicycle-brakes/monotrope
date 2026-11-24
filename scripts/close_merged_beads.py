@@ -90,6 +90,15 @@ FETCH_TIMEOUT = 60.0
 BD_TIMEOUT = float(os.environ.get("CLOSE_MERGED_BD_TIMEOUT", "60.0"))
 
 
+def _monotonic() -> float:
+    """The one clock the startup budget reads; tests replace it to control time.
+
+    It looks `time.monotonic` up at call time, so a default run reads the
+    current monotonic clock.
+    """
+    return time.monotonic()
+
+
 class PreflightError(RuntimeError):
     """A precondition failed — nothing may be attempted."""
 
@@ -321,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.budget_seconds is not None and args.budget_seconds <= 0:
         ap.error("--budget-seconds must be positive")
-    deadline = time.monotonic() + args.budget_seconds if args.budget_seconds is not None else None
+    deadline = _monotonic() + args.budget_seconds if args.budget_seconds is not None else None
 
     if args.write and os.environ.get(bead_render.UMGEBUNGS_RENDER, "").strip():
         print(
@@ -366,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         # Bound each close by the remaining budget, but refuse to start with
         # less than one second: process startup/timeout cleanup can overshoot
         # a tiny timeout. Publication is still attempted after the batch.
-        close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - time.monotonic())
+        close_timeout = BD_TIMEOUT if deadline is None else min(BD_TIMEOUT, deadline - _monotonic())
         if close_timeout < 1.0:
             refused.append((bid, "startup budget exhausted"))
             print(f"refused: {bid}: startup budget exhausted; retry reconciliation", file=sys.stderr)
@@ -394,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: {bid}: {detail}", file=sys.stderr)
 
     try:
-        push_timeout = BD_TIMEOUT if deadline is None else max(0.01, min(BD_TIMEOUT, deadline - time.monotonic()))
+        push_timeout = BD_TIMEOUT if deadline is None else max(0.01, min(BD_TIMEOUT, deadline - _monotonic()))
         push = subprocess.run(
             [str(bd), "dolt", "push"],
             cwd=root,
