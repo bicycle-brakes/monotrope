@@ -666,3 +666,15 @@ Stage-2 call, 2026-11-24: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-24: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
 
 Orchestrator hand edit, 2026-11-24 (maintainer allowed it in the session): the full `make verify` before phase 6 was red on `leerprobe` because the F6-2 repair made `scripts/findings_reader.py` import `MODEL_ID` from `scripts/stage2_free.py`, which does not travel with the kit (and imports `stage2_go`); in the kit probe the import failed and pytest stopped collecting. The pattern now lives in `scripts/findings_reader.py` and `scripts/stage2_free.py` imports it from there — still one shared pattern. Checked: ruff clean; 209 tests of test_finding_duplicates, test_findings_per_model, test_findings_reader_grammar, test_stage2_free and test_kit green; `scripts/kit/probe.py --strict` with the venv on PATH: no block, 1575 of 1619 cases carry (97 %).
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5683 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | scripts/findings_reader.py, `MODEL_NAME` | A released loop row whose named model ID is `mercury` is placed in the unattributed bucket with no gap. The runner’s model-ID grammar permits that ID, but the reader requires a digit, hyphen or slash before crediting a named model. [Criterion 3] | Codex | open | — |
+| F6-2 | MAJOR | SPEC | base | scripts/findings_per_model.py, `branch_of` | A report requested for the unmerged branch `origin/feat/findings-per-model` writes to `revisions/<commit>.jsonl` instead of the encoded branch path. A consumer reading that branch’s specified report file therefore sees stale data or no report. [Criteria 14–15] | Codex | open | — |
+
+Phase 6 verdict: codex 01a20eca-bb90-70a1-8eb7-1dd35d0ecbb0, 2026-11-24
+Reviewer session: codex 01a20eca-bb90-70a1-8eb7-1dd35d0ecbb0 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
