@@ -200,6 +200,7 @@ import check_frontmatter_current  # noqa: E402
 import check_interview_minimums  # noqa: E402
 import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
+import jobs  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
 import plans_registry  # noqa: E402
@@ -1142,6 +1143,8 @@ def launch(
                         pass_fds=pass_fds,
                     )
                     _LIVE_GROUPS.add(process.pid)
+                    # Under a detached job the group joins the job's record, so `jobs.py stop` reaches it.
+                    jobs.register_group(process.pid)
             # Cancellation may have arrived while Popen was starting in a worker.
             if _LAUNCH_STOPPED.is_set():
                 raise NotStarted("the runner was interrupted during launch")
