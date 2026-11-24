@@ -33932,3 +33932,47 @@ def test_repair_scope_saved_ref_contains_refusal_reason(world: World) -> None:
         )
     ref = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo").splitlines()[-1]
     assert "src/stray.txt" in git(world.root, "show", "-s", "--format=%B", ref)
+
+
+def test_repair_plan_directory_grant_matches_spec() -> None:
+    """The plan must not grant descendants of a bare tracked directory."""
+    plan = (REPO_ROOT / "plans/changes/repair-scope-guard/plan.md").read_text(encoding="utf-8")
+    step = plan.split("\n2. ", 1)[1].split("\n3. ", 1)[0]
+    assert "only for slash-ended directories" in step
+    assert "existing tracked directories" not in step
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+def test_failed_verification_restores_tracked_journal(world: World, verb: str) -> None:
+    """A red verifier must not leave an attempt's tracked journal edit behind."""
+    journal = world.root / "docs/journal/note.md"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("original\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed journal")
+    plant = {"src/app.py": "value = 2\n", "docs/journal/note.md": "changed\n"}
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        plant["tests/test_fix.py"] = FIX_TEST
+        script_repair(world, [repair_step(plant=plant)] * 3, full_check=True, make=[{"stdout": "red\n", "exit": 1}] * 3)
+    else:
+        plant["plans/changes/demo/verification-scope.txt"] = "full check\n"
+        world.script(claude=[{"stdout": "implemented", "plant": plant}] * 3, make=[{"stdout": "red\n", "exit": 1}] * 3)
+    world.run(verb)
+    assert journal.read_text(encoding="utf-8") == "original\n", "a failed attempt left a journal edit"
+
+
+def test_repair_cleanup_refusal_stops_before_retry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cleanup that cannot safely remove every stray must stop before a retry."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    first = repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST, "src/stray.txt": "stray\n"})
+    script_repair(world, [first, repair_step()], full_check=True, make=[{"stdout": "red\n", "exit": 1}, GREEN])
+
+    def refuse_cleanup(_root: Path, _stray: object) -> list[str]:
+        raise stage2.Refused("unsafe parent")
+
+    monkeypatch.setattr(stage2, "remove_stray_files", refuse_cleanup)
+    world.run("repair")
+    assert len(repair_calls(world)) == 1, "a retry started after cleanup was refused"

@@ -12336,6 +12336,24 @@ def run_attempts(
                     restore_work_input(root, path, content)
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
+            if problems:
+                # A failed verification never reaches checkpoint's held-path rollback.
+                # Refuse journal edits here too, before a retry can inherit them.
+                journal = [
+                    path.as_posix()
+                    for path in changed_paths(root)
+                    if path.as_posix().casefold().startswith("docs/journal/")
+                ]
+                if journal:
+                    reason = "the attempt changed paths a stage-2 run does not commit: " + ", ".join(
+                        f"`{path}`" for path in journal
+                    )
+                    try:
+                        restored = restore_baseline(root, baseline, allowed, ignored_before)
+                    except RestorationRefused as safety_error:
+                        preserve_attempt_failure(safety_error, Refused(reason))
+                        raise
+                    raise CheckpointRolledBack(f"{reason}; {restored}")
             if problems and repair_scope is not None and scope_new is not None:
                 # A failed attempt's new files outside the scope never survive it, whatever failed -
                 # a check, a rejected answer or the last route: the next route's checkpoint would
@@ -12345,7 +12363,9 @@ def run_attempts(
                     outside = {path for path in scope_new if not within_scope(path, repair_scope)}
                     removed = remove_stray_files(root, outside)
                 except (Refused, OSError) as error:
-                    problems.append(f"the repair scope guard could not remove the attempt's new files ({error})")
+                    raise RestorationRefused(
+                        f"the repair scope guard could not remove the attempt's new files ({error}); retry stopped"
+                    ) from error
                 else:
                     if removed:
                         problems.append(

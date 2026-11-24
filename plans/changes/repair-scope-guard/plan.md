@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-23
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -29,7 +29,7 @@ Starts unless you say stop.
 ## Build sequence
 
 1. The orchestrator already added `docs/journal/` to the runner-held list and synchronized the held plan prompt in one hand commit (`f1fc1836`); retain both edits. Tell both repair prompt variants the scope rule and prohibitions in `scripts/stage2.py`.
-2. In `scripts/stage2.py`, freeze scope before model calls from selected taken Where cells, the change folder and `tests/`; never use the plan as authorization. Extract path-like tokens and Markdown link text and target, strip trailing line or line-range selectors, resolve bare names against the change folder first then the root, grant descendants only for slash-ended or existing tracked directories, and reject repository escapes. Reuse the shared Where-path helper if the adjacent held-row routing change has landed; otherwise make the same rule available for it to reuse.
+2. In `scripts/stage2.py`, freeze scope before model calls from selected taken Where cells, the change folder and `tests/`; never use the plan as authorization. Extract path-like tokens and Markdown link text and target, strip trailing line or line-range selectors, resolve bare names against the change folder first then the root, grant descendants only for slash-ended directories, and reject repository escapes. Reuse the shared Where-path helper if the adjacent held-row routing change has landed; otherwise make the same rule available for it to reuse.
 3. At the checkpoint after verification, compare non-ignored untracked and indexed additions with the pre-attempt baseline, including rename destinations and explicitly indexed ignored files. Apply this guard only to repair, with held paths taking precedence; retain normal behavior for existing tracked edits and ignored untracked files. Report all offending paths, save the refused attempt and diagnostic with its local attempt ref, and use the held-path safe rollback and pre-call findings restoration; stop this run without a retry. Keep the existing restoration safety preflight and lifecycle protection.
 4. Add behavioral tests in `tests/test_stage2.py` for the complete path grammar, boundaries and lookalikes, both prompt routes, all Stage-2 writing verbs' journal protection, staged and unstaged additions, rename destinations, ignored files, frozen scope, and checkpoint refusal with saved evidence and rollback. Exercise a subsequent fresh run on the restored baseline and keep tests independent of provider calls.
 5. Update `docs/WORKFLOW.md` to describe the held journal, repair-only new-file boundary, ignored-file limit and refusal behavior.
@@ -94,3 +94,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage-limited 
 2026-11-23 16:26:18–16:43:48 UTC, 1050 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-23 16:43:58–17:06:44 UTC, 1366 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-23 18:20:09–18:48:59 UTC, 1730 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-24 13:13:09–13:35:30 UTC, 1341 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-24 13:35:48–14:06:18 UTC, 1831 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

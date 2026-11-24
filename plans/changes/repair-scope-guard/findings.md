@@ -874,9 +874,9 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-11 | BLOCKER | SPEC | base | plans/changes/repair-scope-guard/spec.md; plans/changes/repair-scope-guard/plan.md | [DIVERGENT] The spec grants a directory’s descendants only when its Where cell ends in `/`; plan step 2 also grants descendants of an existing tracked directory without that suffix. The two instructions give different scopes to the same cell. [Criterion 8] | Codex | taken — maintainer 2026-11-24: the spec governs; only a trailing / grants descendants; plan step 2 is aligned (the code already follows the spec, stage2.py repair_scope_locations) | — |
-| P6-12 | MAJOR | SPEC | base | scripts/stage2.py:12339 | If an implement or repair attempt edits an existing tracked journal file and its verification fails on the final route, the runner leaves that journal edit in the worktree. The held-path check runs at the checkpoint, which a failed attempt never reaches; repair’s failed-attempt cleanup covers new files, not this edit. [Criterion 1] | Codex | taken — read 2026-11-24: the held-path check runs only at the checkpoint a failed attempt never reaches | — |
-| P6-13 | MAJOR | MAINT | fix-r5 | scripts/stage2.py:12339 | If a failed verification makes one stray’s parent unsafe, cleanup refuses the whole batch but the runner continues to another route. A second stray remains on disk and becomes part of that route’s starting inventory, so a passing retry can commit it without the scope guard reporting it. | Codex | taken — read 2026-11-24: a refused batch cleanup leaves a stray for the next route | — |
+| P6-11 | BLOCKER | SPEC | base | plans/changes/repair-scope-guard/spec.md; plans/changes/repair-scope-guard/plan.md | [DIVERGENT] The spec grants a directory’s descendants only when its Where cell ends in `/`; plan step 2 also grants descendants of an existing tracked directory without that suffix. The two instructions give different scopes to the same cell. [Criterion 8] | Codex | fixed — tests/test_stage2.py::test_repair_plan_directory_grant_matches_spec | — |
+| P6-12 | MAJOR | SPEC | base | scripts/stage2.py:12339 | If an implement or repair attempt edits an existing tracked journal file and its verification fails on the final route, the runner leaves that journal edit in the worktree. The held-path check runs at the checkpoint, which a failed attempt never reaches; repair’s failed-attempt cleanup covers new files, not this edit. [Criterion 1] | Codex | fixed — tests/test_stage2.py::test_failed_verification_restores_tracked_journal | — |
+| P6-13 | MAJOR | MAINT | fix-r5 | scripts/stage2.py:12339 | If a failed verification makes one stray’s parent unsafe, cleanup refuses the whole batch but the runner continues to another route. A second stray remains on disk and becomes part of that route’s starting inventory, so a passing retry can commit it without the scope guard reporting it. | Codex | fixed — tests/test_stage2.py::test_repair_cleanup_refusal_stops_before_retry | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -884,3 +884,129 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20d4a-1a75-7cc1-a575-a97686b3c3fa, 2026-11-24
 Reviewer session: codex 01a20d4a-1a75-7cc1-a575-a97686b3c3fa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5613 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/repair-scope-guard/plan.md` +1 -1
+> - `scripts/stage2.py` +21 -1
+> - `tests/test_stage2.py` +44 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 118 lines of this gate left out …]
+> E        +  where 2 = _attempt_writing(World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-lscyd1g5/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |'), {})
+>
+> tests/test_stage2.py:1153: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 4 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: the committed provenance map cannot be read; no attempt is committed (while parsing a flow sequence
+>   in "<unicode string>", line 1, column 8:
+>     paths: [unclosed
+>            ^
+> expected ',' or ']', but got '<stream end>'
+>   in "<unicode string>", line 2, column 1:
+>     
+>     ^)
+> _ test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits[paths:\n  - just a string\n] _
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-lscyd1g5/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+> provenance = 'paths:\n  - just a string\n'
+>
+>     @pytest.mark.parametrize(
+>         "provenance",
+>         ["paths: [unclosed\n", "paths:\n  - just a string\n", "paths:\n  - {prefix: 'x/', allowed: 5}\n"],
+>     )
+>     def test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits(world: World, provenance: str) -> None:
+>         """O192-5: a provenance that cannot be read is a repairable failure after the restore, never a crash."""
+>         (world.root / "provenance.yaml").write_text(provenance, encoding="utf-8")
+>         git(world.root, "commit", "--quiet", "-am", "a provenance the runner cannot read")
+>         baseline = git(world.root, "rev-parse", "HEAD")
+> >       assert _attempt_writing(world, {}) == 1
+> E       AssertionError: assert 2 == 1
+> E        +  where 2 = _attempt_writing(World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-lscyd1g5/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |'), {})
+>
+> tests/test_stage2.py:1153: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 33 files, 4 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: the committed provenance map cannot be read; no attempt is committed ('str' object has no attribute 'get')
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=85959) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/tests/test_stage2.py:27551: DeprecationWarning: This process (pid=85956) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits[paths: [unclosed\n]
+> FAILED tests/test_stage2.py::test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits[paths:\n  - just a string\n]
+> 2 failed, 6957 passed, 17 skipped, 5 warnings in 1079.67s (0:17:59)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 55783 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-scope-guard/stage2/attempts/repair-scope-guard/attempt-1-20261124T131251272671Z-c3ba7309.md
+> ````
+
+Stage-2 call, 2026-11-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5621 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
