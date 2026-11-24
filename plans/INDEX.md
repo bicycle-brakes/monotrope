@@ -603,7 +603,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/close-budget-clock/research.md`](changes/close-budget-clock/research.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
 | [`changes/close-budget-clock/spec.md`](changes/close-budget-clock/spec.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
 | [`changes/detached-job-launcher/decisions.md`](changes/detached-job-launcher/decisions.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/design.md`](changes/detached-job-launcher/design.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/findings.md`](changes/detached-job-launcher/findings.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/plan.md`](changes/detached-job-launcher/plan.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
 | [`changes/detached-job-launcher/research.md`](changes/detached-job-launcher/research.md) | draft | none | 2026-11-23 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/spec.md`](changes/detached-job-launcher/spec.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
