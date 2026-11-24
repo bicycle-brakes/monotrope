@@ -21695,6 +21695,38 @@ def test_repair_where_paths_resolve_with_shared_rules(world: World) -> None:
     assert directories == base | {"scripts/", "newdir/"}
 
 
+@pytest.mark.parametrize("kind", ["file", "symlink"])
+def test_repair_scope_directory_grant_refuses_directory_path(world: World, kind: str) -> None:
+    """A slash-ended grant admits descendants, not a new file or symlink at the directory itself."""
+    seed_tests(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    before = stage2.file_inventory(world.root)
+    scope = stage2.repair_scope(["src/newdir/"], "demo", world.root)
+    assert stage2.within_scope(Path("src/newdir/child.py"), scope)
+    assert stage2.within_scope(Path("src/newdir"), scope | {"src/newdir"})
+    path = world.root / "src/newdir"
+    if kind == "symlink":
+        path.symlink_to("app.py")
+    else:
+        path.write_text("new file\n", encoding="utf-8")
+    try:
+        stage2.checkpoint(
+            world.root,
+            "demo",
+            baseline,
+            None,
+            None,
+            message="m",
+            repair_scope=scope,
+            scope_baseline=before,
+            attempt_label="repair-attempt-1",
+        )
+    except stage2.CheckpointRolledBack as error:
+        assert "`src/newdir`" in str(error)
+    else:
+        pytest.fail("a directory grant must not admit a file or symlink at the directory path")
+
+
 def test_repair_scope_directory_selectors_grant_descendants(world: World) -> None:
     """A selector after a directory slash preserves the directory grant."""
     seed_tests(world)
@@ -26229,11 +26261,12 @@ def test_work_verbs_skip_escaped_scan_parent(
     elif verb == "repair":
         repair_world(world)
         script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
-        # The scan destination is a Where grant: the symlink that replaces it is no stray new file.
-        # A directory grants its tree only when written with its trailing slash (round-2 decision).
-        record = world.record()
-        granted = record.read_text(encoding="utf-8").replace("| src/app.py:1 |", "| src/app.py:1 src/deep/ |")
-        record.write_text(granted, encoding="utf-8")
+        # Isolate the credential scan from the new-file guard: this scenario replaces a
+        # tracked directory with a symlink, so explicitly grant that exact new path.
+        original_scope = stage2.repair_scope
+        monkeypatch.setattr(
+            stage2, "repair_scope", lambda cells, change, root: original_scope(cells, change, root) | {"src/deep"}
+        )
     else:
         successful_implementation(world)
     deep = world.root / "src/deep"

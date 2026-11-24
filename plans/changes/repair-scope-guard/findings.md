@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-21
 created: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -1094,7 +1094,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10812 | A Where cell naming `src/newdir/` permits a new file or symlink at `src/newdir` itself. The directory grant should cover descendants only, so that path must be refused unless separately named. [Criteria 3 and 8] | Codex | taken — criteria 3 and 8: a Where cell naming a directory (trailing slash) grants its descendants only; a new file or symlink at the directory path itself is refused unless named separately | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10812 | A Where cell naming `src/newdir/` permits a new file or symlink at `src/newdir` itself. The directory grant should cover descendants only, so that path must be refused unless separately named. [Criteria 3 and 8] | Codex | fixed — tests/test_stage2.py::test_repair_scope_directory_grant_refuses_directory_path | — |
 | P6-2 | BLOCKER | MAINT | base | docs/WORKFLOW.md:2100; scripts/stage2.py:6793 | [DIVERGENT] The workflow says a configured `core.excludesFile` is outside the frozen ignore rules, while the implementation snapshots and applies it. These give opposite answers about which rules judge a repair’s new files. | Codex | fixed — not a test — orchestrator hand edit d1c59301: docs/WORKFLOW.md now says a configured core.excludesFile is frozen and only the implicit global file is read as it stands, as the code does | no |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
@@ -1103,3 +1103,128 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a20fb4-a864-7913-8d33-16a031216504, 2026-11-24
 Reviewer session: codex 01a20fb4-a864-7913-8d33-16a031216504 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5730 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +2 -2
+> - `tests/test_stage2.py` +32 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 178 lines of this gate left out …]
+>             real_launch = stage2.launch
+>     
+>             def launch(command, *args, **kwargs):
+>                 result = real_launch(command, *args, **kwargs)
+>                 if command[0] in ({"claude"} if verb == "draft" else {"claude", "codex"}):
+>                     change()
+>                 return result
+>     
+>             monkeypatch.setattr(stage2, "launch", launch)
+> >           assert world.run(verb) == 0, capsys.readouterr().err + world.text()
+> E           AssertionError: [verify-lock] admitted
+> E             [verify-lock] available memory cannot be measured; proceeding without a reading
+> E             [verify-lock] admitted
+> E             [verify-lock] available memory cannot be measured; proceeding without a reading
+> E             [verify-lock] admitted
+> E             [verify-lock] available memory cannot be measured; proceeding without a reading
+> E             [verify-lock] admitted
+> E             [verify-lock] available memory cannot be measured; proceeding without a reading
+> E             refused: restoration of src/deep/keep.txt is refused: its parent src/deep escapes the worktree; the attempt's own failure stands: the repair left new files outside its scope (the change folder, `tests/` and the taken rows' Where cells grant the rest): `src/deep`. No commit was made.
+> E             # Findings — demo
+> E             
+> E             Stage-2 call, 2026-11-19: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 4 files, 2 commits, 12 rules.
+> E             ## Phase 2a — Opus 5.5, 2026-11-19
+> E             
+> E             Spec review commit: fc78019c451bb435bf4c7ce03e55d38246a9e6bc
+> E             
+> E             Spec fingerprint: sha256:c27a91fa3cbc3d2f9c29e1feb80fd1bc5addeb79a48a6af6997584948a858244
+> E             
+> E             | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+> E             |---|---|---|---|---|---|---|---|---|
+> E             | R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |
+> E             
+> E             Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 35 files, 5 commits, 1 rules.
+> E             
+> E             Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/demo/plan.md, plans/changes/demo/spec.md — unchanged
+> E             
+> E           assert 2 == 0
+> E            +  where 2 = run('repair')
+> E            +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-8ku3euzi/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').run
+>
+> tests/test_stage2.py:26308: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=75774) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/repair-scope-guard/tests/test_stage2.py:27675: DeprecationWarning: This process (pid=75751) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent[repair-True]
+> 1 failed, 6965 passed, 17 skipped, 5 warnings in 986.22s (0:16:26)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 55973 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:69:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:134:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:134:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:134:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:135:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:136:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/repair-scope-guard/stage2/attempts/repair-scope-guard/attempt-1-20261124T223902872374Z-fafcc6f5.md
+> ````
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5732 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

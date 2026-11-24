@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-t83
@@ -100,3 +100,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex usage-limited 
 2026-11-24 18:06:03–18:39:40 UTC, 2017 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-24 19:14:33–19:52:30 UTC, 2277 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
 2026-11-24 20:59:01–22:00:38 UTC, 3697 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
+2026-11-24 22:39:17–23:10:47 UTC, 1890 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-24 23:10:59–23:50:33 UTC, 2374 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner

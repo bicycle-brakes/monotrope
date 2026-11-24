@@ -10811,8 +10811,8 @@ def within_scope(relative: Path, scope: frozenset[str]) -> bool:
     posix = relative.as_posix()
     for entry in scope:
         if entry.endswith("/"):
-            # A directory grant covers its descendants and the path itself (a symlink standing in its place).
-            if posix.startswith(entry) or posix == entry.rstrip("/"):
+            # A directory grant covers descendants only, not a file or symlink at the directory path.
+            if posix.startswith(entry):
                 return True
         elif posix == entry:
             return True
