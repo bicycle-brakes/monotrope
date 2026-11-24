@@ -410,7 +410,18 @@ def parse_status(status: str) -> tuple[str | None, list[str]] | None:
     ids = rf"{FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*"
     # The canonical form ends its targets before the optional reason.
     canonical = re.fullmatch(rf"\s*—\s*duplicate\s+of\s+(?P<ids>{ids})(?::.*)?", detail, re.I)
-    legacy = re.fullmatch(rf".*?{DUPLICATE_MARKER.pattern}\s+(?P<ids>{ids})(?![A-Za-z0-9._-]).*", detail, re.I)
+    legacy_ids = rf"{FINDING_ID.pattern}(?:(?:\s+and\s+|\s+/\s+|,\s+){FINDING_ID.pattern})*"
+    legacy = re.fullmatch(
+        rf".*?{DUPLICATE_MARKER.pattern}\s+(?P<ids>{legacy_ids})(?![A-Za-z0-9._-])(?P<tail>.*)",
+        detail,
+        re.I,
+    )
+    if (
+        not (kind == "rejected" and canonical)
+        and legacy
+        and any(not re.fullmatch(r"\d{4}-\d{2}-\d{2}", item) for item in FINDING_ID.findall(legacy.group("tail")))
+    ):
+        return None
     duplicate = canonical if kind == "rejected" and canonical else legacy
     targets = (
         []

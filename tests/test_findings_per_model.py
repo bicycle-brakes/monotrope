@@ -599,7 +599,7 @@ def test_statuses_require_whole_leading_words():
 
 
 def test_duplicate_marker_targets_are_anchored_after_colon():
-    assert fr.duplicate_targets("rejected 2026-11-18 — false: repeat of L1-6 and L3-3; see L9-9") == ["L1-6", "L3-3"]
+    assert not fr.known_status("rejected 2026-11-18 — false: repeat of L1-6 and L3-3; see L9-9")
     assert fr.duplicate_targets("fixed — hand edit: same as L4-4") == ["L4-4"]
     assert not fr.is_duplicate("rejected L1-1 — same as above")
     assert not fr.is_duplicate("rejected — same as 2026-11-18")
@@ -945,3 +945,43 @@ def test_bare_duplicate_status_is_incomplete(tmp_path, monkeypatch):
     assert any(r["type"] == "gap" and r["id"] == "L1-2" for r in records)
     assert not fr.known_status("duplicate of L1-1")
     assert not fr.is_duplicate("duplicate of L1-1")
+
+
+def test_legacy_duplicate_target_lists_and_trailing_ids(tmp_path, monkeypatch):
+    for separator in (" / ", ", ", " and "):
+        status = f"rejected — same as L1-1{separator}L1-404"
+        assert fr.duplicate_targets(status) == ["L1-1", "L1-404"]
+        text = doc(RELEASE, lrow("L1-1", "hy3", "fixed"), lrow("L1-2", "hy3", status))
+        result = read(text)
+        assert any("L1-404" in gap.reason for gap in result.gaps)
+    text = doc(RELEASE, lrow("L1-1", "hy3", "fixed"), lrow("L1-2", "hy3", "rejected — same as L1-1: see L1-404"))
+    root, _ = repo(tmp_path, {findings_path("legacy"): text})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, None, monkeypatch, state)
+    assert code != 0 and "Incomplete" in "".join(chunks)
+    assert jsonl(state / "coding-harness/findings-per-model/main.jsonl")[0]["complete"] is False
+
+
+def test_morning_instructions_cover_each_commit():
+    import re
+
+    def check(text):
+        text = " ".join(text.split()).lower()
+        assert "morning handover" in text
+        assert "findings-per-model" in text or "findings per model" in text
+        assert "main at handover time" in text or "rev=origin/main" in text
+        assert re.search(r"each unmerged change branch that gained (?:findings )?rows that night", text)
+        assert "earlier branch of a lane" in text
+        assert "cutoff commit" in text
+
+    for path in ("AGENTS.md", "docs/orchestration.md"):
+        text = (REPO_ROOT / path).read_text()
+        start = text.index("The morning handover " + ("carries" if path == "AGENTS.md" else "also carries"))
+        text = text[start : text.index("\n\n", start)]
+        text = " ".join(text.split())
+        check(text)
+        for phrase in ("unmerged change branch", "cutoff commit"):
+            with pytest.raises(AssertionError):
+                check(text.replace(phrase, "removed requirement"))
+    plan = (REPO_ROOT / "plans/changes/findings-per-model/plan.md").read_text()
+    assert "17: tests/test_findings_per_model.py::test_morning_instructions_cover_each_commit" in plan
