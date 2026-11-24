@@ -107,7 +107,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MINOR | SPEC | base | `tests/test_stage2.py::test_review_diff_4000_free_overshoot_reaches_round_and_probe` | The test does not inspect the free reviewers’ actual prompts. If a round silently truncated an uncut 2,000–4,000-line diff while still recording no cut, the helper, probe and record assertions would pass. The test must verify that the selected diff reaches the round prompt in full. [Acceptance criterion 4] | Codex | open | — |
+| R-1 | MINOR | SPEC | base | `tests/test_stage2.py::test_review_diff_4000_free_overshoot_reaches_round_and_probe` | The test does not inspect the free reviewers’ actual prompts. If a round silently truncated an uncut 2,000–4,000-line diff while still recording no cut, the helper, probe and record assertions would pass. The test must verify that the selected diff reaches the round prompt in full. [Acceptance criterion 4] | Codex | taken — acceptance criterion 4: the test inspects the free reviewers' round prompts and shows the selected uncut diff of 2,000-4,000 lines reaches them in full | — |
 
 Phase 6 verdict: codex 01a20f93-2af4-7752-a16c-000b78e89d31, 2026-11-24
 Reviewer session: codex 01a20f93-2af4-7752-a16c-000b78e89d31 — a fresh session reviewed: no phase-2a session was recorded
