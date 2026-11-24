@@ -1010,3 +1010,18 @@ Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5621 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5639 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10750 | A taken Where cell containing `scripts/:12` grants no directory scope, although removing the line selector leaves `scripts/`. A repair that creates `scripts/new.py` is therefore refused even though the named directory grants its descendants. The same happens with an untracked directory such as `newdir/:12`. [Criterion 8] | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list — catches without switch: no for the draft cases, because draft restores the journal through a separate path; yes for the implement and repair cases, whose assertions detect removal of the held prefix.
+
+Phase 6 verdict: codex 01a20df9-3abe-7fa2-9f67-2a7d2232d439, 2026-11-24
+Reviewer session: codex 01a20df9-3abe-7fa2-9f67-2a7d2232d439 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
