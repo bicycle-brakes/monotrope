@@ -1067,3 +1067,19 @@ Reviewer session: codex 01a20eeb-ecee-7853-b7ab-b9b3b094316c — a fresh session
 Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5695 commits, 12 rules.
 
 Runner restoration, 2026-11-24: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5707 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:6788, scripts/stage2.py:6828 | Wenn Git seine standardmäßige globale Ignore-Datei verwendet, ohne dass `core.excludesFile` ausdrücklich gesetzt ist, friert der Runner diese Regeln nicht ein. Ändert ein Reparaturversuch eine `.gitignore` und erzeugt eine durch die globale Datei ignorierte Cache-Datei, überschreibt das temporäre Repository die globale Regel mit einer leeren Datei. Der Runner kann den erlaubten Cache als neue Datei außerhalb des Umfangs zurückweisen. [Kriterium 9] | Codex | open | — |
+| P6-2 | MAJOR | MAINT | fix-r6 | scripts/stage2.py:6810, scripts/stage2.py:12180 | Ändert ein Reparaturversuch eine Ignore-Regel und erzeugt eine Datei außerhalb seines Umfangs, kann die anschließende Inventur beim Anlegen oder Beschreiben des temporären Verzeichnisses mit `OSError` scheitern, etwa bei vollem Datenträger. Der Aufrufer fängt dort nur `Refused`; die Wiederherstellung wird übersprungen und die Datei bleibt im Arbeitsbaum. Ein fehlgeschlagener Messversuch muss den Ausgangszustand wiederherstellen oder eine sichere Wiederherstellung ausdrücklich verweigern. | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: `STAGE2_PLANT_FAULT=1` removes `docs/journal/` from the runner’s held-path list, allowing journal writes to reach the checkpoint without that protection — catches without switch: yes; if the implementation itself lacks that held prefix, the test’s assertions still detect the resulting commit or missing held-path refusal.
+
+Phase 6 verdict: codex 01a20f3f-c1af-7dd1-b331-5650db2abf0f, 2026-11-24
+Reviewer session: codex 01a20f3f-c1af-7dd1-b331-5650db2abf0f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
