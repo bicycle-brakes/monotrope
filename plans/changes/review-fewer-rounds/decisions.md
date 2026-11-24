@@ -772,3 +772,18 @@ lines in `findings.md` keep the old file name as recorded.
   only. Answered on 2026-11-09 by the Opus research section of research.md.
 - Open after the answers of 2026-11-10 and answered the same day: who sits in
   the free second round (Q-14) and what triggers it on a small change (Q-15).
+
+## Q-37 · A fourth spec-review round
+
+asked: 2026-11-24
+answer: "Yes — one fourth spec-review round (Opus, phase 2a) of the draft a2eedca7, because Q-31 changed the spec after the third round. Options put: a fourth review (recommended); implement at once; re-slice Q-31 into its own bead."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the redrafted spec is reviewed again.
+  Intention: the plan's prerequisite asks for a recorded authorization before phase 4.
+  Today: AGENTS.md phase 2a ends spec review after round three.
+  Repository change: none.
+  Architecture change: none.
+
+In the context of a spec changed after its third review, facing an unreviewed rule, we decided on one fourth spec review, to achieve a checked spec before 12 h of phase 4, accepting one more Opus run — 2026-11-24
