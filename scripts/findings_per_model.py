@@ -68,6 +68,9 @@ def branch_of(root: Path, rev_arg: str | None, sha: str) -> str | None:
             return done.stdout.decode().strip()
         main = git(root, "rev-parse", "--verify", "refs/heads/main")
         return "main" if main.returncode == 0 and main.stdout.decode().strip() == sha else None
+    if rev_arg == "origin/main":
+        tip = git(root, "rev-parse", "--verify", "refs/remotes/origin/main")
+        return "main" if tip.returncode == 0 and tip.stdout.decode().strip() == sha else None
     tip = git(root, "rev-parse", "--verify", f"refs/heads/{rev_arg}")
     if tip.returncode == 0 and tip.stdout.decode().strip() == sha:
         return rev_arg

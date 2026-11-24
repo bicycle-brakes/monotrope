@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-17
 created: 2026-11-17
 last_reviewed: 2026-11-17
-updated: 2026-11-21
+updated: 2026-11-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -565,8 +565,102 @@ Stage-2 call, 2026-11-21: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | base | `scripts/findings_per_model.py`, `branch_of` | The prescribed main report, `make findings-per-model REV=origin/main`, writes to `revisions/<commit>.jsonl` instead of `main.jsonl`: `branch_of` recognizes only local branches. A consumer reading the specified main file therefore sees stale data or no report. [Criterion 14] | Codex | taken — maintainer 2026-11-21: branch_of maps origin/main to main so REV=origin/main writes main.jsonl | — |
-| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `MODEL_NAME` and `attribute_rows` | A released loop row naming the model `Vendor/model-free` is counted as unattributed, with no gap. The runner permits uppercase letters and `/` in model IDs, but the reader rejects both, so an eligible named model loses its credit. [Criterion 3] | Codex | taken — maintainer 2026-11-21: reader uses the runner's model-id character set (one shared pattern accepting uppercase and '/') | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_per_model.py`, `branch_of` | The prescribed main report, `make findings-per-model REV=origin/main`, writes to `revisions/<commit>.jsonl` instead of `main.jsonl`: `branch_of` recognizes only local branches. A consumer reading the specified main file therefore sees stale data or no report. [Criterion 14] | Codex | fixed — tests/test_findings_per_model.py::test_origin_main_writes_main_report | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `MODEL_NAME` and `attribute_rows` | A released loop row naming the model `Vendor/model-free` is counted as unattributed, with no gap. The runner permits uppercase letters and `/` in model IDs, but the reader rejects both, so an eligible named model loses its credit. [Criterion 3] | Codex | fixed — tests/test_findings_per_model.py::test_vendor_qualified_loop_model_is_attributed | — |
 
 Phase 6 verdict: codex 01a1fbe9-fd92-76a3-82ac-995996b17240, 2026-11-21
 Reviewer session: codex 01a1fbe9-fd92-76a3-82ac-995996b17240 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5657 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/findings_per_model.py` +3 -0
+> - `scripts/findings_reader.py` +5 -5
+> - `tests/test_findings_per_model.py` +20 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .................F.......                                                [100%]
+> =================================== FAILURES ===================================
+> ______________________ test_make_entry_point_and_revision ______________________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/findings-per-model/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3522/popen-gw7/test_make_entry_point_and_revi0')
+>
+>     def test_make_entry_point_and_revision(tmp_path):
+>         lookup = ["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "HEAD~1^{commit}"]
+>         probe = subprocess.run(lookup, capture_output=True, text=True, check=False)
+>         if probe.returncode != 0:
+>             pytest.skip("HEAD~1 is not available in this checkout")
+>         expected = probe.stdout.strip()
+>         env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
+>         env.pop("REV", None)
+>         command = ["make", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
+>         done = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
+>         # the exit code may be non-zero on real history: gaps are reported, never hidden
+>         lines = done.stdout.splitlines()
+> >       assert expected in lines[0], f"the requested revision was ignored: {done.stdout[:300]!r} {done.stderr[:300]!r}"
+> E       IndexError: list index out of range
+>
+> tests/test_findings_per_model.py:444: IndexError
+> =========================== short test summary info ============================
+> FAILED tests/test_findings_per_model.py::test_make_entry_point_and_revision
+> 1 failed, 24 passed in 0.70s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-1-20261124T153259495463Z-34618dfc.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1155 files, 5657 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ................F........                                                [100%]
+> =================================== FAILURES ===================================
+> ______________________ test_make_entry_point_and_revision ______________________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/findings-per-model/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3524/popen-gw7/test_make_entry_point_and_revi0')
+>
+>     def test_make_entry_point_and_revision(tmp_path):
+>         lookup = ["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "HEAD~1^{commit}"]
+>         probe = subprocess.run(lookup, capture_output=True, text=True, check=False)
+>         if probe.returncode != 0:
+>             pytest.skip("HEAD~1 is not available in this checkout")
+>         expected = probe.stdout.strip()
+>         env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
+>         env.pop("REV", None)
+>         command = ["make", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
+>         done = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
+>         # the exit code may be non-zero on real history: gaps are reported, never hidden
+>         lines = done.stdout.splitlines()
+> >       assert expected in lines[0], f"the requested revision was ignored: {done.stdout[:300]!r} {done.stderr[:300]!r}"
+> E       IndexError: list index out of range
+>
+> tests/test_findings_per_model.py:444: IndexError
+> =========================== short test summary info ============================
+> FAILED tests/test_findings_per_model.py::test_make_entry_point_and_revision
+> 1 failed, 24 passed in 0.67s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/findings-per-model/stage2/attempts/findings-per-model/attempt-2-20261124T153259495463Z-34618dfc.md
+> ```
+
+Stage-2 call, 2026-11-24: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1155 files, 5657 commits, 12 rules.
+
+Runner restoration, 2026-11-24: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged

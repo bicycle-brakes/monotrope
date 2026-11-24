@@ -97,6 +97,8 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 
+from stage2_free import MODEL_ID
+
 # The runner's own row shapes (scripts/stage2.py writes them; the mirror is
 # pinned by tests/test_findings_per_model.py::test_row_shapes_match_the_runner).
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
@@ -147,11 +149,9 @@ CALL_LINE = re.compile(r"^Stage-2 call, (?P<date>\d{4}-\d{2}-\d{2}): (?P<rest>.*
 # A column-0 line meant as a call line: anything else in that shape is a gap.
 CALL_PREFIX = re.compile(r"Stage-2 call(?:[,:]| \d)")
 MODEL_FIELD = re.compile(r"·\s+model\s+(\S+)\s+·")
-# A model id, not a vendor: lowercase token with a digit or a hyphenated word
-# (`glm-5.3-flash`, `gpt-6.1-terra`, `hy3`, `space-bunny-free`, `big-pickle`),
-# never `GLM`, `Codex`, `Opus 5.5` (decisions F-21: the model comes from the
-# call line, never a vendor cell; phase-6 RF6-1).
-MODEL_NAME = re.compile(r"(?=\S*(?:\d|-[a-z0-9]))[a-z0-9][a-z0-9._+-]*")
+# The runner's model-id grammar is shared; a digit, hyphen or vendor path
+# distinguishes a named model from a legacy vendor-only reviewer cell.
+MODEL_NAME = re.compile(r"(?=\S*(?:\d|-[A-Za-z0-9]|/))" + MODEL_ID.pattern)
 # A row id in a first cell: tokens with a digit (`F-1`, `L2-2`, `RB-G7`, `2a-1`).
 ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
 # Duplicate targets use exactly the same grammar as readable row IDs.

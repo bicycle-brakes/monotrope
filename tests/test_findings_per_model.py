@@ -160,6 +160,13 @@ def test_loop_model_attribution():
     assert read(no_call).findings[0].model is None, "a vendor-only row without a call line must be unattributed"
 
 
+def test_vendor_qualified_loop_model_is_attributed():
+    result = read(doc(RELEASE, lrow("L1-1", "Vendor/model-free", "fixed")))
+    assert not result.gaps
+    assert result.findings[0].model == "Vendor/model-free"
+    assert totals(result.findings)["Vendor/model-free"]["defects_accepted"] == 1
+
+
 def test_digitless_free_swarm_model_is_attributed():
     """Released loop rows from digitless free-swarm model IDs credit that model (RF6-1)."""
     text = doc(RELEASE, lrow("L1-1", "space-bunny-free", "open"), lrow("L1-2", "big-pickle", "fixed"))
@@ -406,6 +413,19 @@ def test_formats_agree_and_name_commit(tmp_path, monkeypatch):
     assert chunks[-1].strip() == str(revision_file)
 
 
+def test_origin_main_writes_main_report(tmp_path, monkeypatch):
+    root, sha = repo(tmp_path, {findings_path("c1"): doc(RELEASE, lrow("L1-1", "hy3", "open"))})
+    git(root, "update-ref", "refs/remotes/origin/main", sha)
+    git(root, "checkout", "-q", "-b", "feature")
+    commit(root, {findings_path("c2"): doc(RELEASE, lrow("L1-2", "hy3", "fixed"))})
+    state = tmp_path / "state"
+    code, chunks = run_report(root, "origin/main", monkeypatch, state)
+    output = state / "coding-harness/findings-per-model/main.jsonl"
+    assert code == 0
+    assert chunks[-1].strip() == str(output)
+    assert jsonl(output)[0]["commit"] == sha
+
+
 # --- criterion 15 --------------------------------------------------------------------
 
 
@@ -417,9 +437,12 @@ def test_make_entry_point_and_revision(tmp_path):
     expected = probe.stdout.strip()
     env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
     env.pop("REV", None)
+    # the Makefile calls `python3` from PATH: put the interpreter running this test first
+    env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
     command = ["make", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
     done = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
     # the exit code may be non-zero on real history: gaps are reported, never hidden
+    assert done.stdout.strip(), f"the report printed nothing: stderr {done.stderr[:600]!r}"
     lines = done.stdout.splitlines()
     assert expected in lines[0], f"the requested revision was ignored: {done.stdout[:300]!r} {done.stderr[:300]!r}"
     wanted = tmp_path / "state" / "coding-harness" / "findings-per-model" / "revisions" / f"{expected}.jsonl"
