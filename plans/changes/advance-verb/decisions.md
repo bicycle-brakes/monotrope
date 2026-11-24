@@ -494,3 +494,18 @@ context: |
   Architecture change: none.
 
 In the context of when marks are read and how a killed step counts, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Q-26 · The separate ADR draft and the ADR 0021 amendment
+
+asked: 2026-11-24
+answer: "A — the draft docs/adr/0026-local-lane-driver.md is removed and the orchestrator carries the amendment of ADR 0021 on this branch now, as Q-1 and Q-4 decided; the pull request of this change is the decision PR the maintainer merges. Options put: remove the draft and amend ADR 0021 (recommended); keep both until phase 6."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the change's decision record.
+  Intention: resolve the conflict the final plan named (step 5) before implementation, so phase 6 judges one decision text.
+  Today: the final draft left a separate draft ADR 0026 beside the recorded answer (Q-4: one amendment to ADR 0021, no new ADR), and ADR number 0026 is also claimed by feat/central-config.
+  Repository change: docs/adr/0026-local-lane-driver.md removed; docs/adr/0021-review-swarms-until-clean.md gains the lane-driver amendment; spec.md adr_files and plan.md step 5 follow.
+  Architecture change: ADR 0021 amended (effective on merge).
+
+In the context of the change's decision record, facing a draft ADR that contradicts the recorded answer, we decided to remove it and amend ADR 0021 now, to achieve one decision text for phase 6, accepting that a held ADR is edited by hand before the implementation exists. — 2026-11-24

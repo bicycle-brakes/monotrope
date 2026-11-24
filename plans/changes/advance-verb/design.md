@@ -36,7 +36,7 @@ The driver owns `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.json`: a
 
 ## ADR draft
 
-**Proposed amendment to ADR 0021** (decisions.md Q-1, Q-4 and Q-15; effective only on merge).
+**Proposed amendment to ADR 0021** (decisions.md Q-1, Q-4 and Q-15; effective only on merge). Carried into ADR 0021 as its lane-driver amendment by the orchestrator on 2026-11-24 (Q-26).
 
 ### Context
 

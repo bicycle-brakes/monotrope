@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-11-20
+updated: 2026-11-24
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
@@ -299,3 +299,39 @@ with exit 0 and one line on standard output, `next: repair <change>` or
 coding-harness-hwll, change `ladder-next-step`, its `decisions.md` Q-2).
 Until that change merges, the orchestrator applies this amendment by hand,
 as `AGENTS.md` states.
+
+## Lane-driver amendment — a local driver starts the named next step, 2026-11-24
+
+The maintainer decided on 2026-11-24, in the interview of change
+`advance-verb` (bead coding-harness-z40g, its `decisions.md` Q-1, Q-4, Q-10,
+Q-15, Q-20, Q-22 and Q-26), that the next step the runner names no longer
+waits for a hand start. In the night run of 2026-11-24 lanes waited between
+03:20 and 08:00 for a person to start a step the runner had already named.
+
+The consumed-ladder amendment above said that the runner names the next step
+and "does not start either verb itself". That stays true of the runner. What
+changes: a separate local driver, `python3 scripts/lanes.py advance`, reads
+the runner's next-step instruction (`next.json` beside the loop record,
+written by change `ladder-next-step`, bead coding-harness-hwll) and starts
+the named step as a child process `scripts/stage2.py <verb> <change>`, so
+every step keeps its own leak check, verify admission, locks and stops. The
+driver never decides the next step; the runner stays the one decider.
+
+The driver may start only these six verbs: `repair`, `review`,
+`review-loop`, `release-loop`, `prepare-loop` and `implement`. Adding a verb
+needs a further amendment of this ADR. The lists of allowed and
+verify-bearing verbs and the two step limits (verify-bearing steps per lane,
+initially 2; all steps of one call, initially 6) stand in one central
+setting, `lane-driver.yaml`. The lanes it works on stand in one
+machine-local, schema-validated `lanes.json`, written only by `lanes.py`. No
+external input (webhook, label, comment, branch name) ever starts a step.
+
+Unchanged: every stop of this ADR, the repair brake of decision 7, the
+restart authority and the total-outage stop. A failed or killed step, a hand
+step and an invalid instruction or worktree stop the lane with a park mark
+the orchestrator clears; a runner refusal (exit 2) stops the lane for that
+call without one.
+
+Status: proposed until the pull request of change `advance-verb` merges; it
+takes effect with that merge, and no part of it applies before
+`ladder-next-step` has merged.

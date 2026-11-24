@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, lanes]
 class: architectural
 appetite: 8
-adr_files: [docs/adr/0021-review-swarms-until-clean.md, docs/adr/0026-local-lane-driver.md]
+adr_files: [docs/adr/0021-review-swarms-until-clean.md]
 neighbours: [plans/changes/adr-0021-consumed-ladder/spec.md, plans/changes/harness-decide-adr/spec.md]
 ---
 
