@@ -37,65 +37,77 @@ Runner jobs survive the launching session and remain observable (bead coding-har
 
 ## Acceptance criteria
 
-1. When a caller starts a runner command through `scripts/jobs.py start`, it runs in its own observable tmux window and continues after the launching session ends.
-   *Refuted by:* Ending the launcher session terminates the job or no separate window exists.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-2`.
+1. When `scripts/jobs.py start` receives any command, it starts that command in its own window on the dedicated `tmux -L coding-harness` server and the command survives termination of the caller's process tree and its own tmux sessions.
+   *Refuted by:* The command stops with either caller boundary or shares a window.
+   *Basis:* `decisions.md#Q-8`.
 
-2. If tmux is unavailable, start refuses before launching the command and reports the missing prerequisite.
-   *Refuted by:* A command starts or the diagnostic does not identify tmux.
-   *Basis:* `decisions.md#Q-7`.
+2. If the tmux binary is missing, start refuses before running the command and identifies the missing prerequisite.
+   *Refuted by:* The command runs or the diagnostic does not identify tmux.
+   *Basis:* `decisions.md#Q-7`, `decisions.md#Q-8`.
 
-3. When a caller requests `jobs.py stop` for a running job, only the selected job is stopped.
-   *Refuted by:* The selected job continues or another job is terminated.
-   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-2`.
+3. When `jobs.py stop` targets a running job, it ends its entire process tree, including descendants in separate sessions, releases its verify admission, and leaves other jobs running.
+   *Refuted by:* A descendant or admission survives, or another job stops.
+   *Basis:* `decisions.md#Q-10`.
 
-4. When a job starts, its durable record contains its command, tmux window, start time and log path in the shared runner state directory.
-   *Refuted by:* A required field is absent or the record is outside the shared state directory.
-   *Basis:* `decisions.md#Q-4`.
+4. When a job starts, its per-job record under `${XDG_STATE_HOME:-~/.local/state}/coding-harness/jobs/` contains the command, whether it is a runner verb, process ID, tmux window, start time and log path.
+   *Refuted by:* A field or the location is wrong.
+   *Basis:* `decisions.md#Q-4`, `decisions.md#Q-8`, `decisions.md#Q-9`.
 
-5. When a job ends, its record retains its end time and actual exit code.
-   *Refuted by:* A finished job has no end time, loses its record or reports the wrong exit code.
-   *Basis:* `decisions.md#Q-4`.
+5. When a job ends, its wrapper records the end time and actual exit code or `signal N` for signal death, retaining the finished record for 14 days.
+   *Refuted by:* The outcome is wrong or the record disappears before 14 days.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`.
 
-6. While a job is running, `jobs.py list` identifies it as running.
-   *Refuted by:* A running job is missing or reported as finished.
-   *Basis:* `decisions.md#Q-4`.
+6. When `jobs.py list` runs, it shows running jobs and jobs finished in the last 24 hours, while `--all` shows all retained records.
+   *Refuted by:* A qualifying job is omitted or an older finished job appears without `--all`.
+   *Basis:* `decisions.md#Q-9`.
 
-7. While a job is running, `run_report.py` identifies it as running.
-   *Refuted by:* The report omits the running job or reports it as finished.
-   *Basis:* `decisions.md#Q-4`.
+7. When `run_report.py` reports a running detached job, it reads its record and deduplicates it against process recognition by process ID.
+   *Refuted by:* The job is omitted or counted twice when both sources identify it.
+   *Basis:* `decisions.md#Q-9`.
 
-8. When a detached job runs verification, it uses the existing machine-wide verify admission, including its two-slot limit and memory floor.
-   *Refuted by:* Detached verification runs outside the existing admission or exceeds its limits.
-   *Basis:* `decisions.md#Q-3`.
+8. When a detached job runs verification, it obtains its own existing machine-wide admission, including the two-slot limit and memory floor, even if its caller holds an admission.
+   *Refuted by:* It inherits a held admission, bypasses the gate or exceeds its limits.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-9`.
 
-9. When a model is started by a detached job, the model invocation still goes through `scripts/stage2.py`.
-   *Refuted by:* A launcher route invokes a model directly.
-   *Basis:* `decisions.md#Q-1`.
+9. When a runner verb starts a model, the model invocation continues through `scripts/stage2.py`.
+   *Refuted by:* A runner verb introduced or changed by this work invokes a model outside that entry point.
+   *Basis:* `decisions.md#Q-1`, `decisions.md#Q-8`.
 
 10. When the launcher is installed through the kit, its mechanism and required dependencies are available in the destination repository.
-   *Refuted by:* The installed kit cannot invoke the launcher because a required mechanism is absent.
-   *Basis:* `decisions.md#Q-7`.
+    *Refuted by:* The installed kit cannot invoke the launcher because a required mechanism is absent.
+    *Basis:* `decisions.md#Q-7`.
 
 11. When the launcher is added, the continuous integration caller declaration identifies its caller.
-   *Refuted by:* The caller check finds the launcher undeclared.
-   *Basis:* `decisions.md#Q-7`.
+    *Refuted by:* The caller check finds the launcher undeclared.
+    *Basis:* `decisions.md#Q-7`.
 
 12. While detached jobs run, only the orchestrator or `lanes.py` writes lane and busy markers.
-   *Refuted by:* The launcher writes either kind of marker.
-   *Basis:* `decisions.md#Q-4`.
+    *Refuted by:* The launcher writes either kind of marker.
+    *Basis:* `decisions.md#Q-4`.
 
-13. When the architecture decision takes effect, it supersedes the headless-job non-goals of night-heartbeat and night-stall-guard.
-   *Refuted by:* The decision leaves either non-goal in force.
-   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-6`.
+13. When the architecture decision takes effect, it quotes the exact non-goal sentences of night-heartbeat and night-stall-guard and exempts only detached runner jobs, retaining their exclusions of a scheduler, daemon and automatic restart.
+    *Refuted by:* Either sentence is missing or another exclusion is lifted.
+    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`.
 
 14. While `lanes.py advance` has not landed, night runs retain the recurring 30-minute wake.
-   *Refuted by:* The updated guidance removes the wake before advance lands.
-   *Basis:* `decisions.md#Q-6`.
+    *Refuted by:* The updated guidance removes the wake before advance lands.
+    *Basis:* `decisions.md#Q-6`.
 
-15. When the background-mode guidance is updated, it describes detached job launching and retains the interim wake.
-   *Refuted by:* The guidance requires session-bound launching or omits the interim wake.
-   *Basis:* `decisions.md#Q-6`.
+15. When the background guidance is updated, it requires `jobs.py` for runner verbs that run a full `make verify`, permits harness background mode for short commands and retains the interim wake.
+    *Refuted by:* Either route or the wake is omitted or contradicted.
+    *Basis:* `decisions.md#Q-11`, `decisions.md#Q-6`.
+
+16. When a job starts, it receives the caller's working directory, PATH, virtual environment, XDG_STATE_HOME and HARNESS_VERIFY_* values, except held-admission markers which must not be inherited.
+    *Refuted by:* The job observes a server value instead of a supplied caller value or inherits a held admission.
+    *Basis:* `decisions.md#Q-8`, `decisions.md#Q-9`.
+
+17. If a job's process ID is gone without an end record, `jobs.py list` reports it as lost.
+    *Refuted by:* The vanished job remains running or is reported as successfully finished.
+    *Basis:* `decisions.md#Q-10`.
+
+18. When no dedicated tmux server exists, start creates it detached and launches the job without requiring an attached tmux session.
+    *Refuted by:* A caller outside tmux cannot launch despite an available tmux binary.
+    *Basis:* `decisions.md#Q-8`.
 
 ## Non-goals
 

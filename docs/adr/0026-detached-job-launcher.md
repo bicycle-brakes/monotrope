@@ -14,7 +14,7 @@ tags: [adr, night-run, jobs]
 
 # ADR 0026 — Host detached runner jobs in tmux
 
-* Status: accepted by the merge of the pull request carrying this file; until then it is proposed. Supersedes the headless-job non-goals of the night-heartbeat and night-stall-guard changes; amends no numbered D- or O-decision and supersedes no ADR.
+* Status: accepted by the merge of the pull request carrying this file; until then it is proposed. Exempts detached runner jobs from the quoted night-heartbeat and night-stall-guard non-goals; amends no numbered D- or O-decision and supersedes no ADR.
 * Review: maintainer chose the direction on 2026-11-24 (`decisions.md` Q-1–Q-7) · Decider: maintainer · prepared by Codex.
 * Date: 2026-11-24 · takes effect on merge.
 
@@ -36,7 +36,7 @@ Research on 2026-11-23 found that runner child groups are tied to their launchin
 
 ## Decision
 
-Chosen option: a separate tmux window per job with durable records, because it provides survival and live observation across harnesses. `scripts/jobs.py` starts, lists and stops jobs; model calls remain routed through `scripts/stage2.py`. Verification uses the existing admission. Job records live beside runner state and the report reads them. The launcher does not write lane or busy markers. The existing 30-minute wake remains until `lanes.py advance` lands. The two earlier changes' exclusions of headless jobs no longer apply; their other provisions remain.
+Chosen option: a separate tmux window per job with durable records, because it provides survival and live observation across harnesses. `scripts/jobs.py` starts, lists and stops jobs; model calls remain routed through `scripts/stage2.py`. Verification uses the existing admission. Job records live beside runner state and the report reads them. The launcher does not write lane or busy markers. The existing 30-minute wake remains until `lanes.py advance` lands. The earlier non-goals read: night-heartbeat, “A new scheduler, daemon, model call, notification service or automatic restart of an unavailable session; delivery uses the harness's existing scheduling or background-completion facility”; night-stall-guard, “A scheduler, daemon, headless heartbeat architecture, automatic restart, lane planner, runner process watchdog, dashboard or notification service.” Only detached runner jobs are exempted; a scheduler, daemon and automatic restart remain excluded. Runner verbs that run full `make verify` must use the launcher; harness background mode remains available for short commands.
 
 ## Consequences
 
