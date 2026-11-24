@@ -321,7 +321,7 @@ gates:
 
   - id: plans-registry-strict
     title: Plans hygiene holds strictly against the outside world
-    command: python3 scripts/plans_registry.py --check --strict
+    command: git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' && python3 scripts/plans_registry.py --check --strict --branches
     job: drift
     cost: seconds
     enforcement: block
