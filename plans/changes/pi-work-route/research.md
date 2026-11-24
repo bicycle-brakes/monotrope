@@ -11,6 +11,8 @@ bead: coding-harness-363r.3
 owner: Data Architect
 provenance: human-written
 tags: [research]
+class: architectural
+neighbours: []
 ---
 
 # pi work route — Research
