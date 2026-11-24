@@ -29,15 +29,15 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 
 ## Acceptance criteria
 
-1. When `python3 scripts/lanes.py advance` runs, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.json`, whose local entries name a change and its worktree, in file order and validates the JSON against its schema.
+1. When `python3 scripts/lanes.py advance` runs and the lanes file exists, it reads `${XDG_STATE_HOME:-~/.local/state}/coding-harness/lanes.json`, whose local entries name a change and its worktree, in file order and validates the JSON against its schema.
    *Refuted by:* The file entries are read in a different order or an entry is not read.
    *Basis:* `decisions.md#Q-6`, `decisions.md#Q-9`, `decisions.md#Q-11`.
 2. When a change argument is supplied, only its listed lane is considered.
    *Refuted by:* Another or unlisted change runs.
    *Basis:* `decisions.md#Q-6`.
-3. If the lanes file is unreadable, malformed, contains duplicate changes, or the requested change is unlisted, the call is refused before starting a step.
+3. If an existing lanes file is unreadable, malformed, contains duplicate changes, or the requested change is unlisted, the call is refused before starting a step.
    *Refuted by:* Any step starts or the call is not refused.
-   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`, `decisions.md#Q-15`.
+   *Basis:* `decisions.md#Q-6`, `decisions.md#Q-11`, `decisions.md#Q-15`, `decisions.md#Q-24`.
 4. When a lane is considered, its instruction file beside the runner record is selected using that lane’s worktree and each step runs using that worktree’s own `scripts/stage2.py`.
    *Refuted by:* A record or execution belongs to another checkout.
    *Basis:* `decisions.md#Q-11`.
@@ -56,18 +56,18 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 9. While the central counted list has its initial values, `implement`, `repair` and `review` count as verify-bearing steps.
    *Refuted by:* One of these is not counted or an unlisted verb is counted.
    *Basis:* `decisions.md#Q-10`.
-10. When a lane reaches the centrally configured per-lane limit of verify-bearing steps, it starts no further step of any kind in that call and is treated as advanced without a park mark.
-   *Refuted by:* The lane starts any step after reaching its limit or receives a park mark for reaching it.
-   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`.
+10. When a successful step reaches either per-lane limit, the lane ends as advanced without a park mark before reading the `next.json` left by that step.
+   *Refuted by:* The driver reads the new instruction or starts another step in that call, or parks the lane for reaching the limit.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-10`, `decisions.md#Q-22`, `decisions.md#Q-23`.
 11. When the limit is not configured, it defaults to two per lane.
    *Refuted by:* The default differs from two.
    *Basis:* `decisions.md#Q-10`.
 12. If the configured limit is not an integer from one through five, the call is refused before any step starts.
    *Refuted by:* An invalid value is accepted or a step starts.
    *Basis:* `decisions.md#Q-10`.
-13. When a step exits 1 or the instruction requests hand action for held rows, that lane stops even if the preceding repair exited successfully.
+13. When a step fails or the instruction requests hand action for held rows, that lane stops, including after a successful repair that has not reached a limit.
    *Refuted by:* A subsequent step starts in the stopped lane.
-   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`.
+   *Basis:* `decisions.md#Q-9`, `decisions.md#Q-12`, `decisions.md#Q-23`, `decisions.md#Q-25`.
 14. When a lane stops for a failed step, hand instruction, invalid instruction or invalid worktree, the driver records a park mark with its reason in the lanes file and does not run it again until the orchestrator clears the mark.
    *Refuted by:* A later call retries a parked lane without clearing it or the reason is missing.
    *Basis:* `decisions.md#Q-12`.
@@ -114,6 +114,31 @@ On 2026-11-24 lanes waited for a hand start between 03:20 and 08:00 (`decisions.
 28. When the night routine is followed, it calls `scripts/lanes.py advance` using one machine-local lanes file shared by concurrent runs under the specified locks.
    *Refuted by:* The routine prescribes the old per-run lanes file or hand-starts the next lane step.
    *Basis:* `decisions.md#Q-11`, `decisions.md#Q-14`, `decisions.md#Q-16`.
+
+29. When an operator adds, removes, clears or holds a lane, the corresponding `scripts/lanes.py` subcommand writes the lanes file under the same locks as `advance`.
+   *Refuted by:* A subcommand loses a concurrent update, bypasses the lock or requires a hand edit of the file.
+   *Basis:* `decisions.md#Q-14`, `decisions.md#Q-22`.
+30. When the night routine starts lane work, it adds the lane through the driver, and removes the entry before removing its worktree.
+   *Refuted by:* The routine omits the add or removes the worktree before the lane entry.
+   *Basis:* `decisions.md#Q-22`.
+31. When a lane reaches the configured per-call limit of steps of any kind, it starts no further step in that call.
+   *Refuted by:* A changing sequence of uncounted instructions exceeds that limit.
+   *Basis:* `decisions.md#Q-22`.
+32. While the all-step limit uses its initial setting, it is six per lane per call.
+   *Refuted by:* The initial limit is not six.
+   *Basis:* `decisions.md#Q-22`.
+33. If the configured all-step limit is not an integer from one through twenty, the call is refused before a step starts.
+   *Refuted by:* An invalid value is accepted or a step starts.
+   *Basis:* `decisions.md#Q-22`.
+34. When the lanes file is missing, it lists no lanes and an untargeted call exits 0 with nothing to do.
+   *Refuted by:* A fresh machine's untargeted call refuses or starts a step.
+   *Basis:* `decisions.md#Q-24`.
+35. When a selected lane's turn comes, the driver reads its current entry and park mark again under its lane lock before acting.
+   *Refuted by:* A concurrently removed or newly parked lane runs from a stale snapshot.
+   *Basis:* `decisions.md#Q-25`.
+36. When a child step ends by signal, returns 128 plus a signal number, or has no exit code, it is a failed step and its lane is parked and contributes exit 1.
+   *Refuted by:* Such a step is treated as success or refusal, or its lane is not parked.
+   *Basis:* `decisions.md#Q-25`.
 
 ## Non-goals
 
