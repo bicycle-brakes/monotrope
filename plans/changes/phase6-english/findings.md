@@ -242,7 +242,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MAJOR | SPEC | base | prompts/06-review.md; tests/test_stage2.py | The phase-6 verdict prompt does not tell the reviewer `Answer in English.`, so reviewers can continue to return German findings without receiving the requested instruction. The change also adds no test that would fail if the instruction were missing. [Criterion 1; Definition of Done] | Codex | taken | — |
+| R-1 | MAJOR | SPEC | base | prompts/06-review.md; tests/test_stage2.py | The phase-6 verdict prompt does not tell the reviewer `Answer in English.`, so reviewers can continue to return German findings without receiving the requested instruction. The change also adds no test that would fail if the instruction were missing. [Criterion 1; Definition of Done] | Codex | fixed — tests/test_stage2.py::test_the_phase6_prompt_asks_for_english | yes |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -292,3 +292,6 @@ The runner handed the taken rows below to the orchestrator before any model call
 Each row's Status and `Broke a test` cells live in: R-1 in findings.md.
 
 Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+
+Orchestrator hand repair, 2026-11-24 (night run 2026-11-23-a): R-1 — `prompts/06-review.md` is a runner-held path, so the runner handed the row over. The orchestrator added `Answer in English.` before the answer-form paragraph and the test `tests/test_stage2.py::test_the_phase6_prompt_asks_for_english`; the test is red on the prompt without the sentence and green with it; 83 targeted prompt tests passed. A full `make verify` and the phase-6 re-check follow.

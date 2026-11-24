@@ -10918,6 +10918,12 @@ def test_phase6_evidence_save_failure_keeps_first_verdict(world: World, monkeypa
 # ---------------------------------------------------------------------------
 
 
+def test_the_phase6_prompt_asks_for_english() -> None:
+    """Phase6-english R-1. Planted fault: the phase-6 prompt without the instruction to answer in English."""
+    review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
+    assert "Answer in English." in review
+
+
 def test_the_review_prompts_give_both_paths() -> None:
     spec_review = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
