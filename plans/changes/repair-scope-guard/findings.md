@@ -1036,7 +1036,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | MAINT | base | scripts/stage2.py:12180, scripts/stage2.py:12356 | If the file inventory fails immediately after a repair creates an out-of-scope file, the attempt is rejected but its file is not removed because `scope_new` is unavailable. A retry then records that leftover as pre-existing and can commit it without a scope refusal. | Codex | open | — |
+| R1 | MAJOR | MAINT | base | scripts/stage2.py:12180, scripts/stage2.py:12356 | If the file inventory fails immediately after a repair creates an out-of-scope file, the attempt is rejected but its file is not removed because `scope_new` is unavailable. A retry then records that leftover as pre-existing and can commit it without a scope refusal. | Codex | taken — maintainer 2026-11-24: repair, then one more phase-6 re-check | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
