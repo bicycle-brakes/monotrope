@@ -140,3 +140,52 @@ Kept from the loop record:
 > No finding.
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-11-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5577 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_beads_start.py` +8 -7
+> - `tests/test_close_merged_beads.py` +8 -7
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/close-budget-clock/plan.md, plans/changes/close-budget-clock/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_beads_start.py`, `tests/test_close_merged_beads.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-1: tests/test_close_merged_beads.py::test_startup_budget_reserves_publication: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/close-budget-clock/stage2/attempts/close-budget-clock/attempt-1-20261123T213024105639Z-583c3b64.md
+> ```
+
+Stage-2 call, 2026-11-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1188 files, 5578 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_close_merged_beads.py` +23 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/close-budget-clock/plan.md, plans/changes/close-budget-clock/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_beads_start.py`, `tests/test_close_merged_beads.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-1: tests/test_close_merged_beads.py::test_clock_wrappers_record_lazy_renderer: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/close-budget-clock/stage2/attempts/close-budget-clock/attempt-2-20261123T213024105639Z-583c3b64.md
+> ```
+
+Stage-2 call, 2026-11-23: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1188 files, 5578 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_close_merged_beads.py` +4 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/close-budget-clock/plan.md, plans/changes/close-budget-clock/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_beads_start.py`, `tests/test_close_merged_beads.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-1: tests/test_close_merged_beads.py::test_clock_wrappers_record_lazy_renderer: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/close-budget-clock/stage2/attempts/close-budget-clock/attempt-3-20261123T213024105639Z-583c3b64.md
+> ```
