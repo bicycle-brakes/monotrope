@@ -37,14 +37,14 @@ Phase 1 fallback: Stage 1, `claude-haiku-5-5` through `claude-code-plan`, becaus
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_frontmatter_current.py::test_date_check_has_bounded_git_processes — a fourth process inside `reference_dates` or a per-document fallback occurs as the held set grows.
-- 2: not yet written tests/test_frontmatter_current.py::test_batch_matches_literal_per_path_history — a date or hash differs from the literal oracle with `log.follow=false` at a merge, rename, nested root or special path, including with repository `log.follow=true`.
+- 1: tests/test_frontmatter_current.py::test_date_check_has_bounded_git_processes — a fourth process inside `reference_dates` or a per-document fallback occurs as the held set grows.
+- 2: tests/test_frontmatter_current.py::test_batch_matches_literal_per_path_history — a date or hash differs from the literal oracle with `log.follow=false` at a merge, rename, nested root or special path, including with repository `log.follow=true`.
 - 3: tests/test_frontmatter_current.py::test_an_uncommitted_edit_is_held_against_today — an edited file is dated from history.
 - 3: tests/test_frontmatter_current.py::test_a_root_below_the_top_of_the_repository_sees_its_own_edits — a nested-root edit is missed.
-- 3: not yet written tests/test_frontmatter_current.py::test_staged_and_untracked_documents_use_today — a staged or untracked path receives a commit reference.
-- 4: not yet written tests/test_frontmatter_current.py::test_missing_history_keeps_per_file_diagnostic — a missing path changes the diagnostic or exit 3.
-- 5: not yet written tests/test_frontmatter_current.py::test_failed_batch_names_command_without_blaming_file — the failure omits stderr, exceeds either bound, lacks a truncation marker when cut, redacts stderr, blames a file or changes exit 3.
-- 6: not yet written tests/test_frontmatter_current.py::test_batch_preserves_check_and_stamp_output — an exit, stale line or stamped byte changes outside the specified exceptions.
+- 3: tests/test_frontmatter_current.py::test_staged_and_untracked_documents_use_today — a staged or untracked path receives a commit reference.
+- 4: tests/test_frontmatter_current.py::test_missing_history_keeps_per_file_diagnostic — a missing path changes the diagnostic or exit 3.
+- 5: tests/test_frontmatter_current.py::test_failed_batch_names_command_without_blaming_file — the failure omits stderr, exceeds either bound, lacks a truncation marker when cut, redacts stderr, blames a file or changes exit 3.
+- 6: tests/test_frontmatter_current.py::test_batch_preserves_check_and_stamp_output — an exit, stale line or stamped byte changes outside the specified exceptions.
 - 7: not a test — phase-6 review checks five runs of each script on one checkout and machine, including the archived base scripts directory and its gate script with `--root`, individual results, exit statuses and medians; a missing measurement fails review.
 - 8: not a test — phase-6 review compares the recorded five-run medians; an after median over half the before median stops shipping.
 
@@ -52,9 +52,14 @@ Phase 1 fallback: Stage 1, `claude-haiku-5-5` through `claude-code-plan`, becaus
 
 Leave `provenance.yaml`, `decisions/gates.yaml`, `.github/workflows/ci.yml`, `docs/governance/gate-catalog.md`, other gates and the second held-file enumeration alone.
 
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu).
+
 ## Time used
 
 2026-11-25 02:07:21–02:08:47 UTC, 85 s — draft · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 02:13:25–02:15:08 UTC, 103 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 02:19:24–02:20:52 UTC, 88 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 02:26:39–02:28:01 UTC, 82 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 02:28:23–02:41:41 UTC, 798 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_check_adr_answers.py`, `tests/test_frontmatter_current.py`, `tests/test_harness_decide_adr.py`, `tests/test_harness_time_log.py`, `tests/test_run_report.py`, `tests/test_templates.py`, `tests/test_venv_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
