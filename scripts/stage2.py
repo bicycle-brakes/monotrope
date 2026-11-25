@@ -10159,6 +10159,33 @@ def guard_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     return _attempt_tree_proof(root, test, key, tools, planted=False, leg="clean guard proof")
 
 
+def _red_first_refusal(
+    test: str, selector: str, token: str, recorded: bytes | None, done, key: str | None
+) -> str | None:
+    """Compose the pytest verdict from its exit, recorded outcome and protected diagnostic."""
+    if done.returncode == 1 and recorded is not None:
+        fault = _red_record_fault(recorded, token, selector)
+        return f"{test}: {scrub(fault, key)}" if fault is not None else None
+    detail = _red_record_fault(recorded, token, selector, check_exit=False)
+    if detail is None and recorded is not None:
+        detail = "the named test had a qualifying assertion or pytest failure"
+    outcome = (
+        f"{test}: pytest ended {done.returncode} on the baseline's code; "
+        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
+    )
+    if detail is not None:
+        label = "the recorded outcome: " if recorded is not None else ""
+        outcome += f"; {label}{scrub(detail, key)}"
+    if not _red_record_selected(recorded):
+        try:
+            shown = _red_pre_record_diagnostic(done, key)
+        except Refused as error:
+            shown = f"[output withheld: {scrub(str(error), key)}]"
+        if shown:
+            outcome += "\npytest output (protected, capped):\n" + shown
+    return outcome
+
+
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
@@ -10292,30 +10319,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
-                recorded = _red_report_bytes(report)
-                if done.returncode != 1 or (done.returncode != 0 and recorded is None):
-                    detail = _red_record_fault(recorded, token, selector, check_exit=False)
-                    outcome = (
-                        f"{test}: pytest ended {done.returncode} on the baseline's code; "
-                        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
-                    )
-                    if detail is not None:
-                        label = "the recorded outcome: " if recorded is not None else ""
-                        outcome += f"; {label}{scrub(detail, key)}"
-                    if not _red_record_selected(recorded):
-                        # No case ran (a conftest import error, a usage error): the protected tail
-                        # of the combined output is the only evidence, and a protection failure
-                        # raises `Refused` below instead of showing the output.
-                        try:
-                            shown = _red_pre_record_diagnostic(done, key)
-                        except Refused as error:
-                            shown = f"[output withheld: {scrub(str(error), key)}]"
-                        if shown:
-                            outcome += "\npytest output (protected, capped):\n" + shown
-                else:
-                    fault = _red_record_fault(recorded, token, selector)
-                    if fault is not None:
-                        outcome = f"{test}: {scrub(fault, key)}"
+                outcome = _red_first_refusal(test, selector, token, _red_report_bytes(report), done, key)
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         outcome = f"{test}: {scrub(str(error), key)}"
     finally:

@@ -505,7 +505,11 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10296 | If the selected test fails with an assertion but a pytest hook changes the final exit code to 2, the probe can contain a valid assertion-failure outcome. The refusal reports exit 2 but omits that recorded outcome because `_red_record_fault(..., check_exit=False)` returns `None` for a qualifying failure. The refusal must report an available true outcome alongside the exit code. [Acceptance criterion 4] | Codex | taken — maintainer 2026-11-25, structural (second case of criterion-4 refusal wording after P6-3): one function composes every red-first refusal from (the pytest exit code, the first true recorded outcome when a probe record exists, the protected capped diagnostic when none exists); every refusal path in scripts/stage2.py calls it, so an exit 2 after a qualifying assertion failure names both the exit and the recorded outcome; no case repair | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:10296 | If the selected test fails with an assertion but a pytest hook changes the final exit code to 2, the probe can contain a valid assertion-failure outcome. The refusal reports exit 2 but omits that recorded outcome because `_red_record_fault(..., check_exit=False)` returns `None` for a qualifying failure. The refusal must report an available true outcome alongside the exit code. [Acceptance criterion 4] | Codex | fixed — tests/test_stage2.py::test_red_first_reports_assertion_when_hook_changes_exit | — |
 
 Phase 6 verdict: codex 01a211fa-bf2a-7f80-a826-1a33084e7129, 2026-11-25
 Reviewer session: codex 01a211fa-bf2a-7f80-a826-1a33084e7129 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5866 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged

@@ -21203,6 +21203,19 @@ def test_red_first_reports_actual_pytest_outcomes(
     assert "not as a failing run" not in refusal, refusal
 
 
+def test_red_first_reports_assertion_when_hook_changes_exit(world: World) -> None:
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text("def test_out():\n    assert False\n", encoding="utf-8")
+    (world.root / "tests" / "conftest.py").write_text(
+        "def pytest_sessionfinish(session, exitstatus):\n    session.exitstatus = 2\n", encoding="utf-8"
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None
+    assert "pytest ended 2" in refusal
+    assert "assertion" in refusal.split("the recorded outcome:")[-1] and "the recorded outcome:" in refusal
+
+
 def test_red_first_keeps_baseline_code_attempt_tests_and_source_state(world: World) -> None:
     """Criterion 9 (coding-harness-7aso). Planted fault: the attempt's production bytes reach the proof, its
     tests do not, or the source's refs, index or worktree change."""
