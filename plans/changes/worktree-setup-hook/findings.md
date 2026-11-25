@@ -280,7 +280,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | .beads/hooks/post-checkout, `_ls_step` | Without Perl, if a timed-out setup command exits on `TERM` but one of its children ignores `TERM`, `wait` returns and the hook kills the watchdog before it sends `KILL`. The child continues running after checkout returns. Setup must stop when the limit is exceeded. [Criterion 11] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | base | .beads/hooks/post-checkout, `_ls_step` | Without Perl, if a timed-out setup command exits on `TERM` but one of its children ignores `TERM`, `wait` returns and the hook kills the watchdog before it sends `KILL`. The child continues running after checkout returns. Setup must stop when the limit is exceeded. [Criterion 11] | Codex | fixed — tests/test_worktree_setup_hook.py::test_without_perl_a_child_ignoring_term_is_killed (hand repair 7aee5eeb; fails on the previous hook) | no |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
