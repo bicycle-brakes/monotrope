@@ -289,3 +289,16 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a21461-6a53-7892-9503-6f4d3ab046a4, 2026-11-25
 Reviewer session: codex 01a21461-6a53-7892-9503-6f4d3ab046a4 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5982 commits, 12 rules.
+
+## Rejected phase-6 answer — Codex, 2026-11-25
+
+The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict was recorded and nothing was released (Codex thread: 01a21477-cd20-7df0-be2b-635de9f41681). The answer, as it came:
+
+> | P6-1 | MAJOR | SPEC | base | tests/test_worktree_setup_hook.py | No test removes `origin/main` before a new-worktree checkout. A regression that runs setup when the trusted reference is unknown would pass the existing tests, even though setup must be skipped in that case. [Criterion 1] |
+> | P6-2 | MINOR | SPEC | base | tests/test_worktree_setup_hook.py | No test creates a worktree at an older commit that is an ancestor of `origin/main`. A regression that trusts only the current tip would pass the existing tests, even though setup must run for an ancestor. [Criterion 1] |
+> 
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the setup section’s opening marker, preventing the test from establishing its position — catches without switch: yes.
+> 
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: changes text inside the protected Beads-managed block — catches without switch: yes.
