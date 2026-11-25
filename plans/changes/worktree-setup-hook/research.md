@@ -23,20 +23,11 @@ neighbours: []
 
 Class: bounded. 2026-11-25: a new lane worktree lacked .venv and the pinned Pi; scripts/new_change.py failed with 'No module named yaml' and the rule lived only in tracker memory new-worktree-needs-pi (2026-11-22: about 110 tests fail without Pi). Extend the versioned hook .beads/hooks/post-checkout (core.hooksPath), outside the managed beads section: when git runs it for a new worktree (previous HEAD is the null SHA, branch checkout flag 1), run make venv and bash tools/pi/install.sh in that worktree, then a short check (the venv imports yaml, tools/pi/pi --version matches the pin); on failure print a loud message naming the step, without failing the checkout. HARNESS_NO_LANE_SETUP=1 skips it. The runner adds no worktrees itself (measured: no 'worktree add' in scripts/). Harness-neutral: Claude Code, Codex and Antigravity get set-up worktrees. Then retire memory new-worktree-needs-pi in favour of the hook.
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-25: explore · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-haiku-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29; bounded change · leak check clean over 1235 files, 5898 commits, 12 rules.
 
 ## Runner exploration — 2026-11-25
 
-I ran the read-only exploration for `worktree-setup-hook`. Nothing was edited. The findings below are ready to append to `plans/changes/worktree-setup-hook/research.md`. Paths are relative to the repository root.
+Paths are relative to the repository root.
 
 ## What exists today
 

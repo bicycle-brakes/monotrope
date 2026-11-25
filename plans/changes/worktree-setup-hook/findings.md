@@ -138,3 +138,24 @@ Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1239 files, 5937 commits, 12 rules.
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1239 files, 5937 commits, 12 rules.
+
+## Hand steps for the orchestrator — 2026-11-25
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- L2-1 — `.beads/hooks/post-checkout` — runner-held path
+- L2-5 — `.beads/hooks/post-checkout` — runner-held path
+- L2-10 — `.beads/hooks/post-checkout` — runner-held path
+- L2-11 — `.beads/hooks/post-checkout` — runner-held path
+- L2-12 — `.beads/hooks/post-checkout` — runner-held path
+- L2-13 — `AGENTS.md` — runner-held path
+- L2-15 — `.beads/hooks/post-checkout` — runner-held path
+- L2-20 — `.beads/hooks/post-checkout` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: L2-1, L2-5, L2-10, L2-11, L2-12, L2-13, L2-15, L2-20 in the loop record `/Users/mikypiky/.local/state/coding-harness/stage2/worktree-setup-hook@c00d7e82/loop.md`.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5938 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/worktree-setup-hook/plan.md, plans/changes/worktree-setup-hook/spec.md — unchanged

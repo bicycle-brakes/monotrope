@@ -86,12 +86,38 @@ def hook_text() -> str:
     return VERSIONED_HOOK.read_text(encoding="utf-8")
 
 
-def test_hook_text_uses_versioned_hook_without_injection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    hook = tmp_path / "post-checkout"
-    original = "#!/bin/sh\n# --- BEGIN BEADS INTEGRATION v1.1.2 ---\n"
-    hook.write_text(original, encoding="utf-8")
-    monkeypatch.setattr(__import__(__name__, fromlist=["VERSIONED_HOOK"]), "VERSIONED_HOOK", hook)
-    assert hook_text() == original
+def test_lane_setup_precedes_managed_block() -> None:
+    text = hook_text()
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        text = text.replace("BEGIN LANE SETUP", "REMOVED LANE SETUP")
+    setup = text.find("# --- BEGIN LANE SETUP")
+    setup_end = text.find("# --- END LANE SETUP")
+    beads = text.find("# --- BEGIN BEADS INTEGRATION")
+    assert 0 <= setup < setup_end < beads, "lane setup must be entirely above the managed block"
+
+
+def test_managed_beads_block_matches_origin_main() -> None:
+    original = subprocess.run(
+        ["git", "show", "origin/main:.beads/hooks/post-checkout"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    text = hook_text()
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        text = text.replace("This section is managed by beads.", "Changed managed block.")
+
+    def managed_block(hook: str) -> str:
+        begin = "# --- BEGIN BEADS INTEGRATION"
+        end = "# --- END BEADS INTEGRATION"
+        assert hook.count(begin) == 1 and hook.count(end) == 1, "managed block markers must be unique"
+        start = hook.index(begin)
+        finish = hook.index(end)
+        assert start < finish, "managed block markers must be ordered"
+        return hook[start:finish]
+
+    assert managed_block(text) == managed_block(original), "Beads-managed block differs from origin/main"
 
 
 def _write_exec(path: Path, text: str) -> None:
