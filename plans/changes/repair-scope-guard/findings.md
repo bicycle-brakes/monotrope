@@ -1235,7 +1235,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:9602 | If an implement or repair attempt changes only the `updated:` date in a tracked journal document, the checkpoint classifies that edit as a derived stamp and exempts it from the held-path refusal. It restores the date but can accept and commit the attempt, although every tracked journal edit must cause refusal. [Criterion 1] | Codex | open | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:9602 | If an implement or repair attempt changes only the `updated:` date in a tracked journal document, the checkpoint classifies that edit as a derived stamp and exempts it from the held-path refusal. It restores the date but can accept and commit the attempt, although every tracked journal edit must cause refusal. [Criterion 1] | Codex | taken — criterion 1: an attempt's edit of a tracked docs/journal/ document refuses the attempt even when it changes only the updated: date; the derived-stamp exemption does not apply to held journal paths | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
