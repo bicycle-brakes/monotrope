@@ -3681,13 +3681,15 @@ def _write_watcher() -> Iterator[list[tuple[str, Path]]]:
     """
     gesehen: list[tuple[str, Path]] = []
 
-    def notiere(operation: str, ziel: object) -> None:
+    def notiere(operation: str, ziel: object, dir_fd: object = None) -> None:
         if isinstance(ziel, int):
             return
         try:
             roh = os.fsdecode(os.fspath(ziel))  # type: ignore[arg-type]
         except TypeError:
             return
+        if dir_fd is not None:
+            operation += " (unresolved dir_fd)"
         gesehen.append((operation, Path(os.path.realpath(roh))))
 
     def schreibmodus(mode: object) -> bool:
@@ -3715,17 +3717,17 @@ def _write_watcher() -> Iterator[list[tuple[str, Path]]]:
 
     def watched_os_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
         if flags & _WRITE_FLAGS:
-            notiere("os.open", path)
+            notiere("os.open", path, kwargs.get("dir_fd"))
         return os_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
 
     def watched_os_replace(src: object, dst: object, *args: object, **kwargs: object) -> None:
-        notiere("os.replace", src)
-        notiere("os.replace", dst)
+        notiere("os.replace", src, kwargs.get("src_dir_fd"))
+        notiere("os.replace", dst, kwargs.get("dst_dir_fd"))
         os_replace(src, dst, *args, **kwargs)  # type: ignore[arg-type]
 
     def watched_os_rename(src: object, dst: object, *args: object, **kwargs: object) -> None:
-        notiere("os.rename", src)
-        notiere("os.rename", dst)
+        notiere("os.rename", src, kwargs.get("src_dir_fd"))
+        notiere("os.rename", dst, kwargs.get("dst_dir_fd"))
         os_rename(src, dst, *args, **kwargs)  # type: ignore[arg-type]
 
     def watched_write_text(self: Path, *args: object, **kwargs: object) -> int:
@@ -3759,7 +3761,11 @@ def _write_watcher() -> Iterator[list[tuple[str, Path]]]:
 
 def _writes_inside(gesehen: list[tuple[str, Path]], root: Path) -> list[str]:
     """The watcher's report: every recorded attempt whose target lies in `root`."""
-    return [f"{operation} {ziel}" for operation, ziel in gesehen if _inside(ziel, root)]
+    return [
+        f"{operation} {ziel}"
+        for operation, ziel in gesehen
+        if " (unresolved dir_fd)" in operation or _inside(ziel, root)
+    ]
 
 
 def _standin_target_problems(ziel: Path, standin: Path) -> list[str]:
@@ -3785,6 +3791,32 @@ def test_orphan_control_does_not_write_to_checkout(tmp_path: Path) -> None:
     )
     im_checkout = _writes_inside(gesehen, REPO_ROOT)
     assert not im_checkout, "the control test writes into the checkout:\n  " + "\n  ".join(im_checkout)
+
+
+@pytest.mark.parametrize("operation", ["open", "rename_src", "rename_dst", "replace_src", "replace_dst"])
+def test_orphan_write_watcher_rejects_dir_fd_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    """A descriptor-relative write cannot be located reliably and must fail closed."""
+    standin = tmp_path / "standin"
+    standin.mkdir()
+    (standin / "source").write_text("source", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "source").write_text("source", encoding="utf-8")
+    monkeypatch.chdir(outside)
+    fd = os.open(standin, os.O_RDONLY)
+    try:
+        with _write_watcher() as gesehen:
+            if operation == "open":
+                os.close(os.open("created", os.O_WRONLY | os.O_CREAT, 0o644, dir_fd=fd))
+            elif operation.endswith("src"):
+                getattr(os, operation.split("_")[0])("source", "destination", src_dir_fd=fd)
+            else:
+                getattr(os, operation.split("_")[0])("source", "destination", dst_dir_fd=fd)
+        assert _writes_inside(gesehen, standin), f"descriptor-relative {operation} was not reported"
+    finally:
+        os.close(fd)
 
 
 def test_orphan_write_watcher_detects_standin_write(tmp_path: Path) -> None:
