@@ -42,3 +42,5 @@ In the context of runner checks that run outside the verify lock by design, faci
 
 [DETAIL] **D-4 (S-4, scope of the policy)**: only pytest launches of the cheap checks get the cap; `run_gates`, its other gates and its other callers (the draft's and the hand-off's document checks) are unchanged. Reason: the other gates are not pytest and are not the load the bead names.
 
+[DETAIL] **D-5 (spec review round 2 S-5, the setting stays local)**: placement A — the computed worker setting is applied only to the cheap pytest launch, inside `cheap_checks` (a copy of the environment), and never written back into the environment the caller passes on to later steps, gates or the full verify. Reason: D-4 limits the policy to the cheap pytest.
+

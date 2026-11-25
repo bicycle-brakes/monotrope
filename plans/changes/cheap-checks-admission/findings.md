@@ -36,3 +36,14 @@ Spec review commit: d4370398fadf3de5cd4ecee124c6cb89e0335873
 | S-4 | MINOR | SPEC | base | spec.md, Acceptance criterion 2 and Open decisions; scripts/stage2.py:8966-8971, 9037-9080, 12702, 12753 | `run_gates` is the only gate executor for three callers: the targeted check, the draft's document check and the hand-off's document check. In a targeted check it also runs the always-selected `docs` gates and the entrypoint gates next to the kit probe. The spec does not say whether the policy goes into `gate_env` for every gate and every caller, or only into the kit probe's launch in a targeted check. "The affected subprocess boundaries" does not settle it, and no criterion refutes either choice. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-4 (2026-11-25) | — |
 
 Stage-2 call, 2026-11-25: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5837 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1206 files, 5839 commits, 12 rules.
+## Phase 2a — Opus 5.5, 2026-11-25
+
+Spec fingerprint: sha256:640dd29062091dd30ddfc6f08bd96a5b18f02f61f7a5fe426dd2678144612cd1
+
+Spec review commit: 03ff066a1591a4f61cec0baa0256bfc892b84885
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| S-5 | MINOR | SPEC | base | spec.md, Acceptance criterion 1, Non-goals and Definition of Done; scripts/stage2.py:9252, 9275, 9292, 9172, 9056-9061, 9441-9443; scripts/verify_run.py:717-722 | The spec pins that the cheap pytest launch uses the policy, but not whether the computed `PYTEST_XDIST_AUTO_NUM_WORKERS` stays confined to that launch. Both placements meet criteria 1-5. Placement A, inside `cheap_checks` or wrapped around its argument at the two call sites, changes only the cheap pytest. Placement B, `env = targeted_pytest_env(root, env)` next to the lock strip in `_targeted_body`, also sends the variable into `prepare_derived`, `run_gates`' `gate_env` (every selected gate, the kit probe included) and the fallback `full_verify`. There `verify_run` keeps any nonempty value (717-722) instead of computing `worker_default`, so the full check's worker count would come from the targeted readings. Placement B touches what the Non-goals exclude ("Changing `run_gates`, other gates"). But no criterion goes red under B, and the DoD's proof, "shown by the pull request's file list", cannot tell A from B: `run_gates`, `_targeted_body` and `cheap_checks` all live in `scripts/stage2.py`, which the change has to touch anyway. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-5 (2026-11-25) | — |
