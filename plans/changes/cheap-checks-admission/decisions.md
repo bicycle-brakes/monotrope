@@ -44,3 +44,5 @@ In the context of runner checks that run outside the verify lock by design, faci
 
 [DETAIL] **D-5 (spec review round 2 S-5, the setting stays local)**: placement A — the computed worker setting is applied only to the cheap pytest launch, inside `cheap_checks` (a copy of the environment), and never written back into the environment the caller passes on to later steps, gates or the full verify. Reason: D-4 limits the policy to the cheap pytest.
 
+[DETAIL] **D-6 (spec review round 3 S-6, what counts as leaking)**: criterion 6 is refuted only when the value `cheap_checks` computed appears in the environment the caller passes on (the dict it handed to `cheap_checks`); later steps that compute their own worker setting for their own children (the targeted pytest at `targeted_pytest_env`, the full check's scheduler) are not a leak. Reason: those steps already set the variable by design.
+
