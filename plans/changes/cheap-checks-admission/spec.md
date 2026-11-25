@@ -43,6 +43,9 @@ The runner's cheap pytest uses the targeted pytest worker policy, while the targ
 5. When cheap pytest or a selected kit probe fails, the existing blocking failure behavior remains in effect.
    *Refuted by:* a failing affected command is reported as a successful check.
    *Basis:* `decisions.md#Q-1`.
+6. When the cheap pytest worker setting is computed, it is confined to that pytest launch and does not alter the environment passed to later preparation, gates or full verify.
+   *Refuted by:* a computed setting absent from the caller's environment appears in any later step's environment.
+   *Basis:* `decisions.md#Q-1`, D-5.
 
 ## Non-goals
 
@@ -58,10 +61,11 @@ The gate declarations and kit probe implementation remain unchanged: the probe a
 
 - `make verify` green.
 - Updated with the code: `docs/WORKFLOW.md` and the relevant tests; no ADR.
-- Protected areas untouched and non-goals unbuilt, shown by the pull request's file list.
+- Protected areas untouched and non-goals unbuilt, checked by tests and review of the pull request diff.
 - Pull request closes bead coding-harness-bxxt.13; its last commit carries `Closes-Bead: coding-harness-bxxt.13`.
 - Special runs: none.
 
 ## Open decisions
 
 - [DETAIL] Use the existing targeted worker policy for cheap pytest only; the probe is already serial and the other gate launches are outside this change (decisions D-1–D-4).
+- [DETAIL] Keep the computed setting local to that launch so later steps retain their own environment and worker policy (decision D-5).
