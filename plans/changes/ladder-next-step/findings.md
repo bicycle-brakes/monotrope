@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -76,3 +76,55 @@ Stage-2 call, 2026-11-24: spec-review · endpoint claude-code-plan · model clau
 | S-18 | MINOR | SPEC | base | `spec.md` Acceptance criterion 20 | Criterion 20 is refuted only by exit 0 or a `next:` line. It does not pin which non-zero code a failed validation or publication returns, although the codes mean different things to callers: 1 a failed call, 2 a refusal, 3 `CLEAN_CODE`, "the loop is finished" (`scripts/stage2.py:11632-11647`). Take an implementation that raises `CleanStop` when replacing `next.json` fails, so the call exits 3 with a diagnostic on standard error. It satisfies criterion 20. A caller then reads a finished loop and goes to phase 6, even when the instruction it lost was `repair`. No input or state makes criterion 20 red for that code, or for 2 instead of 1 (`triage` reports a failed replacement as 1, `:8853-8854`). S-10 pinned criterion 7's exit code for the same reason. | Opus | in spec — decided by the maintainer, decisions.md Q-10 (2026-11-24) | — |
 
 Stage-2 call, 2026-11-24: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1152 files, 5672 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1251 files, 5935 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1251 files, 5938 commits, 12 rules.
+## Phase 2a — Opus 5.5, 2026-11-25
+
+Spec fingerprint: sha256:de3a771a1568b4097409c5023eb2129e851f1c9312ece9ecef74d47a397997de
+
+Spec review commit: f04da2a9a213e26a5093ea586416963c799eaaa0
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| S-19 | MAJOR | SPEC | base | `spec.md` Acceptance criteria 2 and 23; Non-goals (`hand` producer) | [AMBIGUITY] `repair` exits 0 without repairing a row when every selected taken row names a runner-held path. It either commits the hand-step listing or prints "every held row is already listed … nothing new committed" (`scripts/stage2.py:13570-13579`, `:13634-13635`), and each row stays `taken`. A mixed batch repairs the committable rows and leaves the held ones `taken`. Reading A: such an exit-0 run is a successful repair, so criterion 23 writes `review-loop <change>`. On a consumed ladder that call names `next: repair` again (criterion 2), and the next `repair` takes the held-only path again. Every step exits 0, so a consumer that follows `next.json` cycles without end. Reading B: "succeeds" means at least one row was marked `fixed`. A held-only run then writes no `review-loop` instruction and either keeps the `repair` instruction or deletes it, and the spec says neither. The `hand` verb that would name these rows belongs to the advance-verb change. Test fixture: a consumed ladder whose only taken row has a `Where` under a runner-held path, then `review-loop`, `repair`, `review-loop`. Under A `next.json` reads `review-loop` and then `repair` again; under B it never reads `review-loop`. | Opus | in plan — [DETAIL] decided by the orchestrator under the standing grant for bounded changes (decisions.md, round 5): reading B; a repair succeeds only when at least one row became fixed; a held-only run deletes a stale next.json instead of writing review-loop, and its output names the hand steps, so a consumer never cycles | — |
+| S-20 | MAJOR | SPEC | base | `spec.md` Terms ("For this next-step rule … An inadmissible rung counts as consumed"); Acceptance criteria 12, 13 and 15 | [AMBIGUITY] The spec does not say which stage `review-loop` runs when the ladder is not consumed but its first unconsumed stage is inadmissible. `next_stage` returns the first unconsumed stage in snapshot order (`scripts/stage2.py:5629-5635`). The launch refuses an inadmissible paid member with exit 2, at preflight (`:1941-1947`) or at the member terms check (`:13989-13994`). Reading A: "counts as consumed" applies only to the exhaustion test. Take a snapshot with R1 inadmissible (for example a dated skip) followed by an admissible R2. The run is not exhausted (criterion 12), the call takes R1 and refuses with exit 2, and the lane stops until `release-loop --stage-failed R1`. Reading B: an inadmissible rung counts as consumed for stage selection too. The call passes over R1 (criterion 15), R2 writes the next round, and the call exits 0. The Flash case splits the same way. With F1 and F2 inadmissible and R2 admissible, the Flash stage stays eligible as "replaceable" (criterion 13), so under A it is selected and refuses before any call. Nothing says whether R2 then runs as the replacement, the stage is skipped, or the refusal stands. Test fixture: round 1 complete and repaired, R1 inadmissible, R2 admissible. Reading A gives exit 2 with R1's reason; reading B gives exit 0 and round 2 by R2. | Opus | in plan — [DETAIL] (decisions.md, round 5): reading B; an inadmissible rung counts as consumed for stage selection too; review-loop passes over it to the next admissible rung, and when both Flash members are inadmissible the next admissible paid rung runs as their replacement, recorded in the round | — |
+| S-21 | MAJOR | SPEC | base | `spec.md` Terms ("fails its admission check, including …"); Acceptance criterion 12 | [AMBIGUITY] The admission check for a paid model, `declaration_problem` (`scripts/stage2.py:1822-1859`), also fails for reasons that hold for the whole declaration, not for one model. These are an unreadable `model-endpoints.yaml` (`:1835`), a missing `opencode-go` endpoint (`:1838`), a `darf_sehen` list without `framework` (`:1854-1855`) and an undeclared residency (`:1857-1858`). Each one makes every paid model fail at once. The Terms list only per-model causes, and "including" leaves the list open. Reading A: any failure of the admission check makes the model inadmissible. A run midway up the ladder then becomes a consumed ladder the moment the YAML fails to parse or the endpoint loses its clearance, and `review-loop` exits 0 with `next: review` or `next: repair`, skipping every remaining paid rung. Reading B: only failures tied to the model count, namely its terms dates, dated skip, exclusion, removal from `modelle`, and retention or training reading. A declaration-wide failure keeps today's refusal (exit 2) until the maintainer repairs the declaration. Test fixture: round 1 complete and repaired and one admissible unconsumed rung, then `model-endpoints.yaml` made unparsable or `framework` removed from `darf_sehen`. Reading A gives exit 0 and `next: review <change>`; reading B gives exit 2. | Opus | in plan — [DETAIL] (decisions.md, round 5): reading B; only model-tied failures (terms dates, dated skip, exclusion, removal, retention or training reading) make a model inadmissible; a declaration-wide failure keeps today's refusal with exit 2 until the maintainer repairs the declaration | — |
+| S-22 | MINOR | SPEC | base | `spec.md` Acceptance criterion 23; `docs/WORKFLOW.md:1967-1975` | [AMBIGUITY] `repair` takes taken rows from the loop record and also from every released block and phase-6 table (`docs/WORKFLOW.md:1973-1975`). The doctrine names `review` as the re-check after a phase-6 repair, not the loop's next round (`:1970-1971`). Criterion 23 writes `review-loop <change>` after every successful repair. Reading A: that also holds for a repair of phase-6 rows. The `review-loop` call after the release then exits 3 for a loop that ended clean, which leaves no `next.json` (criterion 21). It exits 2 at the repair brake when the maintainer had sent a braked lane on to phase 6, and that lane stops again. It gives `next: review` only on a consumed ladder. Reading B: criterion 23 covers the loop's repair, the one `next: repair` names. A repair of phase-6 rows then writes `review` or nothing, following the documented re-check. Test fixture: a released run with a phase-6 verdict and one phase-6 row marked `taken`, then `repair` succeeds. Under A `next.json` reads verb `review-loop`; under B it reads `review` or does not exist. | Opus | in plan — [DETAIL] (decisions.md, round 5): reading B; criterion 23 covers the loop's repair named by next: repair; a repair of phase-6 rows writes next: review, the documented re-check | — |

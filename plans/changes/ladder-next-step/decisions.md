@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-20
 created: 2026-11-20
 last_reviewed: 2026-11-20
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
@@ -206,3 +206,7 @@ context: |
   Architecture change: none.
 
 In the context of the exit code when next.json cannot be written, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
+
+## Details decided by the orchestrator (spec-review round 1)
+
+[DETAIL] Round-5 spec review (S-19..S-22) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25), each towards the reading that cannot loop or skip silently. No further redraft: the spec stays as reviewed in round 5; the implementer applies the S-19..S-22 statuses in findings.md as written.
