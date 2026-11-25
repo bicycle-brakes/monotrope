@@ -728,3 +728,14 @@ Reviewer session: codex 01a20fe3-dadd-7523-b3fa-a0c20a3131db — a fresh session
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5834 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5852 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `parse_status` | A legacy row with status `rejected — same as L1-1 (fixed in abc123)` is reported as unreadable, even when `L1-1` exists. The commit identifier in the explanation is mistaken for an additional row ID, so the report is marked incomplete instead of recognizing the duplicate. This is a new case after the preceding repair for a reason introduced by a colon. [Criteria 7, 16] | Codex | open | — |
+
+Phase 6 verdict: codex 01a211e8-31be-7e82-a7ae-545b6470598f, 2026-11-25
+Reviewer session: codex 01a211e8-31be-7e82-a7ae-545b6470598f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
