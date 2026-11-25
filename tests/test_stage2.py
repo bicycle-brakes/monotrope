@@ -26905,8 +26905,28 @@ def test_review_diff_4000_free_overshoot_reaches_round_and_probe(world: World) -
     assert probe is not None and diff in probe and "was cut at" not in probe
     world.script(pi=[{"model": member, "stdout": "No finding."} for member in TEST_FREE])
     assert world.run("review-loop") == 0
+    reviews = world.reviews("pi")
+    assert len(reviews) == len(TEST_FREE), "the free reviewers did not all run"
+    for review in reviews:
+        assert diff in review["prompt_file"], "a free reviewer did not receive the full selected diff"
     record = world.record().read_text(encoding="utf-8")
     assert stage2.CUT_LINE not in record and stage2.cut_rounds(record) == [], record
+
+
+def test_free_overshoot_test_detects_truncated_round_prompt(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The criterion-4 test must fail if a reviewer's actual prompt loses the end of the diff."""
+    original = World.reviews
+
+    def truncated(self: World, name: str = "pi") -> list[dict]:
+        calls = original(self, name)
+        diff, _ = stage2.free_diff(self.root)
+        for call in calls:
+            call["prompt_file"] = call["prompt_file"].replace(diff, "\n".join(diff.split("\n")[:2000]))
+        return calls
+
+    monkeypatch.setattr(World, "reviews", truncated)
+    with pytest.raises(AssertionError, match="did not receive the full selected diff"):
+        test_review_diff_4000_free_overshoot_reaches_round_and_probe(world)
 
 
 def test_review_diff_4000_probe_carries_free_cut_overshoots(world: World) -> None:
