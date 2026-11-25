@@ -37,12 +37,14 @@ On 2026-11-25, research found that `tests/test_ci.py::test_the_glob_itself_finds
    *Refuted by:* A qualifying top-level script is omitted, a non-qualifying file is included, or another tree is used by default.
 4. When either real inventory test runs, it asserts that its default inventory is non-empty.
    *Refuted by:* Either inventory test passes with an empty inventory.
-5. When the control test runs under a write watcher, no attempted `Path.write_text`, `Path.write_bytes` or write-mode `open` targets the checkout's `scripts/` directory.
-   *Refuted by:* A write into that directory is attempted, including one removed before the test ends.
+5. When the control test runs under a write watcher, no attempted write or creation through `Path.write_text`, `Path.write_bytes`, write-mode built-in or `io.open`, write/create-flagged `os.open`, `os.replace`, `os.rename`, `Path.touch` or `Path.mkdir` targets the repository checkout.
+   *Refuted by:* Any watched operation targets the checkout, including a temporary directory outside `scripts/` or a file removed before the test ends.
 6. When a planted variant of the control test writes to `scripts/` in a stand-in repository under a temporary directory, the write watcher reports it.
-   *Refuted by:* The watcher misses the planted write, or the guard writes into the real checkout.
-7. When the control test classifies the orphan, a spy verifies the inputs are the checkout's CI workflow and runner texts and the module's `OHNE_AUFRUFER`.
-   *Refuted by:* Blank, substituted or copied caller inputs leave the spy check green.
+   *Refuted by:* The watcher misses the planted write.
+7. Before the guard runs the planted variant, it asserts that the target is inside its temporary stand-in repository and outside the real checkout.
+   *Refuted by:* A target in the real checkout or outside the stand-in is accepted.
+8. When the control test classifies the orphan, a spy verifies the inputs are the checkout's CI workflow and runner texts and the module's `OHNE_AUFRUFER`.
+   *Refuted by:* Blank or different caller inputs leave the spy check green.
 
 ## Non-goals
 
@@ -63,4 +65,4 @@ Production scripts, CI configuration and tracker data remain untouched: the chan
 
 ## Open decisions
 
-None open. [DETAIL] Keep the existing control-test name so the kit probe's dated reference stays accurate; one hour is the phase-4 stop because this is a focused test-only correction. The temporary tree holds the orphan only; real caller inputs remain read-only so classification uses the actual caller set. The inventory stays non-recursive to preserve its existing policy. The write watcher records the three write interfaces named in criterion 5; a stand-in repository tests the watcher without recreating the shared-tree race. The inventory guard requires no named script because the kit probe uses a different inventory.
+None open. [DETAIL] Keep the existing control-test name so the kit probe's dated reference stays accurate; one hour is the phase-4 stop because this is a focused test-only correction. The temporary tree holds the orphan only; real caller inputs remain read-only so classification uses the actual caller set. The inventory stays non-recursive to preserve its existing policy. The write watcher covers the Python file operations named in criterion 5 across the checkout; native writes outside Python file APIs are a limit of that test. A stand-in repository tests the watcher without recreating the shared-tree race. The inventory guard requires no named script because the kit probe uses a different inventory.
