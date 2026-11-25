@@ -62,3 +62,41 @@ Spec review commit: 62017fa6fb7d389432e5412d91d0954ba1896577
 | S-6 | [AMBIGUITY] | SPEC | base | spec.md, Acceptance criterion 6; scripts/stage2.py:9163, 9172, 9284, 9292; scripts/verify_run.py:717-722 | The criterion's sentence limits the check to "the environment passed to later preparation, gates or full verify". Its refutation is wider: "appears in any later step's environment". Two later steps already compute `PYTEST_XDIST_AUTO_NUM_WORKERS` for their own children. The targeted pytest launches with `targeted_pytest_env(root, env)` at 9163, and the full check's scheduler sets the variable in `base_env` at 717-722. Reading A: "a later step's environment" means the environment a step's own launches get. Then criterion 6 is red on today's unchanged code whenever the readings give a count: the targeted pytest launch, and in the fallback the full-verify gates, carry a computed value the caller's environment lacks. Keeping that value out would mean changing `_targeted_commands` or `verify_run`, and the Non-goals exclude both ("worker calculation", "full-verify admission policy"). A launch-level test also cannot tell a leaked cheap-check value from the step's own value, because both come from the same readings. Reading B: only the `env` argument handed to `prepare_derived`, `targeted_selection`, `_targeted_commands`/`run_targeted`/`run_gates` and `full_verify` counts. Then the criterion can be tested by checking the dict, and a cheap-check value written back into the caller's dict turns it red. The test author has to choose which environments the refutation observes, and which launches it exempts. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-6 (2026-11-25) | — |
 
 Stage-2 call, 2026-11-25: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5843 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu) · leak check clean over 1206 files, 5845 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +11 -2
+> - `scripts/stage2.py` +3 -1
+> - `tests/test_kit_probe.py` +38 -0
+> - `tests/test_stage2.py` +20 -0
+> - `tests/test_stage2_fail_fast.py` +117 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> tests/test_kit_probe.py:27:28: ARG001 Unused function argument: `args`
+>    |
+> 25 |     launched: list[list[str]] = []
+> 26 |
+> 27 |     def fake_run(command, *args, **kwargs):
+>    |                            ^^^^ ARG001
+> 28 |         launched.append([str(part) for part in command])
+> 29 |         return subprocess.CompletedProcess(command, 0, "", "")
+>    |
+>
+> tests/test_kit_probe.py:27:36: ARG001 Unused function argument: `kwargs`
+>    |
+> 25 |     launched: list[list[str]] = []
+> 26 |
+> 27 |     def fake_run(command, *args, **kwargs):
+>    |                                    ^^^^^^ ARG001
+> 28 |         launched.append([str(part) for part in command])
+> 29 |         return subprocess.CompletedProcess(command, 0, "", "")
+>    |
+>
+> Found 2 errors.
+> ```

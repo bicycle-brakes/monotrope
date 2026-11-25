@@ -8596,10 +8596,12 @@ def cheap_checks(
             problems.append(protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key))
         else:
             try:
+                # The targeted worker policy bounds `-n auto` outside the admission (bead
+                # coding-harness-bxxt.13); a copy, so the caller's dictionary never carries it.
                 done = launch(
                     [*PYTEST, *tests],
                     root,
-                    env,
+                    targeted_pytest_env(root, env),
                     key,
                     timeout=TOOL_SECONDS,
                     limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",

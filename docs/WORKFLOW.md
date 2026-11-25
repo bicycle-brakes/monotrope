@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-24
+updated: 2026-11-25
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1116,7 +1116,13 @@ implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
 `.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
-over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
+over exactly the selected tests. Its `-n auto` is bounded by the targeted check's
+worker policy, in the targeted and the full-mode preparation alike (bead
+coding-harness-bxxt.13): a nonempty `PYTEST_XDIST_AUTO_NUM_WORKERS` in its input
+environment stands, otherwise the bound the full check uses is computed from the
+machine's readings; the setting reaches this pytest launch only, never the
+caller's environment. The cheap checks still run outside the verify admission.
+The selected tests are, in each surviving changed `tests/**/test_*.py`
 file the top-level test functions that are new or differ from HEAD (a new file
 whole), the accepted plan's standing criterion-ledger test references as
 function ids, and, on a retry, the test ids pytest reported as failed in the
@@ -2215,7 +2221,10 @@ each learned on the night of 2026-10-29/30:
   coding-harness-gxwg): after its format step and cheap checks, `repair` runs
   the whole touched and linked test files, `ruff` on the touched Python files
   and the local gates the touched kinds of file feed, outside the lock, and
-  checkpoints on green. Where that coverage cannot be determined safely - a
+  checkpoints on green. A selected kit probe (`scripts/kit/probe.py`) runs its
+  own pytest serially, without an xdist `-n` option, so it stays bounded
+  outside the lock too, and its red blocks like any blocking gate (bead
+  coding-harness-bxxt.13). Where that coverage cannot be determined safely - a
   prompt, a shared test or execution configuration, an unclassified input, code
   with no linked test, an unreadable link inventory - it runs the admitted full
   `make verify` instead and says why in `findings.md` and the checkpoint

@@ -40,13 +40,13 @@ Explore used Stage 1 via `claude-code-plan`, model `claude-haiku-5-5`, because G
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_fail_fast.py::test_cheap_pytest_uses_targeted_worker_policy_in_both_modes — either preparation launches uncapped pytest.
-- 2: not yet written tests/test_kit_probe.py::test_probe_pytest_remains_serial — the probe command contains an xdist worker option.
-- 3: not yet written tests/test_stage2_fail_fast.py::test_cheap_pytest_preserves_explicit_worker_setting — the launch replaces a nonempty input setting.
+- 1: tests/test_stage2_fail_fast.py::test_cheap_pytest_uses_targeted_worker_policy_in_both_modes — either preparation launches uncapped pytest.
+- 2: tests/test_kit_probe.py::test_probe_pytest_remains_serial — the probe command contains an xdist worker option.
+- 3: tests/test_stage2_fail_fast.py::test_cheap_pytest_preserves_explicit_worker_setting — the launch replaces a nonempty input setting.
 - 4: tests/test_stage2.py::test_targeted_commands_run_without_verify_admission — a targeted command acquires admission or carries its markers.
-- 5: not yet written tests/test_stage2_fail_fast.py::test_cheap_pytest_failure_remains_blocking — a red cheap pytest is accepted.
-- 5: not yet written tests/test_stage2.py::test_targeted_kit_probe_failure_remains_blocking — a red selected kit probe is accepted.
-- 6: not yet written tests/test_stage2_fail_fast.py::test_cheap_worker_setting_does_not_escape_pytest — cheap checks write their computed setting into the caller-supplied dictionary.
+- 5: tests/test_stage2_fail_fast.py::test_cheap_pytest_failure_remains_blocking — a red cheap pytest is accepted.
+- 5: tests/test_stage2.py::test_targeted_kit_probe_failure_remains_blocking — a red selected kit probe is accepted.
+- 6: tests/test_stage2_fail_fast.py::test_cheap_worker_setting_does_not_escape_pytest — cheap checks write their computed setting into the caller-supplied dictionary.
 
 ## Verification
 
@@ -54,9 +54,14 @@ Explore used Stage 1 via `claude-code-plan`, model `claude-haiku-5-5`, because G
 make verify
 ```
 
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu).
+
 ## Time used
 
 2026-11-25 07:43:29–07:45:52 UTC, 142 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 08:07:28–08:11:35 UTC, 247 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 08:16:13–08:18:28 UTC, 134 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 08:22:01–08:23:58 UTC, 118 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 08:24:26–08:27:22 UTC, 176 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
