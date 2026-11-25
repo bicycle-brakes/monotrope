@@ -146,6 +146,16 @@ In the context of hosts whose hook surface is unverified, facing two readings th
 
 [DETAIL] Companion change enqueue-pr (coding-harness-va1l, Q-8): the policy list holds one more rule, `python3 scripts/enqueue_pr.py * --maintainer*` (and the `.venv/bin/python` spelling) as ask; in an unattended run the ask becomes deny like every other ask, so only the maintainer can use the maintainer mode. The default call `scripts/enqueue_pr.py <number>` is allowed.
 
-## Details decided by the orchestrator (spec-review round 1)
+## Details decided by the orchestrator (spec-review round 3)
+
+[DETAIL] S-16: reading B; a newline and a single background & also separate commands, as the shell reads them
+
+[DETAIL] S-17: heredoc bodies and comments are recognised and skipped (a heredoc body is not command text); only a genuinely unterminated quote is a parsing failure, which asks when attended and denies unattended (it is not a hard deny in attended runs)
+
+[DETAIL] S-18: reading B; any invocation of bash, sh or zsh (by name or path, also through env) that receives -c, alone or in combined short options, has its command string checked
+
+[DETAIL] S-19: a covered action is one the policy list names; Claude Code's support claim is stated with its known gap (sh -c past its own ask rules when the hook fails) in the host table; the claim is 'supported with a named gap', not plain 'supported'
+
+[DETAIL] S-20: the documented Antigravity host check must show the hook process sees HARNESS_UNATTENDED=1 from the launch settings; if it does not, the hook reads the unattended flag from the run's settings file path passed in its input, and failing both, Antigravity is listed as attended-only
 
 [DETAIL] Round-3 spec review (S-16..S-20) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25: answer spec-review questions except BLOCKERs, recorded here). No further redraft: the spec stays as reviewed in round 3 so the review stays current; the implementer applies the S-16..S-20 statuses in findings.md as written.
