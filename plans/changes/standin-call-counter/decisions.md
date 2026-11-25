@@ -34,3 +34,11 @@ reason: A test-infrastructure speed fix with a stated remedy (bead coding-harnes
 
 [DETAIL] **D-5 (spec review S-2, keeping clear-by-removal; refines D-2)**: the counter is read and written only while the stand-in holds the lock on the log's own inode, and every counter write carries that inode; a late writer of a cleared run that still holds the removed inode writes a counter tagged with the removed identity, which the next run ignores by D-4. Reason: the shared locked protocol clears a log by removing it, and the counter must keep that guarantee.
 
+[DETAIL] **D-6 (spec review round 2 S-1, inode reuse; refines D-4)**: the counter's tag is the log's device, inode and byte size right after the counter's last update; the counter describes the current log only when all three match under the lock, so a log recreated on a reused inode (size 0, or any size other than the recorded one) forces a rebuild from the log. Reason: inode numbers are reused after unlink.
+
+[DETAIL] **D-7 (round 2 S-2, the parity oracle)**: the parity test keeps a frozen, verbatim copy of today's log-based count expression as its oracle, not a re-derivation from the counter's formula. Reason: otherwise the parity holds by construction.
+
+[DETAIL] **D-8 (round 2 S-3, a late writer; refines D-5)**: the counter is written by a temporary file plus `os.replace`, always tagged per D-6; a late writer still holding the removed log's inode may replace the counter file, but its tag then names the removed log, so the next reader rebuilds from the current log. Correctness rests on the tag check, not on a lock shared across runs. Reason: no lock covers a removed and a new inode at once.
+
+[DETAIL] **D-9 (round 2 S-4, foreign shape)**: a counter that is missing, unreadable, truncated or of an unknown shape is rebuilt from the log; the stand-in never raises on it. Reason: a raise would break every swarm run.
+
