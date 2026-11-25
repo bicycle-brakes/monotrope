@@ -44,3 +44,5 @@ reason: A test-infrastructure speed fix with a stated remedy (bead coding-harnes
 
 [DETAIL] **D-10 (spec review round 3 S-1, which errors are exempt; narrows D-9)**: Reading A — only reading a bad counter is exempt (it is rebuilt); a failed write or replacement of the counter propagates as the shared helper's contract says ("Other I/O errors ... propagate", nothing retried or suppressed). Reason: a write failure is a real fault of the test environment, not a bad counter.
 
+[DETAIL] **D-11 (review loop L2-6, L2-7: where the counter is declared; amends D-1's wording)**: the counter name is declared in its own `STAND_IN_COUNTERS` tuple, and the guard reads the union `STAND_IN_FILES`; it is deliberately not a member of `STAND_IN_LOGS`, because `append_record` and `read_records` must keep refusing a counter path. D-1's goal (the guard knows the counter) holds. Reason: the implementation's split keeps the log helpers from writing a counter as if it were a log.
+

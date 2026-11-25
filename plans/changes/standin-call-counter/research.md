@@ -39,15 +39,6 @@ claude-mp, night run 2026-11-24-a), from an external verify-speed analysis.
 PARENT
 ↑ ○ coding-harness-bxxt: (EPIC) Verify speed and machine load P1
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
-
 Stage-2 call, 2026-11-25: explore · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-haiku-5-5 · reason GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu) · leak check clean over 1202 files, 5812 commits, 12 rules.
 
 ## Runner exploration — 2026-11-25
@@ -96,7 +87,3 @@ Stage-2 call, 2026-11-25: explore · attempt 1 · route stage-1 · endpoint clau
 - If the guard must also cover the counter: `tests/stand_in_log_guard.py`.
 - If the test-side readers are changed too: `SwarmWorld.calls` and `SwarmWorld.rewind` in `tests/test_stage2_swarm.py`, and the teardown of `calls.jsonl` in `tests/test_stage2.py` and `tests/test_stage2_session.py`.
 - Not touched by the bead: `tests/test_stage2.py`'s assignment logic, unless its second stand-in is in scope.
-
-## Provenance note for the runner
-
-The file's frontmatter still says `provenance: human-written`. The header note in `research.md` asks that the provenance and `produced_by` fields be set when a model fills it; the runner or orchestrator, not this explorer, makes that change.
