@@ -58,7 +58,7 @@ Required:
   attempt never commits a held path: `provenance.yaml`,
   `decisions/gates.yaml`, `model-endpoints.yaml`, `.claude/`, `.codex/`,
   `.agents/`, `.pi/`, `.mcp.json`, `CLAUDE.md`, `prompts/`, `templates/`,
-  `.github/`, `.beads/`, `AGENTS.md`, `README.md`, and every prefix whose
+  `.github/`, `.beads/`, `AGENTS.md`, `README.md`, `docs/journal/`, and every prefix whose
   `allowed` classes in the committed `provenance.yaml` are exactly
   `human-decided`; the runner matches them as prefixes in any letter case, so
   `claude.md` or `README.md.bak` is held too. Every step that edits one of
