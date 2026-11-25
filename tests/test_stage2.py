@@ -21239,6 +21239,7 @@ def test_red_first_keeps_baseline_code_attempt_tests_and_source_state(world: Wor
     assert outcome is not None and "pytest ended 0" in outcome, outcome
 
 
+@pytest.mark.usefixtures("world")
 def test_red_first_retains_tail_of_single_long_diagnostic_line() -> None:
     """Criterion 12 (coding-harness-7aso, finding P6-2). Planted fault: a single pre-record output line
     longer than the character cap is dropped whole, leaving only the truncation marker."""
