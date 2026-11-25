@@ -567,3 +567,18 @@ The review call's answer was neither six-cell findings nor exactly `No finding.`
 > | F-2 | MAJOR | SPEC | base | scripts/jobs.py:547–570 | A short-lived command can exit before `process_start(child.pid)` reads its identity. The wrapper then publishes a record with a command PID but a null start time, although every recorded PID must have its process start time. [Criterion 4] |
 > 
 > Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — catches without switch: yes.
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5908 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/jobs.py:469; scripts/jobs.py:548 | When the caller already has `HARNESS_JOB_RECORD` or `HARNESS_JOB_TOKEN` set, such as when one detached job starts another, the new job receives replacement values instead of the caller’s values. The specification requires the whole caller environment except for the four named verification-admission variables. [Acceptance criterion 16] | Codex | rejected — intended behaviour: a nested job must carry its own job record and token, or its stop and survivor records would reach the outer job (Q-18, S-21); spec criterion 16 now names the two replaced variables (orchestrator hand edit, standing grant 2026-11-25) | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — catches without switch: yes, if that fault is present in the launcher, the test’s occupied-slot assertion fails.
+
+Phase 6 verdict: codex 01a21342-00bc-73d0-9be6-3125cd96de87, 2026-11-25
+Reviewer session: codex 01a21342-00bc-73d0-9be6-3125cd96de87 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

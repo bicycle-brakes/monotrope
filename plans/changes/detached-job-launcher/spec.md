@@ -97,7 +97,7 @@ Runner jobs survive the launching session and remain observable (bead coding-har
     *Refuted by:* Either route or the wake is omitted or contradicted.
     *Basis:* `decisions.md#Q-11`, `decisions.md#Q-6`, `decisions.md#Q-12`, `decisions.md#Q-17`.
 
-16. When a job starts, it receives the caller's working directory and whole environment, explicitly supplied per job rather than inherited from the tmux server, excluding `HARNESS_VERIFY_LOCK_HELD`, `HARNESS_VERIFY_LOCK_TOKEN`, `HARNESS_VERIFY_ADMISSION_ID` and `HARNESS_VERIFY_ADMISSION_WAIT`.
+16. When a job starts, it receives the caller's working directory and whole environment, explicitly supplied per job rather than inherited from the tmux server, excluding `HARNESS_VERIFY_LOCK_HELD`, `HARNESS_VERIFY_LOCK_TOKEN`, `HARNESS_VERIFY_ADMISSION_ID` and `HARNESS_VERIFY_ADMISSION_WAIT`; the job's own `HARNESS_JOB_RECORD` and `HARNESS_JOB_TOKEN` replace any caller values of the same names, so a job started from inside another job is a job of its own (its stop and its records never reach the outer job).
     *Refuted by:* The job observes a server value instead of a supplied caller value or inherits any of the four excluded admission values.
     *Basis:* `decisions.md#Q-8`, `decisions.md#Q-9`, `decisions.md#Q-14`, `decisions.md#Q-18`.
 
