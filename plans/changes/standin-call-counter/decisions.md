@@ -42,3 +42,5 @@ reason: A test-infrastructure speed fix with a stated remedy (bead coding-harnes
 
 [DETAIL] **D-9 (round 2 S-4, foreign shape)**: a counter that is missing, unreadable, truncated or of an unknown shape is rebuilt from the log; the stand-in never raises on it. Reason: a raise would break every swarm run.
 
+[DETAIL] **D-10 (spec review round 3 S-1, which errors are exempt; narrows D-9)**: Reading A — only reading a bad counter is exempt (it is rebuilt); a failed write or replacement of the counter propagates as the shared helper's contract says ("Other I/O errors ... propagate", nothing retried or suppressed). Reason: a write failure is a real fault of the test environment, not a bad counter.
+

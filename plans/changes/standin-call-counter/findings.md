@@ -50,3 +50,14 @@ Spec review commit: 4d794698ccca32c47854166907ddf738d9beb7bc
 | S-4 | MINOR | SPEC | spec.md | spec.md \u00a7Acceptance criteria 5 | Criterion 5 rebuilds only when the counter is missing or belongs to a different log identity. A counter that exists, parses and carries the current identity but holds a foreign shape (an older key set, or a payload truncated by a writer outside the helper) is neither missing nor mismatched, so the implementer must choose between rebuilding and raising, and a raise would break every swarm run. The spec does not say which. | deepseek-v4.1-flash | in spec — [DETAIL] decided by the orchestrator: decisions.md D-9 (2026-11-25) | — |
 
 Stage-2 call, 2026-11-25: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5818 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1206 files, 5819 commits, 12 rules.
+## Phase 2a — Opus 5.5, 2026-11-25
+
+Spec fingerprint: sha256:a8d6f3eacd0e2469dd542a33a2ba361933d7be441bce1db2ae48c585aac8943e
+
+Spec review commit: f709bf35caa7b3d911f843e5dff6e9a13d1c25f3
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| S-1 | [AMBIGUITY] MINOR | SPEC | spec | spec.md Acceptance criterion 5; decisions.md D-9; tests/atomic_test_log.py:27-32 | Two readings of what D-9's "the stand-in never raises on it" covers once a rebuilt counter has to be published by temporary file and replacement. Reading A: only reading the bad counter is exempt. A failed publish then propagates, as the helper's own contract requires ("Other I/O errors ... propagate", "Nothing is retried or suppressed"). Reading B: every error on the counter is exempt, including a failed replacement. The call then answers with the rebuilt count and leaves no valid counter behind. The two readings part on criterion 5's "unreadable" input when it is built as a directory at the counter's path. That is the construction that still works where the suite runs as root, since `chmod 000` blocks no read there. Reading the counter fails, the rebuild from the log succeeds, and `os.replace` onto the directory fails with EISDIR. Under A that call and every later one raises, which criterion 5's refutation names. Under B every call succeeds. A counter path in a non-writable directory splits the two readings the same way. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-10 (2026-11-25) | — |
