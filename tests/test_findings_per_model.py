@@ -1073,7 +1073,6 @@ def test_frozen_legacy_status_inventory():
             "L2-2"
         ],
         "rejected — same as l1-1": ["L1-1"],
-        "rejected — same as l1-1 (fixed in abc123)": ["L1-1"],
         "rejected — same as l1-11": ["L1-11"],
         "rejected — same as l1-2": ["L1-2"],
         "rejected — same as l1-2: ac2 is met by storing a fallback as kind full; a full-fallback producer would be a new guarantee.": [
@@ -1136,7 +1135,7 @@ def test_frozen_legacy_status_inventory():
                         status,
                         re.I,
                     ), (path, status)
-    assert seen == expected.keys() - {"rejected — same as l1-1 (fixed in abc123)"}
-    example = fr.parse_status("rejected — same as L1-1 (fixed in abc123)")
-    assert example.known and example.targets == ["L1-1"]
+    assert seen == expected.keys()
+    # Frozen (maintainer 2026-11-25): a form that never occurred as a status stays unreadable.
+    assert not fr.parse_status("rejected — same as L1-1 (fixed in abc123)").known
     assert not fr.parse_status("rejected — same as L1-1 (unknown form)").known

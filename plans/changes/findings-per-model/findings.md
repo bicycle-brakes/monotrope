@@ -759,3 +759,14 @@ Reviewer session: codex 01a212cb-44b5-73e1-a6aa-ae7fcc9ef890 — a fresh session
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5874 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/findings-per-model/plan.md, plans/changes/findings-per-model/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1155 files, 5883 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/findings_reader.py`, `LEGACY_DUPLICATE_STATUSES`; `tests/test_findings_per_model.py::test_frozen_legacy_status_inventory` | A row with status `rejected — same as L1-1 (fixed in abc123)` is accepted as a duplicate even though the test explicitly excludes that status from those observed in the real findings files. The report can therefore mark both outputs complete instead of reporting an unreadable legacy status. [Criterion 7] | Codex | fixed — orchestrator hand edit: the synthetic inventory entry came from the orchestrator's own triage text and contradicts the freeze; removed from LEGACY_DUPLICATE_STATUSES; tests/test_findings_per_model.py::test_frozen_legacy_status_inventory now asserts the form is unreadable | no |
+
+Phase 6 verdict: codex 01a212fd-15af-7651-b2aa-4055ef975d4c, 2026-11-25
+Reviewer session: codex 01a212fd-15af-7651-b2aa-4055ef975d4c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

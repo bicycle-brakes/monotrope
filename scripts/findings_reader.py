@@ -248,7 +248,6 @@ LEGACY_DUPLICATE_STATUSES = {
         "L2-2"
     ],
     "rejected — same as l1-1": ["L1-1"],
-    "rejected — same as l1-1 (fixed in abc123)": ["L1-1"],
     "rejected — same as l1-11": ["L1-11"],
     "rejected — same as l1-2": ["L1-2"],
     "rejected — same as l1-2: ac2 is met by storing a fallback as kind full; a full-fallback producer would be a new guarantee.": [
