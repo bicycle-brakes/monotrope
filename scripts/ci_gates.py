@@ -88,6 +88,7 @@ COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
 # Wer hier einen Eintrag streicht, braucht einen Schritt in der Gate-Datei;
 # tests/test_ci.py haelt beide Seiten zusammen.
 OHNE_AUFRUFER: dict[str, str] = {
+    "enqueue_pr.py": "Operator command for guarded queue admission; the orchestrator runs it, not CI.",
     "_verdict.py": ("Bibliothek — das gemeinsame Exit-Vokabular der Scripts, kein eigenstaendiges Werkzeug"),
     "adoption.py": (
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "

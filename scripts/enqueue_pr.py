@@ -11,9 +11,9 @@ counts as merged only once GitHub reports it so.
 Conditions, in report order (each failure is one stderr line `<condition>: <reason>`; a condition whose
 evidence depends on an earlier one that could not be read reports `<condition>: not evaluated: <earlier>`):
 
+  script           this checkout's `scripts/enqueue_pr.py` is the blob on origin's `main`
   pr               open, targets `main`, not a draft, not from a fork
   head             origin's pull ref and `main` fetched; the pull ref is the head GitHub reports
-  script           this checkout's `scripts/enqueue_pr.py` is the blob on origin's `main`
   change           the diff touches exactly one change folder, whose `bead` is the trailer's bead
   trailer          the head carries exactly one `Closes-Bead`, naming a known bead that is not closed
   phase-6          the last `## Phase 6` block is settled; released loop rows are settled and undisputed
@@ -36,16 +36,20 @@ Exit: 0 queued or already queued · 1 refused, or the head moved · 2 usage erro
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import venv_guard  # noqa: F401
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -54,9 +58,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import close_merged_beads  # noqa: E402 — the one trailer parser and the one validated tracker reader
 
 CONDITIONS = (
+    "script",
     "pr",
     "head",
-    "script",
     "change",
     "trailer",
     "phase-6",
@@ -227,6 +231,10 @@ def union_required(rules: Any, branch: Any) -> set[str]:
                 raise Unreadable("a required_status_checks rule of main names a check without a context")
             required.add(context)
     protection = branch.get("protection") if isinstance(branch, dict) else None
+    if not isinstance(branch, dict):
+        raise Unreadable("the classic branch protection of main could not be read")
+    if protection is None:
+        return required
     if not isinstance(protection, dict):
         raise Unreadable("the classic branch protection of main could not be read")
     classic = protection.get("required_status_checks")
@@ -331,7 +339,19 @@ class GitHub:
     def required_checks(self, branch: str) -> set[str]:
         owner, name = self.repository()
         rules = self._json("api", f"repos/{owner}/{name}/rules/branches/{branch}?per_page={PAGE}")
-        protection = self._json("api", f"repos/{owner}/{name}/branches/{branch}")
+        endpoint = f"repos/{owner}/{name}/branches/{branch}"
+        result = self._gh("api", endpoint)
+        if result.returncode:
+            diagnostic = (result.stderr or result.stdout or "").strip()
+            if "HTTP 404" in diagnostic and "Branch not protected" in diagnostic:
+                protection = {}
+            else:
+                raise Unreadable(f"gh api {endpoint} failed: {diagnostic}")
+        else:
+            try:
+                protection = json.loads(result.stdout)
+            except (json.JSONDecodeError, TypeError):
+                raise Unreadable(f"gh api {endpoint} answered no JSON") from None
         return union_required(rules, protection)
 
     def head_checks(self, oid: str) -> list[tuple[str, str]]:
@@ -549,6 +569,8 @@ def released_problems(text: str) -> list[str]:
     for loop_id, cells in latest.items():
         if not settled(cells[7]):
             problems.append(f"released loop row {loop_id} stands `{cells[7]}`, not fixed or rejected")
+        if cells[9].strip().lower() in {"—", "no answer", ""}:
+            problems.append(f"phase 6 has no answer for released loop row {loop_id}")
         if cells[9].strip().lower().startswith("disagree"):
             problems.append(f"phase 6 disagrees with released loop row {loop_id}: {cells[9][:80]}")
     return problems
@@ -667,6 +689,27 @@ def head_trailers(root: Path, head: str) -> tuple[list[str], list[str]]:
     return values, malformed
 
 
+def regenerated_index_matches(root: Path, commit: str) -> bool:
+    """Regenerate the index from the merge commit's own tree in an isolated directory."""
+    archive = _git_bytes(root, "archive", "--format=tar", commit)
+    try:
+        with tempfile.TemporaryDirectory(prefix="enqueue-index-") as directory:
+            target = Path(directory)
+            with tarfile.open(fileobj=io.BytesIO(archive)) as contents:
+                contents.extractall(target, filter="data")
+            index = target / INDEX_PATH
+            expected = index.read_bytes()
+            result = subprocess.run(
+                [sys.executable, str(target / "scripts/plans_registry.py"), "--index"],
+                cwd=target,
+                capture_output=True,
+                timeout=GIT_SECONDS,
+            )
+            return result.returncode == 0 and index.read_bytes() == expected
+    except (OSError, tarfile.TarError, subprocess.TimeoutExpired):
+        return False
+
+
 def commit_problems(root: Path, commit: str, parents: list[str], folder: str, main: str) -> list[str]:
     """Why one commit after the reviewed one is not allowed there; empty when it is."""
     short = commit[:12]
@@ -686,16 +729,27 @@ def commit_problems(root: Path, commit: str, parents: list[str], folder: str, ma
         return [f"commit {short} merges {len(parents)} parents; only a merge of main may follow the reviewed commit"]
     if not _is_ancestor(root, parents[1], main):
         return [f"merge {short} brings in {parents[1][:12]}, which is not on origin's main"]
-    result = _git_run(root, "merge-tree", "--write-tree", parents[0], parents[1])
-    if result.returncode == 1:
-        return [f"merge {short} of main is not clean; its conflict resolution was not reviewed"]
-    if result.returncode != 0:
+    result = _git_run(root, "merge-tree", "--write-tree", "--name-only", "-z", parents[0], parents[1])
+    if result.returncode not in (0, 1):
         raise Unreadable(f"git merge-tree failed: {result.stderr.decode('utf-8', 'replace').strip()}")
-    clean = result.stdout.decode("ascii", errors="replace").splitlines()[0].strip()
+    fields = result.stdout.split(b"\0")
+    clean = fields[0].decode("ascii", errors="replace").strip()
+    conflicts = []
+    if result.returncode == 1:
+        for field in fields[1:]:
+            if not field:
+                break
+            conflicts.append(field.decode("utf-8", errors="replace"))
+        if conflicts != [INDEX_PATH]:
+            return [f"merge {short} of main is not clean; its conflict resolution was not reviewed"]
     actual = _git(root, "rev-parse", f"{commit}^{{tree}}")
-    if clean != actual:
-        return [f"merge {short} of main differs from the clean merge of its parents; it changes reviewed code"]
-    return []
+    if clean == actual and not conflicts:
+        return []
+    changed = _git_bytes(root, "diff-tree", "-r", "--no-renames", "--name-only", "-z", clean, actual)
+    paths = [path.decode("utf-8", errors="replace") for path in changed.split(b"\0") if path]
+    if set(paths) <= {INDEX_PATH} and regenerated_index_matches(root, commit):
+        return []
+    return [f"merge {short} of main differs from the clean merge of its parents; it changes reviewed code"]
 
 
 def post_review_problems(root: Path, reviewed: str, head: str, folder: str, main: str) -> list[str]:
@@ -739,7 +793,6 @@ def evaluate(
     pr: PullRequest,
     github: Any,
     tracker: Callable[[], dict[str, str]],
-    script: Path,
     maintainer: bool,
 ) -> Outcome:
     """Every condition, in report order; a dependent one is marked not evaluated, never guessed."""
@@ -758,21 +811,6 @@ def evaluate(
     except Unreadable as error:
         out.fail("head", [f"the head or main could not be fetched and read: {error}"])
         head = paths = None
-
-    if main is None:
-        out.needs("script", "head")
-    else:
-        try:
-            theirs = _git(root, "rev-parse", "--verify", f"{main}:{SCRIPT_IN_REPO}")
-            ours = _git(root, "hash-object", "--", str(script))
-        except Unreadable as error:
-            out.fail("script", [f"the script could not be compared with origin's main: {error}"])
-        else:
-            if ours != theirs:
-                out.fail(
-                    "script",
-                    [f"this checkout's {SCRIPT_IN_REPO} ({ours[:12]}) differs from origin's main ({theirs[:12]})"],
-                )
 
     if maintainer:
         out.skipped = list(MAINTAINER_SKIPS)
@@ -888,11 +926,49 @@ def _attended_conditions(
         adr = ", ".join(path for path in paths if path.startswith(ADR_DIR))
         if adr:
             out.fail("decision", [f"the pull request touches {ADR_DIR} ({adr}); it is the maintainer's"])
+        reserved = ", ".join(
+            path
+            for path in paths
+            if not path.startswith(ADR_DIR) and any(path.startswith(p) for p in human_decided_prefixes(root))
+        )
+        if reserved:
+            out.fail(
+                "decision",
+                [
+                    f"the pull request touches paths provenance.yaml reserves for human-decided ({reserved}); it is the maintainer's"
+                ],
+            )
 
 
 # ---------------------------------------------------------------------------
 # The command
 # ---------------------------------------------------------------------------
+
+
+def human_decided_prefixes(root: Path) -> list[str]:
+    """Path prefixes provenance.yaml reserves for the class `human-decided` (house rule 8), plus docs/adr/.
+
+    Read from the checkout's provenance.yaml; a tree without that file (a test fixture) keeps docs/adr/.
+    """
+    prefixes = [ADR_DIR]
+    source = root / "provenance.yaml"
+    if not source.is_file():
+        return prefixes
+    data = yaml.safe_load(source.read_text(encoding="utf-8"))
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            prefix, allowed = node.get("prefix"), node.get("allowed")
+            if isinstance(prefix, str) and isinstance(allowed, list) and "human-decided" in allowed:
+                prefixes.append(prefix)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(data)
+    return sorted(set(prefixes))
 
 
 class _Parser(argparse.ArgumentParser):
@@ -901,7 +977,8 @@ class _Parser(argparse.ArgumentParser):
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = _Parser(prog="enqueue_pr.py", add_help=False)
+    # No abbreviations: only the literal --maintainer selects maintainer mode (loop row L2-2).
+    parser = _Parser(prog="enqueue_pr.py", add_help=False, allow_abbrev=False)
     parser.add_argument("number")
     parser.add_argument("--maintainer", action="store_true")
     args = parser.parse_args(argv)
@@ -909,6 +986,31 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         raise UsageError(f"the pull request number {args.number!r} is no positive integer")
     args.number = int(args.number)
     return args
+
+
+def script_integrity(root: Path, script: Path) -> list[str]:
+    """Fetch main and check the command before reading the pull request."""
+    ref = f"refs/enqueue-pr/{uuid.uuid4().hex}/main"
+    try:
+        _git(
+            root,
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            "origin",
+            f"+refs/heads/{BASE_BRANCH}:{ref}",
+        )
+        theirs = _git(root, "rev-parse", "--verify", f"{ref}:{SCRIPT_IN_REPO}")
+        ours = _git(root, "hash-object", "--", str(script))
+        if ours != theirs:
+            return [f"this checkout's {SCRIPT_IN_REPO} ({ours[:12]}) differs from origin's main ({theirs[:12]})"]
+        return []
+    except Unreadable as error:
+        return [f"the script could not be compared with origin's main: {error}"]
+    finally:
+        _git_run(root, "update-ref", "-d", ref)
 
 
 def run(
@@ -925,19 +1027,27 @@ def run(
         print(f"usage: enqueue_pr.py <number> [--maintainer] — {error}", file=sys.stderr)
         return 2
     number = args.number
+    problems = script_integrity(root, script)
+    if problems:
+        print(f"refused: PR #{number} is not admitted to the merge queue.", file=sys.stderr)
+        for problem in problems:
+            print(f"script: {problem}", file=sys.stderr)
+        for condition in CONDITIONS[1:]:
+            print(f"{condition}: not evaluated: script", file=sys.stderr)
+        return 1
     try:
         pr = github.pull_request(number)
     except Unreadable as error:
         print(f"refused: PR #{number} is not admitted to the merge queue.", file=sys.stderr)
         print(f"pr: the pull request could not be read: {error}", file=sys.stderr)
-        for condition in CONDITIONS[1:]:
+        for condition in CONDITIONS[2:]:
             print(f"{condition}: not evaluated: pr", file=sys.stderr)
         return 1
     if pr.in_merge_queue:
         print(f"already queued: PR #{number} is in the merge queue; nothing was admitted again.")
         return 0
 
-    outcome = evaluate(root, pr, github, tracker, script, args.maintainer)
+    outcome = evaluate(root, pr, github, tracker, args.maintainer)
     if outcome.refused:
         print(f"refused: PR #{number} is not admitted to the merge queue (head {pr.head_oid}).", file=sys.stderr)
         for line in outcome.lines():

@@ -165,13 +165,7 @@ def test_direct_merge_actions_are_guarded() -> None:
 
 
 class EnqueueNotYetAllowed(AssertionError):
-    """The held day settings do not yet allow the guarded admission command (plans/changes/enqueue-pr).
-
-    The allow rule lives in `.claude/settings.json`, a held path the orchestrator edits after the accepted
-    implementation attempt (plan step 4). Until then the test below is a strict expected failure for exactly
-    this exception: any other assertion fails it red, and once the rule lands the unexpected pass fails it
-    red too, so the marker is removed in the same commit as the settings edit.
-    """
+    """The day settings must allow the guarded admission command."""
 
 
 # The guarded admission command as an agent's Bash call, typed here and never read from the script.

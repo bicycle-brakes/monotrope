@@ -219,3 +219,159 @@ Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1240 files, 5950 commits, 12 rules.
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1240 files, 5950 commits, 12 rules.
+
+## Hand steps for the orchestrator — 2026-11-25
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- L2-2 — `.claude/settings.json` — runner-held path
+- L2-3 — `prompts/07-commit.md`, `.github/PULL_REQUEST_TEMPLATE/decision.md`, `AGENTS.md` — runner-held path
+- L2-8 — `provenance.yaml` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: L2-2, L2-3, L2-8 in the loop record `/Users/mikypiky/.local/state/coding-harness/stage2/enqueue-pr@6332d7a9/loop.md`.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1240 files, 5958 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/ci_gates.py` +1 -0
+> - `scripts/enqueue_pr.py` +99 -29
+> - `tests/test_enqueue_pr.py` +46 -7
+> - `tests/test_merge_guard.py` +1 -7
+> - `tests/test_stage2.py` +4 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/ci_gates.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 88 lines of this gate left out …]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 92%]
+> ........................................................F............... [ 93%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 98%]
+> ........................................................................ [ 99%]
+> ..                                                                       [100%]
+> =================================== FAILURES ===================================
+> ___________________ test_all_third_party_imports_are_guarded ___________________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/.venv/bin/python3
+>
+>     def test_all_third_party_imports_are_guarded() -> None:
+>         files = sorted(SCRIPTS.rglob("*.py"))
+>         assert SCRIPTS / "kit" / "probe.py" in files, "the scan must reach nested directories"
+>         importing: list[str] = []
+>         unguarded: list[str] = []
+>         acting_first: list[str] = []
+>         for path in files:
+>             source = path.read_text(encoding="utf-8")
+>             tree = ast.parse(source)
+>             if any(_third_party(node) for node in ast.walk(tree) if isinstance(node, ast.stmt)):
+>                 importing.append(path.relative_to(REPO_ROOT).as_posix())
+>             name = path.relative_to(REPO_ROOT).as_posix()
+>             if name in NOT_GUARDED:
+>                 continue
+>             unguarded += [f"{name}:{line} {dependency}" for line, dependency in unguarded_imports(source)]
+>             if path != GUARD:
+>                 acting_first += [f"{name}:{line}" for line in effects_before_guard(source)]
+>         assert "scripts/harness.py" in importing and "scripts/omnigent_policy.py" in importing, importing
+> >       assert not unguarded, "third-party import without an earlier `import venv_guard`: " + ", ".join(unguarded)
+> E       AssertionError: third-party import without an earlier `import venv_guard`: scripts/enqueue_pr.py:52 yaml
+> E       assert not ['scripts/enqueue_pr.py:52 yaml']
+>
+> tests/test_venv_guard.py:248: AssertionError
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=49870) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/tests/test_stage2.py:27314: DeprecationWarning: This process (pid=49904) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_venv_guard.py::test_all_third_party_imports_are_guarded - A...
+> 1 failed, 7040 passed, 17 skipped, 5 warnings in 889.10s (0:14:49)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 57846 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 90]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 94]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 87]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:47:81 error MD013/line-length Line length [Expected: 80; Actual: 155]
+> tools/claude-code/README.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 113]
+> tools/claude-code/README.md:71:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:136:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:138:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:139:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/enqueue-pr/stage2/attempts/enqueue-pr/attempt-1-20261125T191325306519Z-16d27d23.md
+> ````
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1240 files, 5960 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/enqueue_pr.py` +1 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/ci_gates.py` is shared execution infrastructure
+> - L2-14: tests/test_enqueue_pr.py::test_required_checks_union: the call of `tests/test_enqueue_pr.py::test_required_checks_union` failed with Unreadable, which is neither Python's AssertionError nor pytest's own failed outcome (pytest.fail.Exception)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/enqueue-pr/stage2/attempts/enqueue-pr/attempt-2-20261125T191325306519Z-16d27d23.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1240 files, 5966 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged

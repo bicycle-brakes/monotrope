@@ -10128,6 +10128,10 @@ def test_phase_six_records_reviewed_commit(world: World) -> None:
     def last_block_commits() -> list[str]:
         text = world.text()
         block = text[[m.start() for m in re.finditer(r"^## Phase 6", text, re.M)][-1] :]
+        if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+            block = block.replace(stage2.REVIEWED_COMMIT_KEY, "missing reviewed commit")
+        assert stage2.REVIEWED_COMMIT_KEY in block, "reviewed commit line is missing"
+        assert "Phase 6 verdict: codex" in block, "phase 6 verdict line is missing"
         assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
         return re.findall(r"^Reviewed commit: ([0-9a-f]{40})$", block, re.M)
 

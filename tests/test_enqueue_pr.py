@@ -376,9 +376,10 @@ def test_no_finding_requires_unquoted_runner_statement(
         ("open", "—", False),
         (FIXED, "disagree — the fix misses the case", False),
         (FIXED, "agree", True),
-        ("rejected — an accepted limit", "no answer", True),
+        ("rejected — an accepted limit", "no answer", False),
+        (FIXED, "—", False),
     ],
-    ids=["taken", "open", "disagreed", "fixed-agreed", "rejected"],
+    ids=["taken", "open", "disagreed", "fixed-agreed", "rejected", "missing-mark"],
 )
 def test_released_loop_rows_and_disagreements_refuse(
     make: Callable[..., World], capsys: pytest.CaptureFixture[str], status: str, mark: str, expected: bool
@@ -552,6 +553,34 @@ def test_only_allowed_commits_follow_review(
         assert found and not any("not evaluated" in line for line in found), err
 
 
+def test_regenerated_index_in_main_merge(make: Callable[..., World], capsys: pytest.CaptureFixture[str]) -> None:
+    """A main merge may regenerate the index, but may not invent an index or alter other paths."""
+    files = {**DEFAULT_CHANGE}
+    for name in ("plans_registry.py", "_verdict.py", "venv_guard.py"):
+        files[f"scripts/{name}"] = (REPO / "scripts" / name).read_bytes()
+    world = make(main_ahead=True, change=files)
+    git(world.root, "merge", "--quiet", "--no-ff", "--no-commit", world.main_tip)
+    subprocess.run(
+        [sys.executable, str(world.root / "scripts/plans_registry.py"), "--index"],
+        cwd=world.root,
+        check=True,
+        capture_output=True,
+    )
+    git(world.root, "add", "plans/INDEX.md")
+    git(world.root, "commit", "--quiet", "-m", f"sync main\n\n{TRAILER}")
+    world.publish()
+    admitted(world, capsys)
+
+    git(world.root, "reset", "--hard", "HEAD^")
+    git(world.root, "merge", "--quiet", "--no-ff", "--no-commit", world.main_tip)
+    write(world.root, {"plans/INDEX.md": "invented index\n"})
+    git(world.root, "add", "plans/INDEX.md")
+    git(world.root, "commit", "--quiet", "-m", f"sync main\n\n{TRAILER}")
+    world.publish()
+    world.gh.calls.clear()
+    assert "post-review:" in refused(world, capsys)
+
+
 # ---------------------------------------------------------------------------
 # Criteria 8 and 24: required checks
 # ---------------------------------------------------------------------------
@@ -622,12 +651,14 @@ def test_required_checks_union(make: Callable[..., World], capsys: pytest.Captur
     branch = {"protection": {"required_status_checks": {"contexts": ["legacy"], "checks": [{"context": "app"}]}}}
     assert ep.union_required(rules, branch) == {"verify", "lint", "legacy", "app"}
     assert ep.union_required(_rules("verify"), {"protection": {"enabled": False}}) == {"verify"}
+    assert ep.union_required(rules, {}) == {"verify", "lint"}
+    assert ep.union_required(rules, {"protection": None}) == {"verify", "lint"}
     for bad_rules, bad_branch in (
         (None, branch),
         ([{"parameters": {}}], branch),
         ([{"type": "required_status_checks", "parameters": {}}], branch),
         (_rules(""), branch),
-        (rules, {}),
+        (rules, {"protection": "invalid"}),
         (rules, {"protection": {"required_status_checks": {"contexts": [None]}}}),
     ):
         with pytest.raises(ep.Unreadable):
@@ -639,6 +670,8 @@ def test_required_checks_union(make: Callable[..., World], capsys: pytest.Captur
     assert ep.GitHub(tmp_path, run=fake).required_checks("main") == {"verify", "lint", "legacy", "app"}
     assert fake.argv[1][:2] == ["gh", "api"] and fake.argv[1][2] == "repos/o/r/rules/branches/main?per_page=100"
     assert fake.argv[2] == ["gh", "api", "repos/o/r/branches/main"]
+    unprotected = FakeRun([repo, (0, json.dumps(rules), ""), (1, "", "Branch not protected (HTTP 404)")])
+    assert ep.GitHub(tmp_path, run=unprotected).required_checks("main") == {"verify", "lint"}
     failing = FakeRun([repo, (0, json.dumps(rules), ""), (1, "", "HTTP 403")])
     with pytest.raises(ep.Unreadable):
         ep.GitHub(tmp_path, run=failing).required_checks("main")
@@ -713,7 +746,7 @@ def test_unreadable_evidence_refused(
     world.gh.failing = {"pull_request"}
     err = refused(world, capsys)
     assert "pr: the pull request could not be read" in err
-    for condition in ep.CONDITIONS[1:]:
+    for condition in ep.CONDITIONS[2:]:
         assert f"{condition}: not evaluated: pr" in err
 
     for failing, line in (
@@ -741,9 +774,9 @@ def test_unreadable_evidence_refused(
     world = make()
     git(world.root, "remote", "set-url", "origin", str(world.root.parent / "missing.git"))
     err = refused(world, capsys)
-    assert "head: the head or main could not be fetched and read" in err
-    for condition in ("script", "change", "trailer", "checks", "decision"):
-        assert f"{condition}: not evaluated: head" in err
+    assert "script: the script could not be compared" in err
+    for condition in ("pr", "head", "change", "trailer", "checks", "decision"):
+        assert f"{condition}: not evaluated: script" in err
     assert ("head_checks", world.head) not in world.gh.calls
 
     # The adapter: a malformed or incomplete answer is unreadable, never a default.
@@ -834,6 +867,12 @@ def test_already_queued_is_idempotent(make: Callable[..., World], capsys: pytest
         assert captured.out.startswith("already queued: PR #7")
         assert captured.err == ""
     assert world.gh.names() == ["pull_request", "pull_request"]
+
+    world.script.write_text("# modified\n", encoding="utf-8")
+    world.gh.calls.clear()
+    err = refused(world, capsys)
+    assert "script: " in err
+    assert world.gh.calls == [], "script integrity must be checked before reading a queued request"
 
 
 def test_refusals_report_all_identifiers(make: Callable[..., World], capsys: pytest.CaptureFixture[str]) -> None:
@@ -947,3 +986,21 @@ def test_maintainer_mode_bypasses_only_specified_conditions(
         plant(world)
         err = refused(world, capsys, "--maintainer")
         assert any(line.startswith(f"{condition}: ") for line in refusal_lines(err)), condition
+
+
+def test_human_decided_paths_make_a_decision_pr(make: Callable[..., World], capsys: pytest.CaptureFixture[str]) -> None:
+    """Loop row L2-8 (decision S-25): a path provenance.yaml reserves for human-decided is a decision PR."""
+    world = make(change={**DEFAULT_CHANGE, "decisions/gates.yaml": "gates: []\n"})
+    (world.root / "provenance.yaml").write_text(
+        'pfade:\n  - prefix: "decisions/gates.yaml"\n    allowed: [human-decided]\n', encoding="utf-8"
+    )
+    err = refused(world, capsys)
+    assert "decision: the pull request touches paths provenance.yaml reserves for human-decided" in err
+    assert "decisions/gates.yaml" in err
+
+
+@pytest.mark.parametrize("spelling", ["--maint", "--main", "--m"])
+def test_maintainer_mode_needs_the_full_option(spelling: str) -> None:
+    """Loop row L2-2: an abbreviated --maintainer is a usage error, never maintainer mode."""
+    with pytest.raises(ep.UsageError):
+        ep.parse_args(["54", spelling])
