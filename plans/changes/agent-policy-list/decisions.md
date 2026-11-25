@@ -145,3 +145,7 @@ In the context of hosts whose hook surface is unverified, facing two readings th
 ## Details decided by the orchestrator (cross-lane, 2026-11-25)
 
 [DETAIL] Companion change enqueue-pr (coding-harness-va1l, Q-8): the policy list holds one more rule, `python3 scripts/enqueue_pr.py * --maintainer*` (and the `.venv/bin/python` spelling) as ask; in an unattended run the ask becomes deny like every other ask, so only the maintainer can use the maintainer mode. The default call `scripts/enqueue_pr.py <number>` is allowed.
+
+## Details decided by the orchestrator (spec-review round 1)
+
+[DETAIL] Round-3 spec review (S-16..S-20) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25: answer spec-review questions except BLOCKERs, recorded here). No further redraft: the spec stays as reviewed in round 3 so the review stays current; the implementer applies the S-16..S-20 statuses in findings.md as written.
