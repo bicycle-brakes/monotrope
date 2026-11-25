@@ -111,3 +111,48 @@ context: |
   Architecture change: none.
 
 In the context of how pull requests enter the merge queue, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a wider documentation change in this lane. — 2026-11-25
+
+## Q-7 · Ambiguity S-14 (admission without the maintainer asking)
+
+asked: 2026-11-25
+answer: "Yes, as granted in PR #459: the orchestrator admits by itself once the script passes; the commit procedure and house rule 8 are amended."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-14 of enqueue-pr.
+  Intention: unattended admission backed by code.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of who may trigger admission, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting an amended house rule 8. — 2026-11-25
+
+## Q-8 · Ambiguities S-15 and S-16 (requests the default refuses)
+
+asked: 2026-11-25
+answer: "A maintainer mode (--maintainer) keeps one path: it skips the phase-6, change-folder and trailer conditions but keeps checks, pinned head and enqueue-only; the agent policy list asks for it when attended and denies it unattended."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-15, S-16 of enqueue-pr.
+  Intention: one path that still admits handovers, decision PRs and similar requests.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of requests the default conditions refuse, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a maintainer option guarded by the agent policy list. — 2026-11-25
+
+## Q-9 · Ambiguity S-18 (phase-6 marks and released rows)
+
+asked: 2026-11-25
+answer: "They count: a disagree mark or a released row neither fixed nor rejected refuses."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-18 of enqueue-pr.
+  Intention: a strict reading of a clean phase 6.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of the phase-6 verdict, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting more refusals on disputed loop rows. — 2026-11-25
