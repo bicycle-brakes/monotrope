@@ -21236,6 +21236,19 @@ def test_red_first_retains_tail_of_single_long_diagnostic_line() -> None:
     assert len(shown) <= 4000 and len(shown.splitlines()) <= 40
 
 
+def test_red_first_reports_exit_one_before_probe_record(world: World) -> None:
+    """A configuration exit before the probe record retains its exit and diagnostic."""
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text("def test_out():\n    assert True\n", encoding="utf-8")
+    (world.root / "tests" / "conftest.py").write_text(
+        'import pytest\ndef pytest_sessionstart(session):\n    pytest.exit("configuration failed", returncode=1)\n',
+        encoding="utf-8",
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None and "pytest ended 1" in refusal and "configuration failed" in refusal, refusal
+
+
 def test_red_first_protects_pre_record_pytest_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 12 (coding-harness-7aso). Planted fault: a pre-record import error loses its exit or
     diagnostic, exceeds a cap, omits the truncation marker, or leaks output after protection failure."""

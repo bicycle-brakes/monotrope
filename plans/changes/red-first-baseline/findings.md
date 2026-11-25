@@ -369,7 +369,132 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-4 | MAJOR | SPEC | base | scripts/stage2.py:10313 | If a `conftest.py` calls `pytest.exit("configuration failed", returncode=1)` before the probe writes a record, the refusal reports only that the outcome record is missing. It omits both pytest’s exit code and the protected diagnostic, so the cause cannot be identified from the refusal. [Criterion 12] | Codex | taken — maintainer 2026-11-25, structural (second case after P6-2): one choke point reports every pytest end without a probe record, exit 1 included, with pytest's exit and the protected, capped diagnostic | — |
+| P6-4 | MAJOR | SPEC | base | scripts/stage2.py:10313 | If a `conftest.py` calls `pytest.exit("configuration failed", returncode=1)` before the probe writes a record, the refusal reports only that the outcome record is missing. It omits both pytest’s exit code and the protected diagnostic, so the cause cannot be identified from the refusal. [Criterion 12] | Codex | fixed — tests/test_stage2.py::test_red_first_reports_exit_one_before_probe_record | — |
 
 Phase 6 verdict: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304, 2026-11-25
 Reviewer session: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5828 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +3 -3
+> - `tests/test_stage2.py` +13 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 133 lines of this gate left out …]
+>                 }
+>     
+>             return mutate
+>     
+>         def without_phase_field(record):
+>             return {
+>                 **record,
+>                 "phases": [
+>                     {name: cell for name, cell in phase.items() if name != "pytest_failed"} for phase in record["phases"]
+>                 ],
+>             }
+>     
+>         faults = {
+>             "absent": lambda _path: None,
+>             "malformed": lambda _path: b"{ not json",
+>             "incomplete": tampered(lambda record: {**record, "session": None}),
+>             "wrong-test": tampered(lambda record: {**record, "selector": "tests/test_red.py::test_other"}),
+>             "stale": tampered(lambda record: {**record, "token": "0" * 32}),
+>             # The failure classification: a phase without the boolean field, or one that is not a
+>             # boolean, is invalid evidence - including JSON's 0, 1 and null.
+>             "phase-without-field": tampered(without_phase_field),
+>             "pytest-failed-zero": tampered(call_phase_field(0)),
+>             "pytest-failed-one": tampered(call_phase_field(1)),
+>             "pytest-failed-null": tampered(call_phase_field(None)),
+>             "pytest-failed-string": tampered(call_phase_field("yes")),
+>         }
+>         for name, fault in faults.items():
+>             monkeypatch.setattr(stage2, "_red_report_bytes", fault)
+>             outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
+> >           assert outcome is not None and "outcome record" in outcome, (name, outcome)
+> E           AssertionError: ('absent', "tests/test_red.py::test_red: pytest ended 1 on the baseline's code; red first needs exit 1 with an asserti...================
+> E             FAILED tests/test_red.py::test_red - AssertionError: assert 'value = 2' in 'v...
+> E             1 failed in 0.01s")
+> E           assert ("tests/test_red.py::test_red: pytest ended 1 on the baseline's code; red first needs exit 1 with an assertion failure ...=================\nFAILED tests/test_red.py::test_red - AssertionError: assert 'value = 2' in 'v...\n1 failed in 0.01s" is not None and 'outcome record' in "tests/test_red.py::test_red: pytest ended 1 on the baseline's code; red first needs exit 1 with an assertion failure ...=================\nFAILED tests/test_red.py::test_red - AssertionError: assert 'va [… 38 characters left out …]
+>
+> tests/test_stage2.py:21361: AssertionError
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =============================== warnings summary ===============================
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=56147) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/red-first-baseline/tests/test_stage2.py:27322: DeprecationWarning: This process (pid=56156) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_red_first_refuses_missing_or_invalid_evidence
+> 1 failed, 6969 passed, 17 skipped, 5 warnings in 803.40s (0:13:23)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 56474 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 90]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 94]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 87]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:47:81 error MD013/line-length Line length [Expected: 80; Actual: 155]
+> tools/claude-code/README.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 113]
+> tools/claude-code/README.md:71:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:136:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:138:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:139:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-baseline/stage2/attempts/red-first-baseline/attempt-1-20261125T074009404808Z-48e12324.md
+> ````
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1206 files, 5832 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged

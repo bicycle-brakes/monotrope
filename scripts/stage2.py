@@ -10292,15 +10292,16 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
-                if done.returncode != 1:
-                    recorded = _red_report_bytes(report)
+                recorded = _red_report_bytes(report)
+                if done.returncode != 1 or (done.returncode != 0 and recorded is None):
                     detail = _red_record_fault(recorded, token, selector, check_exit=False)
                     outcome = (
                         f"{test}: pytest ended {done.returncode} on the baseline's code; "
                         "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
                     )
-                    if detail is not None and recorded is not None:
-                        outcome += f"; the recorded outcome: {scrub(detail, key)}"
+                    if detail is not None:
+                        label = "the recorded outcome: " if recorded is not None else ""
+                        outcome += f"; {label}{scrub(detail, key)}"
                     if not _red_record_selected(recorded):
                         # No case ran (a conftest import error, a usage error): the protected tail
                         # of the combined output is the only evidence, and a protection failure
@@ -10312,7 +10313,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
                         if shown:
                             outcome += "\npytest output (protected, capped):\n" + shown
                 else:
-                    fault = _red_record_fault(_red_report_bytes(report), token, selector)
+                    fault = _red_record_fault(recorded, token, selector)
                     if fault is not None:
                         outcome = f"{test}: {scrub(fault, key)}"
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
