@@ -198,3 +198,22 @@ refused), 1tn1 (Codex pre-tool hook), 363r.5 (model list clean-up), 363r.6
   steps continue.
 - ladder-next-step: unchanged since the main entry (hand finish in progress,
   one test red).
+
+## Addendum — 21:45 CET
+
+- **enqueue-pr (va1l):** the round-3 hand steps are done (docs in
+  `prompts/07-commit.md` "The merge": the two maintainer-merge exceptions —
+  the PR that adds or changes the script, and a repository without a merge
+  queue — the transition for lanes whose phase 6 predates `Reviewed
+  commit:`, and steps 5-8 restored so `docs/governance/quality-gates.md`'s
+  "step 8" is true again; `docs/WORKFLOW.md` states ask-over-allow). L3-1 to
+  L3-4 and L3-11 are now fixed with the hand-edit commit. Review-loop round 4
+  is running.
+- **pi-work-route (363r.3):** the maintainer confirmed the seats for run 3
+  (repository and online trios deepseek-v4.1-flash, mimo-v2.6-flash,
+  glm-5.3-flash). A session-only one-shot wake at **23:13** probes Claude,
+  re-runs `prepare-explore` and starts run 3 with
+  `XDG_STATE_HOME=/Users/Shared/coding-harness-research`; if Claude is still
+  limited it retries 30 minutes later. A new session must re-create that wake.
+- This handover PR (#464) is being admitted to the merge queue on the
+  maintainer's request.
