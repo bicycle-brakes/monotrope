@@ -1110,6 +1110,25 @@ def test_frozen_legacy_status_inventory():
         ],
         "rejected — superseded by q-4: same as l8-1": ["L8-1"],
         "rejected — the same as l1-1: plan step 7, done by the orchestrator in 5eb38120": ["L1-1"],
+        "rejected — duplicate of l2-1 (provisional agent decision, autonomous run 2026-11-19)": ["L2-1"],
+        "rejected — duplicate of l2-1. (provisional agent decision, night run 2026-11-20-a)": ["L2-1"],
+        "rejected — duplicate of l2-10. (provisional agent decision, night run 2026-11-20-a)": ["L2-10"],
+        "rejected — duplicate of l2-11 (same naming duty on the outer fault path; repaired at the root there). (provisional agent decision, night run 2026-11-20-a)": [
+            "L2-11"
+        ],
+        "rejected — duplicate of l2-11. (provisional agent decision, night run 2026-11-20-a)": ["L2-11"],
+        "rejected — duplicate of l2-4. (provisional agent decision, night run 2026-11-20-a)": ["L2-4"],
+        "rejected — duplicate of l2-7 for the clause; the constant names are a style row, accepted limit. (provisional agent decision, night run 2026-11-20-a)": [
+            "L2-7"
+        ],
+        "rejected — duplicate of l3-8, l5-1 and l6-1: a seat whose filtering empties every category stops as invalid-report, decided with l3-8 and tested by test_finder_all_entries_dropped_stops (provisional agent decision, autonomous run 2026-11-20)": [
+            "L3-8",
+            "L5-1",
+            "L6-1",
+        ],
+        "rejected — same as l3-6: worktree path reuse is a named limit of the removed-worktree exclusion (decisions s-16), stated in docs/workflow.md; follow-up bead coding-harness-0aht": [
+            "L3-6"
+        ],
     }
     seen = set()
     for path in (REPO_ROOT / "plans").rglob("findings.md"):

@@ -247,6 +247,25 @@ LEGACY_DUPLICATE_STATUSES = {
     "rejected — repeats l2-2: the `run_codex` docstring now names the verbs a codex route may carry; the lookup stops before the call, and no route pairs implement with codex; a refusal message would be new runner scope, named in the pr as an accepted limit": [
         "L2-2"
     ],
+    "rejected — duplicate of l2-1 (provisional agent decision, autonomous run 2026-11-19)": ["L2-1"],
+    "rejected — duplicate of l2-1. (provisional agent decision, night run 2026-11-20-a)": ["L2-1"],
+    "rejected — duplicate of l2-10. (provisional agent decision, night run 2026-11-20-a)": ["L2-10"],
+    "rejected — duplicate of l2-11 (same naming duty on the outer fault path; repaired at the root there). (provisional agent decision, night run 2026-11-20-a)": [
+        "L2-11"
+    ],
+    "rejected — duplicate of l2-11. (provisional agent decision, night run 2026-11-20-a)": ["L2-11"],
+    "rejected — duplicate of l2-4. (provisional agent decision, night run 2026-11-20-a)": ["L2-4"],
+    "rejected — duplicate of l2-7 for the clause; the constant names are a style row, accepted limit. (provisional agent decision, night run 2026-11-20-a)": [
+        "L2-7"
+    ],
+    "rejected — duplicate of l3-8, l5-1 and l6-1: a seat whose filtering empties every category stops as invalid-report, decided with l3-8 and tested by test_finder_all_entries_dropped_stops (provisional agent decision, autonomous run 2026-11-20)": [
+        "L3-8",
+        "L5-1",
+        "L6-1",
+    ],
+    "rejected — same as l3-6: worktree path reuse is a named limit of the removed-worktree exclusion (decisions s-16), stated in docs/workflow.md; follow-up bead coding-harness-0aht": [
+        "L3-6"
+    ],
     "rejected — same as l1-1": ["L1-1"],
     "rejected — same as l1-11": ["L1-11"],
     "rejected — same as l1-2": ["L1-2"],
