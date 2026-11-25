@@ -220,7 +220,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | spec | tests/atomic_test_log.py:190 | A counter containing a deeply nested JSON array can cause `json.loads` to raise `RecursionError`. That exception is not caught, so a nonempty log’s count is not rebuilt and the call fails instead of selecting the next step. [Acceptance criterion 5] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | tests/atomic_test_log.py:190 | A counter containing a deeply nested JSON array can cause `json.loads` to raise `RecursionError`. That exception is not caught, so a nonempty log’s count is not rebuilt and the call fails instead of selecting the next step. [Acceptance criterion 5] | Codex | taken — guard test — a counter that fails to parse for any reason, RecursionError included, counts as unreadable and is rebuilt from the log (criterion 5, D-9); a guard plants a deeply nested counter and shows the next call still gets its step | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
