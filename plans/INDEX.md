@@ -693,6 +693,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/slip-counter/plan.md`](changes/slip-counter/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/research.md`](changes/slip-counter/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/spec.md`](changes/slip-counter/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slow-test-fixes/decisions.md`](changes/slow-test-fixes/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/findings.md`](changes/slow-test-fixes/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/plan.md`](changes/slow-test-fixes/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/research.md`](changes/slow-test-fixes/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/spec.md`](changes/slow-test-fixes/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
