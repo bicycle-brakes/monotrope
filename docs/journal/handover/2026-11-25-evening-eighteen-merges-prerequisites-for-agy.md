@@ -157,3 +157,44 @@ refused), 1tn1 (Codex pre-tool hook), 363r.5 (model list clean-up), 363r.6
 - Every merged PR: phase 6 clean and `make verify` green on its head or by
   CI in the merge queue.
 - Not run: a full `make verify` on the uncommitted ladder-next-step state.
+
+## Addendum — 21:40 CET
+
+- **#461 merged** (findings per model) after a second sync with main: three
+  more legacy duplicate statuses arrived and were added to the frozen
+  inventory; a CI-only failure (the inner `make` printed "Entering
+  directory") was fixed with `--no-print-directory`.
+- **worktree-setup-hook (wg4z):** the phase-6 re-check found one more no-perl
+  edge case (a child ignoring TERM); fixed by hand (the group gets KILL when
+  the limit is reached), 48 tests green; the next phase-6 re-check is running.
+  Trust is now only a commit on origin/main (maintainer, P6-1 security).
+- **enqueue-pr (va1l):** round 3 (11 rows) repaired by codex-repair; still to
+  do by hand on runner-held files: L3-1 bootstrap note (the PR that adds
+  the script is merged by the maintainer), L3-2 transition note (lanes whose
+  phase 6 predates `Reviewed commit:` get a re-check), L3-3/L3-4 restore the
+  no-queue alternative as steps 5-8 in `prompts/07-commit.md`, L3-11 the
+  ask-over-allow precedence in docs/WORKFLOW.md. L3-1/L3-2 were marked
+  "fixed" by the model although they are hand steps — reopen them.
+- **agent-policy-list (r7zc):** round 5 (6 rows) fixed by repair and hand
+  (gate catalog re-rendered, kit rules, mutation-named drift test, host
+  table "pending the recorded host check", adapter docstring cites the agy
+  hooks documentation); review-loop round 6 running.
+- **pi-work-route (363r.3):** interview done (Q-1..Q-5). The draft failed:
+  the `research-handoff` gate needs a complete v2 run for an architectural
+  change. Maintainer: run 3 with the per-topic limit doubled to 20 minutes
+  (committed in the lane, a4cc09d1); the earlier partial results stay in
+  research.md. **Run 3 needs Claude** (Haiku finders, Opus merge and judge)
+  and waits for the reset at 23:10. Seat recommendation (prepare-explore
+  21:36): repository and online trios deepseek-v4.1-flash, mimo-v2.6-flash,
+  glm-5.3-flash — **to confirm with the maintainer** (Q-18). The draft also
+  named its ADR 0026, already taken by #462: the next draft must use 0027.
+- **Maintainer requirement:** the runner must continue a started research
+  run instead of recomputing it — bead coding-harness-f6qj raised to P1.
+- **Codex Desktop (xrcd):** the maintainer confirmed an automated process in
+  the Codex Desktop app; option A (shared `.git/info/exclude`) or stopping
+  the automation remains to decide.
+- **Claude default profile:** the 5-hour limit was hit again at about 21:35
+  (reset 23:10). Runner steps that need Claude wait until then; Codex and Go
+  steps continue.
+- ladder-next-step: unchanged since the main entry (hand finish in progress,
+  one test red).
