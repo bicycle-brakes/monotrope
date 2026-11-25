@@ -56,6 +56,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import close_merged_beads  # noqa: E402 — the one trailer parser and the one validated tracker reader
+import pr_sync  # noqa: E402
 
 CONDITIONS = (
     "script",
@@ -95,7 +96,7 @@ LOOP_ID = re.compile(r"L\d+-\d+")
 VERDICT_LINE = re.compile(r"Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*")
 VERDICT_START = re.compile(r"phase 6 verdict\b", re.I)
 REVIEWED_COMMIT = re.compile(r"Reviewed commit: ([0-9a-f]{40})[ \t]*")
-NO_FINDING = re.compile(r"[A-Za-z0-9][^\n]*? reported no finding\.[ \t]*")
+NO_FINDING = re.compile(r"[^\W_][^\n]*? reported no finding\.[ \t]*")
 _PIPE = re.compile(r"(?<!\\)\|")
 
 # The one mutation this command sends: queue admission, pinned to the verified head.
@@ -555,6 +556,7 @@ def released_problems(text: str) -> list[str]:
     """Released phase-4b loop rows that are unsettled or that phase 6 disagreed with; the latest row per id."""
     latest: dict[str, list[str]] = {}
     inside = False
+    problems: list[str] = []
     for line in text.splitlines():
         if line.startswith("## "):
             inside = line.startswith(RELEASE_HEADING)
@@ -563,9 +565,12 @@ def released_problems(text: str) -> list[str]:
             inside = False
             continue
         cells = split_row(line) if inside else None
-        if cells and len(cells) == RELEASED_COLUMNS and LOOP_ID.fullmatch(cells[0]):
-            latest[cells[0]] = cells
-    problems: list[str] = []
+        if cells is None or _furniture(cells):
+            continue
+        if len(cells) != RELEASED_COLUMNS or not LOOP_ID.fullmatch(cells[0]):
+            problems.append(f"an unrecognised table line in the released block: {line.strip()[:80]}")
+            continue
+        latest[cells[0]] = cells
     for loop_id, cells in latest.items():
         if not settled(cells[7]):
             problems.append(f"released loop row {loop_id} stands `{cells[7]}`, not fixed or rejected")
@@ -729,19 +734,12 @@ def commit_problems(root: Path, commit: str, parents: list[str], folder: str, ma
         return [f"commit {short} merges {len(parents)} parents; only a merge of main may follow the reviewed commit"]
     if not _is_ancestor(root, parents[1], main):
         return [f"merge {short} brings in {parents[1][:12]}, which is not on origin's main"]
-    result = _git_run(root, "merge-tree", "--write-tree", "--name-only", "-z", parents[0], parents[1])
-    if result.returncode not in (0, 1):
-        raise Unreadable(f"git merge-tree failed: {result.stderr.decode('utf-8', 'replace').strip()}")
-    fields = result.stdout.split(b"\0")
-    clean = fields[0].decode("ascii", errors="replace").strip()
-    conflicts = []
-    if result.returncode == 1:
-        for field in fields[1:]:
-            if not field:
-                break
-            conflicts.append(field.decode("utf-8", errors="replace"))
-        if conflicts != [INDEX_PATH]:
-            return [f"merge {short} of main is not clean; its conflict resolution was not reviewed"]
+    try:
+        clean, conflicts = pr_sync.merge_tree(root, parents[0], parents[1])
+    except pr_sync.Failed as error:
+        raise Unreadable(str(error)) from None
+    if conflicts and conflicts != [INDEX_PATH]:
+        return [f"merge {short} of main is not clean; its conflict resolution was not reviewed"]
     actual = _git(root, "rev-parse", f"{commit}^{{tree}}")
     if clean == actual and not conflicts:
         return []
@@ -926,18 +924,20 @@ def _attended_conditions(
         adr = ", ".join(path for path in paths if path.startswith(ADR_DIR))
         if adr:
             out.fail("decision", [f"the pull request touches {ADR_DIR} ({adr}); it is the maintainer's"])
-        reserved = ", ".join(
-            path
-            for path in paths
-            if not path.startswith(ADR_DIR) and any(path.startswith(p) for p in human_decided_prefixes(root))
-        )
-        if reserved:
-            out.fail(
-                "decision",
-                [
-                    f"the pull request touches paths provenance.yaml reserves for human-decided ({reserved}); it is the maintainer's"
-                ],
+        try:
+            mapping = human_decided_prefixes(root)
+            reserved = ", ".join(
+                path for path in paths if not path.startswith(ADR_DIR) and is_human_decided(path, mapping)
             )
+            if reserved:
+                out.fail(
+                    "decision",
+                    [
+                        f"the pull request touches paths provenance.yaml reserves for human-decided ({reserved}); it is the maintainer's"
+                    ],
+                )
+        except Unreadable as error:
+            out.fail("decision", [f"provenance.yaml could not be read: {error}"])
 
 
 # ---------------------------------------------------------------------------
@@ -945,30 +945,32 @@ def _attended_conditions(
 # ---------------------------------------------------------------------------
 
 
-def human_decided_prefixes(root: Path) -> list[str]:
-    """Path prefixes provenance.yaml reserves for the class `human-decided` (house rule 8), plus docs/adr/.
+def human_decided_prefixes(root: Path) -> list[tuple[str, bool]]:
+    """Read the authoritative main-branch map, including non-reserved overrides."""
+    try:
+        data = yaml.safe_load(show(root, "origin/main", "provenance.yaml"))
+    except yaml.YAMLError as error:
+        raise Unreadable(f"invalid YAML: {error}") from None
+    if not isinstance(data, dict) or not isinstance(data.get("paths"), list):
+        raise Unreadable("missing paths list")
+    entries = []
+    for item in data["paths"]:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("prefix"), str)
+            or not isinstance(item.get("allowed"), list)
+            or not all(isinstance(value, str) for value in item["allowed"])
+        ):
+            raise Unreadable("invalid path mapping")
+        entries.append((item["prefix"], item["allowed"] == ["human-decided"]))
+    if len({prefix for prefix, _ in entries}) != len(entries):
+        raise Unreadable("duplicate path mapping")
+    return entries
 
-    Read from the checkout's provenance.yaml; a tree without that file (a test fixture) keeps docs/adr/.
-    """
-    prefixes = [ADR_DIR]
-    source = root / "provenance.yaml"
-    if not source.is_file():
-        return prefixes
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
 
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            prefix, allowed = node.get("prefix"), node.get("allowed")
-            if isinstance(prefix, str) and isinstance(allowed, list) and "human-decided" in allowed:
-                prefixes.append(prefix)
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for value in node:
-                walk(value)
-
-    walk(data)
-    return sorted(set(prefixes))
+def is_human_decided(path: str, entries: list[tuple[str, bool]]) -> bool:
+    matches = [(len(prefix), reserved) for prefix, reserved in entries if path.startswith(prefix)]
+    return max(matches)[1] if matches else False
 
 
 class _Parser(argparse.ArgumentParser):
@@ -1059,13 +1061,18 @@ def run(
         entry = github.enqueue(pr.node_id, head)
     except AdmissionError as error:
         try:
-            reported: str | None = github.pull_request(number).head_oid
+            reread = github.pull_request(number)
+            reported: str | None = reread.head_oid
         except Unreadable:
             reported = None
         if reported is not None and reported != head:
             print(f"head-moved: expected head {head}, GitHub reports {reported}; not retried.", file=sys.stderr)
             return 1
-        print(f"admission-failed: PR #{number} at {head} was not queued: {error}", file=sys.stderr)
+        if reported is not None and reread.in_merge_queue:
+            print(f"already queued: PR #{number} at head {reported} is in the merge queue.")
+            return 0
+        state = "queue state unreadable" if reported is None else "not currently in the queue"
+        print(f"admission-failed: PR #{number} at {head}; {state}: {error}", file=sys.stderr)
         return 2
     if outcome.skipped:
         print(f"maintainer mode: skipped {', '.join(outcome.skipped)}")

@@ -377,3 +377,37 @@ Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1240 files, 5967 commits, 12 rules.
+
+## Hand steps for the orchestrator — 2026-11-25
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- L3-3 — `prompts/07-commit.md` — runner-held path
+- L3-4 — `docs/governance/quality-gates.md` — runner-held path
+- L3-11 — `.claude/settings.json` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: L3-3, L3-4, L3-11 in the loop record `/Users/mikypiky/.local/state/coding-harness/stage2/enqueue-pr@6332d7a9/loop.md`.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1240 files, 5971 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/enqueue_pr.py` +61 -54
+> - `tests/test_enqueue_pr.py` +80 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_enqueue_pr.py`, `tests/test_merge_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L3-1: no fixed line
+> - L3-2: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/enqueue-pr/stage2/attempts/enqueue-pr/attempt-1-20261125T202420919895Z-baf3a11c.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1240 files, 5971 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged

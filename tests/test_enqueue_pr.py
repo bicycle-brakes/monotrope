@@ -18,11 +18,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 
 import enqueue_pr as ep  # noqa: E402
+import pr_sync  # noqa: E402
 
 GIT = shutil.which("git")
 REAL_SCRIPT = Path(ep.__file__).read_bytes()
@@ -204,6 +206,7 @@ def build(
     git(root, "init", "--quiet")
     git(root, "remote", "add", "origin", str(origin))
     base_files: dict[str, str | bytes | None] = {"plans/INDEX.md": "# Index\n", "src/app.py": "value = 1\n"}
+    base_files["provenance.yaml"] = "paths: []\n"
     base_files["scripts/enqueue_pr.py"] = REAL_SCRIPT if script_on_main else b"# another script\n"
     write(root, base_files)
     git(root, "add", "-A")
@@ -991,9 +994,12 @@ def test_maintainer_mode_bypasses_only_specified_conditions(
 def test_human_decided_paths_make_a_decision_pr(make: Callable[..., World], capsys: pytest.CaptureFixture[str]) -> None:
     """Loop row L2-8 (decision S-25): a path provenance.yaml reserves for human-decided is a decision PR."""
     world = make(change={**DEFAULT_CHANGE, "decisions/gates.yaml": "gates: []\n"})
-    (world.root / "provenance.yaml").write_text(
-        'pfade:\n  - prefix: "decisions/gates.yaml"\n    allowed: [human-decided]\n', encoding="utf-8"
+    git(world.root, "checkout", "--quiet", "-b", "mapping", world.base)
+    world.commit(
+        {"provenance.yaml": 'paths:\n  - prefix: "decisions/gates.yaml"\n    allowed: [human-decided]\n'}, "map"
     )
+    git(world.root, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    git(world.root, "checkout", "--quiet", "feat")
     err = refused(world, capsys)
     assert "decision: the pull request touches paths provenance.yaml reserves for human-decided" in err
     assert "decisions/gates.yaml" in err
@@ -1004,3 +1010,77 @@ def test_maintainer_mode_needs_the_full_option(spelling: str) -> None:
     """Loop row L2-2: an abbreviated --maintainer is a usage error, never maintainer mode."""
     with pytest.raises(ep.UsageError):
         ep.parse_args(["54", spelling])
+
+
+def test_decision_map_uses_main_and_longest_prefix(make, capsys):
+    world = make(change={**DEFAULT_CHANGE, "docs/governance/fehler-katalog.md": "change"})
+    mapping = "paths:\n  - prefix: docs/governance/\n    allowed: [human-decided]\n  - prefix: docs/governance/fehler-katalog.md\n    allowed: [ai-drafted-reviewed]\n  - prefix: docs/mixed/\n    allowed: [human-decided, ai-drafted-reviewed]\n"
+    git(world.root, "checkout", "--quiet", "-b", "mapping", world.base)
+    world.commit({"provenance.yaml": mapping}, "map")
+    git(world.root, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    git(world.root, "checkout", "--quiet", "feat")
+    write(world.root, {"provenance.yaml": "paths: []\n"})
+    admitted(world, capsys)
+    reserved = make(change={**DEFAULT_CHANGE, "docs/governance/quality.md": "change"})
+    git(reserved.root, "checkout", "--quiet", "-b", "mapping", reserved.base)
+    reserved.commit({"provenance.yaml": mapping}, "map")
+    git(reserved.root, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    git(reserved.root, "checkout", "--quiet", "feat")
+    write(reserved.root, {"provenance.yaml": "paths: []\n"})
+    assert "decision:" in refused(reserved, capsys)
+    assert not ep.is_human_decided("docs/mixed/file.md", ep.human_decided_prefixes(world.root))
+
+
+def test_malformed_provenance_refuses(make, capsys):
+    world = make()
+    git(world.root, "checkout", "--quiet", "-b", "mapping", world.base)
+    world.commit({"provenance.yaml": "paths: [broken\n"}, "bad map")
+    git(world.root, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    git(world.root, "checkout", "--quiet", "feat")
+    try:
+        result = world.run("7")
+    except yaml.YAMLError as error:
+        pytest.fail(f"malformed provenance must refuse without an exception: {error}")
+    assert result == 1
+    assert "decision:" in capsys.readouterr().err
+
+
+def test_malformed_released_row_refuses():
+    for row in (
+        "| L1-1 | MAJOR | CODE | x | y | bad | pipe | m | open | — | — |",
+        "| wrong | MAJOR | CODE | x | y | finding | m | open | — | — |",
+    ):
+        text = "## Phase 4b — loop rows, released\n" + RELEASED_HEADER + "\n" + row
+        assert any("unrecognised" in problem for problem in ep.released_problems(text))
+
+
+def test_merge_check_uses_shared_engine(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(ep, "_is_ancestor", lambda *_args: True)
+    monkeypatch.setattr(pr_sync, "merge_tree", lambda *args: (calls.append(args) or ("a" * 40, [])))
+    monkeypatch.setattr(ep, "_git", lambda *_args: "a" * 40)
+    try:
+        problems = ep.commit_problems(tmp_path, "b" * 40, ["c" * 40, "d" * 40], "demo", "main")
+    except ep.Unreadable as error:
+        pytest.fail(f"the shared merge engine must be used: {error}")
+    assert problems == []
+    assert calls
+
+
+def test_unicode_reviewer_no_finding():
+    block = ["## Phase 6", "Émile reported no finding.", VERDICT]
+    assert ep.phase6_problems(block) == []
+
+
+def test_failed_enqueue_rereads_queue_state(make, capsys):
+    world = make()
+    world.gh.enqueue_error = "connection lost"
+    original = world.gh.pull_request
+
+    def reread(number):
+        pr = original(number)
+        return dataclasses.replace(pr, in_merge_queue=True) if world.gh.enqueued() else pr
+
+    world.gh.pull_request = reread
+    assert world.run("7") == 0
+    assert "already queued" in capsys.readouterr().out
