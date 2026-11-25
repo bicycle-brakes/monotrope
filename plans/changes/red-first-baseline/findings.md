@@ -498,3 +498,14 @@ Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1206 files, 5832 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/red-first-baseline/plan.md, plans/changes/red-first-baseline/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5855 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | implementation | scripts/stage2.py:10296 | If the selected test fails with an assertion but a pytest hook changes the final exit code to 2, the probe can contain a valid assertion-failure outcome. The refusal reports exit 2 but omits that recorded outcome because `_red_record_fault(..., check_exit=False)` returns `None` for a qualifying failure. The refusal must report an available true outcome alongside the exit code. [Acceptance criterion 4] | Codex | open | — |
+
+Phase 6 verdict: codex 01a211fa-bf2a-7f80-a826-1a33084e7129, 2026-11-25
+Reviewer session: codex 01a211fa-bf2a-7f80-a826-1a33084e7129 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
