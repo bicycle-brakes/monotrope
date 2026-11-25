@@ -796,3 +796,24 @@ def test_unrepresentable_ask_denies(monkeypatch: pytest.MonkeyPatch) -> None:
     decision, reason = claude(bash("gh pr merge 54"))
     assert decision == DENY and "cannot ask" in reason
     assert claude(bash("ls -la"))[0] == ABSTAIN
+
+
+def test_nested_shell_constructs_are_checked() -> None:
+    commands = (
+        "echo $(gh pr merge 54)",
+        'echo "$(gh pr merge 54)"',
+        "echo `gh pr merge 54`",
+        "(cd /repo; gh pr merge 54)",
+        "echo $(echo $(gh pr merge 54))",
+        'env -u NAME -C /tmp -P /bin FOO=1 bash -c "gh pr merge 54"',
+        "env -S 'bash -c \"gh pr merge 54\"'",
+        "g$'h' pr merge 54",
+    )
+    for command in commands:
+        assert ap.decide_shell(command).kind == ASK, command
+        assert claude(bash(command))[0] == ASK
+        assert claude(bash(command), {"HARNESS_UNATTENDED": "1"})[0] == DENY
+    for command in ("echo '$(gh pr merge 54)'", "echo '(`gh pr merge 54`)'", "echo $(gh pr view 54)"):
+        assert ap.decide_shell(command).kind == ABSTAIN, command
+    for command in ("echo $(gh pr merge 54", "echo `gh pr merge 54", "env -u"):
+        assert ap.decide_shell(command).kind == ASK, command

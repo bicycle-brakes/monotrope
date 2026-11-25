@@ -42,6 +42,7 @@ The module also renders what hosts read:
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import re
 import shlex
@@ -232,6 +233,7 @@ def split_command(text: str) -> list[str]:
     pending: list[tuple[str, bool]] = []
     quote: str | None = None
     i, n = 0, len(text)
+    depth = 0
 
     def flush() -> None:
         part = "".join(current).strip()
@@ -246,13 +248,13 @@ def split_command(text: str) -> list[str]:
             quote = None if char == "'" else quote
             i += 1
             continue
-        if quote == '"':
+        if quote in ('"', "`"):
             if char == "\\" and i + 1 < n:
                 current.append(text[i : i + 2])
                 i += 2
                 continue
             current.append(char)
-            quote = None if char == '"' else quote
+            quote = None if char == quote else quote
             i += 1
             continue
         if char == "\\":
@@ -262,7 +264,7 @@ def split_command(text: str) -> list[str]:
             current.append(text[i : i + 2])
             i += 2
             continue
-        if char in "'\"":
+        if char in "'\"`":
             quote = char
             current.append(char)
             i += 1
@@ -286,6 +288,22 @@ def split_command(text: str) -> list[str]:
                 pending.append((delimiter, strip_tabs))
             current.append(text[i:j])
             i = j
+            continue
+        if char == "(":
+            depth += 1
+            current.append(char)
+            i += 1
+            continue
+        if char == ")":
+            depth -= 1
+            if depth < 0:
+                raise ShellSyntaxError("unexpected closing parenthesis")
+            current.append(char)
+            i += 1
+            continue
+        if depth:
+            current.append(char)
+            i += 1
             continue
         if char == "\n":
             flush()
@@ -318,8 +336,95 @@ def split_command(text: str) -> list[str]:
         i += 1
     if quote is not None:
         raise ShellSyntaxError(f"a {quote} quote never closes")
+    if depth:
+        raise ShellSyntaxError("nested command never closes")
     flush()
     return parts
+
+
+def nested_commands(text: str) -> tuple[str, list[str]]:
+    """Replace executable nesting with inert words and return its command texts."""
+    nested: list[str] = []
+
+    def scan(start: int, closing: str | None = None) -> tuple[str, int]:
+        out: list[str] = []
+        quote: str | None = None
+        i = start
+        while i < len(text):
+            c = text[i]
+            if c == "\\" and quote != "'":
+                if i + 1 >= len(text):
+                    raise ShellSyntaxError("unfinished escape")
+                out.append(text[i : i + 2])
+                i += 2
+                continue
+            if quote == "'":
+                out.append(c)
+                if c == "'":
+                    quote = None
+                i += 1
+                continue
+            if c == "'" and quote is None:
+                quote = "'"
+                out.append(c)
+                i += 1
+                continue
+            if c == '"':
+                quote = None if quote == '"' else '"'
+                out.append(c)
+                i += 1
+                continue
+            if closing and c == closing and quote is None:
+                return "".join(out), i + 1
+            if c == "`":
+                end = i + 1
+                while end < len(text):
+                    if text[end] == "\\":
+                        end += 2
+                    elif text[end] == "`":
+                        break
+                    else:
+                        end += 1
+                if end >= len(text):
+                    raise ShellSyntaxError("backtick substitution never closes")
+                nested.append(text[i + 1 : end])
+                out.append("placeholder")
+                i = end + 1
+                continue
+            if text.startswith("$(", i) or (c == "(" and quote is None):
+                if text.startswith("$((", i):
+                    raise ShellSyntaxError("arithmetic substitution cannot be resolved")
+                inner, i = scan(i + (2 if c == "$" else 1), ")")
+                nested.append(inner)
+                out.append("placeholder")
+                continue
+            if c == ")" and quote is None:
+                raise ShellSyntaxError("unexpected closing parenthesis")
+            out.append(c)
+            i += 1
+        if closing:
+            raise ShellSyntaxError("nested command never closes")
+        if quote:
+            raise ShellSyntaxError(f"a {quote} quote never closes")
+        return "".join(out), i
+
+    outer, _ = scan(0)
+    return outer, nested
+
+
+def decode_ansi_quotes(part: str) -> str:
+    """Decode ANSI-C words before rule matching, refusing unsupported escapes."""
+
+    def replace(match: re.Match[str]) -> str:
+        try:
+            value = codecs.decode(match.group(1), "unicode_escape")
+        except (ValueError, UnicodeError) as exc:
+            raise ShellSyntaxError("invalid ANSI-C quote") from exc
+        if "\\" in value or "\x00" in value:
+            raise ShellSyntaxError("unsupported ANSI-C escape")
+        return shlex.quote(value)
+
+    return re.sub(r"\$'((?:\\.|[^'\\])*)'", replace, part)
 
 
 def shell_c_command(part: str) -> str | None:
@@ -333,8 +438,30 @@ def shell_c_command(part: str) -> str | None:
         i += 1
     if i < len(tokens) and Path(tokens[i]).name == "env":
         i += 1
-        while i < len(tokens) and (tokens[i].startswith("-") or _ASSIGNMENT.fullmatch(tokens[i])):
-            i += 1
+        expansions = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token in ("-u", "--unset", "-C", "--chdir", "-P", "--path"):
+                if i + 1 >= len(tokens):
+                    raise ShellSyntaxError("env option lacks its argument")
+                i += 2
+            elif token in ("-S", "--split-string"):
+                if i + 1 >= len(tokens):
+                    raise ShellSyntaxError("env split-string lacks its argument")
+                expansions += 1
+                if expansions > MAX_NESTING:
+                    raise ShellSyntaxError("env split-string nesting too deep")
+                try:
+                    tokens[i : i + 2] = shlex.split(tokens[i + 1])
+                except ValueError as exc:
+                    raise ShellSyntaxError("invalid env split-string") from exc
+            elif token == "--":
+                i += 1
+                break
+            elif token.startswith("-") or _ASSIGNMENT.fullmatch(token):
+                i += 1
+            else:
+                break
     if i >= len(tokens) or Path(tokens[i]).name not in SHELLS:
         return None
     i += 1
@@ -362,15 +489,21 @@ def decide_shell(command: str, _depth: int = 0) -> Decision:
     if _depth > MAX_NESTING:
         return Decision(ASK, (f"shell -c nesting deeper than {MAX_NESTING} levels is not checked",))
     try:
+        # Split first so comments and heredoc bodies never become executable text.
         parts = split_command(command)
-    except ShellSyntaxError as exc:
+        decisions: list[Decision] = []
+        for part in parts:
+            outer, nested = nested_commands(part)
+            decoded = decode_ansi_quotes(outer)
+            words = shlex.split(decoded)
+            normalised = " ".join(words)
+            decisions.append(_matched(f"Bash({normalised})", f"`{part}`"))
+            shell_command = shell_c_command(decoded)
+            if shell_command is not None:
+                nested.append(shell_command)
+            decisions.extend(decide_shell(item, _depth + 1) for item in nested)
+    except (ShellSyntaxError, ValueError) as exc:
         return Decision(ASK, (f"the line cannot be split ({exc}), so its parts cannot be checked",))
-    decisions: list[Decision] = []
-    for part in parts:
-        decisions.append(_matched(f"Bash({part})", f"`{part}`"))
-        nested = shell_c_command(part)
-        if nested is not None:
-            decisions.append(decide_shell(nested, _depth + 1))
     return combine(decisions)
 
 
