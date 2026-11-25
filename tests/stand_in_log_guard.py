@@ -79,7 +79,7 @@ def _from_helper(frame) -> bool:
     while frame is not None:
         code = frame.f_code
         where = _real_file(code.co_filename)
-        if code.co_filename.startswith("<") or where == _THIS_FILE or where.startswith(_STDLIB):
+        if where == _THIS_FILE or where.startswith(_STDLIB):
             frame = frame.f_back
             continue
         return code.co_name in _HELPER_FUNCTIONS and where == _HELPER_FILE
@@ -90,7 +90,7 @@ def _caller(frame) -> str:
     """The first frame outside this module and the standard library."""
     while frame is not None:
         where = _real_file(frame.f_code.co_filename)
-        if where != _THIS_FILE and not where.startswith(_STDLIB) and not frame.f_code.co_filename.startswith("<"):
+        if where != _THIS_FILE and not where.startswith(_STDLIB):
             return f"{frame.f_code.co_filename}:{frame.f_lineno}"
         frame = frame.f_back
     return "unknown location"

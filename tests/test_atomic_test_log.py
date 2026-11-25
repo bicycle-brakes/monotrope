@@ -1471,3 +1471,48 @@ def test_counter_publication_is_atomic_across_log_generations(tmp_path: Path) ->
     assert snapshots, "the reader read no counter"
     incomplete = [snapshot for snapshot in snapshots if not _complete_counter(snapshot)]
     assert incomplete == [], incomplete[:3]
+
+
+def test_guard_reports_dynamic_callback(tmp_path: Path) -> None:
+    """A dynamic callback is the caller, even while a locked helper invokes it."""
+    script = r"""
+import os
+import sys
+from pathlib import Path
+import atomic_test_log as helper
+import stand_in_log_guard as guard
+
+if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+    def skip_dynamic(frame):
+        while frame is not None:
+            code = frame.f_code
+            where = guard._real_file(code.co_filename)
+            if code.co_filename.startswith("<") or where == guard._THIS_FILE or where.startswith(guard._STDLIB):
+                frame = frame.f_back
+                continue
+            return code.co_name in guard._HELPER_FUNCTIONS and where == guard._HELPER_FILE
+        return False
+    guard._from_helper = skip_dynamic
+
+guard.install()
+log = Path(sys.argv[1]) / "calls.jsonl"
+for target in (log, helper.counter_path(log)):
+    namespace = {"target": target}
+    exec(compile("def builder(index):\n    return {'key': 'a', 'raw': target.read_text()}\n", "<dynamic callback>", "exec"), namespace)
+    try:
+        helper.append_counted(log, "a", namespace["builder"])
+    except guard.RawStandInLogAccess:
+        pass
+    else:
+        raise AssertionError("dynamic callback raw access was not refused")
+    violations = guard.take_violations()
+    assert len(violations) == 1 and "<dynamic callback>" in violations[0], violations
+"""
+    run = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        cwd=HERE,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
