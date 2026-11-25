@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-24
 last_reviewed: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-s9r
@@ -28,7 +28,7 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
 
 ## Terms
 
-**Lane:** the change's persistent worktree and branch. **Attempt:** one model call and its resulting state. **Pinned commit:** the fixed input commit for that attempt.
+**Lane:** the change's persistent worktree and branch. **Attempt:** one model call and its resulting state. **Pinned commit:** the fixed input commit for that attempt. **Runner-owned records:** all of `findings.md` and the `Time used` section of `plan.md`; the model owns the rest of `plan.md`, including the criterion ledger.
 
 ## Acceptance criteria
 
@@ -44,9 +44,9 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* The runner misses a change, continues, reverts it, omits its path, or checks after landing or writing records.
    *Basis:* `decisions.md#Q-26`, `decisions.md#Q-27`
 
-4. When an isolated attempt is created, its worktree is located beneath `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/<repository-id>/<lane-digest>/<invocation-id>/`.
+4. When an isolated attempt is created, its worktree is located beneath `${XDG_STATE_HOME:-~/.local/state}/coding-harness/attempts/<repository-id>/<lane-digest>/<invocation-id>/`, with the repository id derived from the real path of the common Git directory and the lane digest from the real path of the lane top level.
    *Refuted by:* An attempt is created anywhere outside that directory.
-   *Basis:* `decisions.md#Q-30`, `decisions.md#Q-39`
+   *Basis:* `decisions.md#Q-30`, `decisions.md#Q-39`, `decisions.md#Q-47`
 
 5. When worktrees are discovered or loop-record keys scanned, attempt worktrees are excluded.
    *Refuted by:* An attempt is treated as a lane or contributes a loop-record key.
@@ -56,13 +56,13 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* An attempt lacks its identifier, lock, process id, start time or state-directory record.
    *Basis:* `decisions.md#Q-30`, `decisions.md#Q-31`
 
-7. When the runner starts, it restores permissions after a crash, saves a dead attempt’s tree under that invocation’s refs before pruning only its own repository’s attempts, and reports unlocked attempts without removing them; a process is dead when its id and start time no longer match a live process.
-   *Refuted by:* A live or unlocked attempt is removed, a dead tree is lost, a reused process id prevents pruning, an unlocked attempt is not reported, or permissions remain unrestored.
-   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-29`, `decisions.md#Q-37`, `decisions.md#Q-39`, `decisions.md#Q-40`
+7. When the runner starts, it restores permissions after a crash, checks the saved pre-attempt environment checksum and performs criterion 9 recovery on a mismatch, saves dead attempt worktrees under their own invocation refs before pruning only attempt worktrees of its own repository, and reports unlocked and quarantined attempts without removing them; a process is dead when its id and start time no longer match a live process.
+   *Refuted by:* A live or unlocked attempt is removed, a dead tree is lost, a reused process id prevents pruning, an unlocked attempt is not reported, or permissions remain unrestored, or a crashed attempt’s environment change is missed.
+   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-29`, `decisions.md#Q-37`, `decisions.md#Q-39`, `decisions.md#Q-40`, `decisions.md#Q-45`, `decisions.md#Q-46`, `decisions.md#Q-47`
 
-8. While an isolated attempt runs, both the lane’s real Python environment and Pi directories are linked and every entry recursively made read-only; another invocation on that lane is refused while a live attempt holds them read-only; their reproducible installed package versions and Pi version are checksummed before and after the attempt.
+8. While an isolated attempt runs, both the lane’s real Python environment and Pi directories are linked and every entry recursively made read-only without following symlinks; another invocation on that lane is refused while a live attempt holds them read-only; their reproducible installed package versions and Pi version are checksummed before and after the attempt.
    *Refuted by:* Either link or protection is absent, an ordinary write succeeds, or a change to the recorded versions is missed.
-   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-38`
+   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-38`, `decisions.md#Q-47`
 
 9. When a shared environment checksum differs, the runner rejects the attempt, restores write permissions, deletes and rebuilds `.venv`, reinstalls Pi and compares the resulting package versions and Pi version to the pre-attempt checksum; an ineffective restoration stops the run.
    *Refuted by:* The changed environment is accepted, recovery is omitted, comparison uses timestamps or bytecode, or a still-different restoration continues.
@@ -81,10 +81,10 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Basis:* `decisions.md#Q-5`
 
 13. When restoration is refused or ineffective, the lane changes, or an internal runner failure occurs including moved HEAD, checkpoint rollback, runner setup failure or a saved-state merge conflict, the whole run stops without fallback.
-   *Refuted by:* A further route starts after any such failure, including a saved-state merge conflict; the saved state remains inspectable.
+   *Refuted by:* A further route starts after any such failure, including a saved-state merge conflict, or the saved state is lost after such a conflict.
    *Basis:* `decisions.md#Q-27`, `decisions.md#Q-34`, `decisions.md#Q-41`
 
-14. When an isolated attempt ends, its worktree is removed and its saved state remains inspectable under the change’s attempt refs, including tracked changes, untracked files, modes and symlinks but excluding the environment links.
+14. When an isolated attempt ends without quarantine, its worktree is removed and its saved state remains inspectable under the change’s attempt refs, including tracked changes, untracked files, modes and symlinks but excluding the environment links.
    *Refuted by:* A completed worktree remains, saved state is lost or incomplete, or an environment link is saved.
    *Basis:* `decisions.md#Q-29`
 
@@ -104,21 +104,21 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* An attempt starts with pending records uncommitted or without those records in its pinned tree.
    *Basis:* `decisions.md#Q-26`
 
-19. When the first pull request lands, repair is isolated while draft and implement use the same lifecycle without a separate worktree, retaining invocation records, locks, lane checks, checksums and saved-state fall-through.
-   *Refuted by:* A writing verb bypasses the lifecycle, repair is not isolated, or a non-isolated verb omits a required lifecycle operation; non-isolated verbs perform only the pre-attempt lane check and checksums, not the post-attempt lane comparison or read-only protection; after failure their tracked and new untracked state is saved and the pinned tracked state restored and new untracked files removed before the next attempt, including after checksum rejection, without removing ignored files.
-   *Basis:* `decisions.md#Q-31`, `decisions.md#Q-35`
+19. When the first pull request lands, repair is isolated while draft and implement use the same lifecycle without a separate worktree, retaining invocation records, locks, pre-attempt lane checks, checksums and saved-state fall-through; after failure the eligible state is saved and pinned tracked state restored and new untracked files removed before the next attempt, including after checksum rejection, while ignored files are left alone, and post-attempt lane comparison and read-only protection do not run.
+   *Refuted by:* A writing verb bypasses the lifecycle, repair is not isolated, a required operation is omitted, a post-attempt lane comparison or read-only protection runs without isolation, restoration is omitted, or an ignored file is removed.
+   *Basis:* `decisions.md#Q-31`, `decisions.md#Q-35`, `decisions.md#Q-44`, `decisions.md#Q-47`
 
 20. When draft and implement are isolated in the second pull request, the maintainer has first recorded in `decisions.md` a night check naming at least three repair runner invocations, each with at least one isolated attempt, with no lane damage or isolation-caused failure.
    *Refuted by:* Either verb remains unisolated in the second pull request or it proceeds without that evidence.
    *Basis:* `decisions.md#Q-31`, `decisions.md#Q-43`
 
-21. When the runner reads or writes an attempt record, lock or saved-state index, it uses schema-validated JSON in the attempts state directory; the record contains invocation id, change, verb, route, pinned base, worktree path, repository root, lane worktree, real environment paths, process id and start time, and state, while the index maps each attempt to its saved ref and base.
+21. When the runner reads or writes an attempt record, lock or saved-state index, it uses schema-validated JSON in the attempts state directory; the record contains invocation id, change, verb, route, pinned base, worktree path, repository root, lane worktree, real environment paths, runner and model process-group ids and start times, pre-attempt environment checksum, and state, while the index maps each attempt to its saved ref and base.
    *Refuted by:* Malformed JSON or missing required fields is accepted, or state is stored inside a lane or attempt worktree.
-   *Basis:* `decisions.md#Q-30`, `decisions.md#Q-38`, `decisions.md#Q-39`
+   *Basis:* `decisions.md#Q-30`, `decisions.md#Q-38`, `decisions.md#Q-39`, `decisions.md#Q-47`
 
 22. When the doctrine describes writing-call failures, `docs/WORKFLOW.md` section 4 and `AGENTS.md` describe the declared saved-state fallback and leak-refusal stop, and the new ADR partially supersedes ADR 0017 decision 2 and ADR 0016 decision 4.
-   *Refuted by:* Any named draft, implement or repair passage still requires baseline restoration or unconditional stop, or permits fallback after leak refusal, or either partial supersession is missing.
-   *Basis:* `decisions.md#Q-32`
+   *Refuted by:* Any named draft, implement or repair passage still requires the old restore-and-stop behavior or unconditional stop, or permits fallback after leak refusal, or either partial supersession is missing.
+   *Basis:* `decisions.md#Q-32`, `decisions.md#Q-47`
 
 23. When an isolated attempt starts, it refuses before the model call if either the lane’s Python environment or pinned Pi is missing, including an installed Pi with a version different from the pin, and names the setup remedy.
    *Refuted by:* A model starts without either dependency or the refusal omits `make venv` or `tools/pi/install.sh` as applicable.
@@ -128,9 +128,9 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
    *Refuted by:* The same endpoint is retried, implement lacks Sonnet, or repair's old preconditions block the different endpoint.
    *Basis:* `decisions.md#Q-27`, `decisions.md#Q-41`
 
-25. When an attempt ends, the runner recursively adds the owner’s write bit to every entry of both real environment directories before recovery or return.
+25. When an attempt ends, the runner recursively adds the owner’s write bit to every entry of both real environment directories without following symlinks before recovery or return.
    *Refuted by:* A successful, failed or rejected attempt leaves either directory read-only.
-   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-38`
+   *Basis:* `decisions.md#Q-28`, `decisions.md#Q-38`, `decisions.md#Q-47`
 
 26. When the runner finishes an isolated attempt, its answer and diagnostics are stored by the runner in the lane's git directory and survive removal of the attempt worktree.
    *Refuted by:* An answer or diagnostic is absent after removal or is stored only in the attempt worktree.
@@ -155,6 +155,31 @@ At baseline 91d19b8a1604, failed attempts wrote into the lane and required manua
 31. When the worktree doctrine is updated, `AGENTS.md` and `docs/WORKFLOW.md` both state the harness-neutral exception that attempt worktrees are detached under the state directory rather than under `.claude/worktrees`.
    *Refuted by:* Either document omits or contradicts the exception.
    *Basis:* `decisions.md#Q-43`
+
+
+32. When an attempt lands, the runner discards the attempt's changes to `findings.md` and takes its `plan.md` with `Time used` replaced by the lane's section.
+   *Refuted by:* Model edits to findings land, model plan edits are lost, or the lane's time records are replaced by the attempt's.
+   *Basis:* `decisions.md#Q-44`
+
+33. When an attempt falls through, the runner excludes runner-owned records from save, restore and three-way merge and writes the failed attempt's records after restoration, committing them before the next attempt.
+   *Refuted by:* Runner-owned records enter the saved state or merge, are lost on restoration, or are written before restoration or not committed before the next attempt.
+   *Basis:* `decisions.md#Q-44`
+
+34. When the checks in criteria 28 or 29 detect a difference, the runner quarantines the attempt, marks its record `quarantined`, saves nothing, runs no further Git command in its worktree and leaves it for inspection; later prune reports it without removal.
+   *Refuted by:* The runner saves, runs another Git command in the worktree, fails to mark or report quarantine, or removes the worktree.
+   *Basis:* `decisions.md#Q-45`
+
+35. When prune acts on a dead isolated attempt, it first validates that its path is under its recorded repository, lane and invocation directory and is a registered worktree of this repository, that its environment paths match the lane's recomputed real environment paths, and that its ref key matches its invocation; it quarantines and reports any invalid record.
+   *Refuted by:* An invalid record is acted on, not quarantined, or not reported.
+   *Basis:* `decisions.md#Q-46`
+
+36. When prune encounters a crashed non-isolated attempt, it saves only a snapshot under the dead invocation's refs and never resets the lane, which remains subject to the pre-attempt cleanliness check until cleaned by hand.
+   *Refuted by:* Prune resets the lane, fails to save the snapshot, or a dirty lane starts another attempt.
+   *Basis:* `decisions.md#Q-46`
+
+37. When prune acts after a runner crash, it ends a surviving model process group identified by its recorded process id and start time before recovery or snapshotting.
+   *Refuted by:* Recovery or snapshotting starts while the matching model process group remains alive, or an unrelated process is ended after identity reuse.
+   *Basis:* `decisions.md#Q-47`
 
 ## Non-goals
 
