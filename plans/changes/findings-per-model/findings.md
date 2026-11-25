@@ -720,7 +720,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | implementation | `scripts/check_finding_duplicates.py`, `marks_duplicate` | A newly added row with status `rejected — same as L1-1: see L2-2` passes the duplicate-form gate, although it names `L1-1` as a duplicate and does not use the required canonical form. The status parser rejects the trailing ID, so `marks_duplicate` returns false and the gate reports no finding. The report also marks this legacy status unreadable instead of recognizing the duplicate. [Criteria 7 and 9] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | base | `scripts/check_finding_duplicates.py`, `marks_duplicate` | A newly added row with status `rejected — same as L1-1: see L2-2` passes the duplicate-form gate, although it names `L1-1` as a duplicate and does not use the required canonical form. The status parser rejects the trailing ID, so `marks_duplicate` returns false and the gate reports no finding. The report also marks this legacy status unreadable instead of recognizing the duplicate. [Criteria 7 and 9] | Codex | taken — maintainer 2026-11-25, structural (third case of the status-reading mechanism): the duplicate gate (scripts/check_finding_duplicates.py) and the report use one shared parse result from findings_reader; a status that names a row ID but does not parse fails the gate | — |
 
 Phase 6 verdict: codex 01a20fe3-dadd-7523-b3fa-a0c20a3131db, 2026-11-25
 Reviewer session: codex 01a20fe3-dadd-7523-b3fa-a0c20a3131db — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
