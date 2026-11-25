@@ -2291,8 +2291,11 @@ day session would ask:
    and the run continues. The runner automates this once bead
    coding-harness-m98e lands.
 2. **A further case of the same mechanism at a phase-6 re-check:** record
-   the finding, park that pull request and continue with the next queue
-   item; the maintainer decides it in the morning.
+   the finding and take the structural remedy that closes the mechanism at
+   one choke point, recorded in the bead notes and named in the handover
+   (standing grant, maintainer 2026-11-25). Only a `Boundary`, a remedy that
+   changes the spec or its criteria, or a security question parks that pull
+   request for the maintainer; the run continues with the next queue item.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the
