@@ -618,7 +618,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/frontmatter-batch-log/decisions.md`](changes/frontmatter-batch-log/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/findings.md`](changes/frontmatter-batch-log/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/plan.md`](changes/frontmatter-batch-log/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
 | [`changes/frontmatter-batch-log/research.md`](changes/frontmatter-batch-log/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/spec.md`](changes/frontmatter-batch-log/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
