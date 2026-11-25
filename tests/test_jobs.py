@@ -867,3 +867,41 @@ def test_runner_classifier_skips_launchers() -> None:
     assert jobs.is_runner_verb(["env", "-i", "FOO=bar", "python3", "-u", "scripts/stage2.py", "review"])
     assert jobs.is_runner_verb(["uv", "run", "--no-project", "python3.12", "scripts/stage2.py", "review"])
     assert not jobs.is_runner_verb(["env", "python3", "-c", "scripts/stage2.py", "review"])
+
+
+def test_token_membership_uses_environment_not_arguments(monkeypatch) -> None:
+    """An argument resembling the token never authorizes signalling its process."""
+    token = "HARNESS_JOB_TOKEN=job"
+    started = "Mon Jan 1 00:00:00 2024"
+    procs = [
+        job_containment.Proc(100, 1, 100, 1, "?", "S", started, "job"),
+        job_containment.Proc(200, 1, 200, 1, "?", "S", started, f"editor {token}"),
+        job_containment.Proc(300, 1, 300, 1, "?", "S", started, "child"),
+        job_containment.Proc(400, 1, 400, 1, "?", "S", started, "unreadable"),
+    ]
+    monkeypatch.setattr(job_containment.PsBackend, "processes", lambda _self: procs)
+    monkeypatch.setattr(job_containment, "_run", lambda *_a, **_k: f"200 editor {token}\n300 child {token}\n")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(
+        job_containment,
+        "_linux_environment",
+        lambda pid: {
+            100: b"OTHER=value\0",
+            200: b"OTHER=value\0",
+            300: token.encode() + b"\0",
+            400: None,
+        }[pid],
+        raising=False,
+    )
+    backend = job_containment.PsBackend()
+    assert backend.token_holders(token) == {300}, "only exact environment entries establish membership"
+
+    # KERN_PROCARGS2 contains an executable path, padding, argc arguments, then environment.
+    import struct
+
+    data = struct.pack("=i", 2) + b"/bin/editor\0\0editor\0" + token.encode() + b"\0OTHER=x\0"
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(job_containment, "_darwin_procargs", lambda _pid: data, raising=False)
+    assert backend.token_holders(token) == set(), "an argv entry is not an environment entry"
+    data += token.encode() + b"\0"
+    assert backend.token_holders(token) == {100, 200, 300, 400}

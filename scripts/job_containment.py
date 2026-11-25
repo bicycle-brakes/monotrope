@@ -25,12 +25,15 @@ The backend is a seam: `PsBackend` reads `ps`. A Linux cgroup backend can follow
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import os
 import signal
 import subprocess
+import sys
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 STOP_GRACE = 5.0  # seconds between SIGTERM and SIGKILL
 KILL_WAIT = 2.0  # seconds a stop waits for killed members to vanish before it names survivors
@@ -93,6 +96,57 @@ def start_epoch(text: str | None) -> float | None:
         return None
 
 
+def _linux_environment(pid: int) -> bytes | None:
+    try:
+        return Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        return None
+
+
+def _darwin_procargs(pid: int) -> bytes | None:
+    """Read KERN_PROCARGS2, returning None for inaccessible or vanished processes."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    sysctl = libc.sysctl
+    sysctl.argtypes = [
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_uint,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+    ]
+    sysctl.restype = ctypes.c_int
+    mib = (ctypes.c_int * 3)(1, 49, pid)  # CTL_KERN, KERN_PROCARGS2, pid
+    size = ctypes.c_size_t()
+    if sysctl(mib, 3, None, ctypes.byref(size), None, 0) != 0 or not size.value:
+        return None
+    buf = ctypes.create_string_buffer(size.value)
+    if sysctl(mib, 3, buf, ctypes.byref(size), None, 0) != 0:
+        return None
+    return buf.raw[: size.value]
+
+
+def _darwin_environment(data: bytes | None) -> bytes | None:
+    if data is None or len(data) < ctypes.sizeof(ctypes.c_int):
+        return None
+    width = ctypes.sizeof(ctypes.c_int)
+    argc = int.from_bytes(data[:width], sys.byteorder, signed=True)
+    if argc < 0:
+        return None
+    end = data.find(b"\0", width)
+    if end < 0:
+        return None
+    offset = end + 1
+    while offset < len(data) and data[offset] == 0:
+        offset += 1
+    for _ in range(argc):
+        end = data.find(b"\0", offset)
+        if end < 0:
+            return None
+        offset = end + 1
+    return data[offset:]
+
+
 class PsBackend:
     """Finds processes through `ps`; signals through `os.kill`."""
 
@@ -124,11 +178,17 @@ class PsBackend:
             return None
 
     def token_holders(self, token: str) -> set[int]:
+        expected = os.fsencode(token)
         found = set()
-        for line in (_run(["ps", "eww", "-axo", "pid=,command="]) or "").splitlines():
-            parts = line.strip().split(None, 1)
-            if len(parts) == 2 and parts[0].isdigit() and token in parts[1].split():
-                found.add(int(parts[0]))
+        for proc in self.processes():
+            if sys.platform == "darwin":
+                environment = _darwin_environment(_darwin_procargs(proc.pid))
+            elif sys.platform.startswith("linux"):
+                environment = _linux_environment(proc.pid)
+            else:
+                environment = None
+            if environment is not None and expected in environment.split(b"\0"):
+                found.add(proc.pid)
         return found
 
     def alive(self, pid: int, start: str) -> bool:

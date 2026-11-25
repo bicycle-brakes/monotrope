@@ -524,7 +524,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | BLOCKER | MAINT | base | scripts/job_containment.py:126 | Stopping a job can terminate an unrelated process whose command-line arguments contain `HARNESS_JOB_TOKEN=<job-id>`. The token check searches the combined command and environment text returned by `ps`, so it treats that argument as proof of job membership and signals the process. The process may have no connection to the job. [Criterion 3; Boundary] | Codex | taken — structural (standing grant 2026-11-25; one choke point for token membership): PsBackend.token_holders reads each process's environment separately from its arguments — on macOS through sysctl KERN_PROCARGS2 (argc, then argv, then the environment block), on Linux through /proc/<pid>/environ — and a process is a token holder only when one environment entry equals exactly HARNESS_JOB_TOKEN=<job-id>; the combined `ps eww` text is no longer read; a process whose environment cannot be read is not a token holder; an argument containing the token never makes a member | — |
+| F-1 | BLOCKER | MAINT | base | scripts/job_containment.py:126 | Stopping a job can terminate an unrelated process whose command-line arguments contain `HARNESS_JOB_TOKEN=<job-id>`. The token check searches the combined command and environment text returned by `ps`, so it treats that argument as proof of job membership and signals the process. The process may have no connection to the job. [Criterion 3; Boundary] | Codex | fixed — tests/test_jobs.py::test_token_membership_uses_environment_not_arguments | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -532,3 +532,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a212ef-babf-71a0-8c94-06cd8138ea2f, 2026-11-25
 Reviewer session: codex 01a212ef-babf-71a0-8c94-06cd8138ea2f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5883 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
