@@ -39,27 +39,32 @@ Explore fallback: Stage 1, Claude Haiku 5.5 (`claude-haiku-5-5`), because GLM th
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_agent_policy.py::test_rule_sources_preserve_permissions — a rule is missing, duplicated or reclassified.
-- 2: not yet written tests/test_agent_policy.py::test_render_preserves_unrelated_settings — an unrelated setting changes.
-- 3: not yet written tests/test_agent_policy.py::test_adapters_match_shared_check — an adapter disagrees for shell or MCP input.
-- 4: not yet written tests/test_agent_policy.py::test_mcp_merge_names_normalised — an alternative separator abstains.
-- 5: not yet written tests/test_agent_policy.py::test_compound_parts_use_strongest_decision — a covered part is ignored or deny weakened.
-- 6: not yet written tests/test_agent_policy.py::test_quoted_operators_do_not_split — quoted text is treated as a command.
-- 7: not yet written tests/test_agent_policy.py::test_shell_c_command_is_checked — a nested merge abstains.
-- 8: not yet written tests/test_agent_policy.py::test_unattended_asks_are_denied — an unattended ask is not denied.
-- 9: not yet written tests/test_agent_policy.py::test_attended_environment — unset, empty or zero alone causes denial.
-- 10: not yet written tests/test_agent_policy.py::test_claude_night_child_environment — the child lacks the signal.
-- 11: not yet written tests/test_agent_policy.py::test_antigravity_night_child_environment — the child lacks the signal.
-- 12: not yet written tests/test_agent_policy.py::test_unmatched_input_abstains — an unrelated input is blocked.
-- 13: not yet written tests/test_agent_policy.py::test_generated_configuration_drift_fails — altered rules or registration fields pass.
-- 14: not yet written tests/test_agent_policy.py::test_layer_two_and_night_protection — a deny, layer-two ask or overlay conversion is lost.
-- 15: not yet written tests/test_agent_policy.py::test_failures_deny_with_fault — a caught fault passes or lacks a message.
-- 16: not yet written tests/test_agent_policy.py::test_unrepresentable_ask_denies — a host without ask receives abstain.
+- 1: tests/test_agent_policy.py::test_rule_sources_preserve_permissions — a rule is missing, duplicated or reclassified.
+- 2: tests/test_agent_policy.py::test_render_preserves_unrelated_settings — an unrelated setting changes.
+- 3: tests/test_agent_policy.py::test_adapters_match_shared_check — an adapter disagrees for shell or MCP input.
+- 4: tests/test_agent_policy.py::test_mcp_merge_names_normalised — an alternative separator abstains.
+- 5: tests/test_agent_policy.py::test_compound_parts_use_strongest_decision — a covered part is ignored or deny weakened.
+- 6: tests/test_agent_policy.py::test_quoted_operators_do_not_split — quoted text is treated as a command.
+- 7: tests/test_agent_policy.py::test_shell_c_command_is_checked — a nested merge abstains.
+- 8: tests/test_agent_policy.py::test_unattended_asks_are_denied — an unattended ask is not denied.
+- 9: tests/test_agent_policy.py::test_attended_environment — unset, empty or zero alone causes denial.
+- 10: tests/test_agent_policy.py::test_claude_night_child_environment — the child lacks the signal.
+- 11: tests/test_agent_policy.py::test_antigravity_night_child_environment — the child lacks the signal.
+- 12: tests/test_agent_policy.py::test_unmatched_input_abstains — an unrelated input is blocked.
+- 13: tests/test_agent_policy.py::test_generated_configuration_drift_fails — altered rules or registration fields pass.
+- 14: tests/test_agent_policy.py::test_layer_two_and_night_protection — a deny, layer-two ask or overlay conversion is lost.
+- 15: tests/test_agent_policy.py::test_failures_deny_with_fault — a caught fault passes or lacks a message.
+- 16: tests/test_agent_policy.py::test_unrepresentable_ask_denies — a host without ask receives abstain.
 - 17: not a test — the documented host check proves timeout and abnormal-exit protection or marks the host unsupported; a passing action or missing evidence refutes support.
 - 18: not a test — phase-6 review checks the support table names Codex unsupported and its follow-up bead; a missing state or bead refutes it.
+
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
 
 ## Time used
 
 2026-11-25 14:47:26–14:49:01 UTC, 96 s — draft · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 15:24:33–15:26:29 UTC, 116 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 16:01:10–16:03:29 UTC, 139 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 17:12:45–17:47:27 UTC, 2082 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/ci_gates.py` is shared execution infrastructure · measured by the runner
