@@ -46,3 +46,7 @@ reason: The change is a behaviour-preserving speed-up of one gate with a stated 
 
 [DETAIL] **D-11 (spec review S-7, timing at one commit)**: Reading A — one commit is checked out and both script versions run against that same tree (the base commit's script via `git show` into a temporary file, run with `--root` on the checkout), five runs each, median compared. Reason: the held set and the dirty state must be identical for a fair comparison.
 
+[DETAIL] **D-12 (spec review S-8, Git configuration)**: the oracle and the batch both run with `log.follow` forced off (`-c log.follow=false`) and with the repository's other configuration unchanged; the parity test sets `log.follow=true` in the synthetic repository to show the override holds. Reason: the single-path oracle must not follow renames when the batch cannot.
+
+[DETAIL] **D-13 (spec review S-9, running the base script; refines D-11)**: the base commit's whole `scripts/` directory is exported with `git archive` into a temporary directory and its `check_frontmatter_current.py` runs from there with `--root` on the checkout, so its sibling imports resolve as at the base. Reason: a lone copy of the script cannot import `venv_guard`.
+
