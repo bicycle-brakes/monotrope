@@ -44,8 +44,8 @@ Three test changes reduce avoidable work while preserving their existing checks 
    *Refuted by:* a wrong node result or one missing outcome violation being masked by another.
 7. When a bundled log-guard session finishes, its exit status, violation header, raw-read text and pass count match its known mix of outcomes, and its clean test has the expected result.
    *Refuted by:* an incorrect session-wide check, a missing or failing clean node, or an audit that no longer sets the exit status passing unnoticed in the session without self-failing nodes.
-8. When the pull request is prepared, it records one before and one after duration total per rewritten test function, summing all parametrized cases and phases, on the same machine with the same serial worker setting and identified base revision, together with the one-minute load average taken immediately before each measurement.
-   *Refuted by:* a missing total, phase, case, load reading or base revision, a different machine or worker setting, or a before/after load difference greater than 1.0.
+8. When the pull request is prepared, it records one before and one after duration total per rewritten test function, summing all parametrized cases and phases, on the same machine with the same serial worker setting and identified base revision, together with the machine name and architecture (`platform.node()` and `platform.machine()`), the exact pytest command line including its worker setting, and the one-minute load average taken immediately before each measurement.
+   *Refuted by:* a missing total, phase, case, machine identity, command, load reading or base revision, a different machine or command including worker setting, or a before/after load difference greater than 1.0.
 
 ## Non-goals
 

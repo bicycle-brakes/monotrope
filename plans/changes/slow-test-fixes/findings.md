@@ -62,3 +62,5 @@ Spec review commit: c256141e2f873a50fe9abe8c3c9318cbcab5394d
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | S-8 | MINOR | SPEC | fix-r1 | spec.md AC8; decisions.md D-3, D-10 | AC8 can be refuted by "a different machine or worker setting", but it only requires the pull request to record the duration totals, the load readings and the base revision. It does not require recording the machine or the pytest command and worker setting behind each total. So a reviewer of the pull request cannot tell a before total taken on another machine, or with `-n auto` instead of serial, from a matched pair. Those two refutation clauses cannot turn red from the evidence AC8 asks for. D-10 closed the same gap for load by requiring a recorded number; machine and worker setting still have nothing recorded. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-11 (2026-11-25) | — |
+
+Stage-2 call, 2026-11-25: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5806 commits, 12 rules.
