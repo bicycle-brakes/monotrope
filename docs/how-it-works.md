@@ -136,9 +136,10 @@ These are operator details; you can skip them on a first read.
 
 - All review calls go through one operator, OpenCode Go. The models come from
   several vendors; the data recipient is the same.
-- A prompt carries at most 2,000 diff lines; a cut at that total is recorded
-  and the round is not clean. The free round also bounds each file at 400
-  lines; that per-file cut is not recorded as a cut round.
+- A prompt carries at most 4,000 diff lines; a cut at that shared bound is
+  recorded and the round is not clean. The free round also bounds each file at
+  400 lines and stops adding files once its own 2,000-line total is reached;
+  those cuts are recorded as cut rounds too, so such a round is never clean.
 - `prepare-loop` probes each admitted candidate at least once; a probe that
   only ran out of time is retried once with a longer limit. Its receipt is
   bound to the worktree, the configuration and the diff and expires after 900

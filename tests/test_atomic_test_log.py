@@ -22,12 +22,14 @@ import ast
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path, PurePath
 from types import SimpleNamespace
+from xml.etree import ElementTree
 
 import atomic_test_log
 import pytest
@@ -1087,18 +1089,7 @@ def test_runtime_check_fails_a_test_that_swallows_the_refusal(tmp_path: Path) ->
     assert output.count("raw open of the declared stand-in log") >= 1, output
 
 
-@pytest.mark.parametrize("drain", [False, True])
-@pytest.mark.parametrize("workers", [0, 2])
-@pytest.mark.parametrize("outcome", ["pass", "skip", "xfail", "error", "finalizer", "setup"])
-def test_runtime_check_keeps_every_access_until_session_finish(
-    tmp_path: Path, workers: int, outcome: str, drain: bool
-) -> None:
-    """F6-10: even skip/xfail and draining the phase buffer cannot erase an access."""
-    project = tmp_path / "project"
-    project.mkdir()
-    for name in ("conftest.py", "stand_in_log_guard.py", "runner_clock_guard.py", "atomic_test_log.py"):
-        (project / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8")
-    source = """
+RECORDED_PRELUDE = """
 import pytest
 import stand_in_log_guard
 from pathlib import Path
@@ -1125,43 +1116,110 @@ def finalizer_access(request):
         access()
         pytest.skip("after finalizer access")
     request.addfinalizer(finalize)
-
-
-def test_recorded(request):
-    if OUTCOME == "setup":
-        request.getfixturevalue("setup_access")
-    elif OUTCOME == "finalizer":
-        request.getfixturevalue("finalizer_access")
-    else:
-        access()
-        if OUTCOME == "skip":
-            pytest.skip("after access")
-        elif OUTCOME == "xfail":
-            pytest.xfail("after access")
-        elif OUTCOME == "error":
-            raise ValueError("after access")
-
-
-def test_clean():
-    pass
 """
-    (project / "test_recorded.py").write_text(
-        f"OUTCOME = {outcome!r}\nDRAIN = {drain!r}\n" + _render(source), encoding="utf-8"
-    )
-    (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
-    run = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-n", str(workers), str(project)],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-    output = run.stdout + run.stderr
-    assert run.returncode == 1, output
-    assert "stand-in log access violations" in output, output
-    assert "test_recorded.py::test_recorded" in output, output
-    assert "raw read_text" in output, output
-    assert "1 passed" in output or "2 passed" in output, output
+
+# One node per outcome; each reaches the declared log through its own access path.
+RECORDED_OUTCOMES = {
+    "pass": "def test_pass():\n    access()\n",
+    "skip": 'def test_skip():\n    access()\n    pytest.skip("after access")\n',
+    "xfail": 'def test_xfail():\n    access()\n    pytest.xfail("after access")\n',
+    "error": 'def test_error():\n    access()\n    raise ValueError("after access")\n',
+    "finalizer": 'def test_finalizer(request):\n    request.getfixturevalue("finalizer_access")\n',
+    "setup": 'def test_setup(request):\n    request.getfixturevalue("setup_access")\n',
+}
+
+RECORDED_CLEAN = "def test_clean():\n    pass\n"
+
+
+def _recorded_sessions(drain: bool) -> dict[str, list[str]]:
+    """The two nested sessions of one worker/drain pair: the outcomes that fail on their own, and the rest.
+
+    With draining off, `pass` fails on its own (the call hook turns its access into an exception), so it
+    belongs with `error`; left in the other session it would hide an audit that no longer sets the exit status.
+    """
+    self_failing = ["error"] if drain else ["pass", "error"]
+    return {
+        "self-failing": self_failing,
+        "no-self-failing": [outcome for outcome in RECORDED_OUTCOMES if outcome not in self_failing],
+    }
+
+
+def _expected_node_result(outcome: str, drain: bool) -> str:
+    """The JUnit result each outcome node has (measured at 76ceacf6 with one node per session)."""
+    if outcome == "error" or (outcome == "pass" and not drain):
+        return "failure"
+    return "passed" if outcome == "pass" else "skipped"
+
+
+def _junit_results(report: Path) -> dict[str, str]:
+    """Each JUnit test case's name and result: failure, error, skipped or passed."""
+    results = {}
+    for case in ElementTree.parse(report).getroot().iter("testcase"):
+        kinds = {child.tag for child in case}
+        results[case.get("name")] = next((kind for kind in ("failure", "error", "skipped") if kind in kinds), "passed")
+    return results
+
+
+@pytest.mark.parametrize("drain", [False, True])
+@pytest.mark.parametrize("workers", [0, 2])
+def test_runtime_check_keeps_every_access_until_session_finish(tmp_path: Path, workers: int, drain: bool) -> None:
+    """F6-10: even skip/xfail and draining the phase buffer cannot erase an access.
+
+    All six outcomes run in two nested sessions per worker/drain pair: the session
+    without self-failing nodes exits 1 only through the audit, and every outcome
+    node is checked on its own result and its own recorded violation.
+    """
+    sessions = _recorded_sessions(drain)
+    assert sorted(outcome for outcomes in sessions.values() for outcome in outcomes) == sorted(RECORDED_OUTCOMES)
+    for session, outcomes in sessions.items():
+        project = tmp_path / session
+        project.mkdir()
+        for name in ("conftest.py", "stand_in_log_guard.py", "runner_clock_guard.py", "atomic_test_log.py"):
+            (project / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8")
+        nodes = [RECORDED_OUTCOMES[outcome] for outcome in outcomes]
+        source = "\n\n".join([RECORDED_PRELUDE, *nodes, RECORDED_CLEAN])
+        (project / "test_recorded.py").write_text(f"DRAIN = {drain!r}\n" + _render(source), encoding="utf-8")
+        (project / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+        report = tmp_path / f"{session}.xml"
+        run = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                "-n",
+                str(workers),
+                f"--junitxml={report}",
+                str(project),
+            ],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        output = run.stdout + run.stderr
+        expected = {f"test_{outcome}": _expected_node_result(outcome, drain) for outcome in outcomes}
+        expected["test_clean"] = "passed"
+        results = _junit_results(report)
+        assert results == expected, (session, output)
+        if session == "no-self-failing":
+            assert "failure" not in results.values() and "error" not in results.values(), (session, output)
+        assert run.returncode == 1, (
+            f"{session}: the session did not exit 1; the audit no longer sets the exit status\n{output}"
+        )
+        assert "stand-in log access violations" in output, output
+        assert "raw read_text" in output, output
+        audit = output.split("stand-in log access violations", 1)[1]
+        for outcome in outcomes:
+            assert f"test_recorded.py::test_{outcome}: raw read_text" in audit, (outcome, output)
+        assert "test_recorded.py::test_clean: raw" not in audit, output
+        # A passed call counts once: the clean node, a drained pass and the finalizer node, whose
+        # skip comes only in teardown after its call passed.
+        passes = 1 + ("finalizer" in outcomes) + (drain and "pass" in outcomes)
+        counts = re.findall(r"(\d+) passed", output)
+        assert counts and int(counts[-1]) == passes, (session, passes, output)
 
 
 # ---------------------------------------------------------------------------

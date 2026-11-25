@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-24
+updated: 2026-11-25
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1116,7 +1116,13 @@ implement or repair attempt's cheap checks and stops at the first red one
 (bead coding-harness-5tyh): read-only `.venv/bin/ruff check --force-exclude --no-cache` and
 `.venv/bin/ruff format --check --force-exclude --no-cache` over the same changed Python files, then
 `.venv/bin/python3 -m pytest -q -n auto` (parallel, as the `pytest` gate runs)
-over exactly the selected tests — in each surviving changed `tests/**/test_*.py`
+over exactly the selected tests. Its `-n auto` is bounded by the targeted check's
+worker policy, in the targeted and the full-mode preparation alike (bead
+coding-harness-bxxt.13): a nonempty `PYTEST_XDIST_AUTO_NUM_WORKERS` in its input
+environment stands, otherwise the bound the full check uses is computed from the
+machine's readings; the setting reaches this pytest launch only, never the
+caller's environment. The cheap checks still run outside the verify admission.
+The selected tests are, in each surviving changed `tests/**/test_*.py`
 file the top-level test functions that are new or differ from HEAD (a new file
 whole), the accepted plan's standing criterion-ledger test references as
 function ids, and, on a retry, the test ids pytest reported as failed in the
@@ -1768,7 +1774,8 @@ implementation diff: bounded hunks of source and test code against the merge
 base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
 not what OpenCode Go bills. The prompt carries the implementation diff up to
-the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
+the shared bound of `REVIEW_DIFF_MAX_LINES` (4000 lines); a cut, whether by
+that bound or by the free stage's own file or total limits, is recorded in the
 round, and a round over a cut diff never counts as clean (R-12, R-15). When
 every free member fails with a rate-limit (429) or unavailability error, the
 run drops the free stage and the Flash swarm takes the round in the same
@@ -1777,7 +1784,9 @@ coding-harness-pj98); the Flash round then has its own deadline, so that call
 can take two round limits. Any other failure still writes nothing. Round 2
 is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
-declaration — with the paid rounds' read-only tools and the same bounded diff.
+declaration — with the paid rounds' read-only tools. The Flash swarm and the ladder rounds receive
+the full change diff, subject to the same shared 4000-line bound, not the free
+stage's implementation-only diff.
 One deadline of `REVIEWER_MINUTES` covers the round's members and every
 replacement (R-8).
 
@@ -2215,7 +2224,10 @@ each learned on the night of 2026-10-29/30:
   coding-harness-gxwg): after its format step and cheap checks, `repair` runs
   the whole touched and linked test files, `ruff` on the touched Python files
   and the local gates the touched kinds of file feed, outside the lock, and
-  checkpoints on green. Where that coverage cannot be determined safely - a
+  checkpoints on green. A selected kit probe (`scripts/kit/probe.py`) runs its
+  own pytest serially, without an xdist `-n` option, so it stays bounded
+  outside the lock too, and its red blocks like any blocking gate (bead
+  coding-harness-bxxt.13). Where that coverage cannot be determined safely - a
   prompt, a shared test or execution configuration, an unclassified input, code
   with no linked test, an unreadable link inventory - it runs the admitted full
   `make verify` instead and says why in `findings.md` and the checkpoint
