@@ -239,3 +239,17 @@ Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1243 files, 5966 commits, 12 rules.
+
+## Hand steps for the orchestrator — 2026-11-25
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- L5-5 — `.agents/hooks.json` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: L5-5 in the loop record `/Users/mikypiky/.local/state/coding-harness/stage2/agent-policy-list@91ab0d17/loop.md`.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1243 files, 5972 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged

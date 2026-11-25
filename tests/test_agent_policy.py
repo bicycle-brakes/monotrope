@@ -673,17 +673,17 @@ DRIFT_MUTATIONS = (
     (_duplicate, "2 times"),
     (_reclassify, "the policy lists it as ask"),
     (_reorder, "order"),
-    (_claude_command, "registrations"),
+    (_claude_command, "command"),
     (_claude_matcher, "matcher"),
     (_claude_timeout, "timeout"),
     (_claude_missing, "registrations"),
-    (_agents_command, "registrations"),
+    (_agents_command, "command"),
     (_agents_matcher, "matcher"),
     (_agents_timeout, "timeout"),
 )
 
 
-def test_agent_policy_drift_goes_red_when_the_rendered_files_drift(tmp_path: Path) -> None:
+def test_generated_configuration_drift_fails(tmp_path: Path) -> None:
     root = _fresh_root(tmp_path / "clean")
     assert ap.check(root) == []
     assert ap.main(["--root", str(root), "check"]) == 0
@@ -941,3 +941,22 @@ def test_a_render_fault_blocks_with_the_reason_on_stderr(host: str, monkeypatch:
     assert code == 2
     assert json.loads(out)["decision"] == "deny"
     assert "render broke" in err
+
+
+@pytest.mark.parametrize("host", ["claude-code", "antigravity"])
+def test_edited_hook_command_is_replaced_without_removing_foreign_mentions(tmp_path: Path, host: str) -> None:
+    root = _fresh_root(tmp_path / host)
+    path = root / (".claude/settings.json" if host == "claude-code" else ".agents/hooks.json")
+    config = _read(path)
+    group = _ours(config)
+    group["hooks"][0]["command"] = "python3 scripts/agent_policy_hooks.py changed-host"
+    foreign = {"matcher": "Write", "hooks": [{"command": "echo scripts/agent_policy_hooks.py"}]}
+    config["hooks"]["PreToolUse"].append(foreign)
+    _write(path, config)
+    assert any("command" in problem for problem in ap.check(root))
+    ap.write(root)
+    groups = _read(path)["hooks"]["PreToolUse"]
+    assert foreign in groups
+    assert group not in groups
+    assert groups.count(ap.registration(host)) == 1
+    assert ap.check(root) == []

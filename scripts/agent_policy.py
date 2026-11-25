@@ -637,8 +637,28 @@ def _is_ours(group: object) -> bool:
     hooks = group.get("hooks")
     if not isinstance(hooks, list):
         return False
-    commands = {item["hooks"][0]["command"] for item in REGISTRATIONS.values()}
-    return any(isinstance(hook, dict) and hook.get("command") in commands for hook in hooks)
+
+    def runs_policy(command: object) -> bool:
+        if not isinstance(command, str):
+            return False
+        # The generated Antigravity interpreter is a shell expansion with spaces.
+        interpreter = REGISTRATIONS["antigravity"]["hooks"][0]["command"].split(" scripts/", 1)[0]
+        command = command.replace(interpreter, "python3")
+        try:
+            words = shlex.split(command)
+        except ValueError:
+            return False
+        for index, word in enumerate(words):
+            if not word.endswith("/scripts/" + HOOK_SCRIPT) and word != "scripts/" + HOOK_SCRIPT:
+                continue
+            previous = words[index - 1] if index else ""
+            if re.fullmatch(r"python(?:[0-9]+(?:\.[0-9]+)*)?", previous.rsplit("/", 1)[-1]):
+                return True
+            if index == 0 or previous in ("&&", "||", ";", "|"):
+                return True
+        return False
+
+    return any(isinstance(hook, dict) and runs_policy(hook.get("command")) for hook in hooks)
 
 
 def _event_groups(config: dict, label: str) -> list:
