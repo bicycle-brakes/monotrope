@@ -78,3 +78,57 @@ Research for `test-ci-shared-tree`, prepared for `plans/changes/test-ci-shared-t
 ## Not done in this run
 
 I did not run `scripts/stage2.py prepare-explore` or `explore`. The phase instructions say the runner, not this explorer, runs those commands, and my tools are read-only. I also did not write `research.md`; the runner does that from this output.
+
+Stage-2 call, 2026-11-25: explore · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-haiku-5-5 · reason GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu); second run with the bead text as topic · leak check clean over 1202 files, 5749 commits, 12 rules.
+
+## Runner exploration — 2026-11-25
+
+## Research for test-ci-shared-tree (bead coding-harness-bxxt.12, class bounded)
+
+This run replaces the earlier draft's "topic inferred" section. The topic now carries the bead text, and I checked each claim in it against the tree. The earlier draft's `_fixture_tree` material in `tests/test_workflow_entry.py` concerns a different isolation mechanism and is not evidence for this bead. I did not re-read it in this run.
+
+### What exists today
+
+- **The orphan-script test writes into the shared `scripts/` directory.** `test_the_glob_itself_finds_a_real_orphan_shell_script` in `tests/test_ci.py` creates `scripts/verwaistes_werkzeug__test_ci_nie_committen.sh` under `REPO_ROOT` (the write is at line 3619, inside the test's body). It removes the file in a `finally` block (lines 3632–3633). The test's own docstring says the file is untracked, so the kit probe in `scripts/kit/probe.py` never copies it. The write uses the real checkout, not a temporary copy.
+- **The test runs its assertion through `_scripts()`.** `_scripts()` in `tests/test_ci.py` globs `REPO_ROOT / "scripts"` for `*.py` and `*.sh` and drops names starting with `test_`. The test reads the file list at that moment, so the window in which the orphan exists is the window in which its glob runs.
+- **Two other tests in the same module also call `_scripts()` against the real `scripts/`:**
+  - the test whose docstring sits just above line 3568 (its `def` line was not read in this run), which asserts that no script without a caller lacks a declared reason;
+  - `test_every_script_has_a_test_or_a_declared_reason` (`tests/test_ci.py`, around line 3729), which asserts that every script has a test or a declared reason.
+  Both use the same glob and would see the orphan file if they ran while the test is in progress.
+- **Parallel runs are the default.** The pytest gate runs `python3 -m pytest tests/ -q -n auto`. The same command appears in `Makefile` (line 22), `.github/workflows/ci.yml` (line 82), `decisions/gates.yaml` (line 82) and `docs/governance/gate-catalog.md` (row `pytest`). With xdist, the orphan-script test and the two `_scripts()` callers may run in different worker processes against one shared directory.
+- **The kit probe caches its file list per process.** `_ls_files()` in `scripts/kit/probe.py` (lines 369–370) is decorated with `@functools.lru_cache(maxsize=1)`. It runs `git ls-files -z --cached` and `git ls-files -z --others --exclude-standard`. The first set is what the commit contains; the second is untracked files, classified as drift and not as a block. Each xdist worker is its own process, so each gets its own cache. The cache is not shared between workers.
+- **The probe's own test name is recorded in a comment.** `scripts/kit/probe.py` line 259 counts `tests.test_ci::test_the_glob_itself_finds_a_real_orphan_shell_script` in a dated count (61 → 62 on 2026-09-14). A rename or move of that test changes this count.
+- **The kit probe is a separate run.** The docstring of `tests/test_kit.py` (lines 6–8) says the probe runs as a step of its own in `ci.yml` and is not a pytest case. I did not read the probe step in `ci.yml`, so this is the docstring's claim, not a verified step.
+- **Existing tests that call the probe on the real repo.** `tests/test_kit.py` calls `probe.nach_rolle()` against the real repository at lines 58, 66, 352 and 404. `nach_rolle()` uses only the tracked set, so an untracked orphan file would not reach these calls.
+- **The bead's other items.** The string `worksteal` does not occur anywhere in the repository. The sub-bead `coding-harness-bxxt.18` (`--dist worksteal`) is therefore not in the tree. Its text lies outside what I could read.
+
+### Where it lives
+
+- Test: `tests/test_ci.py`, function `test_the_glob_itself_finds_a_real_orphan_shell_script` and helper `_scripts()`.
+- Glob callers: `tests/test_ci.py`, `_scripts()` and its two callers above.
+- Cache and file list: `scripts/kit/probe.py`, `_ls_files()`, `getrackte_dateien()`, `unversionierte_dateien()`, `nach_rolle()`.
+- Parallel-run wiring: `Makefile`, `.github/workflows/ci.yml`, `decisions/gates.yaml`, `docs/governance/gate-catalog.md`.
+
+### What is unclear
+
+- **Which module constant `REPO_ROOT` in `tests/test_ci.py` resolves to.** I read its use in the write and the glob, not its definition in that file. Whether it is the real checkout is inferred from the bead and the docstring, not read.
+- **The `def` of the test above line 3568.** The enclosing test's name was not read.
+- **Whether an in-process probe call can see the orphan.** `unversionierte_dateien()` is used at `scripts/kit/probe.py` line 502. I did not check whether any pytest test calls that path in-process while the orphan exists. If one does, the per-process cache could capture the orphan file.
+- **Whether the bead's stated prerequisites are already met.** The bead names `--dist worksteal` and a parallel kit probe as dependants. Neither is in the tree.
+- **Whether `ci.yml` builds the orphan path in a copy.** Not read.
+
+### Possible neighbours (seen in search results, not read)
+
+- `plans/changes/verify-two-slots/findings.md` contains the phrase "shared tree" (matched by the search; not read).
+- `plans/changes/archive/2026-11-06-verify-duration/` and `docs/research/2026-11-09-make-verify-long-term.md` cover the xdist and speed work (lines seen in search only).
+- `plans/INDEX.md` lists this change's research (line 693).
+
+### Files a change would have to touch (as far as read)
+
+- `tests/test_ci.py`: the orphan test (around lines 3605–3633) and possibly `_scripts()` (line 3532), if the glob is to see only the real inventory.
+- `scripts/kit/probe.py`: the comment at line 259 names the test id, so a rename or move touches it.
+- `plans/changes/test-ci-shared-tree/` (this research, then the usual phase artefacts).
+
+### Not done in this run
+
+I did not run `scripts/stage2.py prepare-explore` or `explore`; the runner does that. I wrote no file, and the research above is returned for the runner to write into `research.md`.
