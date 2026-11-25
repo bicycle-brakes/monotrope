@@ -77,6 +77,8 @@ class Sources:
         # (bead coding-harness-jik: deadline tests wait on this event, not on wall-clock delays).
         self.held: set[str] = set()
         self.held_marker: Path | None = None
+        # The held-set names of every recorded start at the moment the marker was first written.
+        self.marker_arrivals: list[str | None] | None = None
         # A redirect rule answers one request with (status, Location); a callable rule receives the
         # full request path, and a None Location sends no Location header at all. The request whose
         # query carries pi-version is the admitted hop, not the initial catalog request.
@@ -136,8 +138,10 @@ def sources():
                 state.overlap.wait(timeout=60)
             name = held_name(self.path)
             if name in state.held:
-                arrived = {held_name(p) for event, p in state.events if event == "start"}
-                if state.held_marker is not None and state.held <= arrived:
+                starts = [held_name(p) for event, p in state.events if event == "start"]
+                if state.held_marker is not None and state.held <= set(starts):
+                    if state.marker_arrivals is None:
+                        state.marker_arrivals = starts
                     state.held_marker.write_text("held")
                 state.stop.wait()
             state.stop.wait(delay)
@@ -269,6 +273,7 @@ def held_collect(tmp_path: Path, sources: Sources, held: set[str]) -> dict:
     bridge never reads, so exactly `2 - len(held)` reads remain answerable before the deadline.
     """
     sources.held = set(held)
+    sources.marker_arrivals = None
     sources.held_marker = tmp_path / f"held-{len(sources.requests)}"
     control = {"marker": str(sources.held_marker), "answered": 2 - len(sources.held)}
     return collect(tmp_path, sources, deadlineMs=10000, controlledDeadline=control)
@@ -933,9 +938,14 @@ def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, source
     assert len(pi_requests(sources)) == 1 and len([p for p, _ in sources.requests if p == "/metadata"]) == 1
     sources.overlap = None
     # Both slow past one shared deadline: Pi decides (exit 1), the models.dev timeout is a reason, never a retry.
-    sources.pi_delay = sources.metadata_delay = 60
+    # Both sources are held and the deadline fires by event once both are in flight, not after ten seconds.
+    # The event list starts fresh, so starts of the step above cannot satisfy the marker early.
     sources.requests.clear()
-    bridge = collect(tmp_path, sources, deadlineMs=10000)
+    sources.events.clear()
+    bridge = held_collect(tmp_path, sources, {"pi", "metadata"})
+    assert sorted(sources.marker_arrivals or []) == ["metadata", "pi"], (
+        "the deadline marker was written before both current-step requests started"
+    )
     assert bridge["sources"]["models_dev"]["outcome"] == "timeout"
     with pytest.raises(swarm.ResearchCatalogError) as failure:
         select(bridge)
@@ -943,7 +953,8 @@ def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, source
     assert len(sources.requests) == 2, "a timed-out read was retried"
     # Pi on time, models.dev timed out: a reasoned, required-slot-preserving selection; an explicit include is fatal.
     # models.dev is held and the deadline fires once Pi has answered (bead jik), not after a wall-clock bet.
-    sources.pi_delay = sources.metadata_delay = 0.0
+    sources.held = set()
+    sources.events.clear()
     bridge = held_collect(tmp_path, sources, {"metadata"})
     result = select(bridge)
     assert result["capability_reason"] == "timeout" and result["fixed"] == FIXED and result["selected"] == []

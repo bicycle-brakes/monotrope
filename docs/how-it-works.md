@@ -3,8 +3,8 @@ title: "How the workflow works — phases, models, classes and swarms"
 category: architecture
 status: proposed
 created: 2026-10-16
-last_reviewed: 2026-11-02
-updated: 2026-11-20
+last_reviewed: 2026-11-24
+updated: 2026-11-24
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -136,9 +136,10 @@ These are operator details; you can skip them on a first read.
 
 - All review calls go through one operator, OpenCode Go. The models come from
   several vendors; the data recipient is the same.
-- A prompt carries at most 2,000 diff lines; a cut at that total is recorded
-  and the round is not clean. The free round also bounds each file at 400
-  lines; that per-file cut is not recorded as a cut round.
+- A prompt carries at most 4,000 diff lines; a cut at that shared bound is
+  recorded and the round is not clean. The free round also bounds each file at
+  400 lines and stops adding files once its own 2,000-line total is reached;
+  those cuts are recorded as cut rounds too, so such a round is never clean.
 - `prepare-loop` probes each admitted candidate at least once; a probe that
   only ran out of time is retried once with a longer limit. Its receipt is
   bound to the worktree, the configuration and the diff and expires after 900
@@ -148,12 +149,12 @@ These are operator details; you can skip them on a first read.
   rung; a failed single rung is retired with
   `release-loop --stage-failed <model> --reason <text>`.
 - An implement or repair attempt fails fast: ruff and the attempt's own tests
-  run first and stop at the first red one. An implement attempt then runs the
-  full `make verify`. A repair runs a targeted check (the touched and linked
-  test files and the gates their file kinds need) and falls back to the full
-  `make verify` when that selection cannot cover it safely; the final review
-  runs a fresh full `make verify` of its own. A draft runs only its document
-  gates, not the full suite.
+  run first and stop at the first red one. Both implement and repair then run a
+  targeted check (the touched and linked test files and the gates their file
+  kinds need, ADR 0025) and fall back to the full `make verify` when that
+  selection cannot cover the change safely; the final review runs a fresh full
+  `make verify` of its own. A draft runs only its document gates, not the full
+  suite.
 - The runner is one call per verb, not a service. Between calls its state
   lives in git (the change folder, the branch, failed attempts under
   `refs/stage2/attempts/`) and in a state directory outside the repository
@@ -161,9 +162,10 @@ These are operator details; you can skip them on a first read.
   the loop record until the final review releases it into `findings.md`.
 - The `session` verb opens a macOS Terminal window through `osascript`, so it
   needs a graphical login. Every other verb runs in a plain shell.
-- One admission per machine, for protected work only: a run's cheap gates —
+- One admission per machine, for protected work only, two slots since
+  the two-slot change (bead coding-harness-u1ha) — `HARNESS_VERIFY_SLOTS`, default `2`; a run's cheap gates —
   every unmarked `seconds` gate — execute before any wait, so a lint failure
-  appears in seconds even while another check holds the slot; the queue and
+  appears in seconds even while another check holds a slot; the queue and
   the memory floor (`scripts/verify_lock.py`) are entered once, by the
   shared scheduler (`scripts/verify_run.py`), only when no cheap gate failed
   blocking, for the `minutes` gates and the `seconds` gates marked
@@ -199,16 +201,19 @@ flowchart TD
     N -->|no| U[Tree restored, attempt saved on a side ref, exit with an error]
 ```
 
-The post-run check is the document gates for a draft, the full `make verify`
-for an implement attempt, and the targeted check or its full fallback for a
-repair. Deciding on findings, the tracker, worktrees and merges are outside
-the runner: the orchestrating session and the maintainer do them.
+The post-run check is the document gates for a draft, and the targeted check or
+its full `make verify` fallback for an implement or repair attempt (ADR 0025).
+Deciding on findings, the tracker, worktrees and merges are outside the runner:
+the orchestrating session and the maintainer do them.
 
 ### Research swarm
 
 A `feature` or `architectural` change explores through the research swarm
 ([ADR 0020](adr/0020-phase-1-research-swarm.md)); a `bounded` change or a
-`spike` keeps the single explorer. Three repository seats first map the
+`spike` keeps the single explorer. Before launching, `prepare-explore` checks
+model availability and writes an input-bound receipt (`--availability-reported`);
+the swarm also requires `XDG_STATE_HOME` pointing outside `$HOME` for its
+resumable external store. Three repository seats first map the
 sources independently, and one Opus 5.5 context merges the maps. Then eleven
 topics run on the same brief: eight about the repository, each read by the
 three repository seats, and three about outside practice, each read by three
@@ -251,6 +256,8 @@ change that claims it in its spec header.
 
 - **Framework content:** this repository's rules, prompts, templates and tests.
   Calls to other vendors in the second development stage cover this class only.
+- **Public web (`public-web`):** public documentation and web pages retrieved
+  by the research swarm's online seats, with zero repository content sent.
 - **Customer code:** source code and database structure from a customer project.
   Only endpoints that declare where they process data may see it.
 - **Customer data:** rows from source or target systems. No model endpoint may
@@ -293,8 +300,8 @@ flowchart LR
 - **Files, because a change must outlive the session, the machine and the
   harness.** A state kept inside a tool dies with the tool.
 - **One list, because two lists drift.** 25 gates live in one file
-  (`decisions/gates.yaml`); 21 block, 3 report, 1 advisory (as of 2026-11-19,
-  `f04f2662`).
+  (`decisions/gates.yaml`); 21 block, 3 report, 1 advisory (re-verified
+  2026-11-25 on this branch after merging main).
   The file drives the local runner and the CI generator, and a gate holds the
   generated workflow to it byte for byte. `AGENTS.md` is the same kind of single
   entry for the agents; a test fails if a harness-specific file would replace
@@ -308,10 +315,11 @@ flowchart LR
   pre-mortem: "suppose it failed — most likely because …".
 - **Evidence over summaries.** You judge a change by its tests, its findings
   table and green checks, not by an agent's account of itself. A repair of code
-  counts only when its test fails on the code before the repair; a finding the
-  spec supports but no test can show is marked and re-checked. Every count
-  names its commit or date, and what could not be read is "not read", never
-  "none".
+  counts only when its test fails on the code before the repair; a test-only
+  repair proves a planted fault under `STAGE2_PLANT_FAULT=1` (ADR 0023); a
+  finding the spec supports but no test can show is marked and re-checked. Every
+  count names its commit or date, and what could not be read is "not read",
+  never "none".
 - **Block, report or advisory, because a gate whose red means nothing is
   noise.** Every gate says which of the three it is.
 - **Built for focus.** Every question carries its context; every session opens
@@ -332,16 +340,16 @@ What is particular to this repository:
 - **The environment is locked.** Each checkout runs `make venv` and
   `bash tools/pi/install.sh` once. The Pi tests and the review swarms need
   the pinned Pi.
-- **The size, on 2026-10-28 at `db701a06`:** 4102 tests in 59 test files,
-  about 51,600 lines of Python under `tests/` against about 26,500 under
-  `scripts/`. That measures how much is checked, not how well; mutation
-  testing on one or two scripts is planned (bead coding-harness-bvy).
-- **Runs take time.** A full `make verify` took about 11 minutes on
-  2026-10-28 (pytest 515–638 s); on 2026-11-02 pytest alone took 888 s for
-  4426 tests (at `98d58db9`, one change ahead of `main`). The run sizes its
-  test workers from the machine (half the cores, at most one per 2 GiB of
-  memory), and all lanes share one verification slot for protected work,
-  enforced by one admission per machine ([lanes](orchestration.md)).
+- **The size, on `2026-11-24` at `a5b117f8`:** 3,445 `def test_*` functions in
+  85 test files (about 99,600 lines of Python under `tests/` against about
+  44,200 under `scripts/`). That measures how much is checked, not how well;
+  mutation testing on one or two scripts is planned (bead coding-harness-bvy).
+- **Runs take time.** Full local `make verify` runs currently take on the order
+  of 20 minutes on the maintainer's reference machine (dominated by `pytest`
+  and `leerprobe`). The run sizes its test workers from the machine (half the
+  cores, at most one per 2 GiB of memory), and the lanes share two verification
+  slots for protected work (`HARNESS_VERIFY_SLOTS`, default `2`), enforced by
+  machine-wide admission ([lanes](orchestration.md)).
 
 ## Follow one completed change
 
