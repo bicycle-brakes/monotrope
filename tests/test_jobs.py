@@ -29,6 +29,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import jobs  # noqa: E402
+
+try:
+    import job_containment  # noqa: E402
+except ImportError:  # a baseline before the containment module: the regression tests then fail by assertion
+    job_containment = None
 import verify_lock  # noqa: E402
 
 JOBS_PY = REPO_ROOT / "scripts" / "jobs.py"
@@ -52,8 +57,14 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-def detached(state: Path, monkeypatch: pytest.MonkeyPatch):
-    """Replace only the tmux window by a wrapper start in its own session, under a polluted server environment."""
+def detached(state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Replace only the tmux window by a wrapper start in its own session, under a polluted server environment.
+
+    Jobs start in a working directory of this test alone, so a stop's directory rule never meets the
+    processes of another test running in parallel."""
+    job_cwd = tmp_path / "job-cwd"
+    job_cwd.mkdir()
+    monkeypatch.chdir(job_cwd)
     processes: list[subprocess.Popen] = []
 
     def fake_launch(_job_id: str, cwd: str, argv: list[str]) -> None:
@@ -624,19 +635,109 @@ def test_log_captures_streams_and_is_pruned(state: Path, monkeypatch, capsys) ->
     assert not orphan.exists(), "a log without a record was kept"
 
 
-def test_reused_recorded_group_is_never_targeted(monkeypatch):
+def test_reused_recorded_group_is_never_targeted() -> None:
     """A reused group leader and its members are not the recorded job."""
-    old = "Mon Jan  1 00:00:00 2024"
-    new = "Tue Jan  2 00:00:00 2024"
+    assert job_containment is not None, "scripts/job_containment.py is missing"
+
+    class TableBackend(job_containment.PsBackend):
+        """A stand-in process table: no sessions, no tokens, no files."""
+
+        def __init__(self, table: list) -> None:
+            self.table = table
+
+        def processes(self) -> list:
+            return self.table
+
+        def session(self, _pid: int) -> int | None:
+            return None
+
+        def token_holders(self, _token: str) -> set[int]:
+            return set()
+
+        def paths(self, _pids) -> dict[int, list[str]]:
+            return {}
+
+    old = "Mon Jan 1 00:00:00 2024"
+    new = "Tue Jan 2 00:00:00 2024"
+
+    def proc(pid: int, ppid: int, pgid: int, start: str) -> job_containment.Proc:
+        return job_containment.Proc(pid, ppid, pgid, os.getuid(), "??", "S", start, "x")
+
     record = {
         "id": "20240101T000000Z-abcdef",
+        "cwd": "/work",
+        "started_epoch": 0,
         "command_pid": 100,
         "command_start": old,
         "wrapper_pid": 101,
         "groups": [{"pid": 200, "pgid": 200, "start": old}],
     }
-    monkeypatch.setattr(jobs, "process_table", lambda: [(100, 1, 100, old), (200, 1, 200, new), (201, 200, 200, new)])
-    assert set(jobs.targets(record)) == {100}
+    backend = TableBackend([proc(100, 1, 100, old), proc(200, 1, 200, new), proc(201, 200, 200, new)])
+    assert set(job_containment.members(record, [], backend)) == {100}
+
+
+STRAY_GRANDCHILD = "import os, time; open(os.environ['PID_FILE'], 'w').write(str(os.getpid())); time.sleep(120)"
+STRAY_MIDDLE = (
+    f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', {STRAY_GRANDCHILD!r}], start_new_session=True)"
+)
+STRAY_PARENT = (
+    "import os, subprocess, sys, time; "
+    f"subprocess.run([sys.executable, '-c', {STRAY_MIDDLE!r}], env={{'PID_FILE': sys.argv[1]}}, "
+    "start_new_session=True); open(sys.argv[2], 'w').close(); time.sleep(120)"
+)
+
+
+@pytest.mark.usefixtures("detached")
+def test_stop_ends_sanitized_reparented_descendant(tmp_path: Path, capsys) -> None:
+    """Finding F-1 (criterion 3): the command starts a separately sessioned child with a sanitized environment
+    (no job token), which starts another separately sessioned process and exits. The survivor is reparented,
+    carries no token and is in no recorded group; stop must still end it and record no survivor."""
+    marker, middle_done = tmp_path / "stray.pid", tmp_path / "middle.done"
+    code, out = start_job(capsys, sys.executable, "-c", STRAY_PARENT, str(marker), str(middle_done))
+    assert code == 0, out
+    job_id = started_id(out)
+    try:
+        wait_for(lambda: middle_done.exists() and marker.exists())  # the middle process has exited
+        stray = int(marker.read_text(encoding="utf-8"))
+        assert running(stray)
+        assert jobs.main(["stop", job_id]) == 0
+        capsys.readouterr()
+        deadline = time.monotonic() + 10
+        while running(stray) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not running(stray), "a reparented descendant without the job token survived the stop"
+        assert jobs.read_record(record_path(job_id)).get("survivors") == [], "the stop named no or wrong survivors"
+    finally:
+        if marker.exists() and marker.read_text(encoding="utf-8").strip().isdigit():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(marker.read_text(encoding="utf-8")), signal.SIGKILL)
+
+
+@pytest.mark.usefixtures("state")
+def test_stop_writes_survivors_into_the_record(monkeypatch, capsys) -> None:
+    """Finding F-1: a member still alive after SIGKILL and a last scan is written into the record and shown by
+    `list` - never left silent."""
+    assert job_containment is not None, "scripts/job_containment.py is missing"
+    survivor = subprocess.Popen(["sleep", "60"])
+    try:
+        wait_for(lambda: jobs.process_start(survivor.pid) is not None)
+        started = jobs.process_start(survivor.pid)
+        job_id = synthetic("running", command_pid=survivor.pid, command_start=started, cwd="/")
+        monkeypatch.setattr(jobs, "_signal_pid", lambda _pid, _signum: None)  # the signals do not land
+        monkeypatch.setattr(job_containment, "STOP_GRACE", 0.2)
+        monkeypatch.setattr(job_containment, "KILL_WAIT", 0.2)
+        monkeypatch.setattr(jobs, "FINISH_WAIT", 0.2)
+        assert jobs.main(["stop", job_id]) == 3
+        assert f"survivor: pid {survivor.pid}" in capsys.readouterr().out
+        record = jobs.read_record(record_path(job_id))
+        assert [s["pid"] for s in record["survivors"]] == [survivor.pid]
+        assert record["survivors"][0]["start"] == jobs.process_start(survivor.pid)
+        assert "sleep" in record["survivors"][0]["command"]
+        assert jobs.main(["list"]) == 0
+        assert f"survivors after stop: pid {survivor.pid}" in capsys.readouterr().out
+    finally:
+        survivor.kill()
+        survivor.wait()
 
 
 def test_future_runner_verb_is_recognized() -> None:
@@ -742,3 +843,22 @@ def test_detached_verify_waits_for_slots_and_memory(tmp_path, monkeypatch, capsy
     record = wait_finished(started_id(out))
     assert not result.exists(), "detached verification bypassed the memory floor"
     assert record["exit"] != "0"
+
+
+def test_env_launched_runner_verb_is_classified() -> None:
+    """Finding F-2 (Terms; criterion 4): a runner verb behind `env`, with or without its options and
+    NAME=value words, behind a versioned interpreter or `uv run`, is a runner verb; `-c` and `-m` are not."""
+    assert jobs.is_runner_verb(["env", "python3", "scripts/stage2.py", "review", "change"])
+    with_options = ["/usr/bin/env", "-u", "X", "A=1", "python3.12", "-X", "dev", "scripts/stage2.py", "y"]
+    assert jobs.is_runner_verb(with_options)
+    assert jobs.is_runner_verb(["python3", "--", "scripts/stage2.py", "review"])
+    assert jobs.is_runner_verb(["uv", "run", "--python", "3.12", "python", "/r/scripts/stage2.py", "draft"])
+    assert not jobs.is_runner_verb(["env", "python3", "-m", "scripts.stage2", "review"])
+    assert not jobs.is_runner_verb(["env", "python3", "scripts/stage2.py", "--help"])
+    assert not jobs.is_runner_verb(["env", "grep", "scripts/stage2.py", "review"])
+
+
+def test_runner_classifier_skips_launchers() -> None:
+    assert jobs.is_runner_verb(["env", "-i", "FOO=bar", "python3", "-u", "scripts/stage2.py", "review"])
+    assert jobs.is_runner_verb(["uv", "run", "--no-project", "python3.12", "scripts/stage2.py", "review"])
+    assert not jobs.is_runner_verb(["env", "python3", "-c", "scripts/stage2.py", "review"])

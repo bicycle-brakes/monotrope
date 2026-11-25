@@ -96,7 +96,10 @@ rules:
     reason: "die rechnerweite Zulassung des Laufs (Warteschlange, freier Speicher), die scripts.verify_run um die geschuetzten Gates hält; ohne sie ist der exportierte Lauf nicht betretbar (bead coding-harness-p6mu)"
   - prefix: scripts/jobs.py
     rolle: mechanismus
-    reason: "the detached job launcher: start, list and stop of a command that outlives the launching session; standard library only, so it travels alone (bead coding-harness-a6ns.1)"
+    reason: "the detached job launcher: start, list and stop of a command that outlives the launching session; standard library only, it travels with scripts/job_containment.py (bead coding-harness-a6ns.1)"
+  - prefix: scripts/job_containment.py
+    rolle: mechanismus
+    reason: "the one owner of finding and ending a detached job's processes, which scripts/jobs.py stop imports; standard library only (bead coding-harness-a6ns.1)"
   - prefix: scripts/verify_duration.py
     rolle: mechanismus
     reason: "the runner's measured durations: appended under the shared state root and read by its small reader; a dependency of the shared scheduler (bead coding-harness-1um6)"

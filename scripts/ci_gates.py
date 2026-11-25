@@ -158,6 +158,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "checkout can stand in for; tests/test_jobs.py runs it against isolated state roots (bead "
         "coding-harness-a6ns.1)"
     ),
+    "job_containment.py": (
+        "Library - the one owner of finding and ending a detached job's processes; scripts/jobs.py stop "
+        "imports it, and tests/test_jobs.py runs it against real processes and a stand-in backend (bead "
+        "coding-harness-a6ns.1)"
+    ),
     "machine_facts.py": (
         "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
         "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "

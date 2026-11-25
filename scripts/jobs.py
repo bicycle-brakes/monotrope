@@ -3,7 +3,7 @@
 
     python3 scripts/jobs.py start [--] COMMAND [ARGUMENT...]   # one window on the dedicated tmux server
     python3 scripts/jobs.py list [--all]                       # running, lost and recent (24 h) jobs
-    python3 scripts/jobs.py stop JOB_ID                        # end the job's tree; the wrapper records `signal 15`
+    python3 scripts/jobs.py stop JOB_ID                        # end the job's processes; the wrapper records `signal 15`
 
 A job runs in its own window of the `tmux -L coding-harness` server (a server
 that is created detached when none exists) under a small wrapper of this file.
@@ -19,7 +19,8 @@ server's environment - except the four verification-admission values: a
 detached verification run obtains its own machine-wide admission. The record's
 path travels to the command in `HARNESS_JOB_RECORD`; `scripts/stage2.py` adds
 every process group it starts in a session of its own to that record, so `stop`
-reaches them.
+reaches them. `stop` finds and ends a job's processes only through
+`scripts/job_containment.py`, and writes every survivor into the record.
 
 This launcher accepts any command. A runner verb (`scripts/stage2.py` followed
 by a word that is not an option) is recorded as such; model starts stay routed
@@ -52,15 +53,19 @@ from collections.abc import Callable  # noqa: E402
 from datetime import UTC, datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import job_containment  # noqa: E402 - the one owner of finding and ending a job's processes
+
 SESSION = "jobs"
 START_WAIT = 10.0  # seconds a start waits for both process ids
-STOP_GRACE = 5.0  # seconds between SIGTERM and SIGKILL
 FINISH_WAIT = 10.0  # seconds a stop waits for the wrapper's end record
 KEEP_SECONDS = 14 * 86400
 RECENT_SECONDS = 86400
 STALE_START_SECONDS = 3 * START_WAIT  # a record still `starting` after this is lost
 RECORD_ENV = "HARNESS_JOB_RECORD"
-TOKEN_ENV = "HARNESS_JOB_TOKEN"
+TOKEN_ENV = job_containment.TOKEN_ENV
 _launch_deadline: float | None = None
 # The four values of a held verification admission (scripts/verify_lock.py); a job never inherits them.
 EXCLUDED_ENV = (
@@ -144,6 +149,16 @@ SCHEMA: dict = {
         "ended_epoch": _NULL_NUM,
         "exit": _NULL_STR,
         "error": _NULL_STR,
+        # Written by `stop`: every process still alive after SIGKILL and a last scan (optional: older records lack it).
+        "survivors": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["pid", "start", "command"],
+                "properties": {"pid": {"type": "integer"}, "start": _NULL_STR, "command": {"type": "string"}},
+            },
+        },
     },
 }
 
@@ -276,44 +291,9 @@ def _stamp(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _norm(text: str) -> str:
-    return " ".join(text.split())
-
-
-def _ps(args: list[str]) -> str | None:
-    env = {**os.environ, "LC_ALL": "C"}
-    try:
-        done = subprocess.run(["ps", *args], capture_output=True, text=True, timeout=5, env=env, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return done.stdout if done.returncode == 0 else None
-
-
 def process_start(pid: int | None) -> str | None:
     """The start time `ps` reports for `pid` - with the pid, the identity of a process - or None when it is gone."""
-    if pid is None or pid <= 0:
-        return None
-    text = _norm(_ps(["-o", "lstart=", "-p", str(pid)]) or "")
-    return text or None
-
-
-def process_table() -> list[tuple[int, int, int, str]]:
-    """(pid, parent pid, process group, start time) of every visible process."""
-    rows = []
-    for line in (_ps(["-axo", "pid=,ppid=,pgid=,lstart="]) or "").splitlines():
-        parts = line.split(None, 3)
-        if len(parts) == 4 and all(part.isdigit() for part in parts[:3]):
-            rows.append((int(parts[0]), int(parts[1]), int(parts[2]), _norm(parts[3])))
-    return rows
-
-
-def _parse_start(text: str | None) -> datetime | None:
-    if not text:
-        return None
-    try:
-        return datetime.strptime(text, "%a %b %d %H:%M:%S %Y")
-    except ValueError:
-        return None
+    return job_containment.process_start(pid)
 
 
 def alive(pid: int | None, start: str | None) -> bool:
@@ -323,14 +303,40 @@ def alive(pid: int | None, start: str | None) -> bool:
 
 def is_runner_verb(argv: list[str]) -> bool:
     """True when the argument vector invokes scripts/stage2.py followed by a word that is not an option."""
-    if not argv or not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(argv[0]).name):
-        return False
-    for index, token in enumerate(argv[1:], 1):
-        if token == "scripts/stage2.py" or token.endswith("/scripts/stage2.py"):
-            return index + 1 < len(argv) and bool(argv[index + 1]) and not argv[index + 1].startswith("-")
-        if not token.startswith("-") or token in {"-c", "-m", "--"}:
-            return False
-    return False
+    i = 0
+    while i < len(argv):
+        name = Path(argv[i]).name
+        if name == "env":
+            i += 1
+            while i < len(argv) and (argv[i].startswith("-") or re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", argv[i])):
+                if argv[i] in {"-u", "--unset", "-C", "--chdir"}:
+                    i += 1
+                i += 1
+        elif name == "uv" and i + 1 < len(argv) and argv[i + 1] == "run":
+            i += 2
+            while i < len(argv) and argv[i].startswith("-"):
+                if argv[i] in {"--directory", "--project", "--python", "-p", "--with", "--env-file"}:
+                    i += 1
+                i += 1
+        elif re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name):
+            i += 1
+            while i < len(argv) and argv[i].startswith("-"):
+                if argv[i] in {"-c", "-m"}:
+                    return False
+                if argv[i] == "--":  # the end of the interpreter's options; the script follows
+                    i += 1
+                    break
+                if argv[i] in {"-W", "-X"}:
+                    i += 1
+                i += 1
+        else:
+            break
+    return (
+        i + 1 < len(argv)
+        and (argv[i] == "scripts/stage2.py" or argv[i].endswith("/scripts/stage2.py"))
+        and bool(argv[i + 1])
+        and not argv[i + 1].startswith("-")
+    )
 
 
 def effective_state(record: dict, now: float | None = None) -> str:
@@ -661,6 +667,10 @@ def render_row(job_id: str, record: dict | None, state: str) -> str:
         detail = f"  exit {record['exit']}  ended {record['ended_at']}"
     elif state == "failed to start":
         detail = f"  {record['error']}"
+    survivors = record.get("survivors") or []
+    if survivors:
+        named = ", ".join(f"pid {s['pid']} started {s['start']} {s['command'][:60]}" for s in survivors)
+        detail += f"  survivors after stop: {named}"
     command = shlex.join(record["command"])
     if len(command) > 100:
         command = command[:99] + "…"
@@ -721,49 +731,9 @@ def _signal_pid(pid: int, signum: int) -> None:
         os.kill(pid, signum)
 
 
-def targets(record: dict) -> dict[int, str]:
-    """pid -> start identity of the job's command tree and its recorded process groups, never the wrapper."""
-    table = process_table()
-    by_pid = {pid: (ppid, pgid, start) for pid, ppid, pgid, start in table}
-    found: dict[int, str] = {}
-    root = record["command_pid"]
-    row = by_pid.get(root)
-    if row is not None and row[2] == record["command_start"]:
-        found[root] = row[2]
-        children: dict[int, list[int]] = {}
-        for pid, (ppid, _pgid, _start) in by_pid.items():
-            children.setdefault(ppid, []).append(pid)
-        pending = [root]
-        while pending:
-            for child in children.get(pending.pop(), []):
-                if child not in found:
-                    found[child] = by_pid[child][2]
-                    pending.append(child)
-    for group in record["groups"]:
-        leader = by_pid.get(group["pid"])
-        verified = leader is not None and group["start"] is not None and leader[2] == group["start"]
-        if not verified:
-            continue
-        floor = _parse_start(group["start"])
-        for pid, (_ppid, pgid, start) in by_pid.items():
-            member = _parse_start(start)
-            if pgid == group["pgid"] and floor is not None and member is not None and member >= floor:
-                found[pid] = start
-    # The job token follows descendants even after they have been reparented.
-    token = f"{TOKEN_ENV}={record['id']}"
-    for line in (_ps(["eww", "-axo", "pid=,command="]) or "").splitlines():
-        parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[0].isdigit() and token in parts[1].split():
-            pid = int(parts[0])
-            if pid in by_pid:
-                found[pid] = by_pid[pid][2]
-    found.pop(record["wrapper_pid"], None)
-    found.pop(os.getpid(), None)
-    return found
-
-
 def stop(job_id: str, out: Callable[[str], None] = print) -> int:
-    """End a running job's command tree: record the request, SIGTERM, then SIGKILL the survivors after the grace."""
+    """End a running job's processes through `job_containment.end`: record the request first, then signal;
+    every process still alive afterwards is written into the record as a survivor and named."""
     if not ID_RE.fullmatch(job_id):
         raise Refused(f"not a job id: {job_id[:40]}")
     path = state_dir() / f"{job_id}.json"
@@ -783,18 +753,20 @@ def stop(job_id: str, out: Callable[[str], None] = print) -> int:
         rec["stop_requested"] = _stamp(_now())
 
     record = update_record(path, request)  # the request is written before any signal
-    first = targets(record)
-    for pid, started in first.items():
-        if process_start(pid) == started:
-            _signal_pid(pid, signal.SIGTERM)
-    deadline = time.monotonic() + STOP_GRACE
-    while time.monotonic() < deadline and any(process_start(pid) == start for pid, start in first.items()):
-        time.sleep(0.1)
-    survivors = {pid: start for pid, start in first.items() if process_start(pid) == start}
-    survivors.update(targets(record))
-    for pid, started in survivors.items():
-        if process_start(pid) == started:
-            _signal_pid(pid, signal.SIGKILL)
+    others = [
+        other
+        for other_id, other in read_all(path.parent)
+        if other is not None and other_id != job_id and other["state"] in ("starting", "running")
+    ]
+    survivors = job_containment.end(record, others, send=lambda pid, signum: _signal_pid(pid, signum))
+
+    def note(rec: dict) -> None:
+        rec["survivors"] = survivors
+
+    with contextlib.suppress(JobError, OSError):
+        update_record(path, note)
+    for survivor in survivors:
+        out(f"survivor: pid {survivor['pid']} started {survivor['start']}  {survivor['command'][:100]}")
     deadline = time.monotonic() + FINISH_WAIT
     while time.monotonic() < deadline:
         if read_record(path)["state"] == "finished":

@@ -426,8 +426,8 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | scripts/jobs.py:752 | If a command starts a separately sessioned child with a sanitized environment, and that child starts another separately sessioned process before exiting, the surviving process is reparented and has no job token. It is absent from both the descendant tree and recorded groups, so stop leaves it running. This is a new case beyond the earlier reparenting test, whose child retains the token. [Criterion 3] | Codex | taken — maintainer 2026-11-25, structural, no Boundary (second case of a reparented descendant escaping stop): one containment module (scripts/job_containment.py) owns finding and ending a job's processes, and jobs.py stop calls only it; members are the command tree, every process carrying the job token, the recorded process groups and sessions, and — closing this case — every process of the same user that started after the job, has no controlling terminal, and whose working directory or an open file lies inside the job's cwd, never the caller or its ancestors; after SIGKILL stop scans once more and writes every survivor (pid, start time, command) into the job record, and jobs.py list shows it, never silent; the module exposes a backend seam so a Linux cgroup backend can follow (follow-up bead), and stage2 kill_live and the verify supervisor adopt it in that follow-up | — |
-| F-2 | MAJOR | SPEC | base | scripts/jobs.py:324 | Starting `env python3 scripts/stage2.py review change` invokes the runner script followed by a non-option word, but the record marks it as a non-runner because classification requires the first argument to be Python. [Terms; criterion 4] | Codex | taken — maintainer 2026-11-25, structural at the root (third case of runner-verb classification after L2-10 and F-3): classification skips known launchers first — env with its options and NAME=value words, any python or python3.N executable with its interpreter options, and uv run with its options — then a job is a runner verb when the next words are scripts/stage2.py followed by a word that is not an option (S-23); one classifier function, no case list per launcher | — |
+| F-1 | MAJOR | SPEC | base | scripts/jobs.py:752 | If a command starts a separately sessioned child with a sanitized environment, and that child starts another separately sessioned process before exiting, the surviving process is reparented and has no job token. It is absent from both the descendant tree and recorded groups, so stop leaves it running. This is a new case beyond the earlier reparenting test, whose child retains the token. [Criterion 3] | Codex | fixed — tests/test_jobs.py::test_stop_ends_sanitized_reparented_descendant, tests/test_jobs.py::test_stop_writes_survivors_into_the_record (hand finish of attempt 3: ruff B007 only) | — |
+| F-2 | MAJOR | SPEC | base | scripts/jobs.py:324 | Starting `env python3 scripts/stage2.py review change` invokes the runner script followed by a non-option word, but the record marks it as a non-runner because classification requires the first argument to be Python. [Terms; criterion 4] | Codex | fixed — tests/test_jobs.py::test_runner_classifier_skips_launchers, tests/test_jobs.py::test_env_launched_runner_verb_is_classified (hand finish of attempt 3) | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -435,3 +435,65 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a211d9-9ce1-7a32-9834-add206db218a, 2026-11-25
 Reviewer session: codex 01a211d9-9ce1-7a32-9834-add206db218a — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1203 files, 5868 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/jobs.py` +31 -8
+> - `tests/test_jobs.py` +6 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-1: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-1-20261125T121131965099Z-cf3b583c.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1203 files, 5868 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-2-20261125T121131965099Z-cf3b583c.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1203 files, 5869 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/ci_gates.py` +5 -0
+> - `scripts/job_containment.py` +322 -0
+> - `scripts/jobs.py` +44 -95
+> - `scripts/kit/manifest.yaml` +4 -1
+> - `tests/test_jobs.py` +122 -7
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed `tests/test_jobs.py`; ruff check left findings without a safe fix or a file that does not parse.
+> - Runner cheap checks before post-run verification: `.venv/bin/ruff check` exited 1
+> scripts/job_containment.py:302:14: B007 Loop control variable `proc` not used within loop body
+>     |
+> 301 |     first = scan()
+> 302 |     for pid, proc in living(first).items():
+>     |              ^^^^ B007
+> 303 |         kill(pid, signal.SIGTERM)
+> 304 |     deadline = time.monotonic() + STOP_GRACE
+>     |
+>     = help: Rename unused `proc` to `_proc`
+>
+> Found 1 error.
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-3-20261125T121131965099Z-cf3b583c.md
+> ```
