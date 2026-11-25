@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-17
 last_reviewed: 2026-11-18
-updated: 2026-11-20
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-qut1
@@ -40,7 +40,7 @@ At commit `2e3d9d47`, released loop rows retained their reviewer, but the existi
    *Refuted by:* an unpaired historical seven-cell phase-6 row disappears or is assigned a guessed model.
 6. When an attribution source receives the change, findings file, block heading, position and directly preceding call lines, it returns a model ID or `unattributed` through the shared reader without changing consumer calls.
    *Refuted by:* a substitute source that attributes from the heading alone cannot be plugged in without changing a report consumer’s reader calls.
-7. When a legacy Status names another row ID with `same as`, `duplicate of`, `repeat`, `repeats` or `repeat of`, matched without regard to case, that row is a duplicate.
+7. When a legacy Status names another row ID with `same as`, `duplicate of`, `repeat`, `repeats` or `repeat of`, matched without regard to case, that row is a duplicate. The legacy grammar is frozen (maintainer 2026-11-25): only the legacy statuses that occur in the repository's findings files on that day are read, each with its measured targets, pinned by a test over the real files; any other legacy status that carries such a marker followed by a row ID, plain or in backticks, is unreadable and makes a gap. New and changed rows use the canonical form, which the duplicate gate enforces.
    *Refuted by:* `Duplicate of L2-2` counts as a new finding or a marker without a row ID counts as a duplicate.
 8. When duplicate references form a chain, each non-duplicate root receives its own credit and every duplicate receives none, including when a root is unattributed.
    *Refuted by:* a duplicate earns credit, a root loses credit, or an unattributed root’s credit moves to a duplicate’s model.
