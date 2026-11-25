@@ -1266,13 +1266,18 @@ def test_real_reviewer_ignores_discovery_traps(project: Path, transport) -> None
             standin.close()
 
     assert not any(call(trusted=False).values()), "a trap fired under the production flags"
+    # The ordinary trusted baseline covers every positive control but --no-mcp;
+    # only that control runs under a different configuration and needs its own baseline.
     assert not any(call().values()), "an isolation flag failed with project trust granted"
     for flag in checks:
         # --no-extensions also suppresses the built-in MCP extension. Explicitly
         # request it in this paired control so --no-mcp is tested independently.
         transport.controls["mcp_control"] = flag == "--no-mcp"
-        assert not any(call().values())
+        if flag == "--no-mcp":
+            assert not any(call().values()), "an isolation flag failed with the MCP extension requested"
         assert call(omit=flag)[flag], f"{flag}: its real-Pi positive control did not fire"
+    # untrusted, ordinary trusted and MCP-control baselines plus one positive control per flag
+    assert len(transport.calls) == 3 + len(checks), "a repeated baseline returned or a control was lost"
 
 
 @pytest.mark.usefixtures("installed_pi")
