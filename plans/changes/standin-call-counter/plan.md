@@ -39,15 +39,15 @@ The counter name and helper interface are reversible implementation details. The
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_standin_call_counter.py::test_count_uses_counter_without_reading_log — a prior-record read on the matching fast path or a count from another key fails.
-- 2: not yet written tests/test_atomic_test_log.py::test_counter_serializes_parallel_calls_with_log — duplicate indices or indices out of log order fail.
-- 3: not yet written tests/test_standin_call_counter.py::test_scripted_answers_match_log_count — a changed answer or exit status across key fallbacks and exhaustion fails.
-- 4: not yet written tests/test_standin_call_counter.py::test_removal_and_rewind_clear_history — a stale record or later step survives either reset.
-- 5: not yet written tests/test_standin_call_counter.py::test_missing_or_mismatched_counter_rebuilds — with successful publication, an invalid counter or reused inode with different size raises or produces a stale count.
-- 6: not yet written tests/test_atomic_test_log.py::test_late_old_writer_does_not_affect_new_log — a synchronized old writer changes the new history or step count.
-- 7: not yet written tests/test_atomic_test_log.py::test_counter_guard_and_locked_access — raw access succeeds or access escapes the shared protocol.
-- 8: not yet written tests/test_atomic_test_log.py::test_counter_publication_is_atomic_across_log_generations — a synchronized reader sees a partial counter during old and new writers.
-- 9: not yet written tests/test_standin_call_counter.py::test_counter_write_failure_propagates — a failed counter write or replacement, including replacement of a directory, is suppressed.
+- 1: tests/test_standin_call_counter.py::test_count_uses_counter_without_reading_log — a prior-record read on the matching fast path or a count from another key fails.
+- 2: tests/test_atomic_test_log.py::test_counter_serializes_parallel_calls_with_log — duplicate indices or indices out of log order fail.
+- 3: tests/test_standin_call_counter.py::test_scripted_answers_match_log_count — a changed answer or exit status across key fallbacks and exhaustion fails.
+- 4: tests/test_standin_call_counter.py::test_removal_and_rewind_clear_history — a stale record or later step survives either reset.
+- 5: tests/test_standin_call_counter.py::test_missing_or_mismatched_counter_rebuilds — with successful publication, an invalid counter or reused inode with different size raises or produces a stale count.
+- 6: tests/test_atomic_test_log.py::test_late_old_writer_does_not_affect_new_log — a synchronized old writer changes the new history or step count.
+- 7: tests/test_atomic_test_log.py::test_counter_guard_and_locked_access — raw access succeeds or access escapes the shared protocol.
+- 8: tests/test_atomic_test_log.py::test_counter_publication_is_atomic_across_log_generations — a synchronized reader sees a partial counter during old and new writers.
+- 9: tests/test_standin_call_counter.py::test_counter_write_failure_propagates — a failed counter write or replacement, including replacement of a directory, is suppressed.
 
 ## Verification and boundaries
 
@@ -60,9 +60,14 @@ make verify
 
 Do not alter `tests/test_stage2.py`, other stand-ins, production code, model declarations or gates. Stop at the appetite and report any unmet criteria. The orchestrator handles any held path; this plan requires none. The advertised `scripts/validate_change_artefacts.py` is absent at `12c773c5`.
 
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu).
+
 ## Time used
 
 2026-11-25 04:23:01–04:24:52 UTC, 111 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 04:29:18–04:30:46 UTC, 88 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 04:35:23–04:36:53 UTC, 90 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 05:49:16–05:50:56 UTC, 100 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 05:51:16–06:05:35 UTC, 859 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_atomic_test_log.py`, `tests/test_pi_install.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_standin_call_counter.py`; extra ruff targets none beyond the cheap checks; gates `leerprobe` (block), `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
