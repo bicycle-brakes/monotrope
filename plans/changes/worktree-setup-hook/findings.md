@@ -256,3 +256,20 @@ The review call's answer was neither six-cell findings nor exactly `No finding.`
 > Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: the lane setup block’s opening marker is replaced, so the required setup block cannot be located before the Beads block — catches without switch: yes.
 > 
 > Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: text inside the Beads-managed block is changed relative to `origin/main` — catches without switch: yes.
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5960 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | BLOCKER | MAINT | base | `.beads/hooks/post-checkout`, `_ls_trusted` and `_ls_step` | A branch can add a malicious `GNUmakefile` while leaving `Makefile`, `requirements*.txt` and `tools/pi/` unchanged. The trust check accepts the branch, and `make venv` executes the new `GNUmakefile` during checkout. The trust check must cover the files that the setup commands actually execute. | Codex | open | — |
+| P6-2 | MAJOR | SPEC | base | `.beads/hooks/post-checkout`, `_ls_fail` | If the log cannot be written and a setup step fails, the failure line reports `log: /dev/null` rather than naming the log as unavailable. The later summary says `unavailable`, but the failure line does not. [Criterion 5] | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the lane setup section’s opening marker from the hook text — catches without switch: yes, an actual missing marker fails the ordering assertion.
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: changes text inside the Beads-managed block — catches without switch: yes, an actual change inside that block fails the comparison with `origin/main`.
+
+Phase 6 verdict: codex 01a21431-9b92-7dc2-88e7-991d96079afa, 2026-11-25
+Reviewer session: codex 01a21431-9b92-7dc2-88e7-991d96079afa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

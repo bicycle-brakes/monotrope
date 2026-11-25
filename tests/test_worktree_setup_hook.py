@@ -627,3 +627,26 @@ def test_without_perl_the_watchdog_ends_the_steps_children(lane: Lane, tmp_path:
     if alive:
         subprocess.run(["kill", "-KILL", str(child)], capture_output=True)
     assert not alive, "the step's child outlived the watchdog"
+
+
+def test_a_branch_adding_a_gnumakefile_is_not_trusted(lane: Lane) -> None:
+    """Phase-6 P6-1: a state off origin/main is skipped even when Makefile is unchanged."""
+    assert lane.git("checkout", "-q", "-b", "gnu").returncode == 0
+    (lane.main / "GNUmakefile").write_text("venv:\n\t@echo gnu\n", encoding="utf-8")
+    assert lane.git("add", "GNUmakefile").returncode == 0
+    assert lane.git("commit", "-q", "-m", "gnu makefile").returncode == 0
+    assert lane.git("checkout", "-q", "main").returncode == 0
+    path = lane.root / "gnu-lane"
+    proc = lane.git("worktree", "add", "-q", str(path), "gnu")
+    assert any(line.startswith("lane setup: skipped:") for line in proc.stderr.splitlines()), proc.stderr
+    assert lane.record("make") == [], "a GNUmakefile branch ran setup"
+
+
+def test_a_failure_with_an_unwritable_log_names_it_unavailable(lane: Lane) -> None:
+    """Phase-6 P6-2: the failure line says the log is unavailable, not /dev/null."""
+    path = lane.quiet_worktree("ro2")
+    gitdir = Path(lane.git("rev-parse", "--absolute-git-dir", cwd=path).stdout.strip())
+    (gitdir / "lane-setup.log").mkdir()
+    proc = lane.new_worktree_hook(path, STUB_INSTALL_FAIL="1")
+    failures = _failures(proc.stderr)
+    assert failures and all("log: unavailable" in f and "/dev/null" not in f for f in failures), proc.stderr

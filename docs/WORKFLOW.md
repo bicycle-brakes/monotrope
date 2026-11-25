@@ -807,8 +807,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    `yaml`, `tools/pi/pi --version` equals the pin) in the foreground when
    `git worktree add` creates a worktree, bounded by
    `HARNESS_LANE_SETUP_TIMEOUT` (default 600 s). It runs only for a trusted
-   state: the checked-out commit is on `origin/main`, or `Makefile`,
-   `requirements*.txt` and `tools/pi/` equal `origin/main`'s; otherwise it
+   state: the checked-out commit is on `origin/main`; otherwise it
    skips and names the deliberate command `bash .beads/hooks/post-checkout
    --lane-setup`, which also reruns a failed setup. `HARNESS_NO_LANE_SETUP=1`
    skips it. Output: `lane setup: start`, one `LANE SETUP FAILED:` line per

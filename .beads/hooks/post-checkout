@@ -21,7 +21,11 @@ _ls_say() {
 }
 _ls_fail() {
   _ls_failed=$((_ls_failed + 1))
-  _ls_say "LANE SETUP FAILED: $1; log: $_ls_log; retry: $_ls_retry"
+  if [ "$_ls_log" = /dev/null ]; then
+    _ls_say "LANE SETUP FAILED: $1; log: unavailable; retry: $_ls_retry"
+  else
+    _ls_say "LANE SETUP FAILED: $1; log: $_ls_log; retry: $_ls_retry"
+  fi
 }
 _ls_step() {
   _ls_label=$1
@@ -77,12 +81,12 @@ _ls_summary() {
     _ls_say "lane setup: log: $_ls_log"
   fi
 }
-# A trusted state: the checked-out commit is on origin/main, or the inputs the
-# setup runs (Makefile, requirements*.txt, tools/pi/) equal origin/main's.
+# A trusted state: the checked-out commit is on origin/main (maintainer
+# 2026-11-25, phase-6 P6-1: any other state could carry a GNUmakefile or
+# another input make reads first, so no list of "unchanged inputs" is safe).
 _ls_trusted() {
   git rev-parse -q --verify origin/main >/dev/null 2>&1 || return 1
-  git merge-base --is-ancestor HEAD origin/main 2>/dev/null && return 0
-  git diff --quiet origin/main HEAD -- Makefile 'requirements*.txt' tools/pi/ 2>/dev/null
+  git merge-base --is-ancestor HEAD origin/main 2>/dev/null
 }
 _lane_setup() {
   _ls_failed=0
@@ -122,7 +126,7 @@ _lane_setup() {
     _ls_say "lane setup: perl not found; the ${_ls_limit}s limit is enforced by a shell watchdog instead"
   fi
   if [ -z "$_ls_deliberate" ] && ! _ls_trusted; then
-    _ls_say "lane setup: skipped: the checked-out state is not on origin/main and changes Makefile, requirements*.txt or tools/pi/ (or origin/main is unknown); to set up deliberately: $_ls_retry"
+    _ls_say "lane setup: skipped: the checked-out commit is not on origin/main (or origin/main is unknown); to set up deliberately: $_ls_retry"
     return 0
   fi
   _ls_step "make venv" make venv

@@ -30,7 +30,7 @@ New worktrees receive the local Python environment and pinned Pi through the ver
 
 ## Acceptance criteria
 
-1. When Git invokes the installed checkout hook for a new worktree with an all-zero previous object ID and branch-checkout flag `1`, and the checked-out state is trusted, it runs `make venv` in that worktree. A state is trusted when its commit is an ancestor of `origin/main`, or when `Makefile`, `requirements*.txt` and `tools/pi/` equal `origin/main`'s; an untrusted state, or one where `origin/main` is unknown, skips setup with one line naming the reason and the deliberate command `bash .beads/hooks/post-checkout --lane-setup`, which runs setup regardless of trust (maintainer 2026-11-25, loop row L2-5).
+1. When Git invokes the installed checkout hook for a new worktree with an all-zero previous object ID and branch-checkout flag `1`, and the checked-out state is trusted, it runs `make venv` in that worktree. A state is trusted when its commit is an ancestor of `origin/main` (maintainer 2026-11-25, phase-6 P6-1: no list of unchanged inputs is safe); an untrusted state, or one where `origin/main` is unknown, skips setup with one line naming the reason and the deliberate command `bash .beads/hooks/post-checkout --lane-setup`, which runs setup regardless of trust (maintainer 2026-11-25, loop row L2-5).
    *Refuted by:* A qualifying checkout skips the command or runs it elsewhere.
 2. When setup runs, it runs `bash tools/pi/install.sh` in the new worktree.
    *Refuted by:* The installation is skipped or runs elsewhere.
