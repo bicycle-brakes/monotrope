@@ -13,6 +13,7 @@ Each rule stands next to the fault that turns it red (docs/WORKFLOW.md, phase
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from datetime import date
@@ -524,3 +525,337 @@ def test_the_map_holds_documents_not_harness_configuration() -> None:
         "docs/archive/x.md",
     ):
         assert not held(rel), f"{rel} carries no document header and must not be held"
+
+
+# ---------------------------------------------------------------------------
+# the batched history (bead coding-harness-bxxt.21)
+# ---------------------------------------------------------------------------
+
+FLAT_MAP = 'schema_version: 1\npaths:\n  - prefix: ""\n    frontmatter: required\n'
+
+
+def _oracle(root: Path, rel: str) -> tuple[date, str] | None:
+    """What one literal `git log -1 --no-merges -- <file>` with `log.follow` off answers, in the check's own env."""
+    erg = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "--literal-pathspecs",
+            "-c",
+            "log.follow=false",
+            "log",
+            "-1",
+            "--no-merges",
+            "--format=%cs %h",
+            "--",
+            rel,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    zeile = erg.stdout.strip()
+    if not zeile:
+        return None
+    tag, kurz = zeile.split(" ", 1)
+    return date.fromisoformat(tag), kurz
+
+
+def _per_file_reference_dates(root: Path, files: list[str], today: date) -> dict[str, tuple[date, str]]:
+    """The check's former per-file lookup, with the literal pathspec and `log.follow` off the spec asks for."""
+    dirty = set(cfc._git_z(root, "diff", "--name-only", "--no-renames", "--relative", "-z", "HEAD"))
+    dirty |= set(cfc._git_z(root, "ls-files", "-z", "--others", "--exclude-standard"))
+    out: dict[str, tuple[date, str]] = {}
+    for f in files:
+        if f in dirty:
+            out[f] = (today, "uncommitted")
+            continue
+        found = _oracle(root, f)
+        if found is None:
+            raise cfc.CannotMeasure(f"git log cannot date {f}: no commit changed it")
+        out[f] = found
+    return out
+
+
+def _edit(repo: Path, *rels: str, tag: str) -> None:
+    for rel in rels:
+        _write(repo, rel, _doc("2026-09-01", body=f"{rel} {tag}"))
+
+
+def _branchy_history(tmp_path: Path) -> Path:
+    """Merges that keep one side, the other side or neither, a move, a subdirectory, and names git could misread."""
+    repo = _repo(tmp_path, FLAT_MAP)
+    _git(repo, "config", "log.follow", "true")
+    _write(repo, "sub/provenance.yaml", FLAT_MAP)
+    _edit(
+        repo,
+        "side.md",
+        "ours.md",
+        "evil.md",
+        "trunk.md",
+        "trunk2.md",
+        "top2.md",
+        "old.md",
+        "a*b.md",
+        "aXb.md",
+        "q?.md",
+        "qZ.md",
+        "[x].md",
+        "x.md",
+        ":lead.md",
+        "lead.md",
+        "sub/s.md",
+        "sub/t.md",
+        "sub/u.md",
+        tag="base",
+    )
+    _commit(repo, "2026-09-01T12:00:00+00:00")
+    trunk = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+
+    # The side branch touches nothing below sub/.
+    _git(repo, "switch", "-q", "-c", "side")
+    _edit(repo, "side.md", "ours.md", "evil.md", tag="side")
+    _commit(repo, "2026-09-03T12:00:00+00:00")
+    _git(repo, "switch", "-q", trunk)
+    _edit(repo, "trunk.md", "evil.md", "sub/t.md", tag="trunk")
+    _commit(repo, "2026-09-04T12:00:00+00:00")
+    # side.md comes from the branch, ours.md stays as on trunk, evil.md differs from both sides.
+    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side")
+    _git(repo, "checkout", "side", "--", "side.md")
+    _edit(repo, "evil.md", tag="resolved by hand")
+    _commit(repo, "2026-09-10T12:00:00+00:00", "merge side")
+
+    # A glob or pathspec magic in the names above would match these.
+    _edit(repo, "aXb.md", "qZ.md", "x.md", "lead.md", tag="decoy")
+    _commit(repo, "2026-09-11T12:00:00+00:00")
+    _git(repo, "mv", "old.md", "new.md")
+    _commit(repo, "2026-09-11T18:00:00+00:00")
+
+    # The merge takes sub/ from the branch, while the trees differ outside it.
+    _git(repo, "switch", "-q", "-c", "side2")
+    _edit(repo, "sub/s.md", "top2.md", tag="side2")
+    _commit(repo, "2026-09-12T12:00:00+00:00")
+    _git(repo, "switch", "-q", trunk)
+    _edit(repo, "trunk2.md", tag="trunk2")
+    _commit(repo, "2026-09-13T12:00:00+00:00")
+    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "-s", "ours", "side2")
+    _git(repo, "checkout", "side2", "--", "sub/s.md", "top2.md")
+    _commit(repo, "2026-09-15T12:00:00+00:00", "merge side2")
+    return repo
+
+
+def test_batch_matches_literal_per_path_history(tmp_path: Path) -> None:
+    """Spec criterion 2: every clean file gets the date and hash its own literal `git log -1 --no-merges` gives.
+
+    The repository sets `log.follow=true`; the oracle and the batch force it off. Run at the top and at a
+    subdirectory root, across merges that keep one side, the other or neither.
+    """
+    repo = _branchy_history(tmp_path)
+
+    got: dict[Path, dict[str, tuple[date, str]]] = {}
+    for root in (repo, repo / "sub"):
+        files = cfc.held_files(root)
+        want = {f: _oracle(root, f) for f in files}
+        assert None not in want.values(), "every file in the fixture has history"
+        got[root] = cfc.reference_dates(root, files, TODAY)
+        assert got[root] == want, f"the batch differs from per-path git log at {root}"
+    assert {"a*b.md", "q?.md", "[x].md", ":lead.md", "new.md", "sub/t.md"} <= set(got[repo])
+    assert {"s.md", "t.md", "u.md"} <= set(got[repo / "sub"])
+
+    # The fixture bites: a walk that follows both sides of a merge dates ours.md by the discarded branch edit,
+    # and a glob pathspec dates a*b.md by the decoy.
+    def date_of(*args: str) -> str:
+        erg = subprocess.run(
+            ["git", "-C", str(repo), "-c", "log.follow=false", "log", "-1", "--no-merges", "--format=%cs", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return erg.stdout.strip()
+
+    assert date_of("--full-history", "--", "ours.md") == "2026-09-03"
+    assert got[repo]["ours.md"][0] == date(2026, 9, 1)
+    assert date_of("--", "a*b.md") == "2026-09-11"
+    assert got[repo]["a*b.md"][0] == date(2026, 9, 1)
+
+
+def test_date_check_has_bounded_git_processes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 1: the date lookup starts at most three git processes, however many files it dates."""
+    repo = _repo(tmp_path)
+    for n in range(8):
+        _write(repo, f"docs/d{n}.md", _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    _write(repo, "docs/d7.md", _doc("2026-09-10", body="edited"))
+    files = cfc.held_files(repo)
+    assert len(files) == 8
+
+    started: list[object] = []
+    echt = subprocess.Popen
+
+    class Counting(echt):  # type: ignore[misc, valid-type]
+        def __init__(self, args: object, *rest: object, **kw: object) -> None:
+            started.append(args)
+            super().__init__(args, *rest, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(subprocess, "Popen", Counting)
+    counts = []
+    for size in (1, 3, len(files)):
+        started.clear()
+        refs = cfc.reference_dates(repo, files[:size], TODAY)
+        assert len(refs) == size
+        counts.append(len(started))
+    monkeypatch.undo()
+
+    assert max(counts) <= 3, f"processes per lookup: {counts}"
+    assert len(set(counts)) == 1, f"the process count grows with the held set: {counts}"
+
+
+def test_staged_and_untracked_documents_use_today(tmp_path: Path) -> None:
+    """Spec criterion 3: modified, staged, newly staged and untracked files are dated today as uncommitted."""
+    repo = _repo(tmp_path)
+    for rel in ("docs/clean.md", "docs/staged.md", "docs/edited.md"):
+        _write(repo, rel, _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    _write(repo, "docs/staged.md", _doc("2026-09-10", body="staged"))
+    _git(repo, "add", "docs/staged.md")
+    _write(repo, "docs/edited.md", _doc("2026-09-10", body="edited"))
+    _write(repo, "docs/new-staged.md", _doc("2026-09-10"))
+    _git(repo, "add", "docs/new-staged.md")
+    _write(repo, "docs/untracked.md", _doc("2026-09-10"))
+
+    refs = cfc.reference_dates(repo, cfc.held_files(repo), TODAY)
+    for rel in ("docs/staged.md", "docs/edited.md", "docs/new-staged.md", "docs/untracked.md"):
+        assert refs[rel] == (TODAY, "uncommitted"), f"{rel} was dated by a commit"
+    assert refs["docs/clean.md"] == _oracle(repo, "docs/clean.md")
+    assert refs["docs/clean.md"][0] == date(2026, 9, 10)
+
+
+def test_missing_history_keeps_per_file_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Spec criterion 4: a clean file the batch cannot date is exit 3 with the per-file diagnostic, as before."""
+    repo = _repo(tmp_path)
+    _write(repo, "docs/a.md", _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    for rel in ("docs/b-new.md", "docs/c-new.md"):
+        _write(repo, rel, _doc("2026-09-10"))
+        _git(repo, "add", rel)
+
+    # Staged files are dirty; hiding the diff makes them clean files no commit ever changed.
+    echt = cfc._git
+
+    def blind(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        if args[:1] == ("diff",):
+            return subprocess.CompletedProcess(["git", *args], 0, "", "")
+        return echt(root, *args)
+
+    monkeypatch.setattr(cfc, "_git", blind)
+    for do_stamp in (False, True):
+        assert cfc.run(repo, do_stamp, TODAY, UTC_TODAY) == 3
+        err = capsys.readouterr().err
+        assert err == "NOT MEASURED: git log cannot date docs/b-new.md: no commit changed it\n"
+
+
+def test_failed_batch_names_command_without_blaming_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Spec criterion 5: a failed batch is exit 3, names its command and the end of its stderr, blames no file."""
+    repo = _repo(tmp_path)
+    _write(repo, "docs/a.md", _doc("2026-09-01"))
+    _write(repo, "docs/b.md", _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    command = shlex.join(["git", "-C", str(repo), *cfc.HISTORY_ARGS])
+
+    echt = cfc._git
+    stderr = {"text": ""}
+
+    def failing(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        if "log" in args:
+            return subprocess.CompletedProcess(["git", *args], 128, "", stderr["text"])
+        return echt(root, *args)
+
+    monkeypatch.setattr(cfc, "_git", failing)
+
+    def excerpt(text: str) -> str:
+        stderr["text"] = text
+        assert cfc.run(repo, False, TODAY, UTC_TODAY) == 3
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        err = captured.err
+        assert err.count("NOT MEASURED") == 1
+        assert command in err and "exit 128" in err
+        assert "docs/a.md" not in err and "docs/b.md" not in err, "the failure was blamed on a file"
+        return err.split("stderr:\n", 1)[1].removesuffix("\n")
+
+    assert excerpt("fatal: bad object HEAD\n") == "fatal: bad object HEAD"
+
+    lines = [f"stderr line {n:02d} token=sk-not-redacted" for n in range(30)]
+    shown = excerpt("\n".join(lines) + "\n")
+    assert shown == cfc.STDERR_CUT + "\n" + "\n".join(lines[-20:]), "not the last 20 lines, unredacted, marked"
+
+    long_line = "0123456789" * 500 + "END"
+    shown = excerpt(long_line)
+    assert shown.startswith(cfc.STDERR_CUT + "\n")
+    body = shown[len(cfc.STDERR_CUT) + 1 :]
+    assert body == long_line[-2000:] and len(body) <= 2000
+
+
+def _mixed_history(base: Path) -> Path:
+    """Stale, current, missing, future, headless and branch-dated documents, one edited and one new."""
+    base.mkdir()
+    repo = _repo(base)
+    _write(repo, "docs/current.md", _doc("2026-09-05"))
+    _write(repo, "docs/stale.md", _doc("2026-09-01"))
+    _write(repo, "docs/missing.md", _doc(None))
+    _write(repo, "docs/future.md", _doc("2099-01-01"))
+    _write(repo, "docs/headless.md", "# no header\n")
+    _write(repo, "docs/branch.md", _doc("2026-09-05"))
+    _write(repo, "docs/edited.md", _doc("2026-09-05"))
+    _commit(repo, "2026-09-05T12:00:00+00:00")
+    trunk = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    _git(repo, "switch", "-q", "-c", "side")
+    _write(repo, "docs/branch.md", _doc("2026-09-05", body="edited on the branch"))
+    _commit(repo, "2026-09-08T12:00:00+00:00")
+    _git(repo, "switch", "-q", trunk)
+    _write(repo, "docs/current.md", _doc("2026-09-10", body="edited on trunk"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side", when="2026-09-12T12:00:00+00:00")
+    _write(repo, "docs/edited.md", _doc("2026-09-05", body="not committed"))
+    _write(repo, "docs/new.md", _doc("2026-09-01"))
+    return repo
+
+
+def _tree_bytes(repo: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(repo)): p.read_bytes()
+        for p in repo.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(repo).parts
+    }
+
+
+def test_batch_preserves_check_and_stamp_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Spec criterion 6: check and stamp print, exit and write as the per-file lookup does on a twin."""
+    batch = _mixed_history(tmp_path / "batch")
+    per_file = _mixed_history(tmp_path / "per-file")
+
+    def both(do_stamp: bool) -> tuple[tuple[int, str, str], tuple[int, str, str]]:
+        code = cfc.run(batch, do_stamp, TODAY, UTC_TODAY)
+        mit = capsys.readouterr()
+        with monkeypatch.context() as m:
+            m.setattr(cfc, "reference_dates", _per_file_reference_dates)
+            code_alt = cfc.run(per_file, do_stamp, TODAY, UTC_TODAY)
+        ohne = capsys.readouterr()
+        return (code, mit.out, mit.err), (code_alt, ohne.out, ohne.err)
+
+    neu, alt = both(False)
+    assert neu == alt
+    assert neu[0] == 1 and "docs/branch.md: stale" in neu[1] and "docs/edited.md: stale" in neu[1]
+    assert "docs/current.md" not in neu[1], "the merge commit dated a file"
+
+    neu, alt = both(True)
+    assert neu == alt
+    assert _tree_bytes(batch) == _tree_bytes(per_file), "the stamp wrote different bytes"
+    assert b"updated: 2026-09-20" in _tree_bytes(batch)["docs/stale.md"]
