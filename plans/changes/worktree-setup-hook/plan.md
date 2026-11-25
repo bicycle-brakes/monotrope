@@ -54,27 +54,32 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_worktree_setup_hook.py::test_new_worktree_runs_venv_in_worktree — setup is omitted or uses the shared hook's directory.
-- 2: not yet written tests/test_worktree_setup_hook.py::test_new_worktree_runs_pi_install_in_worktree — Pi installation is omitted or uses the wrong directory.
-- 3: not yet written tests/test_worktree_setup_hook.py::test_yaml_check_reports_failure — a failed import is accepted.
-- 4: not yet written tests/test_worktree_setup_hook.py::test_pi_version_check_reports_failure — a missing, failed or mismatched version is accepted.
-- 5: not yet written tests/test_worktree_setup_hook.py::test_each_setup_failure_names_step — a failed step is silent or unnamed.
-- 6: not yet written tests/test_worktree_setup_hook.py::test_setup_failure_does_not_fail_checkout — setup failure makes the hook fail.
-- 7: not yet written tests/test_worktree_setup_hook.py::test_opt_out_skips_setup — an opted-out invocation runs setup or checks.
-- 8: not yet written tests/test_worktree_setup_hook.py::test_other_checkouts_skip_setup — a normal checkout runs setup or checks.
-- 9: not yet written tests/test_worktree_setup_hook.py::test_beads_integration_is_preserved — arguments or exit status change.
-- 10: not yet written tests/test_worktree_setup_hook.py::test_setup_finishes_before_worktree_add_returns — Git returns before setup finishes.
-- 11: not yet written tests/test_worktree_setup_hook.py::test_setup_timeout_stops_and_reports_step_and_limit — a stalled step continues or its report omits the limit.
-- 12: not yet written tests/test_worktree_setup_hook.py::test_setup_precedes_failing_beads — failing Beads prevents setup.
-- 13: not yet written tests/test_worktree_setup_hook.py::test_setup_output_uses_worktree_git_log — output reaches the caller or the log is elsewhere.
-- 14: not yet written tests/test_worktree_setup_hook.py::test_setup_emits_start_and_result — either status line is missing or duplicated.
-- 15: not yet written tests/test_worktree_setup_hook.py::test_only_one_opts_out — an unset or non-1 value skips setup.
+- 1: tests/test_worktree_setup_hook.py::test_new_worktree_runs_venv_in_worktree — setup is omitted or uses the shared hook's directory.
+- 2: tests/test_worktree_setup_hook.py::test_new_worktree_runs_pi_install_in_worktree — Pi installation is omitted or uses the wrong directory.
+- 3: tests/test_worktree_setup_hook.py::test_yaml_check_reports_failure — a failed import is accepted.
+- 4: tests/test_worktree_setup_hook.py::test_pi_version_check_reports_failure — a missing, failed or mismatched version is accepted.
+- 5: tests/test_worktree_setup_hook.py::test_each_setup_failure_names_step — a failed step is silent or unnamed.
+- 6: tests/test_worktree_setup_hook.py::test_setup_failure_does_not_fail_checkout — setup failure makes the hook fail.
+- 7: tests/test_worktree_setup_hook.py::test_opt_out_skips_setup — an opted-out invocation runs setup or checks.
+- 8: tests/test_worktree_setup_hook.py::test_other_checkouts_skip_setup — a normal checkout runs setup or checks.
+- 9: tests/test_worktree_setup_hook.py::test_beads_integration_is_preserved — arguments or exit status change.
+- 10: tests/test_worktree_setup_hook.py::test_setup_finishes_before_worktree_add_returns — Git returns before setup finishes.
+- 11: tests/test_worktree_setup_hook.py::test_setup_timeout_stops_and_reports_step_and_limit — a stalled step continues or its report omits the limit.
+- 12: tests/test_worktree_setup_hook.py::test_setup_precedes_failing_beads — failing Beads prevents setup.
+- 13: tests/test_worktree_setup_hook.py::test_setup_output_uses_worktree_git_log — output reaches the caller or the log is elsewhere.
+- 14: tests/test_worktree_setup_hook.py::test_setup_emits_start_and_result — either status line is missing or duplicated.
+- 15: tests/test_worktree_setup_hook.py::test_only_one_opts_out — an unset or non-1 value skips setup.
 
 ## Explore fallback
 
 On 2026-11-25 explore used the Stage-1 route, `claude-haiku-5-5`, because GLM through Z.ai had reached its weekly limit until 2026-11-29.
 
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
+
 ## Time used
 
 2026-11-25 14:46:40–14:48:55 UTC, 135 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 15:24:33–15:26:20 UTC, 107 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 15:52:40–16:01:28 UTC, 528 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_worktree_setup_hook.py`; extra ruff targets none beyond the cheap checks; gates `leerprobe` (block), `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
