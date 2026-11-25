@@ -34,3 +34,5 @@ reason: A behaviour-preserving fix with a stated remedy (bead coding-harness-vg9
 
 [DETAIL] **D-5 (spec review F-2, which fragment)**: reading (a) — the criterion concerns the credential text the exception carried: neither the whole key nor any run of eight or more of its characters that the exception message contained may survive into the reading; the test injects such a fragment and checks it is replaced. Reason: `scrub` redacts what it is given; the reading cannot contain credential text the exception never carried.
 
+[DETAIL] **D-6 (spec review F-3, the substituted redactor)**: reading (a) — the test passes a stand-in runner object (not the module importable as `stage2`) whose `scrub` returns a sentinel, and asserts the reading carries the sentinel, so a reader that ignores its `runner` and imports `stage2` goes red. Reason: only that construction catches the defect the Problem names.
+
