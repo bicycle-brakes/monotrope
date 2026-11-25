@@ -37,13 +37,15 @@ At commit `12c773c5` on 2026-11-25, the swarm stand-in reads and parses every ea
 4. When the call log is removed, the next call uses a fresh history and starts its selected key at zero, including after direct removal or fixture rewind.
    *Refuted by:* A call after either kind of removal selects a later step or the new log contains a record from the removed history.
 5. If the counter is missing, unreadable, truncated, of unknown shape, or its recorded device, inode and post-update byte size differ from the current log, the count is rebuilt from the current log's records before selecting a step.
-   *Refuted by:* A nonempty current log with a missing, unreadable, truncated, unknown-shaped or mismatched counter raises or yields a stale count instead of its actual per-key count; this includes a recreated log with a reused inode and a different size.
+   *Refuted by:* With successful counter publication, a nonempty current log with a missing, unreadable, truncated, unknown-shaped or mismatched counter raises or yields a stale count instead of its actual per-key count; this includes a recreated log with a reused inode and a different size.
 6. When a writer holding the old log open finishes after removal and a new run has begun, its record and count do not affect the new run's step selection.
    *Refuted by:* A synchronized late old writer causes a new-run call to skip or repeat a step, or places its record in the new log.
 7. While the counter is used, it is declared to the stand-in file guard and its access follows the shared locked helper protocol.
    *Refuted by:* Raw guarded access succeeds outside the helper, or concurrent access exposes a partial counter or log record.
 8. When a counter update is published, readers see a complete counter even if an old-log writer publishes concurrently.
    *Refuted by:* A synchronized old and new writer exposes a partially written counter to a reader.
+9. If writing or replacing the counter fails, the failure propagates to the caller.
+   *Refuted by:* A counter path that is a directory causes a read failure and a failed replacement, but the call succeeds or suppresses the replacement error.
 
 ## Non-goals
 
@@ -65,4 +67,4 @@ Production code and the separate stand-in are outside this test-infrastructure f
 
 ## Open decisions
 
-None open. [DETAIL] The counter is tagged with the log device, inode and byte size after its last update, and is atomically published by temporary file and replacement; an invalid or mismatched counter is rebuilt under the current log lock. This preserves clear-by-removal behavior, including a late old writer (decisions.md D-4 through D-9). A frozen copy of the old count expression makes parity independently refutable. A one-hour implementation appetite is a reversible stop for this small test-only change; it does not prescribe a measured speedup.
+None open. [DETAIL] The counter is tagged with the log device, inode and byte size after its last update, and is atomically published by temporary file and replacement; an invalid or mismatched counter is rebuilt under the current log lock. Counter read errors trigger rebuilding, while write and replacement errors propagate; this preserves the shared helper's error contract (decisions.md D-4 through D-10). A frozen copy of the old count expression makes parity independently refutable. A one-hour implementation appetite is a reversible stop for this small test-only change; it does not prescribe a measured speedup.
