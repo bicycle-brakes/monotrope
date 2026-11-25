@@ -34,7 +34,7 @@ from xml.etree import ElementTree
 import atomic_test_log
 import pytest
 import stand_in_log_guard
-from atomic_test_log import append_record, read_records, text_append
+from atomic_test_log import append_counted, append_record, counter_path, read_counter, read_records, text_append
 from test_stage2_swarm import SwarmWorld
 
 HERE = Path(__file__).resolve().parent
@@ -1002,7 +1002,10 @@ def _check_raw_access_forms(tmp_path: Path) -> None:
         "f6_8_default": reader,
     }
     for name, form in forms.items():
-        with pytest.raises(stand_in_log_guard.RawStandInLogAccess, match="read_records / append_record"):
+        with pytest.raises(
+            stand_in_log_guard.RawStandInLogAccess,
+            match="read_records / append_record",
+        ):
             form()
         recorded = stand_in_log_guard.take_violations()
         assert len(recorded) == 1 and log.name in recorded[0], (name, recorded)
@@ -1217,3 +1220,392 @@ def test_runtime_check_keeps_every_access_until_session_finish(tmp_path: Path, w
         passes = 1 + ("finalizer" in outcomes) + (drain and "pass" in outcomes)
         counts = re.findall(r"(\d+) passed", output)
         assert counts and int(counts[-1]) == passes, (session, passes, output)
+
+
+# ---------------------------------------------------------------------------
+# The per-key call counter beside a log (change standin-call-counter)
+# ---------------------------------------------------------------------------
+
+# Independent counted writers: each signals it is ready, waits for one shared
+# start signal, then appends counted records alternating a shared key and its own.
+COUNTED_WRITER = """
+import sys
+import time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import atomic_test_log
+data = Path(sys.argv[2])
+writer = sys.argv[3]
+go = Path(sys.argv[4])
+Path(sys.argv[5]).write_text("ready")
+deadline = time.time() + 60
+while not go.exists() and time.time() < deadline:
+    time.sleep(0.005)
+for seq in range(8):
+    key = "shared" if seq % 2 == 0 else writer
+    def build(index, key=key, seq=seq):
+        return {"key": key, "writer": writer, "seq": seq, "index": index, "payload": sys.argv[6]}
+    atomic_test_log.append_counted(data, key, build)
+"""
+
+# A counted writer of the old log generation that pauses, holding the old
+# log's lock, either inside its record builder (after its count was taken)
+# or inside its counter publication (the temporary file written, not yet
+# replaced) until the test's `go.marker`. It prints the index it received.
+PAUSED_WRITER = """
+import sys
+import time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import atomic_test_log
+data = Path(sys.argv[2])
+gap = Path(sys.argv[3])
+pause = sys.argv[4]
+
+
+def wait():
+    (gap / "started.marker").write_text("paused")
+    deadline = time.time() + 60
+    while not (gap / "go.marker").exists() and time.time() < deadline:
+        time.sleep(0.02)
+
+
+if pause == "publish":
+    replace = Path.replace
+
+    def paused_replace(self, target):
+        wait()
+        return replace(self, target)
+
+    Path.replace = paused_replace
+
+
+def build(index):
+    if pause == "build":
+        wait()
+    return {"key": "a", "writer": "old", "index": index}
+
+
+print(atomic_test_log.append_counted(data, "a", build))
+"""
+
+COUNTER_FIELDS = {"device", "inode", "size", "mtime_ns", "counts"}
+
+
+def _counted(key: str, writer: str = "test"):
+    """A record builder for `append_counted` that keeps the index it received."""
+    return lambda index: {"key": key, "writer": writer, "index": index}
+
+
+def _start_paused_writer(tmp_path: Path, log: Path, pause: str) -> tuple[subprocess.Popen, Path]:
+    gap = tmp_path / f"gap-{pause}"
+    gap.mkdir()
+    script = tmp_path / "paused_writer.py"
+    script.write_text(PAUSED_WRITER, encoding="utf-8")
+    child = subprocess.Popen(
+        [sys.executable, str(script), str(HERE), str(log), str(gap), pause],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    _wait_for(gap / "started.marker", child)
+    return child, gap
+
+
+def _child_output(child: subprocess.Popen) -> str:
+    out = child.stdout.read() if child.stdout else ""
+    err = child.stderr.read() if child.stderr else ""
+    assert child.returncode == 0, err[-2000:]
+    return out
+
+
+def _check_counter_access(tmp_path: Path) -> None:
+    """Criterion 7 (standin-call-counter), run under the installed guard in an isolated process.
+
+    The helper's counted append and counter read pass; every raw access to
+    the counter, and a raw access a record builder makes while
+    `append_counted` runs it, is refused before touching either file.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    log = _declared_log(tmp_path)
+    counter = counter_path(log)
+    assert counter.name in atomic_test_log.STAND_IN_COUNTERS
+    assert counter.name in atomic_test_log.STAND_IN_FILES
+    stand_in_log_guard.take_violations()
+    assert append_counted(log, "a", _counted("a")) == 0
+    assert read_counter(log)["counts"] == {"a": 1}
+    assert stand_in_log_guard.take_violations() == [], "the helper's locked access was refused"
+    forms = {
+        "open_read": lambda: open(counter).read(),  # noqa: SIM115, PTH123 - the planted raw access
+        "open_write": lambda: open(counter, "w"),  # noqa: SIM115, PTH123 - the planted raw access
+        "os_open": lambda: os.open(counter, os.O_RDONLY),
+        "read_text": lambda: counter.read_text(),
+        "write_text": lambda: counter.write_text("{}"),
+        "builder_reads_log": lambda: append_counted(
+            log, "a", lambda index: {"key": "a", "index": index, "raw": log.read_text()}
+        ),
+        "builder_reads_counter": lambda: append_counted(
+            log, "a", lambda index: {"key": "a", "index": index, "raw": counter.read_bytes()}
+        ),
+    }
+    for name, form in forms.items():
+        with pytest.raises(
+            stand_in_log_guard.RawStandInLogAccess,
+            match="read_records / append_record" if name == "builder_reads_log" else "append_counted",
+        ):
+            form()
+        recorded = stand_in_log_guard.take_violations()
+        assert len(recorded) == 1, (name, recorded)
+        assert "test_atomic_test_log.py" in recorded[0], (name, recorded)
+    with pytest.raises(ValueError, match="use append_counted"):
+        text_append(counter, "{}")
+    assert read_records(log) == [{"key": "a", "writer": "test", "index": 0}], "a refused access changed the log"
+    assert read_counter(log)["counts"] == {"a": 1}, "a refused access changed the counter"
+
+
+def test_counter_guard_and_locked_access(tmp_path: Path) -> None:
+    """Criterion 7 (standin-call-counter). Planted fault: raw counter access passes, or a builder escapes the guard.
+
+    The refusals run in an isolated process, outside this session's audit.
+    Here, a writer holding the log's lock mid-record makes the counted
+    append wait and time out instead of reading the partial record or
+    publishing a counter beside it; once released, the count is rebuilt from
+    the completed log.
+    """
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; from pathlib import Path; import test_atomic_test_log as tests; "
+            "tests.stand_in_log_guard.install(); tests._check_counter_access(Path(sys.argv[1]))",
+            str(tmp_path / "isolated"),
+        ],
+        cwd=HERE,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
+    assert append_counted(log, "a", _counted("a")) == 0
+    published = read_counter(log)
+    child, gap = _start_split_writer(tmp_path, log)
+    try:
+        with pytest.raises(TimeoutError):
+            append_counted(log, "a", _counted("a"), timeout=0.3)
+        assert read_counter(log) == published, "a counter was published while another writer held the log"
+    finally:
+        _finish(child, gap)
+    assert child.returncode == 0, child.stderr.read() if child.stderr else ""
+    assert append_counted(log, "a", _counted("a")) == 1
+    assert [record.get("key") for record in read_records(log)] == ["a", None, "a"]
+
+
+def test_counter_serializes_parallel_calls_with_log(tmp_path: Path) -> None:
+    """Criterion 2 (standin-call-counter). Planted fault: parallel calls receive duplicate or out-of-order indices.
+
+    Four writer processes released by one start signal append counted
+    records with a shared key and their own; each record's index must equal
+    the number of earlier records with its key in the serialized log.
+    """
+    log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
+    script = tmp_path / "counted_writer.py"
+    script.write_text(COUNTED_WRITER, encoding="utf-8")
+    go = tmp_path / "go.marker"
+    writers = 4
+    ready = [tmp_path / f"ready-{index}.marker" for index in range(writers)]
+    children = [
+        subprocess.Popen(
+            [sys.executable, str(script), str(HERE), str(log), f"w{index}", str(go), str(ready[index]), PAYLOAD],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for index in range(writers)
+    ]
+    try:
+        for marker, child in zip(ready, children, strict=True):
+            _wait_for(marker, child)
+        go.write_text("go")
+        for child in children:
+            _out, err = child.communicate(timeout=180)
+            assert child.returncode == 0, err[-2000:]
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+        for child in children:
+            child.wait(timeout=30)
+    records = read_records(log)
+    assert len(records) == writers * 8
+    seen: dict[str, int] = {}
+    for position, record in enumerate(records):
+        assert record["payload"] == PAYLOAD, f"record {position} was torn"
+        assert record["index"] == seen.get(record["key"], 0), f"record {position} got a count out of log order"
+        seen[record["key"]] = seen.get(record["key"], 0) + 1
+    stored = read_counter(log)
+    status = log.stat()
+    assert [stored["device"], stored["inode"], stored["size"]] == [status.st_dev, status.st_ino, status.st_size]
+    assert stored["counts"] == seen
+
+
+def test_late_old_writer_does_not_affect_new_log(tmp_path: Path) -> None:
+    """Criterion 6 (standin-call-counter). Planted fault: a late writer of a removed log changes the new run's count.
+
+    The old writer holds the removed log's lock with its count taken; the new
+    run starts on a fresh log; then the old writer completes and publishes a
+    counter for the removed inode. The new run's next call must still count
+    only the new log, and the late record must stay out of it.
+    """
+    log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
+    for expected in range(2):
+        assert append_counted(log, "a", _counted("a", "seed")) == expected
+    old_inode = log.stat().st_ino
+    child, gap = _start_paused_writer(tmp_path, log, "build")
+    try:
+        log.unlink()  # the suites' clear between runs
+        assert append_counted(log, "a", _counted("a", "new"), timeout=2) == 0
+    finally:
+        _finish(child, gap)
+    assert _child_output(child).strip() == "2", "the old writer did not count its own history"
+    assert read_counter(log)["inode"] == old_inode, "the late writer's counter publication did not land"
+    assert append_counted(log, "a", _counted("a", "new")) == 1
+    assert read_records(log) == [
+        {"key": "a", "writer": "new", "index": 0},
+        {"key": "a", "writer": "new", "index": 1},
+    ], "the late writer's record reached the new log"
+
+
+def _complete_counter(snapshot) -> bool:
+    return (
+        isinstance(snapshot, dict)
+        and set(snapshot) == COUNTER_FIELDS
+        and all(type(snapshot[field]) is int for field in ("device", "inode", "size", "mtime_ns"))
+        and isinstance(snapshot["counts"], dict)
+    )
+
+
+def test_counter_publication_is_atomic_across_log_generations(tmp_path: Path) -> None:
+    """Criterion 8 (standin-call-counter). Planted fault: a reader sees a partial counter while two generations publish.
+
+    The old-generation writer pauses with its counter staged but not
+    replaced; the new generation publishes meanwhile; then the old one
+    replaces. A reader thread reads the counter throughout and at each
+    synchronized step: every snapshot is complete, and the staged one is not
+    visible before its replacement.
+    """
+    log = tmp_path / atomic_test_log.STAND_IN_LOGS[0]
+    for expected in range(2):
+        assert append_counted(log, "a", _counted("a", "seed")) == expected
+    old_inode = log.stat().st_ino
+    snapshots: list = []
+    errors: list = []
+    stop = threading.Event()
+
+    def observe() -> None:
+        while not stop.is_set():
+            try:
+                snapshots.append(read_counter(log))
+            except Exception as error:  # a partial counter shows here
+                errors.append(error)
+
+    reader = threading.Thread(target=observe)
+    reader.start()
+    try:
+        child, gap = _start_paused_writer(tmp_path, log, "publish")
+        try:
+            staged = read_counter(log)
+            assert staged["inode"] == old_inode and staged["counts"] == {"a": 2}, "a staged counter became visible"
+            log.unlink()
+            for expected in range(2):
+                assert append_counted(log, "a", _counted("a", "new"), timeout=2) == expected
+            fresh = read_counter(log)
+            assert fresh["inode"] == log.stat().st_ino and fresh["counts"] == {"a": 2}
+        finally:
+            _finish(child, gap)
+        assert _child_output(child).strip() == "2"
+        late = read_counter(log)
+        assert late["inode"] == old_inode and late["counts"] == {"a": 3}, "the old generation's counter did not land"
+        assert append_counted(log, "a", _counted("a", "new")) == 2
+    finally:
+        stop.set()
+        reader.join(timeout=60)
+    assert not reader.is_alive()
+    assert errors == [], errors[:3]
+    assert snapshots, "the reader read no counter"
+    incomplete = [snapshot for snapshot in snapshots if not _complete_counter(snapshot)]
+    assert incomplete == [], incomplete[:3]
+
+
+def test_guard_reports_dynamic_callback(tmp_path: Path) -> None:
+    """A dynamic callback is the caller, even while a locked helper invokes it."""
+    script = r"""
+import os
+import sys
+from pathlib import Path
+import atomic_test_log as helper
+import stand_in_log_guard as guard
+
+if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+    def skip_dynamic(frame):
+        while frame is not None:
+            code = frame.f_code
+            where = guard._real_file(code.co_filename)
+            if code.co_filename.startswith("<") or where == guard._THIS_FILE or where.startswith(guard._STDLIB):
+                frame = frame.f_back
+                continue
+            return code.co_name in guard._HELPER_FUNCTIONS and where == guard._HELPER_FILE
+        return False
+    guard._from_helper = skip_dynamic
+
+guard.install()
+log = Path(sys.argv[1]) / "calls.jsonl"
+for target in (log, helper.counter_path(log)):
+    namespace = {"target": target}
+    exec(compile("def builder(index):\n    return {'key': 'a', 'raw': target.read_text()}\n", "<dynamic callback>", "exec"), namespace)
+    try:
+        helper.append_counted(log, "a", namespace["builder"])
+    except guard.RawStandInLogAccess:
+        pass
+    else:
+        raise AssertionError("dynamic callback raw access was not refused")
+    violations = guard.take_violations()
+    assert len(violations) == 1 and "<dynamic callback>" in violations[0], violations
+"""
+    run = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        cwd=HERE,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
+def test_counted_builder_reentry_fails_immediately(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    for callback in (lambda: read_records(log), lambda: append_counted(log, "a", _counted("a"))):
+
+        def build(index, callback=callback):
+            callback()
+            return {"key": "a", "index": index}
+
+        with pytest.raises(RuntimeError, match="cannot re-enter"):
+            append_counted(log, "a", build, timeout=0.01)
+    assert read_records(log) == []
+
+
+def test_counted_rejects_non_string_key(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    with pytest.raises(TypeError, match="string"):
+        append_counted(log, 1, lambda _index: {"key": 1})
+    assert read_records(log) == []
+
+
+def test_counter_mtime_mismatch_rebuilds(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    assert append_counted(log, "a", _counted("a")) == 0
+    status = log.stat()
+    os.utime(log, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
+    assert append_counted(log, "a", _counted("a")) == 1
+    assert read_counter(log)["mtime_ns"] == log.stat().st_mtime_ns
