@@ -263,8 +263,8 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | BLOCKER | MAINT | base | `.beads/hooks/post-checkout`, `_ls_trusted` and `_ls_step` | A branch can add a malicious `GNUmakefile` while leaving `Makefile`, `requirements*.txt` and `tools/pi/` unchanged. The trust check accepts the branch, and `make venv` executes the new `GNUmakefile` during checkout. The trust check must cover the files that the setup commands actually execute. | Codex | open | — |
-| P6-2 | MAJOR | SPEC | base | `.beads/hooks/post-checkout`, `_ls_fail` | If the log cannot be written and a setup step fails, the failure line reports `log: /dev/null` rather than naming the log as unavailable. The later summary says `unavailable`, but the failure line does not. [Criterion 5] | Codex | open | — |
+| P6-1 | BLOCKER | MAINT | base | `.beads/hooks/post-checkout`, `_ls_trusted` and `_ls_step` | A branch can add a malicious `GNUmakefile` while leaving `Makefile`, `requirements*.txt` and `tools/pi/` unchanged. The trust check accepts the branch, and `make venv` executes the new `GNUmakefile` during checkout. The trust check must cover the files that the setup commands actually execute. | Codex | fixed — tests/test_worktree_setup_hook.py::test_a_branch_adding_a_gnumakefile_is_not_trusted (hand repair 2b2edd16; maintainer 2026-11-25: trust only a commit on origin/main) | no |
+| P6-2 | MAJOR | SPEC | base | `.beads/hooks/post-checkout`, `_ls_fail` | If the log cannot be written and a setup step fails, the failure line reports `log: /dev/null` rather than naming the log as unavailable. The later summary says `unavailable`, but the failure line does not. [Criterion 5] | Codex | fixed — tests/test_worktree_setup_hook.py::test_a_failure_with_an_unwritable_log_names_it_unavailable (hand repair 2b2edd16) | no |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
