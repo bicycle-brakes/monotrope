@@ -162,6 +162,17 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Library - the research metadata census (explore-provenance); tests/test_explore_provenance.py "
         "imports it, and the pytest gate runs it there. It only reads research files, never rewrites them"
     ),
+    "jobs.py": (
+        "Entry point, not a gate — the detached job launcher (start, list, stop) that the night orchestrator "
+        "calls on the maintainer's machine; it needs a live tmux server and real processes, which no CI "
+        "checkout can stand in for; tests/test_jobs.py runs it against isolated state roots (bead "
+        "coding-harness-a6ns.1)"
+    ),
+    "job_containment.py": (
+        "Library - the one owner of finding and ending a detached job's processes; scripts/jobs.py stop "
+        "imports it, and tests/test_jobs.py runs it against real processes and a stand-in backend (bead "
+        "coding-harness-a6ns.1)"
+    ),
     "machine_facts.py": (
         "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
         "(docs/orchestration.md); it reads the maintainer's live disk, swap, worktrees and processes, "

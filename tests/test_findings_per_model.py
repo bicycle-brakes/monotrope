@@ -436,9 +436,12 @@ def test_make_entry_point_and_revision(tmp_path):
     expected = probe.stdout.strip()
     env = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
     env.pop("REV", None)
+    # Under an outer make (CI's verify) the inner one would print "Entering directory" first.
+    for key in ("MAKEFLAGS", "MAKELEVEL", "MFLAGS"):
+        env.pop(key, None)
     # the Makefile calls `python3` from PATH: put the interpreter running this test first
     env["PATH"] = str(Path(sys.executable).parent) + os.pathsep + env.get("PATH", "")
-    command = ["make", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
+    command = ["make", "--no-print-directory", "-C", str(REPO_ROOT), "findings-per-model", "REV=HEAD~1"]
     done = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
     # the exit code may be non-zero on real history: gaps are reported, never hidden
     assert done.stdout.strip(), f"the report printed nothing: stderr {done.stderr[:600]!r}"

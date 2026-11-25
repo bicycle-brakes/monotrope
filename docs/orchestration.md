@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-28
 last_reviewed: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -112,7 +112,10 @@ lane:
   direction.
 - **The appetite.** It is a stop, not an estimate. At night the orchestrator
   may answer cut, park or drop, never continue.
-- **A further case of the same mechanism** at a phase-6 re-check.
+- **A further case of the same mechanism** at a phase-6 re-check, but only
+  when its remedy would be a `Boundary`, change the spec or its criteria, or
+  touch security; otherwise the orchestrator takes the structural remedy at
+  one choke point itself (standing grant, maintainer 2026-11-25).
 
 A leak-check block or a security blocker stops the whole run.
 
@@ -120,9 +123,11 @@ A leak-check block or a security blocker stops the whole run.
 
 Unattended night runs launch through `tools/claude-code/night.py` (which turns
 every sourced `ask` rule into a `deny` under `--permission-mode dontAsk` so a
-permission prompt cannot stall the session). At night nothing is merged: a
-merge asks the maintainer, and nobody can answer it then. A pull request that meets the self-merge rules is marked
-ready. The morning handover lists the ready pull requests with their head
+permission prompt cannot stall the session). A pull request is admitted to
+the merge queue by the orchestrator itself, by day or night, once phase 6 is clean, `make verify` is green on its head and its last commit carries
+the `Closes-Bead` trailer (standing grant, maintainer 2026-11-25); every other
+merge asks the maintainer. The morning handover lists the queued and the
+remaining ready pull requests with their head
 commits, and one word from the maintainer merges them: with the merge
 queue active (rule RB-G7), that word admits them to the queue, and each counts
 as merged only once GitHub shows it merged; a failing group leaves its pull

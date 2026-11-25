@@ -2072,7 +2072,10 @@ reword its reason so it names no fix instead of marking it fixed.
 **Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
-only when pytest exits 1 or 2 there. The repair prompt names the accepted
+only when pytest exits exactly 1 there, with a qualifying failure recorded. A refusal
+names the actual exit code and the first recorded outcome (pass, empty selection,
+collection error, skip, xfail or XPASS); when no case ran, it shows the protected tail of
+the combined output, at most 40 lines and 4,000 characters. The repair prompt names the accepted
 plan's standing ledger tests as pytest targets before handback, and commands Codex to run
 ruff and those standing tests itself; missing written entries remain owed, while missing unwritten
 entries are named but not owed; a file-only fallback delegates the same cheap checks to
@@ -2110,6 +2113,35 @@ restores the whole frontmatter block from trusted snapshot bytes, preserving the
 attempt's body. Other header edits survive only when effective lifecycle values
 stay unchanged. A linked leaf recovers trusted whole-document bytes without reading
 its target; unreadable YAML is restored from the snapshot and rejects the attempt.
+
+**The repair scope is frozen, and new files outside it refuse the checkpoint.** The scope is the
+change's own folder, `tests/`, and the paths the taken rows' Where cells name, read by the shared
+Where-path classifier (`where_named_paths`, the reader the held-row routing also uses, so there is
+no second grammar): path-like tokens and Markdown link text and target, a trailing `:line`,
+`:line-line`, `#L<line>` or `#L<line>-L<line>` selector dropped, a bare name resolved against the
+change folder first. A path naming a tracked file grants that file; a path not tracked yet grants
+that exact path; a directory grants its tree only when the cell writes it with a trailing `/`; a
+bare word that merely names a tracked directory and prose grant nothing, and nothing is refused.
+The runner freezes
+the scope from the rows as they stand before the first model call; the plan is never a source, and
+an attempt's own plan, findings or row writes cannot enlarge it. Both repair prompts state the rule
+in words and forbid handover and journal writes — `docs/journal/` is held for the orchestrator, on
+the runner's held list beside the other held paths. Right after the call, before verification
+writes anything of its own, the runner compares every file git sees with the inventory taken right
+before that attempt's call, judging ignored files by the ignore rules the attempt started under: an
+edited `.gitignore` or `.git/info/exclude` cannot hide a new file, and removing an ignore line does
+not turn a file that already existed into the attempt's. The guard digests those two kinds of
+source and a file named by `git config core.excludesFile`; git's implicit global excludes file,
+used when that key is unset, is read as it stands (the change's named Boundary). A failed
+attempt's new files outside the scope are removed whatever failed - a check, a rejected answer or
+the last route - so the next route, or the next `repair` run, never starts with them. At the checkpoint: a new file outside the
+scope — an untracked non-ignored file, an indexed addition, an explicitly indexed ignored file or a
+rename destination — refuses the attempt on the held-path refusal path. The refusal names every
+offending path and the saved attempt under `refs/stage2/attempts/`, the baseline and the pre-call
+findings go back, and the run stops without another route. Edits to existing tracked files are
+judged as before, untracked files git ignores (test and tool caches) are not new files, and the
+runner's own derived leftovers (the rendered `plans/INDEX.md`, a stamp, its bytecode) are not the
+attempt's to answer for.
 
 When every post-run check passes — the selected verification is green,
 every fixed line checked — the runner writes each row's Status `fixed` in
@@ -2259,8 +2291,11 @@ day session would ask:
    and the run continues. The runner automates this once bead
    coding-harness-m98e lands.
 2. **A further case of the same mechanism at a phase-6 re-check:** record
-   the finding, park that pull request and continue with the next queue
-   item; the maintainer decides it in the morning.
+   the finding and take the structural remedy that closes the mechanism at
+   one choke point, recorded in the bead notes and named in the handover
+   (standing grant, maintainer 2026-11-25). Only a `Boundary`, a remedy that
+   changes the spec or its criteria, or a security question parks that pull
+   request for the maintainer; the run continues with the next queue item.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the
@@ -2325,6 +2360,18 @@ exists, the session reports the missing keep-awake, as it does a missing
 delivery facility, instead of declaring the run ready. No scheduler adapter is
 introduced for this. The wake is time-based: it returns even when every
 lane looks busy, and lane idleness alone triggers nothing.
+
+**Detached runner jobs (ADR 0026).** Every runner verb and every bare
+`make verify` of a night run starts through `python3 scripts/jobs.py start
+-- <command>`, which runs it in its own window of the dedicated tmux server
+`coding-harness`, so the job outlives the orchestrating session. At each
+wake the session reads a job's completion with `python3 scripts/jobs.py
+list`: `running`, `finished` with its exit status or `signal N`, `lost`, or
+`failed to start`; the job's log lies beside its record in the jobs state
+directory, and `scripts/run_report.py` shows the same records. The launcher
+sends no completion notice of its own, so the 30-minute wake stays until
+`lanes.py advance` lands. Commands outside the runner keep the harness
+background mode.
 
 At each wake the session works one fixed order: rearm once for 30 minutes
 and retain the new handle before any lane work; read the lane file; check
