@@ -266,6 +266,9 @@ LEGACY_DUPLICATE_STATUSES = {
     "rejected — same as l3-6: worktree path reuse is a named limit of the removed-worktree exclusion (decisions s-16), stated in docs/workflow.md; follow-up bead coding-harness-0aht": [
         "L3-6"
     ],
+    "fixed — not a test — orchestrator hand edit e92f0114: same as l2-5": ["L2-5"],
+    "fixed — not a test — orchestrator hand edit e92f0114: same as l2-6": ["L2-6"],
+    "rejected — same as l2-6 for close-budget-clock; docs/workflow.md now carries content (89fd1532)": ["L2-6"],
     "rejected — same as l1-1": ["L1-1"],
     "rejected — same as l1-11": ["L1-11"],
     "rejected — same as l1-2": ["L1-2"],
