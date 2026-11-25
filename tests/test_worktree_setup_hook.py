@@ -6,10 +6,8 @@ they ran, so nothing is downloaded. The hook sits in a shared directory named
 by an absolute `core.hooksPath`, the layout a real main checkout uses: a new
 worktree invokes that one copy, and the hook must still work in the worktree.
 
-The hook under test is the versioned `.beads/hooks/post-checkout`. Until the
-lane-setup block is applied to it, the tests insert `SETUP_BLOCK` (the
-reference block) above its Beads-managed section; once the versioned hook
-carries the block itself, the tests run it unchanged.
+The hook under test is the versioned `.beads/hooks/post-checkout`, copied
+unchanged into the shared hooks directory.
 """
 
 from __future__ import annotations
@@ -27,91 +25,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 VERSIONED_HOOK = REPO / ".beads" / "hooks" / "post-checkout"
-BEADS_BEGIN = "# --- BEGIN BEADS INTEGRATION"
 ZERO = "0" * 40
 PIN = "1.2.3"
 
-SETUP_BLOCK = r"""# --- BEGIN LANE SETUP (bead coding-harness-wg4z) ---
-# A new worktree (all-zero previous object, branch-checkout flag 1) gets its
-# own .venv and pinned Pi here, in the foreground and above the Beads-managed
-# block, so a Beads failure cannot skip it. HARNESS_NO_LANE_SETUP=1 opts out;
-# HARNESS_LANE_SETUP_TIMEOUT bounds the whole setup (default 600 seconds).
-# Step output goes to lane-setup.log in the worktree's Git directory; stderr
-# shows one start line, one result line and a LANE SETUP FAILED line per
-# failure. A setup failure never changes the hook's exit status.
-_ls_perl='my $t = shift @ARGV; my $pid = fork; defined $pid or die "lane setup: fork failed: $!\n"; if ($pid == 0) { setpgrp(0, 0); exec { $ARGV[0] } @ARGV or do { print STDERR "lane setup: cannot run $ARGV[0]: $!\n"; exit 127 }; } setpgrp($pid, $pid); $SIG{ALRM} = sub { kill "TERM", -$pid; sleep 1; kill "KILL", -$pid; waitpid($pid, 0); print STDERR "lane setup: stopped after ${t}s\n"; exit 124 }; alarm $t; waitpid($pid, 0); my $rc = $?; alarm 0; exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);'
-_ls_say() {
-  printf '%s\n' "$1" >&2
-  printf '%s\n' "$1" >>"$_ls_log" 2>/dev/null
-}
-_ls_timeout() {
-  _ls_stopped=1
-  _ls_failed=$((_ls_failed + 1))
-  _ls_say "LANE SETUP FAILED: $1 timed out at the ${_ls_limit}s setup limit (HARNESS_LANE_SETUP_TIMEOUT); log: $_ls_log"
-}
-_ls_step() {
-  _ls_label=$1
-  shift
-  [ -z "$_ls_stopped" ] || return 0
-  _ls_left=$((_ls_deadline - $(date +%s)))
-  if [ "$_ls_left" -le 0 ]; then
-    _ls_timeout "$_ls_label"
-    return 0
-  fi
-  printf '== %s\n' "$_ls_label" >>"$_ls_log"
-  if command -v perl >/dev/null 2>&1; then
-    perl -e "$_ls_perl" "$_ls_left" "$@" >>"$_ls_log" 2>&1 </dev/null
-  else
-    printf '%s\n' "lane setup: perl not found; $_ls_label runs without the setup limit" >>"$_ls_log"
-    "$@" >>"$_ls_log" 2>&1 </dev/null
-  fi
-  _ls_rc=$?
-  if [ "$_ls_rc" -eq 124 ] && [ "$(date +%s)" -ge "$_ls_deadline" ]; then
-    _ls_timeout "$_ls_label"
-  elif [ "$_ls_rc" -ne 0 ]; then
-    _ls_failed=$((_ls_failed + 1))
-    _ls_say "LANE SETUP FAILED: $_ls_label (exit $_ls_rc); log: $_ls_log"
-  fi
-}
-_lane_setup() {
-  _ls_root=$(git rev-parse --show-toplevel 2>/dev/null) || _ls_root=
-  _ls_gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) || _ls_gitdir=
-  if [ -z "$_ls_root" ] || [ -z "$_ls_gitdir" ]; then
-    printf '%s\n' "LANE SETUP FAILED: locate the new worktree; log: none" >&2
-    return 0
-  fi
-  _ls_log="$_ls_gitdir/lane-setup.log"
-  : >"$_ls_log" 2>/dev/null || _ls_log=/dev/null
-  _ls_limit=$(printf '%s' "${HARNESS_LANE_SETUP_TIMEOUT-}" | sed 's/^0*//')
-  case "$_ls_limit" in ''|*[!0-9]*) _ls_limit=600 ;; esac
-  _ls_deadline=$(($(date +%s) + _ls_limit))
-  _ls_failed=0
-  _ls_stopped=
-  cd "$_ls_root" || return 0
-  _ls_say "lane setup: start: $_ls_root (limit ${_ls_limit}s); log: $_ls_log"
-  _ls_step "make venv" make venv
-  _ls_step "bash tools/pi/install.sh" bash tools/pi/install.sh
-  _ls_step "yaml import check" .venv/bin/python3 -c 'import yaml'
-  _ls_pin=$(sed -n 's/^[[:space:]]*"@earendil-works\/pi-coding-agent":[[:space:]]*"\([^"]*\)".*/\1/p' tools/pi/package.json 2>/dev/null | head -n 1)
-  _ls_step "pi version check" sh -c 'want=$1; [ -n "$want" ] || { echo "tools/pi/package.json declares no pin"; exit 1; }; [ -f tools/pi/pi ] || { echo "tools/pi/pi is missing"; exit 1; }; got=$(tools/pi/pi --version) || { echo "tools/pi/pi --version failed"; exit 1; }; echo "tools/pi/pi --version printed $got; pinned $want"; [ "$got" = "$want" ]' lane-setup-pi "$_ls_pin"
-  if [ -n "$_ls_stopped" ]; then
-    _ls_say "lane setup: result: stopped at the ${_ls_limit}s limit, $_ls_failed failed; log: $_ls_log"
-  elif [ "$_ls_failed" -eq 0 ]; then
-    _ls_say "lane setup: result: ok; log: $_ls_log"
-  else
-    _ls_say "lane setup: result: $_ls_failed step(s) failed; log: $_ls_log"
-  fi
-}
-case "$1" in
-  *[!0]*|'') ;;
-  *)
-    if [ "$3" = 1 ] && [ "${HARNESS_NO_LANE_SETUP-}" != 1 ]; then
-      (_lane_setup)
-    fi
-    ;;
-esac
-# --- END LANE SETUP ---
-"""
 
 MAKE_STUB = r"""#!/bin/sh
 if [ "$1" = "-C" ]; then cd "$2" || exit 1; shift 2; fi
@@ -166,12 +82,16 @@ SETUP_RECORDS = ("make", "install", "python", "pi")
 
 
 def hook_text() -> str:
-    """The versioned hook, with the reference block until it carries one."""
-    text = VERSIONED_HOOK.read_text(encoding="utf-8")
-    if "HARNESS_NO_LANE_SETUP" in text:
-        return text
-    assert BEADS_BEGIN in text, "the versioned hook lost its Beads-managed block"
-    return text.replace(BEADS_BEGIN, SETUP_BLOCK + BEADS_BEGIN, 1)
+    """Read the versioned hook without altering it."""
+    return VERSIONED_HOOK.read_text(encoding="utf-8")
+
+
+def test_hook_text_uses_versioned_hook_without_injection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    hook = tmp_path / "post-checkout"
+    original = "#!/bin/sh\n# --- BEGIN BEADS INTEGRATION v1.1.2 ---\n"
+    hook.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(__import__(__name__, fromlist=["VERSIONED_HOOK"]), "VERSIONED_HOOK", hook)
+    assert hook_text() == original
 
 
 def _write_exec(path: Path, text: str) -> None:

@@ -95,3 +95,40 @@ Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.8-
 Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1239 files, 5932 commits, 12 rules.
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5933 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `.beads/hooks/post-checkout` +80 -0
+> - `tests/test_worktree_setup_hook.py` +8 -92
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/worktree-setup-hook/plan.md, plans/changes/worktree-setup-hook/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `.beads/hooks/post-checkout` is an input kind the targeted selector does not cover
+> - L1-1: tests/test_worktree_setup_hook.py::test_hook_text_uses_versioned_hook_without_injection: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/worktree-setup-hook/stage2/attempts/worktree-setup-hook/attempt-1-20261125T161937396169Z-f1a6aa7c.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1239 files, 5934 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_worktree_setup_hook.py` +6 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/worktree-setup-hook/plan.md, plans/changes/worktree-setup-hook/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: green) because the targeted coverage was not safe: `.beads/hooks/post-checkout` is an input kind the targeted selector does not cover
+> - L1-1: tests/test_worktree_setup_hook.py::test_hook_text_uses_versioned_hook_without_injection: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/worktree-setup-hook/stage2/attempts/worktree-setup-hook/attempt-2-20261125T161937396169Z-f1a6aa7c.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1239 files, 5936 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/worktree-setup-hook/plan.md, plans/changes/worktree-setup-hook/spec.md — unchanged
