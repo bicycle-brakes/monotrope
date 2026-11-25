@@ -21,3 +21,93 @@ tags: [decisions, merge-queue, grant, harness-neutral]
 
 status: skipped
 reason: The maintainer decided the direction in the conversation of 2026-11-25 (session 9200c6b1): the merge-queue grant of AGENTS.md (PR #459) is enforced by one script that checks phase 6, required checks and the Closes-Bead trailer and only admits to the merge queue; asked 'Ok, leg los'. The bead (coding-harness-va1l) states every condition; no open human intent question remains.
+
+## Q-1 · Ambiguity S-1 (what a clean phase 6 is)
+
+asked: 2026-11-25
+answer: "Clean means the newest phase-6 table reports no finding or every row is fixed or rejected; any row open or taken refuses, at any severity."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-1 of enqueue-pr.
+  Intention: fix the admission condition for phase 6.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of admitting pull requests to the merge queue unattended, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that an open MINOR also holds a pull request back. — 2026-11-25
+
+## Q-2 · Ambiguity S-3 (which commit phase 6 reviewed)
+
+asked: 2026-11-25
+answer: "The runner records the reviewed commit in the phase-6 block; after that commit only record commits inside the change folder, empty commits and merges of main may follow; anything else refuses."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-3 of enqueue-pr.
+  Intention: tie the phase-6 evidence to the admitted head.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of phase-6 evidence that records no commit, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a small runner change that writes the reviewed commit. — 2026-11-25
+
+## Q-3 · Ambiguity S-4 (which checks must pass)
+
+asked: 2026-11-25
+answer: "The required set comes from the main ruleset; a required check missing on the head refuses; SKIPPED and NEUTRAL pass as GitHub counts them."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-4 of enqueue-pr.
+  Intention: fix the required-check condition.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of required checks on the head, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting GitHub's own semantics for skipped checks. — 2026-11-25
+
+## Q-4 · Ambiguity S-5 (an admission that cannot merge directly)
+
+asked: 2026-11-25
+answer: "Admission uses the GraphQL enqueuePullRequest mutation with the expected head commit; it can only enqueue and fails when there is no queue."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-5 of enqueue-pr.
+  Intention: make a direct merge impossible.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of the admission call, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a GraphQL call instead of gh pr merge. — 2026-11-25
+
+## Q-5 · Decision in the draft (decision pull requests)
+
+asked: 2026-11-25
+answer: "Option 1: the script refuses decision pull requests and names the reason; the maintainer admits them."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-10 of enqueue-pr.
+  Intention: keep decisions effective only by the maintainer's merge.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of decision pull requests, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that decision PRs wait for the maintainer. — 2026-11-25
+
+## Q-6 · Ambiguity S-11 (one admission path)
+
+asked: 2026-11-25
+answer: "The script becomes the one admission path for everyone (one-path principle, PR #402); prompts/07-commit.md step 5, docs/WORKFLOW.md and the decision-PR template switch to it; a direct gh pr merge stays behind approval. Asked back what is more sustainable; the orchestrator recommended one path; confirmed."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-11 of enqueue-pr.
+  Intention: one path into the merge queue.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/enqueue-pr/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of how pull requests enter the merge queue, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a wider documentation change in this lane. — 2026-11-25
