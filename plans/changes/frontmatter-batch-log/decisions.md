@@ -40,3 +40,9 @@ reason: The change is a behaviour-preserving speed-up of one gate with a stated 
 
 [DETAIL] **D-8 (spec review S-4, a failed batch; amends D-3 for this case)**: when the single batched invocation fails, the gate reports one message naming the command and its protected stderr and blames no document, with the same exit status as today's per-file failure; the per-file "git log cannot date <file>" message stays for a document the batch output does not date. Reason: a batch failure belongs to no document.
 
+[DETAIL] **D-9 (spec review S-5, scope of the count; narrows D-5)**: Reading A — the bound counts the Git processes of the date lookup (`reference_dates`): the dirty-set calls plus the batch, at most three, independent of the number of held documents; the preflight and the held-file enumeration stay as they are and are not counted. Reason: the per-document date calls are the cost the bead names.
+
+[DETAIL] **D-10 (spec review S-6, protected stderr)**: "protected" means bounded, not redacted: the batch's stderr is cut to the last 20 lines and 2,000 characters with a truncation marker; the gate takes no dependency on the runner's secret redaction. Reason: git's stderr names paths, not secrets, and a gate must stay self-contained.
+
+[DETAIL] **D-11 (spec review S-7, timing at one commit)**: Reading A — one commit is checked out and both script versions run against that same tree (the base commit's script via `git show` into a temporary file, run with `--root` on the checkout), five runs each, median compared. Reason: the held set and the dirty state must be identical for a fair comparison.
+
