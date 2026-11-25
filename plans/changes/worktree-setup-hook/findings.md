@@ -159,3 +159,5 @@ Book each row from your own evidence as `fixed — tests/<path>::<function>`, se
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5938 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/worktree-setup-hook/plan.md, plans/changes/worktree-setup-hook/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1239 files, 5940 commits, 12 rules.
