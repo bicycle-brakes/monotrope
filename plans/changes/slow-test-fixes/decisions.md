@@ -29,3 +29,10 @@ reason: Test-only speed fixes with remedies stated in the bead (coding-harness-b
 [DETAIL] **D-2 (no assertion is lost)**: every rewritten test keeps each assertion it has today, against the same inputs; the plan maps old assertions to new ones. Reason: a speed fix must not weaken a test.
 
 [DETAIL] **D-3 (measure)**: the pull request records each rewritten test's duration before and after (`pytest --durations`, same machine, same commit for the base via the base's test file). Reason: the bead's numbers are counted from source, not measured.
+
+[DETAIL] **D-4 (spec review S-1, attribution in one session)**: inside each bundled session every outcome is its own test node; per-outcome assertions read that node's result from the session's JUnit XML report, so each stays attributable to its outcome; the four whole-session checks (exit status, the violations header, the `raw read_text` text, the pass count) are asserted once per bundle against the value the bundle's known mix of outcomes produces. Reason: AC5 can only ask per-outcome attribution of per-outcome assertions.
+
+[DETAIL] **D-5 (spec review S-2, a fresh held step)**: the deadline step starts from a fresh event list (a new source, or the events cleared after the overlap step), and the test asserts `held_collect`'s marker is written only after both requests of this step have started, so "does not hold both requests until the deadline" can turn red. Reason: the shared, never-cleared event list made the clause untestable.
+
+[DETAIL] **D-6 (spec review S-3, durations)**: Reading B — the pull request reports one total per test function, summed over its parametrised cases, before and after. Reason: 24 old node ids cannot be paired with four new ones.
+
