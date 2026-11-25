@@ -36,3 +36,11 @@ context: |
   Architecture change: none.
 
 In the context of setting up new worktrees, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting about a minute longer per new worktree. — 2026-11-25
+
+## Details decided by the orchestrator (spec-review round 2)
+
+[DETAIL] S-7 (standing grant for bounded changes, maintainer 2026-11-25): every failed check prints its own `LANE SETUP FAILED:` line naming the step and the log path; a separate summary line ends the output: `lane setup: ok` or `lane setup: failed (N checks)`; the first line is `lane setup: start`.
+
+[DETAIL] S-8: `HARNESS_LANE_SETUP_TIMEOUT` is a positive whole number of seconds; unset or empty means 600; `0`, a negative or a non-numeric value falls back to 600 and prints one warning line.
+
+[DETAIL] S-9: a test compares the text between the `BEGIN` and `END BEADS INTEGRATION` markers of `.beads/hooks/post-checkout` with `origin/main` and fails on any change.
