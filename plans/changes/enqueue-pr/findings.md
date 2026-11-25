@@ -411,3 +411,5 @@ Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1240 files, 5971 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1240 files, 5981 commits, 12 rules.
