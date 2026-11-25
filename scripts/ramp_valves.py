@@ -191,35 +191,45 @@ def _enforcer_exists(ref: str) -> bool:
 
 # name -> (what is missing, which enforcer would close it, deadline)
 REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "agent-writes-allowlist": (
         "RB-A4: a writing agent declares where it may write",
         "tests/test_agents.py::test_agents_declare_writes_allowlist_when_they_can_write",
-        "2026-11-30",
+        "2026-12-31",
     ),
     # "merge-freshness" (RB-G7) closed on 2026-10-08: tests/test_ci.py asserts the
     # merge ref and the merge group's run, the gate `ruleset` the freshness
     # requirement — a merge queue or the up-to-date flag; rule set 6.0.0.
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "signature-transcription": (
         "RB-M2: a signature is transcribed from the pull request, never set",
         "tests/test_validators.py::test_a_signature_is_transcribed_not_typed",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "adversarial-record": (
         "RB-M3: an accepted contract presupposes an adversarial source verification",
         "tests/test_validators.py::test_an_accepted_contract_names_a_verification_record",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "boundary-before-close": (
         "RB-M5: all gates of a delivery unit close before the delivery unit",
         "tests/test_human_gates.py::test_a_unit_cannot_close_while_a_gate_is_open",
-        "2026-11-30",
+        "2026-12-31",
     ),
     # "ruleset-assert" (RB-M6) closed on 2026-10-05: the gate `ruleset` asserts the
     # branch ruleset (tests/test_repo_settings.py); rule set 4.0.0 records it.
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "commit-identity": (
         "RB-P4: real identity and trailers on commits that touch decisions",
         "tests/test_repo_settings.py::test_recent_commits_carry_a_real_identity_and_trailers",
-        "2026-11-30",
+        "2026-12-31",
     ),
     "closed-vocabulary": (
         "RB-A5: where an agent decides, a closed vocabulary stands, not free text",
@@ -245,25 +255,31 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
     # "agents-evidence-contract" (RB-A1) closed on 2026-11-18: the clause test in
     # tests/test_regelwerk.py compares section 6 with every agent definition; rule
     # set 7.0.0 records it.
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "agents-tool-scopes": (
         "RB-A2: read-only agents carry no shell, executors declare their scope",
         "tests/test_agents.py::test_read_only_agents_have_no_bash",
-        "2026-11-30",
+        "2026-12-31",
     ),
     "skill-outputs-transfer": (
         "RB-A3: a self-asserted verdict is recomputed by a second reader",
         "tests/test_skill_outputs.py::test_a_self_asserted_verdict_is_recomputed",
         "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "hook-behaviour-tests": (
         "RB-H1/H2/H3: guards fail closed, matchers are tool names, no silencers",
         "tests/test_hook_behaviour.py::test_no_guard_is_registered_with_a_silencer",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "hooks-registered-tests": (
         "RB-H4: every hook script is registered and every registration runs",
         "tests/test_hooks_registered.py::test_every_hook_script_here_is_registered",
-        "2026-11-30",
+        "2026-12-31",
     ),
     "fehler-katalog-transfer": (
         "RB-G2: the gate level follows from the significance in the error catalogue",
@@ -280,25 +296,33 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "tests/test_human_gates.py::test_a_recon_report_without_a_signer_is_unsigned",
         "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer is
+    # not written yet; it is built as its own bounded bead in the 72-hour run of 2026-11-25.
     "codeowners-here": (
         "RB-M7: CODEOWNERS covers every decision path with a line of its own",
         "tests/test_repo_settings.py::test_codeowners_covers_every_human_decided_path",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "owner-roles-here": (
         "RB-M8: the roster resolves role to handle, never the reverse",
         "tests/test_provenance.py::test_owner_is_a_role_not_a_person",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "provenance-validators": (
         "RB-P1/P2: artifact classes, sign-offs and the directory map are checked",
         "tests/test_provenance.py::test_every_in_scope_file_declares_a_class",
-        "2026-11-30",
+        "2026-12-31",
     ),
+    # Re-dated 2026-11-30 -> 2026-12-31 (maintainer, 2026-11-25, bead coding-harness-5ane.1): the enforcer
+    # travels with the kit transfer to LakeSwitch (valve kit-transfer, also 2026-12-31), not built here alone.
     "gate-record-validators": (
         "RB-M1: the record template is checked by a validator",
         "tests/test_validators.py::test_gate_record_template_validates",
-        "2026-11-30",
+        "2026-12-31",
     ),
 }
 
