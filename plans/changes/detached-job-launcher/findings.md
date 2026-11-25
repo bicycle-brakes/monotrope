@@ -504,7 +504,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | BLOCKER | MAINT | base | scripts/job_containment.py:234 | Stopping a job also signals an unrelated process when that process belongs to the same user, started after the job, has no controlling terminal, and has its working directory or an open file inside the job’s directory. A background editor, build, or service in the same checkout can therefore be terminated even though it is not part of the job. | Codex | taken — maintainer 2026-11-25: remove membership rule 4 (working directory or open files) from scripts/job_containment.py entirely, with its home and root exceptions and its lsof and /proc file readers; members are the command tree, the job token and the recorded groups and sessions only; a process with its working directory inside the job's directory that is none of these is never signalled; the spec Boundary under Non-goals states it | — |
+| F-1 | BLOCKER | MAINT | base | scripts/job_containment.py:234 | Stopping a job also signals an unrelated process when that process belongs to the same user, started after the job, has no controlling terminal, and has its working directory or an open file inside the job’s directory. A background editor, build, or service in the same checkout can therefore be terminated even though it is not part of the job. | Codex | fixed — tests/test_jobs.py::test_stop_spares_unrelated_process_in_job_directory | — |
 | F-2 | MAJOR | SPEC | base | scripts/job_containment.py:234 | A separately sessioned descendant that clears its environment, starts another separately sessioned process in `/tmp`, and exits leaves that process reparented and outside the job’s working directory. Stop cannot identify it through the process tree, token, recorded groups, or directory scan, so it remains running. The same directory scan is disabled entirely for jobs started in the home directory or `/`. [Criterion 3] | Codex | rejected — Boundary, maintainer 2026-11-25: on macOS a reparented descendant without the token is out of reach without OS containment; the spec names the Boundary under Non-goals and bead coding-harness-a6ns.3 measures launchd coalitions or a dedicated Unix user first, cgroup v2 on Linux | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
@@ -513,3 +513,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a212bd-e865-7ae0-95bf-82c672739439, 2026-11-25
 Reviewer session: codex 01a212bd-e865-7ae0-95bf-82c672739439 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5877 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged

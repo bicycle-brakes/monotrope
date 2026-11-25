@@ -676,41 +676,46 @@ def test_reused_recorded_group_is_never_targeted() -> None:
     assert set(job_containment.members(record, [], backend)) == {100}
 
 
-STRAY_GRANDCHILD = "import os, time; open(os.environ['PID_FILE'], 'w').write(str(os.getpid())); time.sleep(120)"
-STRAY_MIDDLE = (
-    f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', {STRAY_GRANDCHILD!r}], start_new_session=True)"
-)
-STRAY_PARENT = (
-    "import os, subprocess, sys, time; "
-    f"subprocess.run([sys.executable, '-c', {STRAY_MIDDLE!r}], env={{'PID_FILE': sys.argv[1]}}, "
-    "start_new_session=True); open(sys.argv[2], 'w').close(); time.sleep(120)"
-)
+def test_stop_spares_unrelated_process_in_job_directory() -> None:
+    """A process with files in the job directory is not a member or a signal target."""
+    assert job_containment is not None
+    started = "Mon Jan 1 00:00:00 2024"
+    root = job_containment.Proc(100, 1, 100, os.getuid(), "??", "S", started, "job")
+    unrelated = job_containment.Proc(200, 1, 200, os.getuid(), "??", "S", started, "editor")
 
+    class Backend:
+        def __init__(self):
+            self.signals = []
 
-@pytest.mark.usefixtures("detached")
-def test_stop_ends_sanitized_reparented_descendant(tmp_path: Path, capsys) -> None:
-    """Finding F-1 (criterion 3): the command starts a separately sessioned child with a sanitized environment
-    (no job token), which starts another separately sessioned process and exits. The survivor is reparented,
-    carries no token and is in no recorded group; stop must still end it and record no survivor."""
-    marker, middle_done = tmp_path / "stray.pid", tmp_path / "middle.done"
-    code, out = start_job(capsys, sys.executable, "-c", STRAY_PARENT, str(marker), str(middle_done))
-    assert code == 0, out
-    job_id = started_id(out)
-    try:
-        wait_for(lambda: middle_done.exists() and marker.exists())  # the middle process has exited
-        stray = int(marker.read_text(encoding="utf-8"))
-        assert running(stray)
-        assert jobs.main(["stop", job_id]) == 0
-        capsys.readouterr()
-        deadline = time.monotonic() + 10
-        while running(stray) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        assert not running(stray), "a reparented descendant without the job token survived the stop"
-        assert jobs.read_record(record_path(job_id)).get("survivors") == [], "the stop named no or wrong survivors"
-    finally:
-        if marker.exists() and marker.read_text(encoding="utf-8").strip().isdigit():
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(int(marker.read_text(encoding="utf-8")), signal.SIGKILL)
+        def processes(self):
+            return [root, unrelated]
+
+        def token_holders(self, _token):
+            return set()
+
+        def session(self, _pid):
+            return None
+
+        def paths(self, _pids):
+            return {200: ["/work/project", "/work/project/open-file"]}
+
+        def alive(self, pid, _start):
+            return pid not in {sent for sent, _ in self.signals}
+
+        def send(self, pid, signum):
+            self.signals.append((pid, signum))
+
+    record = {
+        "id": "job",
+        "cwd": "/work/project",
+        "started_epoch": 0,
+        "command_pid": 100,
+        "command_start": started,
+        "groups": [],
+    }
+    backend = Backend()
+    job_containment.end(record, backend=backend)
+    assert [pid for pid, _ in backend.signals] == [100], "an unrelated process was signalled"
 
 
 @pytest.mark.usefixtures("state")
