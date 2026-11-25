@@ -233,3 +233,20 @@ def test_gate_checks_staged_unstaged_and_untracked_working_tree_rows(tmp_path, c
     )
     assert gate.main(["--root", str(root)]) == 1, "a new bad row in a staged-archived file passed"
     assert "L1-99" in capsys.readouterr().out
+
+
+def test_backticked_duplicate_targets_are_gaps_and_fail_gate(tmp_path):
+    import findings_reader as reader
+
+    root, base = base_repo(tmp_path, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", "open"))})
+    for marker in ("same as", "duplicate of", "repeat", "repeats", "repeat of"):
+        for target in ("L1-1", "`L1-1`"):
+            status = f"rejected — {marker} {target} unexpected prose"
+            result = reader.read_change(
+                "c1", PATH, "## Phase 6 — Codex, 2026-11-01\n" + table(("L1-1", "fixed"), ("L1-2", status))
+            )
+            assert result.gaps, f"unmeasured legacy status was accepted: {status}"
+            head = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", status), ("L1-3", status))})
+            found = gate.measure(root, base, head)
+            assert any("L1-2" in item for item in found), f"changed row passed: {status}"
+            assert any("L1-3" in item for item in found), f"new row passed: {status}"

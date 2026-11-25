@@ -159,6 +159,9 @@ ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
 # Duplicate targets use exactly the same grammar as readable row IDs.
 FINDING_ID = ROW_ID
 DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repeats?)", re.I)
+DUPLICATE_REFERENCE = re.compile(
+    rf"{DUPLICATE_MARKER.pattern}\s+(?:`(?P<quoted>{FINDING_ID.pattern})`|(?P<plain>{FINDING_ID.pattern}))", re.I
+)
 # Historical duplicate status cells measured from plans/ on 2026-11-25 (baseline 47a6ad4f).
 # Exact cells are frozen: prose is evidence, not an open-ended target grammar.
 LEGACY_DUPLICATE_STATUSES = {
@@ -550,9 +553,8 @@ def parse_status(status: str) -> StatusParse:
         targets = LEGACY_DUPLICATE_STATUSES[cell.lower()]
     else:
         # A named legacy marker outside the measured corpus is unreadable.
-        unquoted = re.sub(r"`[^`]*`", "", cell)
-        marker = re.search(rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern})", unquoted, re.I)
-        if marker and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", marker.group(1)):
+        marker = DUPLICATE_REFERENCE.search(cell)
+        if marker and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", marker.group("quoted") or marker.group("plain")):
             return StatusParse(None, [], False, names_id)
         targets = []
     return StatusParse(outcome, sorted(set(targets)), True, names_id)
