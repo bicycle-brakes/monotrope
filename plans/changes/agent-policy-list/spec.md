@@ -21,46 +21,58 @@ neighbours: []
 
 # Spec — agent-policy-list
 
-One repository policy supplies Claude Code's permissions and the command decisions for Antigravity (bead coding-harness-r7zc). Research: `research.md`. Decisions: `decisions.md`.
+One harness-neutral policy check supplies consistent decisions to Claude Code, Codex and Antigravity (bead coding-harness-r7zc). Research: `research.md`. Decisions: `decisions.md`.
 
 ## Problem
 
-At commit `e68a00e6`, Claude Code's permissions are split between generated Omnigent rules and hand-maintained command rules; Antigravity has no repository hook to apply the command rules. The research did not verify Antigravity's hook protocol or its user settings. Unattended Claude Code runs already convert asks to denies, but the research found no equivalent Antigravity path.
+At commit `e68a00e6`, Claude Code's permissions are split between generated Omnigent rules and hand-maintained command rules; the repository has no Antigravity permission hook. The research did not verify Antigravity's hook protocol or user settings. Claude Code's unattended overlay converts asks to denies, but no equivalent Antigravity path was found.
 
 ## Acceptance criteria
 
-1. When the policy is rendered, Claude Code's deny and ask rules match the existing rules at commit `937cdec8` and have one authoritative source.
-   *Refuted by:* a missing, extra or differently classified rule, or an independently maintained duplicate.
-2. When permissions are rendered, unrelated settings and hooks remain unchanged.
+1. When the policy check reads rules, it uses the existing merge and Omnigent sources and a single source for each remaining rule, preserving the Claude Code deny and ask rules at commit `937cdec8`.
+   *Refuted by:* a missing, extra or reclassified rule or an independently maintained duplicate.
+2. When Claude Code permissions are generated, unrelated settings and hooks remain unchanged.
    *Refuted by:* a changed SessionStart hook or unrelated setting.
-3. When Antigravity invokes `run_command`, the hook returns the policy's deny or ask decision for each command covered by the existing Claude Code command rules.
-   *Refuted by:* a covered command receives a weaker or different decision.
-4. When Antigravity runs unattended, every command that the policy asks about is denied.
-   *Refuted by:* an ask-covered command can proceed or waits for approval.
-5. When a command matches no command rule, the Antigravity hook leaves the decision to the host.
-   *Refuted by:* an unrelated command is denied or requires approval by this hook.
-6. When generated settings or hook configuration drift from the policy, the repository verification fails.
-   *Refuted by:* changing or removing a generated rule or hook configuration leaves verification green.
-7. When the policy is regenerated, the existing Omnigent layer-two policy and Claude Code unattended overlay retain their present protection.
-   *Refuted by:* an Omnigent denial or an unattended ask-to-deny conversion is lost.
+3. When any of the three harness adapters receives a shell command or an MCP tool name ending in `merge_pull_request`, it returns the shared check's decision for that input.
+   *Refuted by:* an adapter returns a different decision for a covered input.
+4. When a shell line contains parts separated by `&&`, `||`, `;` or `|`, the check evaluates every part and applies the strongest decision to the whole line, with deny stronger than ask and ask stronger than abstain.
+   *Refuted by:* `cd /repo && gh pr merge 54` or `git add . && git push origin main` abstains, or a deny is weakened by another part.
+5. When `HARNESS_UNATTENDED=1`, an ask decision becomes deny in each adapter.
+   *Refuted by:* a covered ask produces ask or abstain in unattended mode.
+6. When an input matches no rule and the check succeeds, the adapter abstains.
+   *Refuted by:* a successful check blocks an unrelated command.
+7. When generated permissions or hook registration drift from their sources, repository verification fails.
+   *Refuted by:* a changed or missing generated rule or hook registration passes the drift check.
+8. When policy output is regenerated, the existing Omnigent layer-two deny and ask policies and Claude Code's unattended ask-to-deny overlay retain their protection.
+   *Refuted by:* a denial, the `sys_advise_models` layer-two ask, or an overlay conversion is lost or weakened.
+9. If policy reading, input parsing or adapter execution fails, the adapter denies and identifies the fault.
+   *Refuted by:* malformed input, unreadable policy or an exception produces abstain or an unexplained denial.
+10. If a host cannot express ask, its adapter returns deny for an ask decision.
+    *Refuted by:* a host without ask support receives an abstention for an ask rule.
+11. If a host cannot enforce denial on hook timeout, the integration is not declared supported.
+    *Refuted by:* support is claimed although a timed-out hook can permit a covered action.
 
 ## Non-goals
 
-- A general shell security boundary or coverage of alternate spellings beyond the existing command rules; these rules remain brakes.
-- Implementing the companion merge-queue enqueue script or changing the maintainer's merge authority.
-- Applying Claude-only tool and file rules to Antigravity tools it does not expose, or changing user-level settings.
+- A general shell security boundary, shell syntax beyond the named operators, or alternate spellings beyond the existing rules.
+- The companion merge-queue enqueue script or a change to maintainer merge authority.
+- Changing user-level settings or covering file-writing tools.
+
+## Boundary
+
+Tests establish check and adapter output for supplied input, not effective host behavior after user-level settings. File-writing tools are outside these hooks. A one-time host check on the maintainer's machine is documented in the pull request with host versions, registration, unattended mode and timeout behavior; if host behavior cannot be established, support is not claimed.
 
 ## Protected areas
 
-Customer instances and user-level configuration are outside this change. Existing non-permission settings and the Omnigent layer-two protections remain intact.
+Customer instances and user-level configuration are outside this change. Existing unrelated settings and Omnigent layer-two protections remain intact.
 
 ## Definition of Done
 
-- `make verify` green; the Antigravity hook protocol and both interactive and unattended behavior verified against the installed supported host, with the version and result recorded in the pull request.
-- The policy documentation and generated configurations move with the code; no ADR changes.
+- `make verify` green; host check and its limits recorded in the pull request.
+- Policy documentation and generated configurations move with the code; no ADR changes.
 - Protected areas untouched and non-goals unbuilt, shown by the pull request file list.
 - The pull request closes `coding-harness-r7zc` and its last commit carries `Closes-Bead: coding-harness-r7zc`.
 
 ## Open decisions
 
-[DETAIL] An eight-hour implementation appetite provides a bounded stop; it is a revisable planning limit, not an estimate. The host's hook schema and unattended signal must be established from the supported host before implementation; do not invent either.
+[DETAIL] The eight-hour appetite is a revisable stop. The launcher sets `HARNESS_UNATTENDED=1`; absence means attended. Deny is used when ask cannot be represented, and failures deny, because silently allowing an unchecked action would lose the brake. Host timeout enforcement must be verified rather than assumed.
