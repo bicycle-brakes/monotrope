@@ -1247,3 +1247,18 @@ Reviewer session: codex 01a2100b-ef71-7ab0-ba58-261d897d1928 — a fresh session
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5742 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5755 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+> 
+> Guard evidence: tests/test_stage2.py::test_stage2_journal_paths_are_held — fault: removes `docs/journal/` from the runner’s held-path list — catches without switch: no for the draft cases, because draft can restore the journal path independently and the test does not require refusal; yes for the implement and repair cases.
+
+Phase 6 verdict: codex 01a21039-ff36-7792-b831-a5b371d20923, 2026-11-25
+Reviewer session: codex 01a21039-ff36-7792-b831-a5b371d20923 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
