@@ -43,9 +43,9 @@ The runner's cheap pytest uses the targeted pytest worker policy, while the targ
 5. When cheap pytest or a selected kit probe fails, the existing blocking failure behavior remains in effect.
    *Refuted by:* a failing affected command is reported as a successful check.
    *Basis:* `decisions.md#Q-1`.
-6. When the cheap pytest worker setting is computed, it is confined to that pytest launch and does not alter the environment passed to later preparation, gates or full verify.
-   *Refuted by:* a computed setting absent from the caller's environment appears in any later step's environment.
-   *Basis:* `decisions.md#Q-1`, D-5.
+6. When cheap checks compute a pytest worker setting, they do not write it into the environment dictionary supplied by their caller.
+   *Refuted by:* the computed setting is added to or changes that caller-supplied dictionary; a later step independently computing its own setting is not a leak.
+   *Basis:* `decisions.md#Q-1`, D-5, D-6.
 
 ## Non-goals
 
@@ -69,3 +69,4 @@ The gate declarations and kit probe implementation remain unchanged: the probe a
 
 - [DETAIL] Use the existing targeted worker policy for cheap pytest only; the probe is already serial and the other gate launches are outside this change (decisions D-1–D-4).
 - [DETAIL] Keep the computed setting local to that launch so later steps retain their own environment and worker policy (decision D-5).
+- [DETAIL] Judge leakage by the caller-supplied dictionary; later subprocesses may compute their own setting (decision D-6).
