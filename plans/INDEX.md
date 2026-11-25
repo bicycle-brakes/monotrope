@@ -691,7 +691,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/test-ci-shared-tree/decisions.md`](changes/test-ci-shared-tree/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/findings.md`](changes/test-ci-shared-tree/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/plan.md`](changes/test-ci-shared-tree/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/test-ci-shared-tree/research.md`](changes/test-ci-shared-tree/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/spec.md`](changes/test-ci-shared-tree/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/venv-guard/decisions.md`](changes/venv-guard/decisions.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/findings.md`](changes/venv-guard/findings.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/plan.md`](changes/venv-guard/plan.md) | draft | none | 2026-11-17 | coding-harness-s55e |
