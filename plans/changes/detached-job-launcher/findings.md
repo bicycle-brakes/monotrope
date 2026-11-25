@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-24
 created: 2026-11-24
 last_reviewed: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-a6ns.1
@@ -246,7 +246,7 @@ Stage-2 call, 2026-11-24: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | Acceptance criterion 3 | scripts/jobs.py:684 | If a command starts a child in a separate session and that child starts another separately sessioned process before exiting, the remaining process is reparented. It is no longer in the command’s descendant tree, and its group was never registered by `stage2.py`; `stop` therefore leaves it running and can leave its verification admission held. [Criterion 3] | Codex | open | — |
+| F-1 | MAJOR | SPEC | base | scripts/jobs.py:684 | If a command starts a child in a separate session and that child starts another separately sessioned process before exiting, the remaining process is reparented. It is no longer in the command’s descendant tree, and its group was never registered by `stage2.py`; `stop` therefore leaves it running and can leave its verification admission held. [Criterion 3] | Codex | taken — maintainer 2026-11-25, repair: the wrapper gives the job a job token in its environment; stop also finds every live process carrying that token (process table, identity by pid and start time), so a reparented grandchild in another session is stopped too | — |
 | F-2 | MAJOR | SPEC | Acceptance criteria 24–25 | scripts/jobs.py:497 | The ten-second deadline starts only after the tmux calls return. Each tmux call can itself wait up to 15 seconds, so an unresponsive server can make `start` wait longer than ten seconds before reporting a failed launch. [Criteria 24–25] | Codex | taken — criteria 24-25: the ten-second deadline covers the tmux calls too; start reports failed to start within ten seconds even when tmux hangs | — |
 | F-3 | MAJOR | SPEC | Terms and acceptance criterion 4 | scripts/jobs.py:322 | A command such as `python3 scripts/stage2.py future-verb change` invokes `scripts/stage2.py` followed by a non-option word, but the record marks it as not being a runner verb because the implementation accepts only a fixed set of names. [Terms; criterion 4] | Codex | taken — Terms and criterion 4: a runner verb is a python executable running scripts/stage2.py followed by a non-option word, with no fixed verb list (keeps L2-10: grep and non-python commands are not runner verbs) | — |
 | F-4 | MAJOR | SPEC | Acceptance criterion 8 | tests/test_jobs.py::test_detached_verify_obeys_shared_admission | The test checks that admission environment variables are removed, but never runs verification while admissions are occupied or memory is below the floor. It therefore cannot catch a detached verification process bypassing the two-slot limit or memory floor. [Criterion 8] | Codex | taken — criterion 8: a test runs a detached verification while both admissions are held, and while memory is below the floor, and shows it waits or refuses | — |
