@@ -19,6 +19,29 @@ neighbours: []
 
 # test ci shared tree — Research
 
+## Topic (bead coding-harness-bxxt.12, copied by the orchestrator 2026-11-25)
+
+Class: bounded.
+
+Why: test_the_glob_itself_finds_a_real_orphan_shell_script
+(tests/test_ci.py:3605-3633) writes
+REPO_ROOT/scripts/verwaistes_werkzeug__test_ci_nie_committen.sh (line 3619)
+and unlinks it in finally. Parallel workers that glob scripts/ can see it;
+scripts/kit/probe.py caches _ls_files() with lru_cache (369-370). What:
+build the orphan case in a temporary copy, never in the shared tree.
+Prerequisite for --dist worksteal and a parallel kit probe.
+
+Checked 2026-11-24 at origin/main 18a13d3d by read-only subagents (session
+claude-mp, night run 2026-11-24-a), from an external verify-speed analysis.
+
+
+
+PARENT
+↑ ○ coding-harness-bxxt: (EPIC) Verify speed and machine load P1
+
+BLOCKS
+← ○ coding-harness-bxxt.18: pytest --dist worksteal for make verify, CI and the kit probe (xdist-guarded in the probe) P3
+
 Stage-2 call, 2026-11-25: explore · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-haiku-5-5 · reason GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu) · leak check clean over 1202 files, 5747 commits, 12 rules.
 
 ## Runner exploration — 2026-11-25
