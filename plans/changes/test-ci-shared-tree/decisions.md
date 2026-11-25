@@ -50,3 +50,9 @@ reason: The change is a test-only fix with one stated remedy and no open design 
 
 [DETAIL] **D-13 (spec review S-10, the caller inputs)**: the control test spies on `_heimatlose_namen()` and asserts it received the checkout's `.github/workflows/ci.yml` and `scripts/verify_all.sh` texts and the module's `OHNE_AUFRUFER`, read in place. Reason: otherwise passing blank inputs stays green.
 
+[DETAIL] **D-14 (spec review S-11, what the watcher sees; extends D-11)**: the watcher also records `os.open` with a write or create flag, `os.replace`, `os.rename`, `Path.touch` and `Path.mkdir` whose target lies under the repository's `scripts/`; writes from native code outside Python's file API are a named limit of the test. Reason: the orphan could otherwise be created or moved in without any recorded call.
+
+[DETAIL] **D-15 (spec review S-12, where the guard writes)**: the guard asserts that the planted write target lies under its tmp_path stand-in root and outside the repository root before it runs the planted variant. Reason: a guard that wrote into the checkout would stay green while bringing the race back.
+
+[DETAIL] **D-16 (spec review S-13, copied inputs)**: criterion 7 drops "copied" from its refutation: a byte-identical copy of `ci.yml` and `verify_all.sh` yields the same classification, so only different or blank inputs are refuted; D-9 (read in place) stays the implementation rule. Reason: the clause was not testable and changes no outcome.
+
