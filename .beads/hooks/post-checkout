@@ -36,10 +36,24 @@ _ls_step() {
   printf '== %s\n' "$_ls_label" >>"$_ls_log"
   if [ -n "$_ls_perl_ok" ]; then
     perl -e "$_ls_perl" "$_ls_left" "$@" >>"$_ls_log" 2>&1 </dev/null
+    _ls_rc=$?
   else
-    "$@" >>"$_ls_log" 2>&1 </dev/null
+    # Without Perl: a shell watchdog ends the step's process after the time left.
+    "$@" >>"$_ls_log" 2>&1 </dev/null &
+    _ls_pid=$!
+    # The watchdog holds no inherited descriptor (git waits for the hook's stderr to close),
+    # and its own sleep is ended with it.
+    ( sleep "$_ls_left"; kill -TERM "$_ls_pid" 2>/dev/null; sleep 1; kill -KILL "$_ls_pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+    _ls_dog=$!
+    wait "$_ls_pid"
+    _ls_rc=$?
+    pkill -P "$_ls_dog" 2>/dev/null
+    kill "$_ls_dog" 2>/dev/null
+    wait "$_ls_dog" 2>/dev/null
+    if [ "$(date +%s)" -ge "$_ls_deadline" ]; then
+      _ls_rc=124
+    fi
   fi
-  _ls_rc=$?
   if [ "$_ls_rc" -eq 124 ] && [ "$(date +%s)" -ge "$_ls_deadline" ]; then
     _ls_stopped=1
     _ls_fail "$_ls_label timed out at the ${_ls_limit}s setup limit (HARNESS_LANE_SETUP_TIMEOUT)"
@@ -54,7 +68,11 @@ _ls_summary() {
   else
     _ls_say "lane setup: failed ($_ls_failed checks)"
   fi
-  _ls_say "lane setup: log: $_ls_log"
+  if [ "$_ls_log" = /dev/null ]; then
+    _ls_say "lane setup: log: unavailable"
+  else
+    _ls_say "lane setup: log: $_ls_log"
+  fi
 }
 # A trusted state: the checked-out commit is on origin/main, or the inputs the
 # setup runs (Makefile, requirements*.txt, tools/pi/) equal origin/main's.
@@ -77,7 +95,10 @@ _lane_setup() {
     return 0
   fi
   _ls_log="$_ls_gitdir/lane-setup.log"
-  : >"$_ls_log" 2>/dev/null || _ls_log=/dev/null
+  if ! : >"$_ls_log" 2>/dev/null; then
+    _ls_say "lane setup: warning: the log $_ls_log cannot be written; step output is discarded"
+    _ls_log=/dev/null
+  fi
   if ! cd "$_ls_root"; then
     _ls_fail "cd into $_ls_root"
     _ls_summary
@@ -95,7 +116,7 @@ _lane_setup() {
   if command -v perl >/dev/null 2>&1; then
     _ls_perl_ok=1
   else
-    _ls_say "lane setup: perl not found; the ${_ls_limit}s limit per step is not enforced on this system"
+    _ls_say "lane setup: perl not found; the ${_ls_limit}s limit is enforced by a shell watchdog instead"
   fi
   if [ -z "$_ls_deliberate" ] && ! _ls_trusted; then
     _ls_say "lane setup: skipped: the checked-out state is not on origin/main and changes Makefile, requirements*.txt or tools/pi/ (or origin/main is unknown); to set up deliberately: $_ls_retry"

@@ -30,7 +30,7 @@ New worktrees receive the local Python environment and pinned Pi through the ver
 
 ## Acceptance criteria
 
-1. When Git invokes the installed checkout hook for a new worktree with an all-zero previous object ID and branch-checkout flag `1`, it runs `make venv` in that worktree.
+1. When Git invokes the installed checkout hook for a new worktree with an all-zero previous object ID and branch-checkout flag `1`, and the checked-out state is trusted, it runs `make venv` in that worktree. A state is trusted when its commit is an ancestor of `origin/main`, or when `Makefile`, `requirements*.txt` and `tools/pi/` equal `origin/main`'s; an untrusted state, or one where `origin/main` is unknown, skips setup with one line naming the reason and the deliberate command `bash .beads/hooks/post-checkout --lane-setup`, which runs setup regardless of trust (maintainer 2026-11-25, loop row L2-5).
    *Refuted by:* A qualifying checkout skips the command or runs it elsewhere.
 2. When setup runs, it runs `bash tools/pi/install.sh` in the new worktree.
    *Refuted by:* The installation is skipped or runs elsewhere.
@@ -38,7 +38,7 @@ New worktrees receive the local Python environment and pinned Pi through the ver
    *Refuted by:* A broken import passes without a failure report.
 4. When setup reaches its checks, it checks that the new worktree's Pi launcher reports the exact pinned version.
    *Refuted by:* A missing, failing or mismatched launcher passes without a failure report.
-5. If a setup command or check fails, stderr includes a line beginning `LANE SETUP FAILED:` that names the failed step and log path.
+5. If a setup command or check fails, stderr includes a line beginning `LANE SETUP FAILED:` that names the failed step, the log path and the retry command; when the log cannot be written, stderr says so and the summary names the log as unavailable.
    *Refuted by:* A failure lacks that line, step or path.
 6. If setup fails, that failure does not change an otherwise successful hook invocation to a nonzero exit.
    *Refuted by:* A setup failure makes an otherwise successful hook fail.
@@ -50,15 +50,15 @@ New worktrees receive the local Python environment and pinned Pi through the ver
    *Refuted by:* Setup prevents its invocation, changes its arguments or masks its result.
 10. When setup runs, it finishes in the foreground before `git worktree add` returns.
     *Refuted by:* Git returns while setup or its checks are still running.
-11. When setup exceeds `HARNESS_LANE_SETUP_TIMEOUT` seconds, defaulting to 600, it stops and reports the step and limit.
+11. When setup exceeds `HARNESS_LANE_SETUP_TIMEOUT` seconds, defaulting to 600, it stops and reports the step and limit, with or without Perl. An unset or empty value means 600; `0`, a negative or a non-numeric value falls back to 600 and prints exactly one warning line naming the given value (decisions S-8).
     *Refuted by:* An overdue step continues or the failure report omits the step or limit.
 12. When the Beads integration fails on a qualifying checkout, setup has already run.
     *Refuted by:* A failing Beads invocation prevents setup.
 13. When setup runs, command and check output is written to `lane-setup.log` in the new worktree's Git directory.
     *Refuted by:* Output goes to the caller instead or the log is absent from that Git directory.
-14. When setup runs, stderr shows one start line and one result line.
+14. When setup runs, stderr shows one start line `lane setup: start: …` and one summary line, exactly `lane setup: ok` or `lane setup: failed (N checks)`, followed by `lane setup: log: <path>` (decisions S-7).
     *Refuted by:* Either line is absent or repeated.
-15. When `HARNESS_NO_LANE_SETUP` has any value other than `1`, including empty or unset, a qualifying checkout runs setup.
+15. When `HARNESS_NO_LANE_SETUP` has any value other than `1`, including empty or unset, a qualifying trusted checkout runs setup.
     *Refuted by:* Such a value skips setup.
 
 ## Non-goals
@@ -69,7 +69,7 @@ New worktrees receive the local Python environment and pinned Pi through the ver
 
 ## Protected areas
 
-The Beads-managed block and historical handovers remain unchanged; hook additions belong outside the managed block.
+The Beads-managed block and historical handovers remain unchanged; hook additions belong outside the managed block. A test compares the text between the `BEGIN` and `END BEADS INTEGRATION` markers with `origin/main` and fails on any change (decisions S-9).
 
 ## Definition of Done
 

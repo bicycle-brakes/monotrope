@@ -554,7 +554,7 @@ def test_without_perl_the_unenforced_limit_is_named(lane: Lane, tmp_path: Path) 
                 continue
     path_env = os.pathsep.join([lane.env["PATH"].split(os.pathsep)[0], str(nopl)])
     proc, _ = lane.add_worktree(PATH=path_env)
-    assert any("perl not found" in line and "not enforced" in line for line in proc.stderr.splitlines()), proc.stderr
+    assert any("perl not found" in line and "shell watchdog" in line for line in proc.stderr.splitlines()), proc.stderr
 
 
 def test_a_step_never_started_names_the_step_that_used_the_budget(lane: Lane) -> None:
@@ -562,3 +562,36 @@ def test_a_step_never_started_names_the_step_that_used_the_budget(lane: Lane) ->
     proc, _ = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT="1", STUB_MAKE_SLEEP="3")
     text = proc.stderr
     assert "not started" in text and "used up by make venv" in text or "make venv timed out" in text, text
+
+
+def test_without_perl_a_hanging_step_still_stops(lane: Lane, tmp_path: Path) -> None:
+    """Phase-6 P6-2: without perl the limit still ends an overdue step and reports it."""
+    nopl = tmp_path / "noperl-bin2"
+    nopl.mkdir()
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if not folder or not Path(folder).is_dir():
+            continue
+        for entry in Path(folder).iterdir():
+            target = nopl / entry.name
+            if entry.name.startswith("perl") or target.exists():
+                continue
+            try:
+                target.symlink_to(entry)
+            except OSError:
+                continue
+    path_env = os.pathsep.join([lane.env["PATH"].split(os.pathsep)[0], str(nopl)])
+    started = time.monotonic()
+    proc, _ = lane.add_worktree(PATH=path_env, HARNESS_LANE_SETUP_TIMEOUT="2", STUB_MAKE_SLEEP="30")
+    assert time.monotonic() - started < 20, "the hanging step was not stopped"
+    assert any("make venv timed out" in line for line in _failures(proc.stderr)), proc.stderr
+
+
+def test_an_unwritable_log_is_reported(lane: Lane) -> None:
+    """Phase-6 P6-3: an unwritable log is named on stderr and in the summary."""
+    path = lane.quiet_worktree("ro")
+    gitdir = Path(lane.git("rev-parse", "--absolute-git-dir", cwd=path).stdout.strip())
+    log = gitdir / "lane-setup.log"
+    log.mkdir()  # a directory where the log file would go cannot be truncated
+    proc = lane.new_worktree_hook(path)
+    assert any("cannot be written" in line for line in proc.stderr.splitlines()), proc.stderr
+    assert "lane setup: log: unavailable" in proc.stderr.splitlines(), proc.stderr
