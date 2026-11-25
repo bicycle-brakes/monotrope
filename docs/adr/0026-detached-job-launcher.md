@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-11-24
 last_reviewed: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-11-24"}

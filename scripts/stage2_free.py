@@ -17,16 +17,14 @@ This module performs no I/O, network call, catalog refresh, probe or credential 
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
 import stage2_go
 
-# A catalog id the runner may select: third-party catalog text never carries a `|` or other markup into
-# the record's cells (DL-B-7 of the loop's deep review).
-MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+# The catalog-id pattern lives in the kit-travelling reader (one shared pattern, F6-2).
+from findings_reader import MODEL_ID
 
 PAID_REASON = "a paid model; the free class does not admit it"
 

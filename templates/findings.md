@@ -91,8 +91,9 @@ Reference — what the columns and markers mean. Not copied.
 **A finding rejected before** returns only with new evidence attached.
 Repetition without new evidence is not a finding.
 
-**Status** — the values in use, not a closed set. Each may be followed by a
-dash and a note:
+**Status** — a closed set: `open`, `taken`, `fixed`, `closed —`, `resolved`,
+`answered`, `in spec`, `rejected`, `accepted limit —` (decisions F-27 of
+findings-per-model). Each may be followed by a dash and a note:
 
 - `open` — found, nothing done.
 - `fixed in <commit>` — repaired, with the commit.
@@ -100,6 +101,8 @@ dash and a note:
 - `answered` — a question of the spec review, answered in phase 6.
 - `in spec` — a spec-review row that arrived in `spec.md`.
 - `rejected — <reason>` — not taken over, with the reason.
+- `rejected — duplicate of <ID>[ and <ID>…][: <reason>]` — the one form for a
+  duplicate; the originals keep the credit.
 
 **Stage 2** (dated 2026-09-30). Once pull request #60 is merged,
 `docs/WORKFLOW.md` §4 defines what follows, and a change that runs stage 2

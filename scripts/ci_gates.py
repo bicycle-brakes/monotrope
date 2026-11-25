@@ -114,6 +114,16 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
         "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
     ),
+    "findings_per_model.py": (
+        "Local command, not a gate — `make findings-per-model` runs it to count accepted review findings per "
+        "model at one commit for the morning handover; it measures and decides nothing "
+        "(bead coding-harness-qut1; tests/test_findings_per_model.py runs it)"
+    ),
+    "findings_reader.py": (
+        "Library — the one reader of findings.md rows, imported by scripts/findings_per_model.py and by "
+        "scripts/check_finding_duplicates.py (the gate finding-duplicates); tests/test_findings_per_model.py "
+        "imports it"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "

@@ -149,6 +149,14 @@ include runs of other repositories on the machine. The reader also reports flaky
 full red of one identity) and, when evidence is incomplete, names the
 incomplete runs on both sides of a possible pair.
 
+The morning handover also carries the findings per model (bead
+coding-harness-qut1): the table `make findings-per-model` prints, with its
+cutoff commit, once for main at handover time (`git fetch origin`, then `make findings-per-model REV=origin/main`; a local `main` may be stale)
+and once for each unmerged
+change branch that gained findings rows that night, including an earlier
+branch of a lane (`make findings-per-model REV=<branch>`). Each table names
+its own commit; reports at different commits are never combined into one.
+
 ## Stated, enforced, planned
 
 | Rule | Today | Planned |

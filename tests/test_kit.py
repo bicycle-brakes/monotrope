@@ -421,6 +421,18 @@ def test_research_handoff_checker_and_tests_travel() -> None:
         assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
 
 
+def test_finding_duplicates_gate_and_dependencies_travel() -> None:
+    """The carried gate must include its script, reader and fixture tests."""
+    for path in (
+        "scripts/check_finding_duplicates.py",
+        "scripts/findings_reader.py",
+        "tests/test_finding_duplicates.py",
+    ):
+        rule = probe.rolle(path)
+        assert rule is not None and rule[0] == "mechanismus", path
+        assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+
+
 def test_detached_launcher_travels_with_dependencies() -> None:
     """Criterion 10 of detached-job-launcher: the launcher, its tests and every repository module it
     imports travel as mechanism, each by a rule of its own.

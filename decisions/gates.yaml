@@ -175,6 +175,16 @@ gates:
     needs_tracker: true
     reason: A citation of an unknown bead silently severs the provenance chain. The same tracker render as bead-export, via BEAD_RENDER in CI (bead 1jg.3).
 
+  - id: finding-duplicates
+    title: New or changed duplicate rows use the one canonical form
+    command: python3 scripts/check_finding_duplicates.py
+    job: verify
+    cost: seconds
+    enforcement: block
+    floor: false
+    placement: both
+    reason: A duplicate in a free form credits the wrong model in the per-model counts; history is never demanded a rewrite, only rows added or changed against the merge base with origin/main are checked (bead coding-harness-qut1; maintainer allowed this edit explicitly, 2026-11-19).
+
   - id: decision-continuity
     title: Every interview decision stays mapped; every amendment has its ADR
     command: python3 scripts/check_decision_continuity.py

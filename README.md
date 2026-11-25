@@ -263,9 +263,10 @@ Status re-verified on `2026-11-24` against `origin/main` at `a5b117f8`.
 
 ### Checked by tools
 
-- One gate list drives `make verify` and CI: **24 gates** (20 block, 3 report,
-  1 advisory). Every gate has a mutation test, a run that turns it red, or a
-  stated reason in a list that may only shrink.
+- One gate list drives `make verify` and CI: 25 gates, of which 21 block,
+  3 report and 1 is advisory (re-verified 2026-11-25). Every gate has a
+  mutation test, a run that turns it red, or a stated reason in a list that
+  may only shrink.
 - The runner checks the endpoint and runs the leak check before every call to
   another vendor, and runs the phase checks above after it.
 - A repair counts only when its test failed on the code before the repair (or

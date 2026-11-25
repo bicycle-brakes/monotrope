@@ -103,6 +103,12 @@ rules:
   - prefix: scripts/verify_duration.py
     rolle: mechanismus
     reason: "the runner's measured durations: appended under the shared state root and read by its small reader; a dependency of the shared scheduler (bead coding-harness-1um6)"
+  - prefix: scripts/check_finding_duplicates.py
+    rolle: mechanismus
+    reason: "the finding-duplicates gate travels, so its check must travel with it"
+  - prefix: scripts/findings_reader.py
+    rolle: mechanismus
+    reason: "the finding-duplicates gate imports this shared reader"
   - prefix: scripts/check_docs.py
     rolle: mechanismus
     reason: "Frontmatter-, Link- und Anchor-Pruefung fuer die Dokumentation (bead bo0)"
@@ -207,6 +213,9 @@ rules:
   - prefix: tests/test_pr_templates.py
     rolle: mechanismus
     reason: "reads only the two templates, which travel"
+  - prefix: tests/test_finding_duplicates.py
+    rolle: mechanismus
+    reason: "the finding-duplicates gate tests build their own repositories and travel with the check"
   - prefix: tests/test_check_adr_answers.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
