@@ -207,6 +207,14 @@ context: |
 
 In the context of the exit code when next.json cannot be written, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-24
 
-## Details decided by the orchestrator (spec-review round 1)
+## Details decided by the orchestrator (spec-review round 5)
+
+[DETAIL] S-19: reading B; a repair succeeds only when at least one row became fixed; a held-only run deletes a stale next.json instead of writing review-loop, and its output names the hand steps, so a consumer never cycles
+
+[DETAIL] S-20: reading B; an inadmissible rung counts as consumed for stage selection too; review-loop passes over it to the next admissible rung, and when both Flash members are inadmissible the next admissible paid rung runs as their replacement, recorded in the round
+
+[DETAIL] S-21: reading B; only model-tied failures (terms dates, dated skip, exclusion, removal, retention or training reading) make a model inadmissible; a declaration-wide failure keeps today's refusal with exit 2 until the maintainer repairs the declaration
+
+[DETAIL] S-22: reading B; criterion 23 covers the loop's repair named by next: repair; a repair of phase-6 rows writes next: review, the documented re-check
 
 [DETAIL] Round-5 spec review (S-19..S-22) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25), each towards the reading that cannot loop or skip silently. No further redraft: the spec stays as reviewed in round 5; the implementer applies the S-19..S-22 statuses in findings.md as written.
