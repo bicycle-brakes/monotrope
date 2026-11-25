@@ -274,3 +274,20 @@ Stage-2 call, 2026-11-25: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1207 files, 5848 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/standin-call-counter/plan.md, plans/changes/standin-call-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1207 files, 5858 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
+> 
+> Guard evidence: tests/test_atomic_test_log.py::test_guard_reports_dynamic_callback — fault: the guard skips dynamically compiled callback frames, allowing raw log or counter access through a builder — catches without switch: yes, the assertions detect that faulty guard behavior.
+> 
+> Guard evidence: tests/test_standin_call_counter.py::test_deeply_nested_counter_rebuilds — fault: rebuilding counts from the log returns an empty count instead of counting existing records — catches without switch: yes, the assertions require the existing record to be counted.
+
+Phase 6 verdict: codex 01a21208-a9cd-7d01-9ab0-440141abb002, 2026-11-25
+Reviewer session: codex 01a21208-a9cd-7d01-9ab0-440141abb002 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
