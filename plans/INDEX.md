@@ -591,11 +591,21 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/plan.md`](changes/archive/2026-11-16-verify-tmp-cleanup/plan.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/research.md`](changes/archive/2026-11-16-verify-tmp-cleanup/research.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
 | [`changes/archive/2026-11-16-verify-tmp-cleanup/spec.md`](changes/archive/2026-11-16-verify-tmp-cleanup/spec.md) | accepted | done | 2026-11-16 | coding-harness-bxxt.3 |
+| [`changes/availability-scrub-import/decisions.md`](changes/availability-scrub-import/decisions.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
+| [`changes/availability-scrub-import/findings.md`](changes/availability-scrub-import/findings.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
+| [`changes/availability-scrub-import/plan.md`](changes/availability-scrub-import/plan.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
+| [`changes/availability-scrub-import/research.md`](changes/availability-scrub-import/research.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
+| [`changes/availability-scrub-import/spec.md`](changes/availability-scrub-import/spec.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
 | [`changes/bd-1-3-4/decisions.md`](changes/bd-1-3-4/decisions.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/findings.md`](changes/bd-1-3-4/findings.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/plan.md`](changes/bd-1-3-4/plan.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/research.md`](changes/bd-1-3-4/research.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
 | [`changes/bd-1-3-4/spec.md`](changes/bd-1-3-4/spec.md) | draft | none | 2026-11-14 | coding-harness-tr84 |
+| [`changes/cheap-checks-admission/decisions.md`](changes/cheap-checks-admission/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
+| [`changes/cheap-checks-admission/findings.md`](changes/cheap-checks-admission/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
+| [`changes/cheap-checks-admission/plan.md`](changes/cheap-checks-admission/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
+| [`changes/cheap-checks-admission/research.md`](changes/cheap-checks-admission/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
+| [`changes/cheap-checks-admission/spec.md`](changes/cheap-checks-admission/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
 | [`changes/ci-bead-summary/research.md`](changes/ci-bead-summary/research.md) | draft | none | 2026-10-14 | coding-harness-1jg.4 |
 | [`changes/close-budget-clock/decisions.md`](changes/close-budget-clock/decisions.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
 | [`changes/close-budget-clock/findings.md`](changes/close-budget-clock/findings.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
@@ -608,6 +618,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/detached-job-launcher/plan.md`](changes/detached-job-launcher/plan.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
 | [`changes/detached-job-launcher/research.md`](changes/detached-job-launcher/research.md) | draft | none | 2026-11-23 | coding-harness-a6ns.1 |
 | [`changes/detached-job-launcher/spec.md`](changes/detached-job-launcher/spec.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/drift-lane-branches/decisions.md`](changes/drift-lane-branches/decisions.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/drift-lane-branches/findings.md`](changes/drift-lane-branches/findings.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/drift-lane-branches/plan.md`](changes/drift-lane-branches/plan.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/drift-lane-branches/research.md`](changes/drift-lane-branches/research.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/drift-lane-branches/spec.md`](changes/drift-lane-branches/spec.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
@@ -618,6 +633,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/research.md`](changes/flaky-swarm-leak-test/research.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/spec.md`](changes/flaky-swarm-leak-test/spec.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
+| [`changes/frontmatter-batch-log/decisions.md`](changes/frontmatter-batch-log/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/findings.md`](changes/frontmatter-batch-log/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/plan.md`](changes/frontmatter-batch-log/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/research.md`](changes/frontmatter-batch-log/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
+| [`changes/frontmatter-batch-log/spec.md`](changes/frontmatter-batch-log/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.21 |
 | [`changes/handover-at-95/research.md`](changes/handover-at-95/research.md) | draft | none | 2026-10-14 | coding-harness-l9s |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
@@ -669,6 +689,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/review-diff-4000/decisions.md`](changes/review-diff-4000/decisions.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/findings.md`](changes/review-diff-4000/findings.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/plan.md`](changes/review-diff-4000/plan.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/research.md`](changes/review-diff-4000/research.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
+| [`changes/review-diff-4000/spec.md`](changes/review-diff-4000/spec.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-loop-deep-a/decisions.md`](changes/review-loop-deep-a/decisions.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/findings.md`](changes/review-loop-deep-a/findings.md) | draft | partial | 2026-10-25 | to be filed |
 | [`changes/review-loop-deep-a/plan.md`](changes/review-loop-deep-a/plan.md) | draft | partial | 2026-10-25 | to be filed |
@@ -679,6 +704,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/slip-counter/plan.md`](changes/slip-counter/plan.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/research.md`](changes/slip-counter/research.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
 | [`changes/slip-counter/spec.md`](changes/slip-counter/spec.md) | draft | none | 2026-11-13 | coding-harness-bxxt.7 |
+| [`changes/slow-test-fixes/decisions.md`](changes/slow-test-fixes/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/findings.md`](changes/slow-test-fixes/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/plan.md`](changes/slow-test-fixes/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/research.md`](changes/slow-test-fixes/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
+| [`changes/slow-test-fixes/spec.md`](changes/slow-test-fixes/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.16 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
@@ -691,6 +721,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/research.md`](changes/swarm-test-speed/research.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/spec.md`](changes/swarm-test-speed/spec.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
+| [`changes/test-ci-shared-tree/decisions.md`](changes/test-ci-shared-tree/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/findings.md`](changes/test-ci-shared-tree/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/plan.md`](changes/test-ci-shared-tree/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/research.md`](changes/test-ci-shared-tree/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/test-ci-shared-tree/spec.md`](changes/test-ci-shared-tree/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/venv-guard/decisions.md`](changes/venv-guard/decisions.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/findings.md`](changes/venv-guard/findings.md) | draft | none | 2026-11-17 | coding-harness-s55e |
 | [`changes/venv-guard/plan.md`](changes/venv-guard/plan.md) | draft | none | 2026-11-17 | coding-harness-s55e |

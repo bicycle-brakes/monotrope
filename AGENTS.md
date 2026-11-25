@@ -90,6 +90,8 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
     MINOR, touches only display, messages or rare edge cases (never correctness or security), fixing it would void an
     expensive measurement or review pass, and the pull request names the limit and the bead. Otherwise it is fixed
     (maintainer, 2026-11-22).
+11. **Code before prose.** State a program reads back is a schema-validated JSON file written by code, never
+    Markdown parsed back; Markdown only where a person reads it and it cannot be avoided (maintainer, 2026-11-24).
 
 ## Communication and session continuity
 

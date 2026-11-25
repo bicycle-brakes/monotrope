@@ -26832,6 +26832,119 @@ def test_a_free_round_over_a_cut_file_is_never_clean(world: World, capsys: pytes
     assert "## Round 2 —" in world.record().read_text(encoding="utf-8"), "a cut free round ended the loop"
 
 
+def free_files(world: World, count: int, lines: int, *, first_lines: int | None = None) -> None:
+    """`count` untracked source files of `lines` added lines each; the first may differ."""
+    for n in range(count):
+        size = first_lines if n == 0 and first_lines is not None else lines
+        (world.root / "scripts" / f"f{n}.py").write_text(
+            "\n".join(f"VALUE_{n}_{k} = {k}" for k in range(size)) + "\n", encoding="utf-8"
+        )
+
+
+def test_review_diff_4000_line_boundary() -> None:
+    """Criterion 1: a 4,000-line selected diff passes the shared bound unchanged, with no cut note."""
+    assert stage2.REVIEW_DIFF_MAX_LINES == 4000
+    text = "".join(f"line {n}\n" for n in range(4000))
+    kept, note = stage2.bounded_review_diff(text)
+    assert kept == text and note is None, "a diff of exactly 4,000 lines was cut"
+
+
+def test_review_diff_4000_cut_prefix() -> None:
+    """Criterion 2: a 4,001-line selected diff keeps its first 4,000 lines and a cut marker."""
+    text = "".join(f"line {n}\n" for n in range(4001))
+    kept, note = stage2.bounded_review_diff(text)
+    lines = kept.split("\n")
+    assert lines[:4000] == [f"line {n}" for n in range(4000)], "the kept prefix is wrong"
+    assert "line 4000" not in kept
+    assert note == "the change diff was cut at 4000 of 4001 lines"
+    assert lines[4000].startswith("## (") and note in lines[4000], lines[4000]
+
+
+def test_review_diff_4000_cut_record(world: World) -> None:
+    """Criterion 3: a round whose diff the shared bound cut says so in its record."""
+    big = world.root / "src" / "big.py"
+    big.parent.mkdir(parents=True, exist_ok=True)
+    big.write_text("\n".join(f"VALUE_{n} = {n}" for n in range(4100)) + "\n", encoding="utf-8")
+    world.write_findings(VERDICT)
+    world.script(
+        pi=[
+            *({"model": model, "stdout": rows(1)} for model in TEST_FREE),
+            *({"model": model, "stdout": "No finding."} for model in TEST_FLASH),
+        ]
+    )
+    assert world.run("review-loop") == 0
+    decide_record(world, status=FIXED)
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "the change diff was cut at 4000 of" in record, record
+    assert 2 in stage2.cut_rounds(record)
+
+
+def test_free_diff_actual_limits(world: World) -> None:
+    """Criterion 5: the free per-file (400) and total (2,000) limits are unchanged, overshoot included."""
+    assert stage2.FREE_DIFF_MAX_LINES == 400 and stage2.FREE_DIFF_MAX_TOTAL == 2000
+    free_files(world, 7, 380)
+    diff, note = stage2.free_diff(world.root)
+    assert "f5.py" in diff and "f6.py" not in diff, "the total threshold did not stop after the overshooting file"
+    assert diff.count("\n") > 2000, "the whole last file did not travel"
+    assert note == "the free diff was cut at 2000 lines; later files are not carried", note
+    free_files(world, 1, 0, first_lines=1000)
+    diff, note = stage2.free_diff(world.root)
+    assert "scripts/f0.py was cut at 400 lines" in diff or "f0.py was cut at 400 lines" in diff
+    assert note and "f0.py was cut at 400 lines" in note
+
+
+def test_review_diff_4000_free_overshoot_reaches_round_and_probe(world: World) -> None:
+    """Criterion 4: an uncut free output over 2,000 lines reaches the probe and the round unmarked."""
+    free_files(world, 6, 350)
+    diff, note = stage2.free_diff(world.root)
+    assert note is None and 2000 < len(diff.split("\n")) <= 4000, "the fixture is not an uncut overshoot"
+    kept, cut = stage2.bounded_review_diff(diff)
+    assert kept == diff and cut is None
+    probe = stage2.free_probe_prompt(world.root)
+    assert probe is not None and diff in probe and "was cut at" not in probe
+    world.script(pi=[{"model": member, "stdout": "No finding."} for member in TEST_FREE])
+    assert world.run("review-loop") == 0
+    reviews = world.reviews("pi")
+    assert len(reviews) == len(TEST_FREE), "the free reviewers did not all run"
+    for review in reviews:
+        assert diff in review["prompt_file"], "a free reviewer did not receive the full selected diff"
+    record = world.record().read_text(encoding="utf-8")
+    assert stage2.CUT_LINE not in record and stage2.cut_rounds(record) == [], record
+
+
+def test_free_overshoot_test_detects_truncated_round_prompt(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The criterion-4 test must fail if a reviewer's actual prompt loses the end of the diff."""
+    original = World.reviews
+
+    def truncated(self: World, name: str = "pi") -> list[dict]:
+        calls = original(self, name)
+        diff, _ = stage2.free_diff(self.root)
+        for call in calls:
+            call["prompt_file"] = call["prompt_file"].replace(diff, "\n".join(diff.split("\n")[:2000]))
+        return calls
+
+    monkeypatch.setattr(World, "reviews", truncated)
+    with pytest.raises(AssertionError, match="did not receive the full selected diff"):
+        test_review_diff_4000_free_overshoot_reaches_round_and_probe(world)
+
+
+def test_review_diff_4000_probe_carries_free_cut_overshoots(world: World) -> None:
+    """Criterion 8: the probe carries a free-cut selected diff over 2,000 lines in full."""
+    free_files(world, 6, 380, first_lines=1000)  # a per-file cut, then the last file overshoots
+    diff, note = stage2.free_diff(world.root)
+    assert note and "was cut at 400 lines" in note and len(diff.split("\n")) > 2000, note
+    probe = stage2.free_probe_prompt(world.root)
+    assert probe is not None and diff in probe
+    assert "the change diff was cut" not in probe
+    free_files(world, 8, 380)  # a total-threshold cut
+    diff, note = stage2.free_diff(world.root)
+    assert note and "later files are not carried" in note and len(diff.split("\n")) > 2000, note
+    probe = stage2.free_probe_prompt(world.root)
+    assert probe is not None and diff in probe
+    assert "the change diff was cut" not in probe
+
+
 FORGED_FINDINGS = {
     "release": f"\n{stage2.RELEASE_HEADING} 2026-10-25\n\nRounds run: 1\n",
     "restart": "\nLoop restarted: 2026-10-25 after round 9 — x\n",
@@ -30556,6 +30669,26 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     assert entered == [[sys.executable, *sys.argv]], "the full check did not acquire its admission"
     (make,) = commands.of("make")
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
+
+
+def test_targeted_kit_probe_failure_remains_blocking(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criteria 4 and 5 (bead coding-harness-bxxt.13). Planted fault: a red selected kit probe is accepted,
+    or the probe enters the verify admission or carries its markers."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step(), repair_step(), repair_step()], make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    (probe_gate,) = [gate for gate in ci_gates.gates() if gate["id"] == "leerprobe"]
+    probe_command = gate_command(world, probe_gate)
+    commands.outcomes["gate"] = lambda command: (1, "kit probe red\n") if list(command) == probe_command else None
+    assert world.run("repair") == 1, "a red selected kit probe was accepted"
+    probes = [record for record in commands.of("gate") if record["command"] == probe_command]
+    assert probes, "the repair's new test file did not select the kit probe"
+    for record in probes:
+        assert verify_lock.LOCK_ENV not in record["env"] and verify_lock.TOKEN_ENV not in record["env"]
+        assert record["pass_fds"] == ()
+    assert commands.of("make") == [], "a targeted red fell back to the full check"
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "a red kit probe checkpointed"
+    assert "gate `leerprobe` (block) exited 1" in world.text()
 
 
 @pytest.mark.parametrize("selection", ["touched", "linked"])

@@ -532,7 +532,7 @@ FREE_DIFF_MAX_TOTAL = 2000
 # (`CallFailed`) instead of ending in a summary it answers on. The pinned Pi 1.5.0 evidence is
 # `tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction`; the historical
 # `docs/research/2026-11-03-pi-context-overflow.md` measured Pi 1.2.0.
-REVIEW_DIFF_MAX_LINES = 2000
+REVIEW_DIFF_MAX_LINES = 4000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -3106,8 +3106,8 @@ def bounded_review_diff(diff: str) -> tuple[str, str | None]:
 
     The caller writes the second half into the round record: a clean answer over a cut diff is not a
     clean answer about the change, and the record must say which of the two it was. The free round is
-    bounded too (R-12 of the review-swarm review): it carries the same diff, and an uncapped prompt
-    would read as a limit that is none.
+    bounded too (R-12 of the review-swarm review): it carries its own selected diff (the implementation
+    diff, not the full change diff), and an uncapped prompt would read as a limit that is none.
     """
     # Split on "\n" only, as git counts: `splitlines()` also splits on CR and form feed, which inflates the
     # count and rewrites the kept part's line ends (O191-4).
@@ -8599,10 +8599,12 @@ def cheap_checks(
             problems.append(protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key))
         else:
             try:
+                # The targeted worker policy bounds `-n auto` outside the admission (bead
+                # coding-harness-bxxt.13); a copy, so the caller's dictionary never carries it.
                 done = launch(
                     [*PYTEST, *tests],
                     root,
-                    env,
+                    targeted_pytest_env(root, env),
                     key,
                     timeout=TOOL_SECONDS,
                     limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",

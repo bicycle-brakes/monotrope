@@ -200,7 +200,7 @@ jobs:
       - name: Plans hygiene holds strictly against the outside world
         id: plans-registry-strict
         if: ${{ !cancelled() }}
-        run: python3 scripts/plans_registry.py --check --strict
+        run: git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' && python3 scripts/plans_registry.py --check --strict --branches
       - name: Research notes not reviewed for more than 90 days are listed
         id: research-currency
         if: ${{ !cancelled() }}
