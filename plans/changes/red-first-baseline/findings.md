@@ -236,3 +236,129 @@ Stage-2 call, 2026-11-24: repair · attempt 3 · route stage-1 · endpoint claud
 > - P6-3: no fixed line
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/red-first-baseline/stage2/attempts/red-first-baseline/attempt-3-20261124T214522868386Z-c02575c1.md
 > ```
+
+## Investigation of the recorded refusals (P6-1), 2026-11-25
+
+Measured on 2026-11-25 against branch `fix/red-first-baseline` at `d26a1704` (the worktree's `scripts/stage2.py` is byte-identical to `d26a1704:scripts/stage2.py`). Interpreter for every pytest and `red_first` run: `/Users/mikypiky/coding-harness/.claude/worktrees/red-first-baseline/.venv/bin/python` (Python 3.12.15, pytest 8.3.4). The lane's own `.venv` (`.claude/worktrees/finder-partial-report/.venv/pyvenv.cfg`) records the same build, Python 3.12.15 from `/opt/homebrew/opt/python@3.12`. All copies, clones and runs were made under the scratch directory `7aso-forensics/`. No ref, index, worktree or tracker entry of the real repository was written. Read-only `git fsck` and `git archive` were run against it.
+
+Short result: in all three attempts the runner reported what pytest does. Run directly on the same baseline with the same attempt `tests/` bytes, each named test passes with exit 0. Neither the historical runner nor this branch's runner disagrees with that.
+
+### Sources searched
+
+- **Incident commit** — `git show ca493614`: Three refusal records: L3-1 in attempts 1 and 2, L3-4 in attempt 3. Run id `20261120T102655717416Z-03165124`. Time lines in plan.md: attempt 1 10:27:08–12:01:09 UTC, attempt 2 12:01:18–12:11:54 UTC, attempt 3 12:12:03–12:20:53 UTC.
+- **Saved-attempt refs** — `git for-each-ref refs/stage2/attempts/finder-partial-report`: 0 refs. The full `refs/stage2/` listing has no finder-partial-report entry.
+- **Lane git directory** — `ls -R .git/worktrees/finder-partial-report/` (incl. `stage2/attempts/`): 15 saved answers. The three for this run are `attempt-{1,2,3}-20261120T102655717416Z-03165124.md` (833, 1079 and 1611 bytes). They hold prose and fixed lines only, with no test code (`grep -c 'def test_'` gives 0 in each).
+- **Lane HEAD reflog** — `.git/worktrees/finder-partial-report/logs/HEAD`, read with a Python parser: Entry 23 moves HEAD to `feacd0c8` at 2026-11-20T08:52:19Z. Entry 24 moves it to `ca493614` at 12:37:32Z. There is no entry in between.
+- **Branch `fix/finder-partial-report`** — `git log --oneline feacd0c8..ca493614`: Only `ca493614` (docs). `git diff --quiet feacd0c8 ca493614 -- scripts` shows the scripts are identical. `ca493614` and `feacd0c8` have the same `tests` tree (`7d8ccc34`).
+- **Unreachable objects** — `git fsck --unreachable --no-reflogs --no-progress` (read-only): 12089 trees, 4918 blobs and 1498 commits. Loose objects from 2026-11-20 had been packed, so the objects carry no mtime.
+- **Unreachable root trees** — Python over `git cat-file --batch`: root trees with `scripts`, `tests` and `plans`: 3119 root trees; 29 differ from `feacd0c8^{tree}` in at most 12 paths.
+- **Attempt tree pairs** — `git diff-tree -r --numstat --no-renames A B` over all pairs of those 29 plus the baseline tree, compared with the recorded "Files the attempt changed" counts: Exactly one before/after pair matches each attempt (see the attempts below).
+- **Unreachable commits in the window** — `git log --no-walk` over the unreachable commits, filtered to 2026-11-20: Only `dolt remote info` commits. No attempt commit exists.
+- **Stash** — `git stash list` filtered for "finder": 0 entries.
+- **Bead coding-harness-7aso (this repair)** — `tools/bd show coding-harness-7aso`: The hand check claims L3-1 "fails (1 failed)" on the baseline. The 2026-11-20 14:30 note: the L3-4 hand check used `test_finder_faults_follow_entry_form`.
+- **Bead coding-harness-bf9m (test-local check code)** — `tools/bd show coding-harness-bf9m`: Covers the journal-citation-gate case only. It does not concern these attempts.
+- **Hand finish** — `git show -s 5121a00c`; `git show 5794f6d2`: "Every new test was red by hand against the HEAD versions of both scripts". The tests tree `091fb5b0` differs from every attempt tree.
+- **Historical runner** — `git show ca493614:scripts/stage2.py`; `git show c4dceb9a:scripts/stage2.py` (origin/main at 10:27 UTC): The red_first path is identical in both. Which copy the runner actually executed is not recorded (not read).
+
+### Attempt 1 (L3-1, route codex)
+
+- **Baseline:** `feacd0c87c0541a5ae09a6cb6629c2f373dc3ecd`.
+  - Derived. `ca493614:scripts/stage2.py` captures `baseline = git rev-parse HEAD` once, before the routes loop, so all three attempts share it.
+  - The lane reflog shows HEAD at `feacd0c8` from 08:52:19Z to 12:37:32Z, which covers the run start at 10:26:55Z.
+  - The candidate is confirmed.
+- **Test bytes:** `tests` tree `2fb75da85faff8e06af73a4a895267803e659cff`.
+  - Recovered from unreachable objects. It is the after-tree `2068bd52…` of the unique before/after pair `1c82686e…` to `2068bd52…`.
+  - That pair's numstat equals the record exactly: decisions.md +2 -1, `scripts/stage2_research_map.py` +9 -3, `scripts/stage2_research_run.py` +38 -6, `tests/test_stage2_research_map.py` +10 -0, `tests/test_stage2_swarm.py` +78 -14.
+  - The before-tree's tests equal the baseline's (`7d8ccc34`). The same tests tree reappears as attempt 2's before-tree (`e1b4eec0…`), so it stood unchanged through the red-first check in between.
+  - Blobs: swarm `d29b4f83`, research_map `b93c4958`. Both exist only as unreachable objects.
+  - In this tree the named test drives the swarm through the `sworld` fixture with `"[" * 2000 + "]" * 2000`. The attempt also rewrote the shared fixture helpers `finder_steps` and the stand-in script in the same file.
+- **Selector:** `tests/test_stage2_swarm.py::test_finder_deep_envelope_is_invalid_without_crashing`, from the refusal line in `ca493614` and the saved answer.
+- **Direct pytest:**
+  - Checkout `att1`: a scratch clone at `feacd0c8` on branch `fix/finder-partial-report`, with `tests/` replaced from tree `2fb75da8` through `git archive`. The re-hashed `tests` tree equals `2fb75da8`.
+  - Command: `.venv/bin/python -m pytest -q -p no:cacheprovider -rA <selector>`.
+  - Result: exit 0, the test PASSED (1 passed, 5.76 s). The captured stderr shows the run ending `finders-0-3 (invalid-report)`. The baseline already reports the seat as invalid and does not crash.
+- **red_first on this branch:**
+  - Call: `stage2.red_first(att1, feacd0c8…, <selector>, None)`, with `TMPDIR` and `XDG_STATE_HOME` pointed into the scratch directory so the private clone and the verify-lock state stay there.
+  - Returned: "pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome; the recorded outcome: the named test passed; no selected call failed".
+  - Source refs, HEAD and status were unchanged.
+- **Historical red_first:** the full `ca493614` tree was extracted into the scratch directory and run the same way. It returned the recorded sentence verbatim, without the "recorded outcome" tail.
+- **Recorded diagnostic (ca493614 findings.md):** "L3-1: tests/test_stage2_swarm.py::test_finder_deep_envelope_is_invalid_without_crashing: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome".
+- **Verdict:** no runner mismatch (absent).
+  - The test is truly green on the baseline. On this Python build `json.loads('[' * 2000 + ']' * 2000)` raises no RecursionError (measured; recursion limit 1000), so the planted input reaches no fault.
+  - The cause is shared with attempt 2: a test that plants no fault the baseline exhibits. That is a test-design cause in the attempt, not in the runner.
+
+### Attempt 2 (L3-1, route codex-repair)
+
+- **Baseline:** `feacd0c8`. Same derivation as attempt 1: one capture per repair run, and the reflog shows no HEAD move before 12:37:32Z.
+- **Test bytes:** `tests` tree `ed99421b5dbb72bd68afc0a01c6cf80fa8909dc9`.
+  - Recovered as the after-tree `34e6901f…` of the unique pair `e1b4eec0…` to `34e6901f…`.
+  - Numstat: decisions.md +1 -1, `scripts/stage2_research_run.py` +0 -1, `tests/test_stage2_swarm.py` +6 -6. This equals the record.
+  - The same tests tree reappears as attempt 3's before-tree (`16eb0804…`).
+  - Swarm blob `faa42610`. The named test now calls `stage2_research_run.claude_finder_output("[" * 2000 + "]" * 2000)` directly and expects `("", None, None)`.
+- **Selector:** `tests/test_stage2_swarm.py::test_finder_deep_envelope_is_invalid_without_crashing`.
+- **Direct pytest:** checkout `att2` (re-hashed tests equal `ed99421b`). Exit 0, PASSED (1 passed, 5.00 s).
+- **red_first on this branch:** "pytest ended 0 on the baseline's code; …; the recorded outcome: the named test passed; no selected call failed". Source unchanged.
+- **Historical red_first:** the recorded sentence, verbatim.
+- **Recorded diagnostic:** identical to attempt 1's L3-1 line.
+- **Verdict:**
+  - Absent: no runner mismatch.
+  - Shared with attempt 1: the deep input does not make the baseline's `json.loads` raise on this build, and the baseline catches `ValueError` and returns the empty triple.
+  - Attempt 3's saved answer states the same mechanism in prose. That prose is corroborated here by measurement, not taken as evidence.
+
+### Attempt 3 (L3-4, route stage-1)
+
+- **Baseline:** `feacd0c8`. Same derivation as above.
+- **Test bytes:** `tests` tree `1e4b628e3a22c41f3d4bd625eaa9f5f1c28bd7f8`.
+  - Recovered as the after-tree `47042d71…` of the unique pair `16eb0804…` to `47042d71…`.
+  - Numstat: decisions.md +1 -0, `tests/test_stage2_swarm.py` +7 -3. This equals the record.
+  - No later attempt confirms the tree. The record says "ruff changed no file", and no runner step that writes tests is recorded, so this is derived.
+  - `tests/test_stage2_research_map.py` is blob `b93c4958`, the same blob as in attempts 1 and 2.
+- **Selector:** `tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry`.
+  - Source: the refusal line and attempt 3's saved answer.
+  - Attempts 1 and 2 named `test_finder_faults_follow_entry_form` for L3-4 instead.
+  - The selected test already exists at `feacd0c8` (line 374 of blob `f42cb5f6`). In the attempt's blob it is unchanged, because the diff from `f42cb5f6` to `b93c4958` only appends `test_finder_faults_follow_entry_form` at the end of the file.
+- **Direct pytest:** checkout `att3` (re-hashed tests equal `1e4b628e`). Exit 0, PASSED (1 passed, 0.05 s).
+- **red_first on this branch:** "pytest ended 0 on the baseline's code; …; the recorded outcome: the named test passed; no selected call failed". Source unchanged.
+- **Historical red_first:** the recorded sentence, verbatim.
+- **Control on the same inputs:** attempt 3's L3-1 test (the monkeypatched `json.loads`) is not refused in the record. It fails directly with exit 1, and both this branch's and the historical `red_first` return `None` (an accepted red). Both runners therefore accept a genuine red on these inputs.
+- **Recorded diagnostic:** "L3-4: tests/test_stage2_research_map.py::test_finder_filter_reports_each_invalid_entry: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure or pytest's own failed outcome".
+- **Verdict:** absent, no runner mismatch. This cause is distinct from attempts 1 and 2: the attempt named a pre-existing baseline test that passes on baseline code.
+
+### Context only: the hand check's inputs (not the refused tests)
+
+These runs explain the bead's "red by hand" claim. They are not comparisons of the refused tests.
+
+- **Input** — Test: Direct pytest on `feacd0c8`
+- **Hand-finish tests `5121a00c` (tree `091fb5b0`)** — `tests/test_stage2_swarm.py::test_finder_deep_envelope_is_invalid_without_crashing`: exit 1, failed
+- **Hand-finish tests `5121a00c`** — `tests/test_stage2_research_map.py::test_finder_faults_follow_entry_form`: exit 1, failed
+- **Attempt-1 tests `2fb75da8`** — `tests/test_stage2_research_map.py::test_finder_faults_follow_entry_form`: exit 1, failed (consistent with L3-4 not being refused in attempts 1 and 2)
+
+The hand check used different test bytes for L3-1 and a different test function for L3-4. Its red results are not evidence of a runner mismatch.
+
+### Runner difference since ca493614
+
+`git diff ca493614 d26a1704 -- scripts/stage2.py` changes 3108 insertions and 424 deletions over 98 commits. The functions on the red_first path were extracted with `ast` and diffed:
+
+- Unchanged: `RED_FIRST_MINUTES`, `RED_PROBE_NAME`, `RED_PROBE_SOURCE`, `red_first_python`, `_red_report_bytes`, `_red_own_selector`, `_private_repository`, and the helpers `worktree_tree`, `runner_env`, `foreign_env`, `ENV_ALLOW` (text), `_ref_targets`, `_proof_ref_targets`, `_proof_reference_guard` and `_remove_private`.
+- `_red_record_fault` gains `check_exit` (default True). When it is False, the session exit is not checked, and a run without a failing call yields "the named test passed; no selected call failed".
+- New `_red_record_selected` and `_red_pre_record_diagnostic`: the protected tail of combined output, capped at 40 lines and 4,000 characters.
+- `red_first`, non-exit-1 branch: it keeps the old sentence and appends "; the recorded outcome: …" from the probe record. When the record holds no selected case, it also appends "pytest output (protected, capped):" with the protected tail. The exit-1 branch is unchanged.
+- `scripts/verify_lock.py` also changed (516 insertions and 138 deletions). It only governs admission. Both versions honour `XDG_STATE_HOME`, and both admitted the scratch runs.
+
+On the incident inputs both runners give the same verdict with the same exit (0). The current runner adds only the true recorded outcome. This branch's runner does not carry a historical-only fault, because none was found in the historical runner either.
+
+### Conclusion
+
+- **Attempt 1 (L3-1):** absent. Pytest truly ended 0 and the test passed on the baseline. The cause is shared with attempt 2: the 2000-deep JSON input raises nothing on Python 3.12.15, so the test planted no fault.
+- **Attempt 2 (L3-1):** absent, with the same shared cause as attempt 1.
+- **Attempt 3 (L3-4):** absent. The cause is distinct: the attempt named a pre-existing baseline test (`test_finder_filter_reports_each_invalid_entry`) that passes on baseline code.
+- **Out of scope:** nothing. No missing external package was involved, and the private checkout and filtered environment caused no difference: direct pytest and `red_first` agree in all three attempts and in the attempt-3 L3-1 control.
+- **Bead claim:** the "red by hand" result in bead coding-harness-7aso came from different inputs, the hand-finish tests `091fb5b0` and the attempts-1/2 L3-4 function. It does not show a runner mismatch.
+- **Unavailable:**
+  - Which `scripts/stage2.py` copy the runner process executed. The lane copy at `feacd0c8` and `ca493614` and main at `c4dceb9a` have an identical red_first path, so this does not change the verdict.
+  - Direct timestamps for the recovered trees: the objects are packed, and the trees are identified by exact numstat match instead.
+  - Saved-attempt refs: there are none.
+  - A post-attempt confirmation for attempt 3's tests tree.
+- **Test bytes:** all three attempts' test bytes were recovered from unreachable objects in the shared object store. None is reconstructed from prose.
+
+Artifacts in the scratch directory: `unreachable.txt`, `roots.txt`, `near_base.txt`, `direct-att{1,2,3}.log`, `redfirst-att{1,2,3}.log`, `redfirst-hist.log`, `redpath.diff`, `driver/run_red_first.py`, `driver/run_red_first_hist.py`.
