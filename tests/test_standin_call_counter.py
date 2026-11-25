@@ -215,6 +215,21 @@ def test_missing_or_mismatched_counter_rebuilds(tmp_path: Path) -> None:
     assert append_counted(control, "a", _counted("a")) == 9, "a current counter was not used"
 
 
+@pytest.mark.raw_stand_in_log_access(reason="plants an excessively nested counter")
+def test_deeply_nested_counter_rebuilds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    log = tmp_path / LOG
+    assert append_counted(log, "a", _counted("a")) == 0
+    counter_path(log).write_text("[" * 10000 + "]" * 10000, encoding="utf-8")
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        monkeypatch.setattr(atomic_test_log, "_rebuild_counts", lambda _handle: {})
+    try:
+        index = append_counted(log, "a", _counted("a"))
+    except RecursionError:
+        pytest.fail("an unreadable nested counter must be rebuilt from the log")
+    assert index == 1
+    assert read_counter(log)["counts"] == {"a": 2}
+
+
 def test_counter_write_failure_propagates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 9. Planted fault: a failed counter write or replacement is suppressed.
 

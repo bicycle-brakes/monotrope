@@ -181,7 +181,7 @@ def append_counted(data_path: str | Path, key: str, build, timeout: float | None
             tag = [status.st_dev, status.st_ino, status.st_size, status.st_mtime_ns]
             try:
                 stored = _load_counter(counter)
-            except (OSError, ValueError):
+            except (OSError, ValueError, RecursionError):
                 stored = None  # missing, unreadable or truncated: rebuilt below
             counts = _current_counts(stored, tag)
             if counts is None:
