@@ -141,3 +141,7 @@ context: |
   Architecture change: none.
 
 In the context of hosts whose hook surface is unverified, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting Codex outside this change. — 2026-11-25
+
+## Details decided by the orchestrator (cross-lane, 2026-11-25)
+
+[DETAIL] Companion change enqueue-pr (coding-harness-va1l, Q-8): the policy list holds one more rule, `python3 scripts/enqueue_pr.py * --maintainer*` (and the `.venv/bin/python` spelling) as ask; in an unattended run the ask becomes deny like every other ask, so only the maintainer can use the maintainer mode. The default call `scripts/enqueue_pr.py <number>` is allowed.
