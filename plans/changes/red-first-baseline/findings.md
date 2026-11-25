@@ -369,7 +369,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-4 | MAJOR | SPEC | base | scripts/stage2.py:10313 | If a `conftest.py` calls `pytest.exit("configuration failed", returncode=1)` before the probe writes a record, the refusal reports only that the outcome record is missing. It omits both pytest’s exit code and the protected diagnostic, so the cause cannot be identified from the refusal. [Criterion 12] | Codex | open | — |
+| P6-4 | MAJOR | SPEC | base | scripts/stage2.py:10313 | If a `conftest.py` calls `pytest.exit("configuration failed", returncode=1)` before the probe writes a record, the refusal reports only that the outcome record is missing. It omits both pytest’s exit code and the protected diagnostic, so the cause cannot be identified from the refusal. [Criterion 12] | Codex | taken — maintainer 2026-11-25, structural (second case after P6-2): one choke point reports every pytest end without a probe record, exit 1 included, with pytest's exit and the protected, capped diagnostic | — |
 
 Phase 6 verdict: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304, 2026-11-25
 Reviewer session: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
