@@ -419,3 +419,19 @@ Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claud
 > - F-4: no fixed line
 > - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-3-20261125T074255205892Z-36d2fc23.md
 > ```
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1203 files, 5848 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/jobs.py:752 | If a command starts a separately sessioned child with a sanitized environment, and that child starts another separately sessioned process before exiting, the surviving process is reparented and has no job token. It is absent from both the descendant tree and recorded groups, so stop leaves it running. This is a new case beyond the earlier reparenting test, whose child retains the token. [Criterion 3] | Codex | open | — |
+| F-2 | MAJOR | SPEC | base | scripts/jobs.py:324 | Starting `env python3 scripts/stage2.py review change` invokes the runner script followed by a non-option word, but the record marks it as a non-runner because classification requires the first argument to be Python. [Terms; criterion 4] | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — catches without switch: yes, the assertion detects the same inherited-admission fault if introduced in the launcher.
+
+Phase 6 verdict: codex 01a211d9-9ce1-7a32-9834-add206db218a, 2026-11-25
+Reviewer session: codex 01a211d9-9ce1-7a32-9834-add206db218a — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
