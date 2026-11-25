@@ -888,8 +888,8 @@ launchers).
 
 | Host | State | How |
 | --- | --- | --- |
-| Claude Code | supported, with a named gap | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`. |
-| Antigravity | supported if the host check shows the hook sees `HARNESS_UNATTENDED`; otherwise attended-only | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools); the hook starts in `.agents/`, the command changes to the repository root. Host check: not yet recorded. |
+| Claude Code | supported pending the recorded host check, with a named gap | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`. |
+| Antigravity | pending the recorded host check (supported if it shows the hook sees `HARNESS_UNATTENDED`; otherwise attended-only) | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools); the hook starts in `.agents/`, the command changes to the repository root. Host check: not yet recorded. |
 | Codex | not supported | no pre-tool hook found in `.codex/hooks.json`; measured in bead coding-harness-1tn1. |
 
 ### Pull requests stay mergeable

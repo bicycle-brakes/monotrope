@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-11-24
+updated: 2026-11-25
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
@@ -72,6 +72,7 @@ source (bead coding-harness-yim).
 | research-handoff | What a research run hands to the interview and the spec stays measured | `python3 scripts/check_research_handoff.py` | verify | block | seconds | no | no | both | A research decision that never reached the maintainer is the loss the swarm exists to prevent (bead coding-harness-icw), so every complete research-swarm/v2 run's obligations need linked maintainer answers, the spec's neighbours header must follow the runs' confirmed paths, and every criterion basis must name supported claims or answered records; a change without v2 evidence is a reported exemption. |
 | guard-test-environment | Verification never runs with a guard test's planting switch present | `python3 scripts/check_guard_test_environment.py` | verify | block | seconds | no | no | both | A guard test plants its real fault only under STAGE2_PLANT_FAULT, set by the repair runner in the planted proof run alone (ADR 0023, bead coding-harness-0ho); a green suite run with the switch present would count planted faults as passing proof, so repeatable guard proofs must never count as green verification. |
 | gate-schema | This gate file satisfies its own schema | `python3 scripts/ci_gates.py --check-schema` | verify | block | seconds | no | yes | both | A malformed gate file would silence every runner at once — it is checked like any other input. |
+| agent-policy-drift | Claude Code permissions and the hook registrations are what the agent policy renders | `python3 scripts/agent_policy.py check` | verify | block | seconds | no | no | both | One policy list for every harness (bead coding-harness-r7zc); a hand edit of .claude/settings.json or .agents/hooks.json that drifts from scripts/agent_policy.py must fail verification (criterion 13). |
 | ci-drift | ci.yml is exactly what the gate file generates | `python3 scripts/ci_gates.py --check-ci` | verify | block | seconds | no | yes | both | The workflow is derived, never hand-edited; this gate is the derivation's ratchet (D-10). |
 | ramp-valves | ramp valves — dated transitions turn loud on their date | `python3 scripts/ramp_valves.py` | verify | block | seconds | no | no | both | Ein Ventil ist ein datiertes Versprechen — der Uebergang der Frist muss den Lauf rot machen, lokal wie in der CI; deshalb steht er in derselben Liste (D-10) und nicht als fest eincompilierter Schritt im Generator. |
 | ruleset | The branch ruleset asks for what rule RB-M6 asks | `RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs` | verify | block | seconds | no | no | writer | The ruleset lives at GitHub and changes without a commit; GitHub shows its bypass list only to whoever may edit it, so the maintainer's own gh login measures it on the writer machine, and an unreachable API is red (RB-M6). |

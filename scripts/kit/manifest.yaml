@@ -67,6 +67,18 @@ rules:
     reason: "the test strategy of the workflow in six layers; links only files that travel, names no count of this repository (bead coding-harness-vxwp)"
 
   # --- der Mechanismus -------------------------------------------------------
+  - prefix: scripts/agent_policy.py
+    rolle: mechanismus
+    reason: "the harness-neutral permission check and the renderer of the host configuration (bead coding-harness-r7zc); travels with the gate agent-policy-drift"
+  - prefix: scripts/agent_policy_hooks.py
+    rolle: mechanismus
+    reason: "the thin hook adapters for Claude Code and Antigravity that call the shared check (bead coding-harness-r7zc)"
+  - prefix: scripts/merge_guard.py
+    rolle: mechanismus
+    reason: "the one list of merge ask rules, read by the agent policy (ADR 0008)"
+  - prefix: scripts/omnigent_policy.py
+    rolle: mechanismus
+    reason: "the Omnigent deny and ask list, read by the agent policy and rendered into the host configuration"
   - prefix: scripts/_verdict.py
     rolle: mechanismus
     reason: "das gemeinsame Exit-Vokabular. Haengt an nichts"

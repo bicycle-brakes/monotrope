@@ -683,7 +683,7 @@ DRIFT_MUTATIONS = (
 )
 
 
-def test_generated_configuration_drift_fails(tmp_path: Path) -> None:
+def test_agent_policy_drift_goes_red_when_the_rendered_files_drift(tmp_path: Path) -> None:
     root = _fresh_root(tmp_path / "clean")
     assert ap.check(root) == []
     assert ap.main(["--root", str(root), "check"]) == 0
