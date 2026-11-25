@@ -36,3 +36,11 @@ reason: Test-only speed fixes with remedies stated in the bead (coding-harness-b
 
 [DETAIL] **D-6 (spec review S-3, durations)**: Reading B — the pull request reports one total per test function, summed over its parametrised cases, before and after. Reason: 24 old node ids cannot be paired with four new ones.
 
+[DETAIL] **D-7 (spec review S-5, keep the exit-status catch; refines D-4)**: each (workers, drain) pair runs two nested sessions, not one: a quiet session with the outcomes in which no node fails (pass, skip, xfail, setup, finalizer), where exit status 1 can only come from the audit, and a separate session for the failing outcome (error); 8 nested runs instead of 24. Reason: one mixed session would let a guard that no longer sets the exit status pass.
+
+[DETAIL] **D-8 (spec review S-4, the marker's timing)**: Reading B — the test records the current step's two `start` events apart from earlier steps and fails if the marker exists before the second of them; the step starts from a fresh event list (D-5). Reason: only that reading can turn red.
+
+[DETAIL] **D-9 (spec review S-6, per-node results)**: the expected JUnit result of every outcome node is measured once from a run of today's code and written into the test as a table (for example `error` is reported as failed, `finalizer` as passed with a skipped teardown); the plan records the measurement. Reason: the spec cannot name values nobody has measured.
+
+[DETAIL] **D-10 (spec review S-7, comparable load)**: each duration in the pull request carries the one-minute load average (`os.getloadavg()[0]`) taken just before it; before and after count as comparable when those differ by at most 1.0, otherwise both are measured again. Reason: "materially different load" needs a recorded number.
+
