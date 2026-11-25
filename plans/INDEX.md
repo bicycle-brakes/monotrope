@@ -617,6 +617,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/drift-lane-branches/plan.md`](changes/drift-lane-branches/plan.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/research.md`](changes/drift-lane-branches/research.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/spec.md`](changes/drift-lane-branches/spec.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/enqueue-pr/research.md`](changes/enqueue-pr/research.md) | draft | none | 2026-11-25 | coding-harness-va1l |
 | [`changes/finder-partial-report/decisions.md`](changes/finder-partial-report/decisions.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/findings.md`](changes/finder-partial-report/findings.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
