@@ -31,3 +31,12 @@ reason: The change is a behaviour-preserving speed-up of one gate with a stated 
 [DETAIL] **D-3 (messages unchanged)**: every STALE line and the per-file `git log cannot date <file>` error keep their exact wording; dirty or untracked files keep skipping the date check. Reason: the gate's output is read by people and tests.
 
 [DETAIL] **D-4 (measure)**: the pull request records the gate's run time before and after on this repository at the same commit. Reason: the 6-16 s figure is from an external analysis, not measured here.
+
+[DETAIL] **D-5 (spec review S-1, what counts)**: Reading B — the number of Git processes the date check starts is bounded and does not grow with the number of held documents (at most three for the whole run); a per-document fallback of any Git command refutes criterion 1. Reason: the per-document process count is the cost the bead removes.
+
+[DETAIL] **D-6 (spec review S-2, the timing decides)**: Reading B — the change ships only if the gate's run time on this repository, measured before and after at the same commit on the same machine, is at least halved; otherwise the lane stops and reports. Reason: run time is the change's only purpose.
+
+[DETAIL] **D-7 (spec review S-3, literal paths)**: held paths are literal: the oracle and the batch both treat them as literal paths (`GIT_LITERAL_PATHSPECS=1` or `:(literal)`), so a name with `*`, `?`, `[` or a leading `:` matches only itself. Reason: a held document is one file, never a pattern.
+
+[DETAIL] **D-8 (spec review S-4, a failed batch; amends D-3 for this case)**: when the single batched invocation fails, the gate reports one message naming the command and its protected stderr and blames no document, with the same exit status as today's per-file failure; the per-file "git log cannot date <file>" message stays for a document the batch output does not date. Reason: a batch failure belongs to no document.
+
