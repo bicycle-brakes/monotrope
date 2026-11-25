@@ -362,3 +362,14 @@ On the incident inputs both runners give the same verdict with the same exit (0)
 - **Test bytes:** all three attempts' test bytes were recovered from unreachable objects in the shared object store. None is reconstructed from prose.
 
 Artifacts in the scratch directory: `unreachable.txt`, `roots.txt`, `near_base.txt`, `direct-att{1,2,3}.log`, `redfirst-att{1,2,3}.log`, `redfirst-hist.log`, `redpath.diff`, `driver/run_red_first.py`, `driver/run_red_first_hist.py`.
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5742 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-4 | MAJOR | SPEC | base | scripts/stage2.py:10313 | If a `conftest.py` calls `pytest.exit("configuration failed", returncode=1)` before the probe writes a record, the refusal reports only that the outcome record is missing. It omits both pytest’s exit code and the protected diagnostic, so the cause cannot be identified from the refusal. [Criterion 12] | Codex | open | — |
+
+Phase 6 verdict: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304, 2026-11-25
+Reviewer session: codex 01a2101b-f8fc-7f20-b2cd-98e43ed06304 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
