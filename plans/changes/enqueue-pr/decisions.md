@@ -156,3 +156,7 @@ context: |
   Architecture change: none.
 
 In the context of the phase-6 verdict, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting more refusals on disputed loop rows. — 2026-11-25
+
+## Details decided by the orchestrator (spec-review round 1)
+
+[DETAIL] Round-3 spec review (S-24..S-34) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25: answer spec-review questions except BLOCKERs, recorded here), each towards refusal when in doubt. No further redraft: the spec stays as reviewed in round 3 so the review stays current; the implementer applies the S-24..S-34 statuses in findings.md as written.
