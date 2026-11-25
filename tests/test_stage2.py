@@ -30671,6 +30671,26 @@ def test_targeted_commands_run_without_verify_admission(world: World, monkeypatc
     assert make["pass_fds"] and verify_lock.LOCK_ENV in make["env"]
 
 
+def test_targeted_kit_probe_failure_remains_blocking(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criteria 4 and 5 (bead coding-harness-bxxt.13). Planted fault: a red selected kit probe is accepted,
+    or the probe enters the verify admission or carries its markers."""
+    baseline = repair_world(world)
+    script_repair(world, [repair_step(), repair_step(), repair_step()], make=[{"stdout": "green\n"}])
+    commands = targeted_mode(monkeypatch)
+    (probe_gate,) = [gate for gate in ci_gates.gates() if gate["id"] == "leerprobe"]
+    probe_command = gate_command(world, probe_gate)
+    commands.outcomes["gate"] = lambda command: (1, "kit probe red\n") if list(command) == probe_command else None
+    assert world.run("repair") == 1, "a red selected kit probe was accepted"
+    probes = [record for record in commands.of("gate") if record["command"] == probe_command]
+    assert probes, "the repair's new test file did not select the kit probe"
+    for record in probes:
+        assert verify_lock.LOCK_ENV not in record["env"] and verify_lock.TOKEN_ENV not in record["env"]
+        assert record["pass_fds"] == ()
+    assert commands.of("make") == [], "a targeted red fell back to the full check"
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "a red kit probe checkpointed"
+    assert "gate `leerprobe` (block) exited 1" in world.text()
+
+
 @pytest.mark.parametrize("selection", ["touched", "linked"])
 @pytest.mark.parametrize("full_result", [0, 1])
 def test_targeted_stage2_test_file_requires_full_verification(

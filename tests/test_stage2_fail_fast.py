@@ -35,6 +35,7 @@ from test_stage2 import (  # noqa: E402
     script_repair,  # noqa: E402
     seed_tests,  # noqa: E402
     successful_implementation,  # noqa: E402
+    targeted_mode,  # noqa: E402
     venv_pytest,  # noqa: E402
     venv_ruff,  # noqa: E402
 )
@@ -1459,3 +1460,119 @@ def test_repair_prompt_names_file_when_stat_is_denied(world: World, monkeypatch)
     prompt = stage2.repair_must_run_refs(world.root, plan)
     assert "tests/test_denied.py" in prompt and "cannot be read or parsed" in prompt
     assert "plan's criterion ledger could not be read" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# The cheap pytest's worker policy (bead coding-harness-bxxt.13): both preparations launch it with
+# the targeted check's worker bound, outside the verify admission, without writing the computed
+# setting into the caller's environment.
+# ---------------------------------------------------------------------------
+
+WORKERS = "PYTEST_XDIST_AUTO_NUM_WORKERS"
+CONTROLLED_BOUND = "3"
+
+
+def cheap_world(world: World) -> str:
+    """Worktree tools, a committed baseline and one new test file the cheap pytest selects whole."""
+    venv_ruff(world)
+    venv_pytest(world)
+    seed_tests(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "tests" / "test_cheap.py").write_text("def test_cheap():\n    assert 1\n", encoding="utf-8")
+    world.script(make=[{"stdout": "green\n"}] * 3)
+    return baseline
+
+
+def controlled_workers(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int | None, int | None]]:
+    """Fix the worker rule's answer whatever the machine reads, and clear an inherited setting."""
+    seen: list[tuple[int | None, int | None]] = []
+
+    def rule(cores: int | None, memory: int | None) -> int:
+        seen.append((cores, memory))
+        return int(CONTROLLED_BOUND)
+
+    monkeypatch.setattr(stage2.verify_run, "worker_bound", rule)
+    monkeypatch.delenv(WORKERS, raising=False)
+    return seen
+
+
+def cheap_spy(monkeypatch: pytest.MonkeyPatch, commands) -> list[dict]:
+    """Record each cheap-checks call: the caller's dictionary, its contents before, the pytest launches inside."""
+    calls: list[dict] = []
+    real = stage2.cheap_checks
+
+    def spy(root, env, *args, **kwargs):
+        before = dict(env)
+        start = len(commands.of("pytest"))
+        try:
+            return real(root, env, *args, **kwargs)
+        finally:
+            calls.append({"env": env, "before": before, "launches": commands.of("pytest")[start:]})
+
+    monkeypatch.setattr(stage2, "cheap_checks", spy)
+    return calls
+
+
+@pytest.mark.parametrize("mode", ["targeted", "full"])
+def test_cheap_pytest_uses_targeted_worker_policy_in_both_modes(
+    world: World, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Spec criterion 1. Planted fault: either preparation launches uncapped pytest."""
+    baseline = cheap_world(world)
+    controlled_workers(monkeypatch)
+    commands = targeted_mode(monkeypatch)
+    calls = cheap_spy(monkeypatch, commands)
+    stage2.verify_attempt(world.root, world.plan, mode=mode, against=baseline)
+    assert len(calls) == 1, f"the {mode} preparation did not run the cheap checks once"
+    (call,) = calls
+    (launch,) = call["launches"]
+    assert launch["command"][len(stage2.PYTEST) :] == ["tests/test_cheap.py"], launch["command"]
+    assert launch["env"].get(WORKERS) == CONTROLLED_BOUND, f"the {mode} preparation launched uncapped pytest"
+    assert launch["env"] == stage2.targeted_pytest_env(world.root, call["before"]), (
+        "the cheap pytest's environment is not the targeted policy's for the same input"
+    )
+    assert WORKERS not in call["env"], "the computed setting escaped into the caller's environment"
+
+
+def test_cheap_pytest_preserves_explicit_worker_setting(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 3. Planted fault: the launch replaces a nonempty input setting."""
+    cheap_world(world)
+    controlled_workers(monkeypatch)
+    commands = targeted_mode(monkeypatch)
+    env = {**stage2.runner_env(stage2.foreign_env({}), world.root), WORKERS: "2"}
+    assert stage2.cheap_checks(world.root, env, world.plan, None, None) == []
+    (launch,) = commands.of("pytest")
+    assert launch["env"][WORKERS] == "2", "the caller's own worker setting was replaced"
+    assert env[WORKERS] == "2"
+
+
+@pytest.mark.parametrize("mode", ["targeted", "full"])
+def test_cheap_pytest_failure_remains_blocking(world: World, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    """Spec criterion 5. Planted fault: a red cheap pytest is accepted."""
+    baseline = cheap_world(world)
+    controlled_workers(monkeypatch)
+    commands = targeted_mode(monkeypatch)
+    commands.outcomes["pytest"] = (1, "FAILED tests/test_cheap.py::test_cheap - assert 0\n")
+    problems = stage2.verify_attempt(world.root, world.plan, mode=mode, against=baseline)
+    assert problems, "a red cheap pytest was reported as a successful check"
+    assert problems[0].startswith(stage2.CHEAP_LABEL), problems
+    assert "exited 1" in problems[0] and "FAILED tests/test_cheap.py::test_cheap" in problems[0], problems
+    assert len(commands.of("pytest")) == 1, "the check continued past the red cheap pytest"
+    assert commands.of("make") == [], "a red cheap pytest still started `make verify`"
+
+
+def test_cheap_worker_setting_does_not_escape_pytest(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Spec criterion 6. Planted fault: the computed setting is written into the caller-supplied dictionary."""
+    cheap_world(world)
+    controlled_workers(monkeypatch)
+    commands = targeted_mode(monkeypatch)
+    env = stage2.runner_env(stage2.foreign_env({}), world.root)
+    env.pop(WORKERS, None)
+    before = dict(env)
+    assert stage2.cheap_checks(world.root, env, world.plan, None, None) == []
+    (launch,) = commands.of("pytest")
+    assert launch["env"][WORKERS] == CONTROLLED_BOUND, "the cheap pytest did not carry its computed setting"
+    assert env == before, "the cheap checks changed the caller-supplied dictionary"
+    assert commands.of("ruff"), "the cheap ruff did not run"
+    for record in commands.of("ruff"):
+        assert WORKERS not in record["env"], "the computed setting reached a launch other than pytest"
