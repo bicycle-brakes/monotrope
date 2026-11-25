@@ -871,6 +871,26 @@ on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
 
+### One agent policy for every harness
+
+`scripts/agent_policy.py` is the one place that decides whether an agent may
+run a command: it reads the merge asks of `scripts/merge_guard.py`, the
+Omnigent rules of `scripts/omnigent_policy.py` and its own rules (`codex`,
+the enqueue script's `--maintainer` mode), and splits a shell line as the
+shell reads it, checking every part, every `bash/sh/zsh -c` string behind
+known wrappers (`env`, `sudo`, `timeout`, `nohup`, `nice`, `xargs`, …) and
+every `$( )` or backtick substitution. `python3 scripts/agent_policy.py write`
+renders `.claude/settings.json` and `.agents/hooks.json`; the gate
+`agent-policy-drift` fails when either drifts. An ask becomes a deny when
+`HARNESS_UNATTENDED` is set to anything but `0` (set by the unattended
+launchers).
+
+| Host | State | How |
+| --- | --- | --- |
+| Claude Code | supported, with a named gap | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`. |
+| Antigravity | supported if the host check shows the hook sees `HARNESS_UNATTENDED`; otherwise attended-only | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools); the hook starts in `.agents/`, the command changes to the repository root. Host check: not yet recorded. |
+| Codex | not supported | no pre-tool hook found in `.codex/hooks.json`; measured in bead coding-harness-1tn1. |
+
 ### Pull requests stay mergeable
 
 On 2026-10-27 five runner pull requests could not merge `main` any more:

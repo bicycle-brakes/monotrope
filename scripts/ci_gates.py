@@ -268,10 +268,6 @@ OHNE_AUFRUFER: dict[str, str] = {
         "answer with it, or logs one measured time span into a change's plan (time-log); "
         "tests/test_harness_decide_adr.py and tests/test_harness_time_log.py run it"
     ),
-    "agent_policy.py": (
-        "Library and maintainer tool - the harness-neutral permission check and the host configuration "
-        "rendered from it; tests/test_agent_policy.py runs it, its drift check included"
-    ),
     "agent_policy_hooks.py": (
         "Hook adapter - Claude Code and Antigravity start it before a tool call on the agent's machine, "
         "which no CI step can do; tests/test_agent_policy.py runs it"

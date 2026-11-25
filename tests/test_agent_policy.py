@@ -659,17 +659,17 @@ DRIFT_MUTATIONS = (
     (_duplicate, "2 times"),
     (_reclassify, "the policy lists it as ask"),
     (_reorder, "order"),
-    (_claude_command, "command"),
+    (_claude_command, "registrations"),
     (_claude_matcher, "matcher"),
     (_claude_timeout, "timeout"),
     (_claude_missing, "registrations"),
-    (_agents_command, "command"),
+    (_agents_command, "registrations"),
     (_agents_matcher, "matcher"),
     (_agents_timeout, "timeout"),
 )
 
 
-def test_generated_configuration_drift_fails(tmp_path: Path) -> None:
+def test_agent_policy_drift_goes_red_when_the_rendered_files_drift(tmp_path: Path) -> None:
     root = _fresh_root(tmp_path / "clean")
     assert ap.check(root) == []
     assert ap.main(["--root", str(root), "check"]) == 0
@@ -817,3 +817,52 @@ def test_nested_shell_constructs_are_checked() -> None:
         assert ap.decide_shell(command).kind == ABSTAIN, command
     for command in ("echo $(gh pr merge 54", "echo `gh pr merge 54", "env -u"):
         assert ap.decide_shell(command).kind == ASK, command
+
+
+def test_wrapped_shell_commands_are_checked() -> None:
+    for prefix in (
+        "sudo -u root",
+        "timeout 5",
+        "nohup",
+        "nice -n 5",
+        "exec",
+        "command",
+        "time",
+        "xargs -n 1",
+        "env --file F --chdir D --unset N",
+    ):
+        assert ap.decide_shell(f"{prefix} bash -c 'gh pr merge 54'").kind == ASK, prefix
+
+
+def test_antigravity_registration_is_anchored() -> None:
+    command = ap.registration("antigravity")["hooks"][0]["command"]
+    assert (
+        command
+        == "cd .. && ${HARNESS_PYTHON:-$( [ -x .venv/bin/python ] && printf .venv/bin/python || printf python3 )} scripts/agent_policy_hooks.py antigravity"
+    )
+
+
+def test_noncommand_shell_syntax_abstains() -> None:
+    for line in ("echo $((1+2))", "ls $((2-1))dir", "echo stray)", r"echo $'\q'"):
+        assert ap.decide_shell(line).kind == ABSTAIN, line
+
+
+def test_foreign_hook_mentions_are_preserved() -> None:
+    foreign = {"hooks": [{"command": "echo agent_policy_hooks.py"}]}
+    config = {"hooks": {"PreToolUse": [foreign]}}
+    assert foreign in ap.render_settings(config)["hooks"]["PreToolUse"]
+
+
+def test_substitution_depth_is_bounded() -> None:
+    line = "echo " + "$(" * 1500 + "true" + ")" * 1500
+    try:
+        result = ap.decide_shell(line)
+    except RecursionError:
+        pytest.fail("deep substitutions must return a decision, not raise RecursionError")
+    assert result.kind == ASK
+    process = subprocess.run(
+        [sys.executable, str(REPO / "scripts/agent_policy.py"), "decide", "--shell", line],
+        capture_output=True,
+        text=True,
+    )
+    assert process.returncode == 0 and "ask" in process.stdout

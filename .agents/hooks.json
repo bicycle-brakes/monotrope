@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "cd .. && ${HARNESS_PYTHON:-$( [ -x .venv/bin/python ] && printf .venv/bin/python || printf python3 )} scripts/agent_policy_hooks.py antigravity",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "run_command|.*merge_pull_request"
+      }
+    ]
+  }
+}

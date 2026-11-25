@@ -57,7 +57,7 @@ At commit `e68a00e6`, Claude Code's permissions are split between generated Omni
     *Refuted by:* an altered or missing rule, command, matcher or timeout passes the drift check.
 14. When policy output is regenerated, Omnigent's layer-two deny and ask policies and Claude Code's unattended overlay retain their protection.
     *Refuted by:* a denial, the `sys_advise_models` layer-two ask, or an overlay conversion is lost or weakened.
-15. If policy reading, input parsing or adapter execution fails while the adapter can respond, it denies and identifies the fault.
+15. If policy reading or adapter execution fails while the adapter can respond, it denies and identifies the fault. A shell line the reader cannot split (a genuinely unterminated quote, or nesting deeper than the bound) asks when attended and denies when unattended, naming the fault (decision S-17).
     *Refuted by:* malformed input, unreadable policy or a caught exception produces abstain or an unexplained denial.
 16. If a host cannot express ask, its adapter returns deny for an ask decision.
     *Refuted by:* an ask produces abstention on that host.

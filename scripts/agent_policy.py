@@ -295,9 +295,7 @@ def split_command(text: str) -> list[str]:
             i += 1
             continue
         if char == ")":
-            depth -= 1
-            if depth < 0:
-                raise ShellSyntaxError("unexpected closing parenthesis")
+            depth = max(0, depth - 1)
             current.append(char)
             i += 1
             continue
@@ -346,7 +344,9 @@ def nested_commands(text: str) -> tuple[str, list[str]]:
     """Replace executable nesting with inert words and return its command texts."""
     nested: list[str] = []
 
-    def scan(start: int, closing: str | None = None) -> tuple[str, int]:
+    def scan(start: int, closing: str | None = None, depth: int = 0) -> tuple[str, int]:
+        if depth > MAX_NESTING:
+            raise ShellSyntaxError("substitution nesting too deep")
         out: list[str] = []
         quote: str | None = None
         i = start
@@ -393,13 +393,17 @@ def nested_commands(text: str) -> tuple[str, list[str]]:
                 continue
             if text.startswith("$(", i) or (c == "(" and quote is None):
                 if text.startswith("$((", i):
-                    raise ShellSyntaxError("arithmetic substitution cannot be resolved")
-                inner, i = scan(i + (2 if c == "$" else 1), ")")
+                    level, j = 2, i + 3
+                    while j < len(text) and level:
+                        level += (text[j] == "(") - (text[j] == ")")
+                        j += 1
+                    out.append("0")
+                    i = j
+                    continue
+                inner, i = scan(i + (2 if c == "$" else 1), ")", depth + 1)
                 nested.append(inner)
                 out.append("placeholder")
                 continue
-            if c == ")" and quote is None:
-                raise ShellSyntaxError("unexpected closing parenthesis")
             out.append(c)
             i += 1
         if closing:
@@ -420,8 +424,8 @@ def decode_ansi_quotes(part: str) -> str:
             value = codecs.decode(match.group(1), "unicode_escape")
         except (ValueError, UnicodeError) as exc:
             raise ShellSyntaxError("invalid ANSI-C quote") from exc
-        if "\\" in value or "\x00" in value:
-            raise ShellSyntaxError("unsupported ANSI-C escape")
+        if "\x00" in value:
+            return shlex.quote(match.group(1))
         return shlex.quote(value)
 
     return re.sub(r"\$'((?:\\.|[^'\\])*)'", replace, part)
@@ -436,16 +440,58 @@ def shell_c_command(part: str) -> str | None:
     i = 0
     while i < len(tokens) and _ASSIGNMENT.fullmatch(tokens[i]):
         i += 1
-    if i < len(tokens) and Path(tokens[i]).name == "env":
+    expansions = 0
+    while i < len(tokens):
+        name = Path(tokens[i]).name
+        if name not in ("env", "sudo", "timeout", "nohup", "nice", "exec", "command", "time", "xargs"):
+            break
         i += 1
-        expansions = 0
+        value_options = {
+            "env": ("-u", "--unset", "-C", "--chdir", "-P", "--path", "-f", "--file"),
+            "sudo": (
+                "-u",
+                "-g",
+                "-h",
+                "-p",
+                "-C",
+                "-T",
+                "-R",
+                "-D",
+                "--user",
+                "--group",
+                "--host",
+                "--prompt",
+                "--chdir",
+                "--chroot",
+                "--close-from",
+                "--command-timeout",
+            ),
+            "timeout": ("-k", "--kill-after", "-s", "--signal"),
+            "nice": ("-n", "--adjustment"),
+            "xargs": (
+                "-a",
+                "-d",
+                "-E",
+                "-I",
+                "-L",
+                "-n",
+                "-P",
+                "-s",
+                "--arg-file",
+                "--delimiter",
+                "--eof",
+                "--replace",
+                "--max-lines",
+                "--max-args",
+                "--max-procs",
+                "--max-chars",
+                "--process-slot-var",
+            ),
+            "time": ("-f", "-o", "--format", "--output"),
+        }.get(name, ())
         while i < len(tokens):
             token = tokens[i]
-            if token in ("-u", "--unset", "-C", "--chdir", "-P", "--path"):
-                if i + 1 >= len(tokens):
-                    raise ShellSyntaxError("env option lacks its argument")
-                i += 2
-            elif token in ("-S", "--split-string"):
+            if name == "env" and token in ("-S", "--split-string"):
                 if i + 1 >= len(tokens):
                     raise ShellSyntaxError("env split-string lacks its argument")
                 expansions += 1
@@ -455,13 +501,19 @@ def shell_c_command(part: str) -> str | None:
                     tokens[i : i + 2] = shlex.split(tokens[i + 1])
                 except ValueError as exc:
                     raise ShellSyntaxError("invalid env split-string") from exc
+            elif token in value_options:
+                if i + 1 >= len(tokens):
+                    raise ShellSyntaxError(f"{name} option lacks its argument")
+                i += 2
             elif token == "--":
                 i += 1
                 break
-            elif token.startswith("-") or _ASSIGNMENT.fullmatch(token):
+            elif token.startswith("-") or (name == "env" and _ASSIGNMENT.fullmatch(token)):
                 i += 1
             else:
                 break
+        if name == "timeout" and i < len(tokens):
+            i += 1
     if i >= len(tokens) or Path(tokens[i]).name not in SHELLS:
         return None
     i += 1
@@ -556,7 +608,7 @@ REGISTRATIONS: dict[str, dict] = {
         "matcher": "run_command|.*merge_pull_request",
         "hooks": [
             {
-                "command": f"python3 scripts/{HOOK_SCRIPT} antigravity",
+                "command": f"cd .. && ${{HARNESS_PYTHON:-$( [ -x .venv/bin/python ] && printf .venv/bin/python || printf python3 )}} scripts/{HOOK_SCRIPT} antigravity",
                 "timeout": HOOK_TIMEOUT,
                 "type": "command",
             }
@@ -576,7 +628,8 @@ def _is_ours(group: object) -> bool:
     hooks = group.get("hooks")
     if not isinstance(hooks, list):
         return False
-    return any(isinstance(hook, dict) and HOOK_SCRIPT in str(hook.get("command", "")) for hook in hooks)
+    commands = {item["hooks"][0]["command"] for item in REGISTRATIONS.values()}
+    return any(isinstance(hook, dict) and hook.get("command") in commands for hook in hooks)
 
 
 def _event_groups(config: dict, label: str) -> list:
@@ -627,12 +680,14 @@ def _dump(path: Path, data: dict) -> None:
 
 def write(root: Path = ROOT) -> None:
     """Render the Omnigent policy, `.claude/settings.json` and `.agents/hooks.json` under `root`."""
-    op.write(root)
     settings_file = root / SETTINGS_PATH
     _dump(settings_file, render_settings(_load(settings_file)))
     agents_file = root / AGENTS_HOOKS_PATH
     agents = _load(agents_file) if agents_file.exists() else {}
     _dump(agents_file, render_agents_hooks(agents))
+    # The Omnigent renderer writes last: it owns the order of its own rules in the settings,
+    # so both drift checks (this module's and scripts/omnigent_policy.py --check) agree.
+    op.write(root)
 
 
 def _permission_drift(settings: dict) -> list[str]:

@@ -261,6 +261,16 @@ gates:
     placement: both
     reason: A malformed gate file would silence every runner at once — it is checked like any other input.
 
+  - id: agent-policy-drift
+    title: Claude Code permissions and the hook registrations are what the agent policy renders
+    command: python3 scripts/agent_policy.py check
+    job: verify
+    cost: seconds
+    enforcement: block
+    floor: false
+    placement: both
+    reason: One policy list for every harness (bead coding-harness-r7zc); a hand edit of .claude/settings.json or .agents/hooks.json that drifts from scripts/agent_policy.py must fail verification (criterion 13).
+
   - id: ci-drift
     title: ci.yml is exactly what the gate file generates
     command: python3 scripts/ci_gates.py --check-ci

@@ -147,3 +147,49 @@ Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model deepseek-
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1242 files, 5951 commits, 12 rules.
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1242 files, 5951 commits, 12 rules.
+
+## Hand steps for the orchestrator — 2026-11-25
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- L2-1 — `decisions/gates.yaml` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: L2-1 in the loop record `/Users/mikypiky/.local/state/coding-harness/stage2/agent-policy-list@91ab0d17/loop.md`.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1242 files, 5954 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/agent_policy.py` +73 -20
+> - `tests/test_agent_policy.py` +51 -2
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_agent_policy.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - L2-10: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/agent-policy-list/stage2/attempts/agent-policy-list/attempt-1-20261125T182033040192Z-8748c921.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1242 files, 5954 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_agent_policy.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; repair the taken rows of the loop record
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/agent-policy-list/stage2/attempts/agent-policy-list/attempt-2-20261125T182033040192Z-8748c921.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1242 files, 5954 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
