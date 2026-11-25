@@ -30,7 +30,7 @@ At the worktree examined on 2026-11-25, `scripts/stage2_availability.py` imports
 ## Acceptance criteria
 
 1. When an intelligence fetch or response raises an exception, the status uses the redactor on the runner supplied by the caller.
-   *Refuted by:* a substituted runner redactor is not called or its result is absent from the status.
+   *Refuted by:* a stand-in runner distinct from the module importable as `stage2` supplies a redactor that returns a sentinel, but the status does not contain that sentinel.
 2. When an intelligence fetch or response raises an exception containing credential material, the returned reading keeps the existing redaction and `not read` status behavior.
    *Refuted by:* credential text carried by the exception survives in the returned reading as the whole credential or a contiguous fragment of eight or more characters, or the error is propagated instead of returning a `not read` reading. Fragments shorter than eight characters are outside this criterion; unrelated text that happens to match the credential is not credential text carried by the exception.
 3. While the availability module is loaded or executed, its source contains no `import stage2` or `from stage2 import` statement at any nesting depth.
@@ -57,4 +57,4 @@ At the worktree examined on 2026-11-25, `scripts/stage2_availability.py` imports
 
 ## Open decisions
 
-None open. [DETAIL] The reader takes a keyword-only runner and the import guard inspects Python syntax, as recorded in `decisions.md`; these follow the existing runner-passing pattern and catch function-local imports. The redaction refutation uses the existing eight-character threshold and concerns credential text carried by the exception, rather than coincidental matches elsewhere (`decisions.md`, D-4 and D-5).
+None open. [DETAIL] The reader takes a keyword-only runner and the import guard inspects Python syntax, as recorded in `decisions.md`; these follow the existing runner-passing pattern and catch function-local imports. The redaction refutation uses the existing eight-character threshold and concerns credential text carried by the exception, rather than coincidental matches elsewhere (`decisions.md`, D-4 and D-5). The stand-in runner is distinct from the importable module so the test detects an import that bypasses the supplied runner (`decisions.md`, D-6).
