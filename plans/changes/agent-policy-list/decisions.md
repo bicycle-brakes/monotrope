@@ -81,3 +81,63 @@ context: |
   Architecture change: none.
 
 In the context of tool coverage of the hook, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting file-writing tools outside the hook. — 2026-11-25
+
+## Q-5 · Ambiguity S-8 (MCP merge tool names)
+
+asked: 2026-11-25
+answer: "Every tool name ending in merge_pull_request, whatever the separator; each adapter normalises the host's name; the rule list stays unchanged."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-8 of agent-policy-list.
+  Intention: cover MCP merges on every host.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/agent-policy-list/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of MCP merge tools across hosts, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting name normalisation in each adapter. — 2026-11-25
+
+## Q-6 · Ambiguity S-9 (quotes in compound lines)
+
+asked: 2026-11-25
+answer: "Split as the shell reads it; quoted operators do not split; the argument of bash -c, sh -c and zsh -c is checked as a command line of its own."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-9 of agent-policy-list.
+  Intention: catch hidden merges without blocking harmless text.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/agent-policy-list/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of compound command lines with quotes, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a quote-aware splitter. — 2026-11-25
+
+## Q-7 · Ambiguity S-10 (hook failure and support)
+
+asked: 2026-11-25
+answer: "A host counts as supported when it blocks on a hook failure or has a holding second layer; without one, a one-time documented host check."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-10 of agent-policy-list.
+  Intention: an honest support claim per host.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/agent-policy-list/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of hosts that continue after a hook failure, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting a host check outside CI. — 2026-11-25
+
+## Q-8 · Gap S-11 (hosts without a verified pre-tool hook)
+
+asked: 2026-11-25
+answer: "Build adapters only for hosts with a verified pre-tool hook (Claude Code, Antigravity); Codex is listed as not supported with a follow-up bead; one table in the policy documentation names every host's state."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: spec-review round 1 row S-11 of agent-policy-list.
+  Intention: ship only what is proven.
+  Today: the draft spec left two readings open.
+  Repository change: plans/changes/agent-policy-list/spec.md in the final draft.
+  Architecture change: none.
+
+In the context of hosts whose hook surface is unverified, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting Codex outside this change. — 2026-11-25
