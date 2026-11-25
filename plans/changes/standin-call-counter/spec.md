@@ -28,16 +28,20 @@ At commit `12c773c5` on 2026-11-25, the swarm stand-in reads and parses every ea
 
 ## Acceptance criteria
 
-1. When a swarm stand-in selects a scripted step, it obtains the number of earlier calls for the selected scenario key from a small counter beside the call log without reading the log's records for that count.
+1. When a swarm stand-in selects a scripted step, it obtains the number of earlier calls for the selected scenario key from a small counter beside the call log without reading the log's records for that count when the counter matches the current log.
    *Refuted by:* Step selection reads prior call records, or uses a count for a different key.
 2. When parallel swarm calls select steps, each call's count equals the number of earlier records with its selected key in the serialized call log.
    *Refuted by:* Two records for one key receive the same earlier-call count, or a call counts a record later in the log.
 3. When the same sequential scripted calls are run with the former log-based counting and the new counter, their answers are identical, including key selection and exhausted steps with and without `repeat_last`.
    *Refuted by:* A scripted call produces a different answer or exit status.
-4. When the swarm fixture rewinds, the next call starts with an empty call history and zero counts.
-   *Refuted by:* A call after rewind selects a later scripted step or an earlier record remains.
-5. While the counter is used, it is declared to the stand-in file guard and its access follows the shared locked helper protocol.
-   *Refuted by:* Raw guarded access succeeds outside the helper, or concurrent helper access loses a count or exposes a partial log record.
+4. When the call log is removed, the next call uses a fresh history and starts its selected key at zero, including after direct removal or fixture rewind.
+   *Refuted by:* A call after either kind of removal selects a later step or the new log contains a record from the removed history.
+5. If the counter is missing or belongs to a different log identity, the count is rebuilt from the current log's records before selecting a step.
+   *Refuted by:* A nonempty current log with a missing or mismatched counter yields zero or a stale count instead of its actual per-key count.
+6. When a writer holding the old log open finishes after removal and a new run has begun, its record and count do not affect the new run's step selection.
+   *Refuted by:* A synchronized late old writer causes a new-run call to skip or repeat a step, or places its record in the new log.
+7. While the counter is used, it is declared to the stand-in file guard and its access follows the shared locked helper protocol.
+   *Refuted by:* Raw guarded access succeeds outside the helper, or concurrent access exposes a partial counter or log record.
 
 ## Non-goals
 
@@ -59,4 +63,4 @@ Production code and the separate stand-in are outside this test-infrastructure f
 
 ## Open decisions
 
-None open. [DETAIL] A one-hour implementation appetite is a reversible stop for this small test-only change; it does not prescribe a measured speedup.
+None open. [DETAIL] The counter is associated with the log device and inode, and a missing or mismatched counter is rebuilt under the current log lock; this preserves existing clear-by-removal behavior (decisions.md D-4 and D-5). A one-hour implementation appetite is a reversible stop for this small test-only change; it does not prescribe a measured speedup.
