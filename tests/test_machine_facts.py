@@ -584,3 +584,40 @@ def test_timed_out_sources_preserve_independent_facts(tmp_path: Path, monkeypatc
     else:
         assert "pid 123 · verify" in out
     assert "private raw diagnostic" not in out and "Traceback" not in out
+
+
+@pytest.fixture(autouse=True)
+def _isolated_job_records(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The jobs field reads the job records of the state root: never those of the machine running the tests."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("job-state")))
+
+
+def test_jobs_field_includes_detached_records() -> None:
+    """Fault: a running detached job known only from its record is omitted from the jobs field, or one the
+    process table also recognized is counted twice (spec criterion 27)."""
+    jobs = run_report.jobs
+    me = os.getpid()
+    command = ["python3", "scripts/stage2.py", "implement", "alpha"]
+    ids = []
+    for pid in (4242, 4243):
+        job_id = jobs.new_job_id()
+        record = jobs.new_record(job_id, command, "/work", f"/state/{job_id}.log")
+        record.update(
+            state="running",
+            command_pid=pid,
+            command_start="Mon Jan 1 00:00:00 2001",
+            wrapper_pid=me,
+            wrapper_start=jobs.process_start(me),
+        )
+        jobs.write_record(jobs.state_dir() / f"{job_id}.json", record)
+        ids.append(job_id)
+    run = fake_run(
+        {("ps", "-axo", "pid,etime,command"): ps_output("4243 00:09 python3 scripts/stage2.py implement alpha")}
+    )
+    lines = machine_facts.jobs_field(run, None)
+    only_record = [line for line in lines if ids[0] in line]
+    assert len(only_record) == 1 and only_record[0].startswith("pid 4242 · implement · change not read")
+    assert len([line for line in lines if "pid 4243" in line]) == 1, "the process and its record were both counted"
+    assert ids[1] not in "\n".join(lines)
+    assert "none matched" not in lines
+    assert "/work" not in "\n".join(lines)  # a record's directory never prints

@@ -94,6 +94,12 @@ rules:
   - prefix: scripts/verify_lock.py
     rolle: mechanismus
     reason: "die rechnerweite Zulassung des Laufs (Warteschlange, freier Speicher), die scripts.verify_run um die geschuetzten Gates hält; ohne sie ist der exportierte Lauf nicht betretbar (bead coding-harness-p6mu)"
+  - prefix: scripts/jobs.py
+    rolle: mechanismus
+    reason: "the detached job launcher: start, list and stop of a command that outlives the launching session; standard library only, it travels with scripts/job_containment.py (bead coding-harness-a6ns.1)"
+  - prefix: scripts/job_containment.py
+    rolle: mechanismus
+    reason: "the one owner of finding and ending a detached job's processes, which scripts/jobs.py stop imports; standard library only (bead coding-harness-a6ns.1)"
   - prefix: scripts/verify_duration.py
     rolle: mechanismus
     reason: "the runner's measured durations: appended under the shared state root and read by its small reader; a dependency of the shared scheduler (bead coding-harness-1um6)"
@@ -237,6 +243,9 @@ rules:
   - prefix: tests/test_ci.py
     rolle: mechanismus
     reason: "die Ableitung reist; die Scriptmenge dieses Repos ist Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_jobs.py
+    rolle: mechanismus
+    reason: "the launcher's faults travel with it; its cases use isolated state roots and a tmux socket of their own, and touch no real server (bead coding-harness-a6ns.1)"
   - prefix: tests/test_verify_lock.py
     rolle: mechanismus
     reason: "die Zulassung reist mit dem Lauf, den sie umstellt; ihre Faelle bauen eigene State-Roots und beruehren den echten Rechner-Schloss nicht (bead coding-harness-p6mu)"

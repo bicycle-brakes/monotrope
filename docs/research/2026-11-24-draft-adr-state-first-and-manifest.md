@@ -2,7 +2,7 @@
 title: "Draft ADR <NNNN> — State-first machine state, single kit manifest, and shared script primitives"
 category: research
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 last_reviewed: 2026-11-24
 status: draft
 implementation_status: none

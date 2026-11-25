@@ -34781,3 +34781,25 @@ def test_old_runner_reviews_before_the_merge_day_stay_legacy(world: World) -> No
     admission = stage2.review_admission(world.root, "demo")
     assert "on or after the fingerprint rule" not in (admission.left_out or "")
     assert "on or after the fingerprint rule" not in (admission.review_problem or "")
+
+
+def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 20 of detached-job-launcher (bead coding-harness-a6ns.1): a process group the runner starts
+    in a session of its own joins the job record the environment names, so `jobs.py stop` reaches it.
+    Planted fault: the runner starts the group and never records it - a stop would leave it running."""
+    jobs = stage2.jobs
+    job_id = jobs.new_job_id()
+    path = tmp_path / f"{job_id}.json"
+    jobs.write_record(path, jobs.new_record(job_id, ["x"], str(tmp_path), str(tmp_path / "job.log")))
+    program = "import os, time; print(os.getpgid(0), flush=True); time.sleep(0.5)"
+    monkeypatch.setenv(jobs.RECORD_ENV, str(path))
+    done = stage2.launch([sys.executable, "-c", program], tmp_path, {**os.environ}, timeout=30)
+    group = int(done.stdout.strip())
+    assert group != os.getpgid(0), "the program did not lead a group of its own"
+    entries = jobs.read_record(path)["groups"]
+    assert [entry["pgid"] for entry in entries] == [group]
+    assert entries[0]["pid"] == group and entries[0]["start"], "the group's identity was not recorded"
+    # Outside a job nothing is written: the record stays as it is.
+    monkeypatch.delenv(jobs.RECORD_ENV)
+    stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
+    assert len(jobs.read_record(path)["groups"]) == 1
