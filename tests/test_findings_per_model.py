@@ -958,8 +958,9 @@ def test_legacy_duplicate_target_lists_and_trailing_ids(tmp_path, monkeypatch):
     root, _ = repo(tmp_path, {findings_path("legacy"): text})
     state = tmp_path / "state"
     code, chunks = run_report(root, None, monkeypatch, state)
-    assert code != 0 and "Incomplete" in "".join(chunks)
-    assert jsonl(state / "coding-harness/findings-per-model/main.jsonl")[0]["complete"] is False
+    assert code == 0 and "Incomplete" not in "".join(chunks)
+    assert jsonl(state / "coding-harness/findings-per-model/main.jsonl")[0]["complete"] is True
+    assert fr.duplicate_targets("rejected — same as L1-1: see L1-404") == ["L1-1"]
 
 
 def test_morning_instructions_cover_each_commit():

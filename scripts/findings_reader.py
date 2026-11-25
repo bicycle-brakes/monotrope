@@ -390,12 +390,21 @@ def normalized_status(status: str) -> str:
     return " ".join(status.strip().lower().split())
 
 
-def parse_status(status: str) -> tuple[str | None, list[str]] | None:
+@dataclass
+class StatusParse:
+    outcome: str | None
+    targets: list[str]
+    known: bool
+    names_id: bool
+
+
+def parse_status(status: str) -> StatusParse:
     """Parse a complete status cell into its outcome and referenced duplicate IDs."""
     cell = " ".join(status.strip().split())
+    names_id = any(not re.fullmatch(r"\d{4}-\d{2}-\d{2}", item) for item in FINDING_ID.findall(cell))
     match = STATUS_CELL.fullmatch(cell)
     if not match:
-        return None
+        return StatusParse(None, [], False, names_id)
     kind = match.group("kind").lower()
     outcome = {
         "taken": "defects_accepted",
@@ -419,9 +428,12 @@ def parse_status(status: str) -> tuple[str | None, list[str]] | None:
     if (
         not (kind == "rejected" and canonical)
         and legacy
-        and any(not re.fullmatch(r"\d{4}-\d{2}-\d{2}", item) for item in FINDING_ID.findall(legacy.group("tail")))
+        and any(
+            not re.fullmatch(r"\d{4}-\d{2}-\d{2}", item)
+            for item in FINDING_ID.findall(legacy.group("tail").split(":", 1)[0])
+        )
     ):
-        return None
+        return StatusParse(None, [], False, names_id)
     duplicate = canonical if kind == "rejected" and canonical else legacy
     targets = (
         []
@@ -432,30 +444,30 @@ def parse_status(status: str) -> tuple[str | None, list[str]] | None:
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target)
         ]
     )
-    return outcome, sorted(set(targets))
+    return StatusParse(outcome, sorted(set(targets)), True, names_id)
 
 
 def status_outcome(status: str) -> str | None:
     """Return the outcome of a known status, or None for a raised-only status."""
     parsed = parse_status(status)
-    return parsed[0] if parsed else None
+    return parsed.outcome if parsed.known else None
 
 
 def known_status(status: str) -> bool:
     """Whether the complete status cell matches the closed grammar."""
-    return parse_status(status) is not None
+    return parse_status(status).known
 
 
 def duplicate_targets(status: str) -> list[str]:
     """Return the IDs referenced by a duplicate in a known status."""
     parsed = parse_status(status)
-    return parsed[1] if parsed else []
+    return parsed.targets if parsed.known else []
 
 
 def is_duplicate(status: str) -> bool:
     """Whether a known status names another row as a duplicate."""
     parsed = parse_status(status)
-    return bool(parsed and parsed[1])
+    return bool(parsed.known and parsed.targets)
 
 
 # ---------------------------------------------------------------------------

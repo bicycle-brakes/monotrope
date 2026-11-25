@@ -49,6 +49,22 @@ def base_repo(tmp_path: Path, files: dict[str, str]) -> tuple[Path, str]:
 PATH = "plans/changes/c1/findings.md"
 
 
+def test_legacy_duplicate_reason_and_unparsed_id_fail_gate(tmp_path):
+    import findings_reader as reader
+
+    root, base = base_repo(tmp_path, {PATH: HEADER + table(("L1-1", "fixed"))})
+    status = "rejected — same as L1-1: see L2-2"
+    head = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", status))})
+    assert any("L1-2" in item for item in gate.measure(root, base, head))
+    assert reader.duplicate_targets(status) == ["L1-1"]
+    result = reader.read_change(
+        "c1", PATH, "## Phase 6 — Codex, 2026-11-01\n" + table(("L1-1", "fixed"), ("L1-2", status))
+    )
+    assert not result.gaps
+    assert next(row for row in result.findings if row.id == "L1-2").duplicate
+    assert gate.marks_duplicate("unreadable status mentioning L1-1")
+
+
 def test_new_duplicate_form_gate(tmp_path):
     history = table(("L1-1", "fixed"), ("L1-2", "rejected — Same as L1-1"))
     root, base = base_repo(tmp_path, {PATH: HEADER + history})
