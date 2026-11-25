@@ -880,7 +880,8 @@ the enqueue script's `--maintainer` mode), and splits a shell line as the
 shell reads it, checking every part, every `bash/sh/zsh -c` string behind
 known wrappers (`env`, `sudo`, `timeout`, `nohup`, `nice`, `xargs`, …) and
 every `$( )` or backtick substitution. `python3 scripts/agent_policy.py write`
-renders `.claude/settings.json` and `.agents/hooks.json`; the gate
+renders `.claude/settings.json` and `.agents/hooks.json` and re-renders
+`tools/omnigent/policy.yaml` through the Omnigent renderer; the gate
 `agent-policy-drift` fails when either drifts. An ask becomes a deny when
 `HARNESS_UNATTENDED` is set to anything but `0` (set by the unattended
 launchers).
