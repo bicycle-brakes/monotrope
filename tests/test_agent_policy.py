@@ -9,6 +9,7 @@ touches the held `.claude/settings.json`, `.agents/hooks.json` or any user setti
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import os
@@ -144,11 +145,10 @@ def antigravity(payload: dict | str, env: dict[str, str] | None = None) -> tuple
     if code == 0 and not out:
         assert not err
         return ABSTAIN, ""
-    assert code == 2, (code, out, err)
     body = json.loads(out)
-    assert body["decision"] == DENY
-    assert err.strip() == body["reason"]
-    return DENY, body["reason"]
+    assert code == (2 if body["decision"] == DENY else 0), (code, out, err)
+    assert err.strip() == (body["reason"] if code == 2 else "")
+    return body["decision"], body["reason"]
 
 
 def _without_signal() -> dict[str, str]:
@@ -216,7 +216,7 @@ def test_rule_sources_preserve_permissions(monkeypatch: pytest.MonkeyPatch) -> N
     # Planted faults: a rule with a second home is refused, a rule dropped from its source is missed.
     with monkeypatch.context() as planted:
         planted.setitem(ap.OWN_ASK_RULES, "Bash(gh pr merge *)", "a second home for a merge rule")
-        with pytest.raises(ValueError, match="named twice"):
+        with pytest.raises(ValueError, match="twice"):
             ap.rules()
     with monkeypatch.context() as planted:
         planted.delitem(op.DENIED_TOOLS, "sys_os_shell")
@@ -293,8 +293,8 @@ TOOL_SAMPLES = (
 
 
 def _on_antigravity(kind: str) -> str:
-    """Antigravity cannot ask, so the shared ask arrives there as a deny."""
-    return DENY if kind == ASK else kind
+    """Antigravity expresses the shared decision."""
+    return kind
 
 
 def test_adapters_match_shared_check(capsys: pytest.CaptureFixture[str]) -> None:
@@ -324,7 +324,7 @@ def test_adapters_match_shared_check(capsys: pytest.CaptureFixture[str]) -> None
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout)["hookSpecificOutput"]["permissionDecision"] == ASK
     done = _hook_process("antigravity", run_command("gh pr merge 54"), env)
-    assert done.returncode == 2 and json.loads(done.stdout)["decision"] == DENY
+    assert done.returncode == 0 and json.loads(done.stdout)["decision"] == ASK
 
     assert ap.main(["decide", "--shell", "cd /repo && gh pr merge 54"]) == 0
     assert json.loads(capsys.readouterr().out)["decision"] == ASK
@@ -350,7 +350,7 @@ def test_mcp_merge_names_normalised() -> None:
         assert decision.kind == ASK, f"{name} abstains"
         assert "mcp__*__merge_pull_request" in decision.message()
         assert claude(tool(name))[0] == ASK
-        assert antigravity(tool(name))[0] == DENY
+        assert antigravity(tool(name))[0] == ASK
     for name in ("github.get_pull_request", "github.merge_pull_request_status", "mcp__github__list_pull_requests"):
         assert ap.normalise_tool_name(name) == name
         assert ap.decide_tool(name).kind == ABSTAIN, f"{name} is not a merge tool"
@@ -669,7 +669,7 @@ DRIFT_MUTATIONS = (
 )
 
 
-def test_agent_policy_drift_goes_red_when_the_rendered_files_drift(tmp_path: Path) -> None:
+def test_generated_configuration_drift_fails(tmp_path: Path) -> None:
     root = _fresh_root(tmp_path / "clean")
     assert ap.check(root) == []
     assert ap.main(["--root", str(root), "check"]) == 0
@@ -786,10 +786,6 @@ def test_failures_deny_with_fault(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_unrepresentable_ask_denies(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert hooks.CAN_ASK["antigravity"] is False
-    decision, reason = antigravity(run_command("gh pr merge 54"))
-    assert decision == DENY and "cannot ask" in reason
-    assert antigravity(tool("github.merge_pull_request"))[0] == DENY
     assert claude(bash("gh pr merge 54"))[0] == ASK, "a host that can ask keeps the ask"
 
     monkeypatch.setitem(hooks.CAN_ASK, "claude-code", False)
@@ -864,5 +860,54 @@ def test_substitution_depth_is_bounded() -> None:
         [sys.executable, str(REPO / "scripts/agent_policy.py"), "decide", "--shell", line],
         capture_output=True,
         text=True,
+        timeout=60,
     )
     assert process.returncode == 0 and "ask" in process.stdout
+
+
+def test_subprocess_calls_have_timeouts() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        source += "\nsubprocess.run(['true'])\n"
+    tree = ast.parse(source)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "subprocess"
+        and node.func.attr == "run"
+    ]
+    assert calls
+    assert all(
+        any(kw.arg == "timeout" and isinstance(kw.value, ast.Constant) and kw.value.value == 60 for kw in call.keywords)
+        for call in calls
+    )
+
+
+def test_antigravity_asks_when_attended() -> None:
+    for payload in (run_command("gh pr merge 54"), tool("github.merge_pull_request")):
+        assert antigravity(payload)[0] == ASK
+        assert antigravity(payload, {"HARNESS_UNATTENDED": "1"})[0] == DENY
+
+
+def test_duplicate_rule_is_policy_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    pattern = next(iter(mg.MERGE_ASK_RULES))
+    monkeypatch.setitem(ap.OWN_ASK_RULES, pattern, "duplicate")
+    result = ap.decide_shell("ls")
+    assert result.kind == DENY
+    assert f"the policy names the rule {pattern} twice" in result.message()
+    assert "cannot be split" not in result.message()
+
+
+def test_missing_shared_rule_reports_both_sources_once(tmp_path: Path) -> None:
+    root = _fresh_root(tmp_path / "root")
+    path = root / ".claude" / "settings.json"
+    settings = _read(path)
+    rule = op.layer1_ask_rules()[0]
+    settings["permissions"]["ask"].remove(rule)
+    _write(path, settings)
+    problems = [problem for problem in ap.check(root) if rule in problem]
+    assert len(problems) == 1
+    assert "Omnigent" in problems[0] and "agent policy" in problems[0]

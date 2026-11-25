@@ -107,6 +107,10 @@ def _omnigent_reason(rule: str) -> str:
     return "an Omnigent rule"
 
 
+class PolicyRuleError(ValueError):
+    """Conflicting policy sources."""
+
+
 def rules() -> list[Rule]:
     """Every rule, asks first (merge, own, Omnigent), then denies (own, Omnigent); a duplicate is refused."""
     found: list[Rule] = []
@@ -118,8 +122,8 @@ def rules() -> list[Rule]:
     seen: dict[str, Rule] = {}
     for rule in found:
         if rule.pattern in seen:
-            raise ValueError(
-                f"the rule {rule.pattern} is named twice: by {seen[rule.pattern].source} and by {rule.source}"
+            raise PolicyRuleError(
+                f"the policy names the rule {rule.pattern} twice: by {seen[rule.pattern].source} and by {rule.source}"
             )
         seen[rule.pattern] = rule
     return found
@@ -554,6 +558,8 @@ def decide_shell(command: str, _depth: int = 0) -> Decision:
             if shell_command is not None:
                 nested.append(shell_command)
             decisions.extend(decide_shell(item, _depth + 1) for item in nested)
+    except PolicyRuleError as exc:
+        return Decision(DENY, (f"policy fault: {exc}",))
     except (ShellSyntaxError, ValueError) as exc:
         return Decision(ASK, (f"the line cannot be split ({exc}), so its parts cannot be checked",))
     return combine(decisions)
@@ -745,7 +751,14 @@ def check(root: Path = ROOT) -> list[str]:
         problems.append(f"{SETTINGS_PATH} cannot be read: {exc}")
     else:
         problems += mg.problems(settings)
-        problems += _permission_drift(settings)
+        drift = _permission_drift(settings)
+        for kind, shared in ((ASK, op.layer1_ask_rules()), (DENY, op.layer1_rules())):
+            for rule in shared:
+                message = f"{SETTINGS_PATH} lacks the {kind} rule {rule}"
+                if message in problems and message in drift:
+                    problems.remove(message)
+                    drift[drift.index(message)] = f"{message} (Omnigent and agent policy sources)"
+        problems += drift
         problems += _registration_drift(settings, "claude-code", str(SETTINGS_PATH))
     try:
         agents = _load(root / AGENTS_HOOKS_PATH)

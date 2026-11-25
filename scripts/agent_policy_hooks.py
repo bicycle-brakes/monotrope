@@ -22,8 +22,8 @@ exit 0 with no output.
 Antigravity: the shell tool is ``run_command``. Its hook payload and result
 form are taken here as the research recorded them and are confirmed only by the
 one-time host check the policy documentation records; until then the adapter
-reads the tool name and command under the spellings below, cannot express ask
-(so ask is denied), and answers a deny both as ``{"decision": "deny"}`` on
+reads the tool name and command under the spellings below, expresses ask on stdout,
+and answers a deny both as ``{"decision": "deny"}`` on
 stdout and as exit 2 with the reason on stderr. No support is claimed without
 that check (plans/changes/agent-policy-list, criterion 17).
 """
@@ -47,7 +47,7 @@ ABSTAIN = "abstain"
 UNATTENDED_VARIABLE = "HARNESS_UNATTENDED"
 
 # Whether a host's hook protocol can express "ask the user".
-CAN_ASK: dict[str, bool] = {"claude-code": True, "antigravity": False}
+CAN_ASK: dict[str, bool] = {"claude-code": True, "antigravity": True}
 
 ANTIGRAVITY_SHELL_TOOLS = ("run_command",)
 ANTIGRAVITY_NAME_KEYS = ("tool_name", "toolName", "name", "tool")
@@ -172,7 +172,12 @@ def render(host: str, outcome: Outcome) -> tuple[int, str, str]:
             }
         }
         return 0, json.dumps(body) + "\n", ""
-    return 2, json.dumps({"decision": DENY, "reason": outcome.message}) + "\n", outcome.message + "\n"
+    code = 2 if outcome.kind == DENY else 0
+    return (
+        code,
+        json.dumps({"decision": outcome.kind, "reason": outcome.message}) + "\n",
+        (outcome.message + "\n" if code == 2 else ""),
+    )
 
 
 def run(host: str, payload_text: str, env: Mapping[str, str]) -> tuple[int, str, str]:

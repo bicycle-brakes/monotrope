@@ -195,3 +195,7 @@ Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claud
 Runner restoration, 2026-11-25: repair · attempt 3 · route stage-1 — lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
 
 Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1243 files, 5959 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1243 files, 5960 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/agent-policy-list/plan.md, plans/changes/agent-policy-list/spec.md — unchanged
