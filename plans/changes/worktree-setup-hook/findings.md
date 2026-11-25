@@ -273,3 +273,19 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a21431-9b92-7dc2-88e7-991d96079afa, 2026-11-25
 Reviewer session: codex 01a21431-9b92-7dc2-88e7-991d96079afa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5970 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | .beads/hooks/post-checkout, `_ls_step` | Without Perl, if a timed-out setup command exits on `TERM` but one of its children ignores `TERM`, `wait` returns and the hook kills the watchdog before it sends `KILL`. The child continues running after checkout returns. Setup must stop when the limit is exceeded. [Criterion 11] | Codex | open | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the lane-setup begin marker from the hook text — catches without switch: yes, if the marker is removed from the hook.
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: changes text inside the managed Beads block — catches without switch: yes, if the block is changed in the hook.
+
+Phase 6 verdict: codex 01a21461-6a53-7892-9503-6f4d3ab046a4, 2026-11-25
+Reviewer session: codex 01a21461-6a53-7892-9503-6f4d3ab046a4 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

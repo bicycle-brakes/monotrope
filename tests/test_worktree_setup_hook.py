@@ -34,6 +34,10 @@ if [ "$1" = "-C" ]; then cd "$2" || exit 1; shift 2; fi
 printf '%s|%s\n' "$(pwd -P)" "$*" >>"$STUB_RECORD_DIR/make"
 echo "STUB-MAKE-STDOUT"
 echo "STUB-MAKE-STDERR" >&2
+if [ -n "${STUB_MAKE_STUBBORN:-}" ]; then
+  (trap '' TERM; sleep "$STUB_MAKE_STUBBORN") &
+  echo $! >"$STUB_RECORD_DIR/make-stubborn"
+fi
 if [ -n "${STUB_MAKE_CHILD:-}" ]; then
   sleep "$STUB_MAKE_CHILD" &
   echo $! >"$STUB_RECORD_DIR/make-child"
@@ -650,3 +654,31 @@ def test_a_failure_with_an_unwritable_log_names_it_unavailable(lane: Lane) -> No
     proc = lane.new_worktree_hook(path, STUB_INSTALL_FAIL="1")
     failures = _failures(proc.stderr)
     assert failures and all("log: unavailable" in f and "/dev/null" not in f for f in failures), proc.stderr
+
+
+def test_without_perl_a_child_ignoring_term_is_killed(lane: Lane, tmp_path: Path) -> None:
+    """Phase-6 P6-1 (re-check 01a21461): a child that ignores TERM is killed once the limit is reached."""
+    nopl = tmp_path / "noperl-bin4"
+    nopl.mkdir()
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if not folder or not Path(folder).is_dir():
+            continue
+        for entry in Path(folder).iterdir():
+            target = nopl / entry.name
+            if entry.name.startswith("perl") or target.exists():
+                continue
+            try:
+                target.symlink_to(entry)
+            except OSError:
+                continue
+    path_env = os.pathsep.join([lane.env["PATH"].split(os.pathsep)[0], str(nopl)])
+    proc, _ = lane.add_worktree(
+        PATH=path_env, HARNESS_LANE_SETUP_TIMEOUT="2", STUB_MAKE_SLEEP="30", STUB_MAKE_STUBBORN="40"
+    )
+    assert any("make venv timed out" in line for line in _failures(proc.stderr)), proc.stderr
+    pid_text = (lane.records / "make-stubborn").read_text().strip()
+    time.sleep(1)
+    alive = subprocess.run(["kill", "-0", pid_text], capture_output=True).returncode == 0
+    if alive:
+        subprocess.run(["kill", "-KILL", pid_text], capture_output=True)
+    assert not alive, "a child that ignores TERM outlived the limit"

@@ -54,12 +54,15 @@ _ls_step() {
     _ls_dog=$!
     wait "$_ls_pid"
     _ls_rc=$?
+    if [ "$(date +%s)" -ge "$_ls_deadline" ]; then
+      # The limit was reached: whatever of the step's group ignored TERM gets KILL now,
+      # before the watchdog (which would have sent it a second later) is ended.
+      kill -KILL -"$_ls_pid" 2>/dev/null
+      _ls_rc=124
+    fi
     pkill -P "$_ls_dog" 2>/dev/null
     kill "$_ls_dog" 2>/dev/null
     wait "$_ls_dog" 2>/dev/null
-    if [ "$(date +%s)" -ge "$_ls_deadline" ]; then
-      _ls_rc=124
-    fi
   fi
   if [ "$_ls_rc" -eq 124 ] && [ "$(date +%s)" -ge "$_ls_deadline" ]; then
     _ls_stopped=1
