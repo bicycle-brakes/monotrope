@@ -278,8 +278,11 @@ def split_command(text: str) -> list[str]:
             i = n if end < 0 else end
             continue
         if text.startswith("<<<", i):
-            current.append("<<<")
             i += 3
+            while i < n and text[i] in " \t":
+                i += 1
+            _, i = _read_heredoc_delimiter(text, i)
+            current.append(" ")
             continue
         if text.startswith("<<", i):
             j = i + 2

@@ -66,6 +66,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai 
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-11-25
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-11-25 14:47:26–14:49:01 UTC, 96 s — draft · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
@@ -76,3 +80,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-11-25 18:20:50–18:23:02 UTC, 132 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-25 18:23:19–18:24:20 UTC, 61 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-25 19:28:57–19:34:51 UTC, 354 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_agent_policy.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `agent-policy-drift` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
+2026-11-25 19:52:13–19:53:37 UTC, 84 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
+2026-11-25 19:53:54–19:55:10 UTC, 77 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · rejected · measured by the runner

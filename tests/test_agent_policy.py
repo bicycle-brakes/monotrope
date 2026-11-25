@@ -419,6 +419,20 @@ def test_quoted_operators_do_not_split() -> None:
     assert ap.decide_shell("git commit -m docs; git push origin main later").kind == ASK
 
 
+def test_here_string_word_is_input_not_command() -> None:
+    assert ap.split_command("cat <<< 'gh pr merge 54'") == ["cat"]
+    for command in (
+        "cat <<< 'gh pr merge 54'",
+        'cat <<<"gh pr merge 54"',
+        "cat <<< 'gh pr merge 54' && gh pr merge 55",
+    ):
+        expected = ASK if command.endswith("merge 55") else ABSTAIN
+        assert ap.decide_shell(command).kind == expected
+    assert ap.decide_shell("cat <<< 'gh pr merge 54' | cat").kind == ABSTAIN
+    assert ap.decide_shell("cat <<< 'gh pr merge 54' ; gh pr merge 55").kind == ASK
+    assert ap.decide_shell("cat <<< 'unterminated").kind == ASK
+
+
 def test_shell_c_command_is_checked(monkeypatch: pytest.MonkeyPatch) -> None:
     for command in (
         'bash -c "cd /repo && gh pr merge 54"',
@@ -911,3 +925,19 @@ def test_missing_shared_rule_reports_both_sources_once(tmp_path: Path) -> None:
     problems = [problem for problem in ap.check(root) if rule in problem]
     assert len(problems) == 1
     assert "Omnigent" in problems[0] and "agent policy" in problems[0]
+
+
+@pytest.mark.parametrize("host", ["claude-code", "antigravity"])
+def test_a_render_fault_blocks_with_the_reason_on_stderr(host: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Loop row L4-1: when rendering fails, the adapter exits 2 (Claude Code blocks the tool on exit 2)
+    and names the fault on stderr, where Claude Code shows it, besides the JSON deny on stdout."""
+
+    def broken(*_args: object, **_kwargs: object) -> tuple[int, str, str]:
+        raise RuntimeError("render broke")
+
+    monkeypatch.setattr(hooks, "render", broken)
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
+    code, out, err = hooks.run(host, payload, {})
+    assert code == 2
+    assert json.loads(out)["decision"] == "deny"
+    assert "render broke" in err
