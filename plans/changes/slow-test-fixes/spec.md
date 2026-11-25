@@ -33,15 +33,19 @@ Three test changes reduce avoidable work while preserving their existing checks 
 1. When the real-Pi isolation test runs, it removes the five repeated baseline calls while retaining the untrusted baseline, both distinct trusted baselines, and each of the six omitted-flag positive controls with their existing assertions.
    *Refuted by:* a repeated ordinary baseline, a missing MCP baseline or positive control, or a lost assertion.
 2. When both catalog sources are held past the shared deadline, the catalog test fires the existing controlled deadline rather than waiting ten seconds of wall time.
-   *Refuted by:* the both-slow case uses the real ten-second timer or does not hold both requests until the deadline.
-3. When the catalog deadline test runs, it retains its existing overlap, timeout, selection, exit-code, request-count and guard assertions for the same scenarios.
+   *Refuted by:* the both-slow case uses the real ten-second timer.
+3. When the controlled deadline marker is written for the both-slow case, the current step has recorded starts for both held requests.
+   *Refuted by:* the marker is written before either current-step request starts, including when earlier steps recorded both starts.
+4. When the catalog deadline test runs, it retains its existing overlap, timeout, selection, exit-code, request-count and guard assertions for the same scenarios.
    *Refuted by:* sequential reads, a retry, a wrong timeout or selection, or a lost existing assertion going undetected.
-4. When the log-guard test runs, it executes all six outcomes in one nested pytest run per worker and drain pair.
+5. When the log-guard test runs, it executes all six outcomes in one nested pytest run per worker and drain pair.
    *Refuted by:* more than four nested runs for the matrix or any missing outcome in a pair.
-5. When each log-guard outcome runs for each worker and drain pair, the existing return-code, violation-report, raw-read and clean-test assertions remain independently attributable to that outcome.
-   *Refuted by:* a missing violation for one outcome being masked by another, or a lost existing assertion.
-6. When the pull request is prepared, it records before and after durations of each rewritten test on the same machine, using the base test file for the before measurement.
-   *Refuted by:* any missing test duration, unmatched machine or an unidentified base revision.
+6. When each log-guard outcome runs for each worker and drain pair, its own node has the expected result and a raw-read violation attributed to that node.
+   *Refuted by:* a wrong node result or one missing outcome violation being masked by another.
+7. When a bundled log-guard session finishes, its exit status, violation header, raw-read text and pass count match its known mix of outcomes, and its clean test has the expected result.
+   *Refuted by:* an incorrect session-wide check or a missing or failing clean node passing unnoticed.
+8. When the pull request is prepared, it records one before and one after duration total per rewritten test function, summing all parametrized cases and phases, on the same machine with the same serial worker setting and comparable load, using the identified base test file for the before measurement.
+   *Refuted by:* a missing total, omitted phase or case, unidentified base revision, different machine or worker setting, or materially different load.
 
 ## Non-goals
 
