@@ -35,17 +35,17 @@ Three test changes reduce avoidable work while preserving their existing checks 
 2. When both catalog sources are held past the shared deadline, the catalog test fires the existing controlled deadline rather than waiting ten seconds of wall time.
    *Refuted by:* the both-slow case uses the real ten-second timer.
 3. When the controlled deadline marker is written for the both-slow case, the current step has recorded starts for both held requests.
-   *Refuted by:* the marker is written before either current-step request starts, including when earlier steps recorded both starts.
+   *Refuted by:* the marker is written after the first current-step request starts but before the second starts, including when earlier steps recorded both starts.
 4. When the catalog deadline test runs, it retains its existing overlap, timeout, selection, exit-code, request-count and guard assertions for the same scenarios.
    *Refuted by:* sequential reads, a retry, a wrong timeout or selection, or a lost existing assertion going undetected.
-5. When the log-guard test runs, it executes all six outcomes in one nested pytest run per worker and drain pair.
-   *Refuted by:* more than four nested runs for the matrix or any missing outcome in a pair.
+5. When the log-guard test runs, it executes all six outcomes in two nested pytest sessions per worker and drain pair, separating outcomes that fail on their own from those that do not.
+   *Refuted by:* more than eight nested sessions for the matrix, a missing outcome, or a self-failing node in the session used to check the audit's exit status.
 6. When each log-guard outcome runs for each worker and drain pair, its own node has the expected result and a raw-read violation attributed to that node.
    *Refuted by:* a wrong node result or one missing outcome violation being masked by another.
 7. When a bundled log-guard session finishes, its exit status, violation header, raw-read text and pass count match its known mix of outcomes, and its clean test has the expected result.
-   *Refuted by:* an incorrect session-wide check or a missing or failing clean node passing unnoticed.
-8. When the pull request is prepared, it records one before and one after duration total per rewritten test function, summing all parametrized cases and phases, on the same machine with the same serial worker setting and comparable load, using the identified base test file for the before measurement.
-   *Refuted by:* a missing total, omitted phase or case, unidentified base revision, different machine or worker setting, or materially different load.
+   *Refuted by:* an incorrect session-wide check, a missing or failing clean node, or an audit that no longer sets the exit status passing unnoticed in the session without self-failing nodes.
+8. When the pull request is prepared, it records one before and one after duration total per rewritten test function, summing all parametrized cases and phases, on the same machine with the same serial worker setting and identified base revision, together with the one-minute load average taken immediately before each measurement.
+   *Refuted by:* a missing total, phase, case, load reading or base revision, a different machine or worker setting, or a before/after load difference greater than 1.0.
 
 ## Non-goals
 
@@ -67,5 +67,7 @@ The finder test in `tests/test_stage2_swarm.py` is reserved for the neighbouring
 ## Open decisions
 
 [DETAIL] Use the existing event-controlled deadline for both held sources; it exercises the existing abort path without a wall-clock wait. The measurement compares reported pytest durations without a fixed speed threshold because no matched baseline exists yet.
+
+[DETAIL] With draining off, the pass outcome belongs with the error outcome in the self-failing session; otherwise it would mask a broken audit exit status. With draining on, pass belongs in the session without self-failing nodes.
 
 None open.
