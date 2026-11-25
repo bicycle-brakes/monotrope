@@ -556,3 +556,14 @@ Reviewer session: codex 01a2130d-62e0-7113-a93a-5baaf5b3ba83 — a fresh session
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5887 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5903 commits, 12 rules.
+
+## Rejected phase-6 answer — Codex, 2026-11-25
+
+The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict was recorded and nothing was released (Codex thread: 01a2132e-db23-7ed2-8005-26f930522110). The answer, as it came:
+
+> | F-1 | MAJOR | SPEC | base | scripts/jobs.py:495–505 | If `tmux new-window` creates the window but its response times out after the wrapper has published a running record, `start` returns 1 while `_fail` leaves the record running. The command can continue even though the caller was told it failed to start; the record must instead be in `failed to start` state. [Criterion 25] |
+> | F-2 | MAJOR | SPEC | base | scripts/jobs.py:547–570 | A short-lived command can exit before `process_start(child.pid)` reads its identity. The wrapper then publishes a record with a command PID but a null start time, although every recorded PID must have its process start time. [Criterion 4] |
+> 
+> Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — catches without switch: yes.
