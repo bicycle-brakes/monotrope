@@ -738,5 +738,8 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/verify-two-slots/research.md`](changes/verify-two-slots/research.md) | draft | none | 2026-11-20 | coding-harness-u1ha |
 | [`changes/verify-two-slots/spec.md`](changes/verify-two-slots/spec.md) | draft | none | 2026-11-21 | coding-harness-u1ha |
 | [`changes/worktree-setup-hook/decisions.md`](changes/worktree-setup-hook/decisions.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/findings.md`](changes/worktree-setup-hook/findings.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/plan.md`](changes/worktree-setup-hook/plan.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`changes/worktree-setup-hook/research.md`](changes/worktree-setup-hook/research.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/spec.md`](changes/worktree-setup-hook/spec.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
