@@ -154,3 +154,25 @@ Also still open from the evening: #446 (house rule 11), #444 and #448 (handovers
 - Measurements: frontmatter gate 6.23 s -> 0.28 s (median of 5, same commit,
   output identical); three tests 29.2 s -> 11.7 s (same command, load 1.8-2.1).
 - Not read: PR #447.
+
+## Addendum — 10:00 CET, end of the run window
+
+Still running at 10:00 (results land after this handover): phase 6 of
+cheap-checks-admission (implemented 6b3a021c, loop clean), the phase-6
+re-check of standin-call-counter (F6-1 fixed as a guard test, 9f6bdb5c) and of
+red-first-baseline (P6-4 fixed at one choke point, 6342032f).
+
+New questions since 09:25, each with options in its bead's notes:
+
+- **A — detached-job-launcher F-1 (coding-harness-a6ns.1):** a child that clears
+  its environment and starts another session leaves no job token; second case
+  of the reparenting mechanism. Recommended: a named Boundary (macOS has no
+  general way to follow such a process without cgroups).
+- **B — detached-job-launcher F-2:** `env python3 scripts/stage2.py …` is not
+  recognised as a runner verb; third case of the classification mechanism.
+  Recommended: classify after skipping known launchers (env, python*, uv run).
+- **C — findings-per-model F6-1 (coding-harness-qut1):** after the shared-parse
+  repair the reader is too strict (`same as L1-1 (fixed in abc123)` reads the
+  commit id as a row id); fourth case. Recommended: freeze the legacy grammar
+  to the 60 forms that occur in the repository, pinned by a test over the real
+  findings files; new rows already need the canonical form.
