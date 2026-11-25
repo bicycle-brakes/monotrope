@@ -32,3 +32,5 @@ reason: A behaviour-preserving fix with a stated remedy (bead coding-harness-vg9
 
 [DETAIL] **D-4 (spec review F-1, fragment length)**: criterion 2's refutation counts the whole key or a fragment of 8 or more characters, the threshold `scrub` already applies (`scripts/stage2.py` `scrub`; `tests/test_stage2.py` keeps a 7-character fragment); shorter fragments are outside the criterion. Reason: the change keeps the existing redaction and must not demand more than it.
 
+[DETAIL] **D-5 (spec review F-2, which fragment)**: reading (a) — the criterion concerns the credential text the exception carried: neither the whole key nor any run of eight or more of its characters that the exception message contained may survive into the reading; the test injects such a fragment and checks it is replaced. Reason: `scrub` redacts what it is given; the reading cannot contain credential text the exception never carried.
+
