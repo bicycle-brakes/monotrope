@@ -157,6 +157,28 @@ context: |
 
 In the context of the phase-6 verdict, facing two readings that build differently, we decided as answered above, to achieve one testable reading for the final draft, accepting more refusals on disputed loop rows. — 2026-11-25
 
-## Details decided by the orchestrator (spec-review round 1)
+## Details decided by the orchestrator (spec-review round 3)
+
+[DETAIL] S-24: this change adds an ask rule for the maintainer mode to .claude/settings.json (any enqueue_pr.py call containing --maintainer), which the night overlay turns into deny; the allow rule stays for the default mode
+
+[DETAIL] S-25: reading (b); a decision PR is one that carries the decision label, touches docs/adr/, or touches any file provenance.yaml reserves for human-decided (house rule 8)
+
+[DETAIL] S-26: a merge of main also passes when its tree differs from git's clean merge result only in plans/INDEX.md and that file equals a fresh regeneration; any other difference refuses
+
+[DETAIL] S-27: reading (b); a released row whose Phase 6 cell is '—' or 'no answer' is missing evidence and refuses
+
+[DETAIL] S-28: every released loop row in the file counts, and for a row ID released more than once the latest release wins
+
+[DETAIL] S-29: reading (b); the diff touches exactly one change folder and its bead equals the trailer's
+
+[DETAIL] S-30: criterion 20's refutation also names a procedure that still requires a maintainer request for default-mode admission (prompts/07-commit.md step 1, AGENTS.md house rule 8 unchanged)
+
+[DETAIL] S-31: the night-run fallback is amended: the orchestrator writes the reviewed commit and the runner-form no-finding line when it records a Sonnet fallback phase 6 by hand; WORKFLOW.md says so
+
+[DETAIL] S-32: after any failed mutation the script reads the request again; a changed head is head-moved (exit 1, both heads named); an unchanged head with a failed call is exit 2
+
+[DETAIL] S-33: head fails when the head cannot be read or is not the commit the checks ran on; the script-integrity refusal gets the identifier script and comes first, before the request is read; a failed origin/main fetch reports script with the fetch error
+
+[DETAIL] S-34: an empty required-check set refuses as evidence (no CI evidence, no admission)
 
 [DETAIL] Round-3 spec review (S-24..S-34) decided by the orchestrator under the maintainer's standing grant for bounded changes (2026-11-25: answer spec-review questions except BLOCKERs, recorded here), each towards refusal when in doubt. No further redraft: the spec stays as reviewed in round 3 so the review stays current; the implementer applies the S-24..S-34 statuses in findings.md as written.
