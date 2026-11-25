@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-22
 created: 2026-11-22
 last_reviewed: 2026-11-22
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-s9r
@@ -771,3 +771,63 @@ context: |
   Architecture change: none beyond the spec text.
 
 In the context of the night check before PR 2 and where worktrees may live, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the redraft, accepting that round three is the last review. — 2026-11-24
+
+## Q-44 · Who owns findings.md and plan.md (spec review 2a-60, 2a-61)
+
+asked: 2026-11-25
+answer: "Split by section: findings.md belongs to the runner alone (model edits to it are discarded at landing); in plan.md the model owns the Criterion ledger and the runner owns 'Time used'; the landing commit takes the attempt's plan.md with its 'Time used' section replaced by the lane's. On a fall-through the runner-owned files and sections are left out of save, restore and three-way merge, and the runner writes its records for the failed attempt only after the restore, committed in the records commit before the next attempt. Options put: the orchestrator's recommendations with alternatives (confirmed by the maintainer)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the files runner and model both write.
+  Intention: settle spec-review round three (Opus, 2026-11-24, the last allowed round) before the final draft.
+  Today: the reviewed spec leaves this open (findings.md, round three).
+  Repository change: the spec text of the final draft.
+  Architecture change: none beyond the spec text.
+
+In the context of the files runner and model both write, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-25
+
+## Q-45 · A detected tampering stops in quarantine (spec review 2a-62)
+
+asked: 2026-11-25
+answer: "Quarantine: on a difference the runner runs no further git command in the attempt worktree, saves nothing, leaves the worktree in place for inspection and marks its record 'quarantined'; prune reports quarantined attempts at every start but never removes them; criterion 14 does not apply to a quarantined attempt. Options put: the orchestrator's recommendations with alternatives (confirmed by the maintainer)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what happens when criteria 28 or 29 find a difference.
+  Intention: settle spec-review round three (Opus, 2026-11-24, the last allowed round) before the final draft.
+  Today: the reviewed spec leaves this open (findings.md, round three).
+  Repository change: the spec text of the final draft.
+  Architecture change: none beyond the spec text.
+
+In the context of what happens when criteria 28 or 29 find a difference, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-25
+
+## Q-46 · Prune validates records and only snapshots lanes (spec review 2a-63, 2a-64)
+
+asked: 2026-11-25
+answer: "Prune acts only on a record whose worktree path lies under attempts/<repository-id>/<lane-digest>/<invocation-id>/ and is a registered worktree of this repository, whose environment paths equal the lane's real .venv and Pi recomputed from the lane, and whose ref key matches its own invocation id; any other record is quarantined and reported. A crashed non-isolated attempt in a lane (PR 1 draft and implement) is only saved as a snapshot under the dead invocation's refs, never reset; the lane stays dirty and criterion 17 refuses it until it is cleaned by hand. Options put: the orchestrator's recommendations with alternatives (confirmed by the maintainer)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what prune may act on after a crash.
+  Intention: settle spec-review round three (Opus, 2026-11-24, the last allowed round) before the final draft.
+  Today: the reviewed spec leaves this open (findings.md, round three).
+  Repository change: the spec text of the final draft.
+  Architecture change: none beyond the spec text.
+
+In the context of what prune may act on after a crash, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-25
+
+## Q-47 · Crash path, symlinks, identities and wording (spec review 2a-65, 2a-66, 2a-67, 2a-68, 2a-69)
+
+asked: 2026-11-25
+answer: "2a-65: the attempt record stores the pre-attempt environment checksum, and prune ends a surviving model process group (identity by pid and start time) before it acts. 2a-66: read-only protection and its reversal do not follow symlinks. 2a-67: the repository id is derived from the real path of the common git directory, the lane digest from the real path of the lane's top level; prune handles dead attempts of the whole repository, but only attempt worktrees, never lanes. 2a-68: the Refuted-by lines of criteria 13 and 19 are rewritten as real failure states. 2a-69: 'baseline restoration' in criterion 22 means the old restore-and-stop, not PR 1's save, restore and fall through. Options put: the orchestrator's recommendations with alternatives (confirmed by the maintainer)."
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the five smaller round-3 rows.
+  Intention: settle spec-review round three (Opus, 2026-11-24, the last allowed round) before the final draft.
+  Today: the reviewed spec leaves this open (findings.md, round three).
+  Repository change: the spec text of the final draft.
+  Architecture change: none beyond the spec text.
+
+In the context of the five smaller round-3 rows, facing readings that build or test differently, we decided as answered above, to achieve one testable reading for the final draft, accepting that the final draft is not reviewed again. — 2026-11-25
