@@ -32,6 +32,8 @@ context: |
   Repository change: scripts/stage2.py routes, model-endpoints.yaml (opencode-go widened to work verbs), tests.
   Architecture change: the work verbs gain a Pi route on OpenCode Go (new ADR, Q-4).
 
+In the context of work verbs that stop when Claude Code or Z.ai is exhausted, facing a narrow or a full scope, we decided to build all three parts (fallback, model choice, GLM off Claude Code), to achieve one Pi route for every work verb, accepting a larger architectural change. — 2026-11-25
+
 ## Q-2 · Fallback order for implement and repair
 
 asked: 2026-11-25
@@ -44,6 +46,8 @@ context: |
   Today: implement falls back from GLM-through-Claude-Code to Sonnet only; no Codex implement route.
   Repository change: the route order in scripts/stage2.py and its documentation.
   Architecture change: Codex becomes an implement/repair route.
+
+In the context of choosing the order of implement and repair routes, facing a scarce Claude budget and an available Codex, we decided Go first, then Codex, then Claude, to achieve lanes that keep running while any route has capacity, accepting a new Codex implement route. — 2026-11-25
 
 ## Q-3 · Default Go model
 
@@ -58,6 +62,8 @@ context: |
   Repository change: the default and its fallback in the route declaration.
   Architecture change: none beyond Q-4.
 
+In the context of the default Go model for implement and repair, facing DeepSeek's monthly data terms and GLM's open-ended ones, we decided DeepSeek V4.1 Flash with an automatic fallback to GLM 5.3 Flash when its terms lapse, to achieve the preferred model without a gap, accepting a fallback that depends on valid_until. — 2026-11-25
+
 ## Q-4 · How the decision is recorded
 
 asked: 2026-11-25
@@ -70,6 +76,8 @@ context: |
   Today: model routing is spread over ADR 0007, 0011 and 0015.
   Repository change: docs/adr/<next>-work-verbs-through-pi.md and three pointer lines.
   Architecture change: the routing decision moves into the new ADR.
+
+In the context of recording the work-verb routing, facing three ADRs that each hold a part, we decided one new ADR that supersedes the affected parts with pointers, to achieve one place for the routing decision, accepting three pointer edits. — 2026-11-25
 
 ## Q-5 · Write boundary for a write-capable Pi run
 
@@ -84,4 +92,4 @@ context: |
   Repository change: a small tool module for Pi with path checks, and its tests.
   Architecture change: the write boundary of foreign-model runs is ours, in code.
 
-In the context of letting implement and repair run when Claude Code or Z.ai is exhausted, facing several possible routes, models and confinements, we decided as answered above, to achieve work verbs that keep running on OpenCode Go and Codex with a write boundary of our own, accepting a new ADR and a cross-platform tool module to build. — 2026-11-25
+In the context of confining a write-capable Pi run on macOS, Linux and Windows, facing an OS sandbox that exists only on macOS and a multiplexer without isolation, we decided our own path-checked write tools first and containers later, to achieve the same boundary on every platform, accepting a tool module to build and test. — 2026-11-25
