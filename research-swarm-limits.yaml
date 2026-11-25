@@ -11,5 +11,5 @@ role_minutes:
   finders: 40  # Each source finder (maintainer, 2026-11-19: 20 timed out on this repository).
   merge: 10  # The source-map merger.
   sentence: 5  # The public topic author.
-  topics: 10  # Each of the eleven topic researchers.
+  topics: 20  # Each of the eleven topic researchers (doubled 2026-11-25, maintainer, pi-work-route run 3).
   judge: 15  # The final reconciliation judge.
