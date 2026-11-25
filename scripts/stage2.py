@@ -9891,7 +9891,9 @@ def _red_own_selector(nodeid: str, selector: str) -> bool:
     return nodeid == selector or nodeid.startswith(selector + "[")
 
 
-def _red_record_fault(record: bytes | None, token: str, selector: str, *, passing: bool = False) -> str | None:
+def _red_record_fault(
+    record: bytes | None, token: str, selector: str, *, passing: bool = False, check_exit: bool = True
+) -> str | None:
     """Why the outcome record cannot prove this invocation red first, or None when it can.
 
     The record must be this selector's and this invocation's (a fresh token binds it to one run),
@@ -9923,7 +9925,9 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
     if not isinstance(session, dict) or session.get("finished") is not True:
         return "the outcome record shows no finished session; the run's outcome cannot be proven"
     expected_exit = 0 if passing else 1
-    if session.get("exitstatus") != expected_exit:
+    # `check_exit=False` reads the record for what the cases did, when pytest's own exit already
+    # refused the run: the refusal then names the first true outcome, not the session status.
+    if check_exit and session.get("exitstatus") != expected_exit:
         expected_run = "passing" if passing else "failing"
         return f"the session ended {session.get('exitstatus')!r}, not as a {expected_run} run"
     errors, selected, phases = (parsed.get("collection_errors"), parsed.get("selected"), parsed.get("phases"))
@@ -10004,8 +10008,46 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
     if not passing and not red:
+        if not check_exit:
+            return "the named test passed; no selected call failed"
         return "no selected call failed by an assertion or pytest's own failed outcome; the run is green for the requested test"
     return None
+
+
+RED_DIAGNOSTIC_LINES = 40
+RED_DIAGNOSTIC_CHARS = 4000
+RED_DIAGNOSTIC_MARKER = "[... truncated]"
+
+
+def _red_record_selected(record: bytes | None) -> bool:
+    """Whether the outcome record exists and holds at least one selected case."""
+    if record is None:
+        return False
+    try:
+        parsed = json.loads(record.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    return isinstance(parsed, dict) and isinstance(parsed.get("selected"), list) and bool(parsed["selected"])
+
+
+def _red_pre_record_diagnostic(done: subprocess.CompletedProcess, key: str | None) -> str:
+    """The protected tail of pytest's combined output, within the line and character caps.
+
+    The whole text is protected before any cut, so no secret is split across the cut; a protection
+    failure raises `Refused` and nothing of the output is shown. The cap counts the marker.
+    """
+    combined = "\n".join(part for part in ((done.stdout or ""), (done.stderr or "")) if part.strip())
+    safe = protect_diagnostics(combined, key).strip("\n")
+    lines = safe.splitlines()
+    if len(lines) <= RED_DIAGNOSTIC_LINES and len(safe) <= RED_DIAGNOSTIC_CHARS:
+        return safe
+    kept = lines[-(RED_DIAGNOSTIC_LINES - 1) :]
+    while len(kept) > 1 and len("\n".join([RED_DIAGNOSTIC_MARKER, *kept])) > RED_DIAGNOSTIC_CHARS:
+        kept = kept[1:]
+    if kept:
+        available = RED_DIAGNOSTIC_CHARS - len(RED_DIAGNOSTIC_MARKER) - 1
+        kept[-1] = kept[-1][-available:]
+    return "\n".join([RED_DIAGNOSTIC_MARKER, *kept])
 
 
 def _remove_private(path: Path) -> str | None:
@@ -10346,6 +10388,33 @@ def guard_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     return _attempt_tree_proof(root, test, key, tools, planted=False, leg="clean guard proof")
 
 
+def _red_first_refusal(
+    test: str, selector: str, token: str, recorded: bytes | None, done, key: str | None
+) -> str | None:
+    """Compose the pytest verdict from its exit, recorded outcome and protected diagnostic."""
+    if done.returncode == 1 and recorded is not None:
+        fault = _red_record_fault(recorded, token, selector)
+        return f"{test}: {scrub(fault, key)}" if fault is not None else None
+    detail = _red_record_fault(recorded, token, selector, check_exit=False)
+    if detail is None and recorded is not None:
+        detail = "the named test had a qualifying assertion or pytest failure"
+    outcome = (
+        f"{test}: pytest ended {done.returncode} on the baseline's code; "
+        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
+    )
+    if detail is not None:
+        label = "the recorded outcome: " if recorded is not None else ""
+        outcome += f"; {label}{scrub(detail, key)}"
+    if not _red_record_selected(recorded):
+        try:
+            shown = _red_pre_record_diagnostic(done, key)
+        except Refused as error:
+            shown = f"[output withheld: {scrub(str(error), key)}]"
+        if shown:
+            outcome += "\npytest output (protected, capped):\n" + shown
+    return outcome
+
+
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
@@ -10479,15 +10548,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
-                if done.returncode != 1:
-                    outcome = (
-                        f"{test}: pytest ended {done.returncode} on the baseline's code; "
-                        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
-                    )
-                else:
-                    fault = _red_record_fault(_red_report_bytes(report), token, selector)
-                    if fault is not None:
-                        outcome = f"{test}: {scrub(fault, key)}"
+                outcome = _red_first_refusal(test, selector, token, _red_report_bytes(report), done, key)
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         outcome = f"{test}: {scrub(str(error), key)}"
     finally:

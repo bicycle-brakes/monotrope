@@ -673,6 +673,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/phase6-english/plan.md`](changes/phase6-english/plan.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/phase6-english/research.md`](changes/phase6-english/research.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/phase6-english/spec.md`](changes/phase6-english/spec.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/red-first-baseline/decisions.md`](changes/red-first-baseline/decisions.md) | draft | none | 2026-11-21 | coding-harness-7aso |
+| [`changes/red-first-baseline/findings.md`](changes/red-first-baseline/findings.md) | draft | none | 2026-11-21 | coding-harness-7aso |
+| [`changes/red-first-baseline/plan.md`](changes/red-first-baseline/plan.md) | draft | none | 2026-11-21 | coding-harness-7aso |
+| [`changes/red-first-baseline/research.md`](changes/red-first-baseline/research.md) | draft | none | 2026-11-21 | coding-harness-7aso |
+| [`changes/red-first-baseline/spec.md`](changes/red-first-baseline/spec.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/repair-hand-held-rows/decisions.md`](changes/repair-hand-held-rows/decisions.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/findings.md`](changes/repair-hand-held-rows/findings.md) | draft | none | 2026-11-21 | coding-harness-0zhf |
 | [`changes/repair-hand-held-rows/plan.md`](changes/repair-hand-held-rows/plan.md) | draft | none | 2026-11-21 | coding-harness-0zhf |

@@ -21168,6 +21168,172 @@ def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dic
     assert outcome is not None and cause in outcome, outcome
 
 
+@pytest.mark.parametrize(
+    ("source", "selector", "exit_code", "outcome"),
+    [
+        ("def test_out():\n    assert True\n", "tests/test_out.py::test_out", "0", "the named test passed"),
+        ("def test_out():\n    assert True\n", "tests/test_out.py::test_out", "5", "no test was selected"),
+        (
+            "import pytest\n\n\n@pytest.mark.skip\ndef test_out():\n    assert True\n",
+            "tests/test_out.py::test_out",
+            "0",
+            "ended skipped",
+        ),
+        (
+            "import pytest\n\n\n@pytest.mark.xfail\ndef test_out():\n    assert False\n",
+            "tests/test_out.py::test_out",
+            "0",
+            "expected-failing or unexpectedly passed",
+        ),
+        (
+            "import pytest\n\n\n@pytest.mark.xfail\ndef test_out():\n    assert True\n",
+            "tests/test_out.py::test_out",
+            "0",
+            "expected-failing or unexpectedly passed",
+        ),
+        (
+            "import absent_module_xyz\n\n\ndef test_out():\n    assert True\n",
+            "tests/test_out.py::test_out",
+            "4",
+            "collection failed before any selected test ran",
+        ),
+    ],
+    ids=["pass", "empty-selection", "skip", "xfail", "xpass", "collection-error"],
+)
+def test_red_first_reports_actual_pytest_outcomes(
+    world: World, source: str, selector: str, exit_code: str, outcome: str
+) -> None:
+    """Criterion 4 (coding-harness-7aso). Planted fault: a non-exit-1 refusal omits or misstates the exit
+    or names only a generic session status instead of the recorded outcome."""
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text(source, encoding="utf-8")
+    if outcome == "no test was selected":
+        (world.root / "tests" / "conftest.py").write_text(
+            "def pytest_collection_modifyitems(items):\n    items.clear()\n", encoding="utf-8"
+        )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, selector, None)
+    assert refusal is not None, refusal
+    assert f"pytest ended {exit_code} on the baseline's code" in refusal, refusal
+    assert outcome in refusal, refusal
+    assert "not as a failing run" not in refusal, refusal
+
+
+def test_red_first_reports_assertion_when_hook_changes_exit(world: World) -> None:
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text("def test_out():\n    assert False\n", encoding="utf-8")
+    (world.root / "tests" / "conftest.py").write_text(
+        "def pytest_sessionfinish(session, exitstatus):\n    session.exitstatus = 2\n", encoding="utf-8"
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None
+    assert "pytest ended 2" in refusal
+    assert "assertion" in refusal.split("the recorded outcome:")[-1] and "the recorded outcome:" in refusal
+
+
+def test_red_first_keeps_baseline_code_attempt_tests_and_source_state(world: World) -> None:
+    """Criterion 9 (coding-harness-7aso). Planted fault: the attempt's production bytes reach the proof, its
+    tests do not, or the source's refs, index or worktree change."""
+    repair_world(world)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
+    refs = git(world.root, "for-each-ref", "--format=%(refname) %(objectname)")
+    status = git(world.root, "status", "--porcelain")
+    head = git(world.root, "rev-parse", "HEAD")
+    # The attempt's new production value would make the test pass; only baseline code keeps it red.
+    outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
+    assert outcome is None, outcome
+    assert git(world.root, "for-each-ref", "--format=%(refname) %(objectname)") == refs
+    assert git(world.root, "status", "--porcelain") == status
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
+    # The attempt's tests do reach the proof: a different test body decides the outcome.
+    (world.root / "tests" / "test_red.py").write_text("def test_red():\n    assert True\n", encoding="utf-8")
+    outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
+    assert outcome is not None and "pytest ended 0" in outcome, outcome
+
+
+@pytest.mark.usefixtures("world")
+def test_red_first_retains_tail_of_single_long_diagnostic_line() -> None:
+    """Criterion 12 (coding-harness-7aso, finding P6-2). Planted fault: a single pre-record output line
+    longer than the character cap is dropped whole, leaving only the truncation marker."""
+    done = subprocess.CompletedProcess([], 4, "x" * 5000 + "conftest exploded", "")
+    shown = stage2._red_pre_record_diagnostic(done, None)
+    assert shown.startswith(stage2.RED_DIAGNOSTIC_MARKER)
+    assert shown.endswith("conftest exploded")
+    assert len(shown) <= 4000 and len(shown.splitlines()) <= 40
+
+
+def test_red_first_reports_exit_one_before_probe_record(world: World) -> None:
+    """A configuration exit before the probe record retains its exit and diagnostic."""
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text("def test_out():\n    assert True\n", encoding="utf-8")
+    (world.root / "tests" / "conftest.py").write_text(
+        'import pytest\ndef pytest_sessionstart(session):\n    pytest.exit("configuration failed", returncode=1)\n',
+        encoding="utf-8",
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None and "pytest ended 1" in refusal and "configuration failed" in refusal, refusal
+
+
+def test_red_first_protects_pre_record_pytest_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 12 (coding-harness-7aso). Planted fault: a pre-record import error loses its exit or
+    diagnostic, exceeds a cap, omits the truncation marker, or leaks output after protection failure."""
+    repair_world(world)
+    (world.root / "tests" / "test_out.py").write_text("def test_out():\n    assert True\n", encoding="utf-8")
+    (world.root / "tests" / "conftest.py").write_text('raise RuntimeError("conftest exploded")\n', encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None, refusal
+    assert "pytest ended" in refusal and "conftest exploded" in refusal, refusal
+    # The caps: a long output keeps its tail, within 40 lines and 4,000 characters, marker included.
+    done = subprocess.CompletedProcess([], 4, "\n".join(f"line {number}" for number in range(300)), "tail-err")
+    shown = stage2._red_pre_record_diagnostic(done, None)
+    assert len(shown.splitlines()) <= 40 and len(shown) <= 4000, shown
+    assert shown.startswith(stage2.RED_DIAGNOSTIC_MARKER) and shown.endswith("tail-err"), shown
+    wide = subprocess.CompletedProcess([], 4, "\n".join("x" * 500 for _ in range(30)), "")
+    shown = stage2._red_pre_record_diagnostic(wide, None)
+    assert len(shown) <= 4000 and shown.startswith(stage2.RED_DIAGNOSTIC_MARKER), len(shown)
+    short = subprocess.CompletedProcess([], 4, "one\ntwo", "")
+    assert stage2._red_pre_record_diagnostic(short, None) == "one\ntwo"
+
+    # A protection failure withholds the output instead of showing it.
+    def fail_protection(_text: str, _key: str | None = None) -> str:
+        raise stage2.Refused("cannot protect")
+
+    monkeypatch.setattr(stage2, "protect_diagnostics", fail_protection)
+    refusal = stage2.red_first(world.root, baseline, "tests/test_out.py::test_out", None)
+    assert refusal is not None and "pytest ended" in refusal, refusal
+    assert "conftest exploded" not in refusal, refusal
+
+
+def test_fixed_code_proof_preserves_pass_and_refusal_contract(world: World) -> None:
+    """Criterion 11 (coding-harness-7aso). Planted fault: after a shared-helper repair a passing fixed-code
+    test is refused, or a skipped, xfailed or failing one is accepted."""
+    repair_world(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    cases = {
+        "test_pass.py": ("def test_case():\n    assert True\n", True),
+        "test_fail.py": ("def test_case():\n    assert False\n", False),
+        "test_skip.py": ("import pytest\n\n\n@pytest.mark.skip\ndef test_case():\n    assert True\n", False),
+        "test_xfail.py": ("import pytest\n\n\n@pytest.mark.xfail\ndef test_case():\n    assert False\n", False),
+    }
+    for name, (source, accepted) in cases.items():
+        (world.root / "tests" / name).write_text(source, encoding="utf-8")
+        refusal = stage2.fixed_test_proof(world.root, f"tests/{name}::test_case", None)
+        assert (refusal is None) is accepted, (name, refusal)
+
+
+def test_workflow_red_first_exit_contract() -> None:
+    """Criterion 10 (coding-harness-7aso). Planted fault: the workflow permits exit 2 or omits exit 1."""
+    text = " ".join((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8").split())
+    assert "only when pytest exits exactly 1 there" in text
+    assert "only when pytest exits 1 or 2" not in text
+
+
 def test_red_first_refuses_missing_or_invalid_evidence(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 4 (coding-harness-a7m; criterion 6 of red-first-install). Planted fault: absent, malformed, incomplete, wrong-test or stale evidence passes."""
     repair_world(world)
