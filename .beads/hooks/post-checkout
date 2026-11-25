@@ -39,11 +39,14 @@ _ls_step() {
     _ls_rc=$?
   else
     # Without Perl: a shell watchdog ends the step's process after the time left.
+    # Job control gives the step its own process group, so the watchdog ends its children too.
+    set -m
     "$@" >>"$_ls_log" 2>&1 </dev/null &
     _ls_pid=$!
+    set +m
     # The watchdog holds no inherited descriptor (git waits for the hook's stderr to close),
     # and its own sleep is ended with it.
-    ( sleep "$_ls_left"; kill -TERM "$_ls_pid" 2>/dev/null; sleep 1; kill -KILL "$_ls_pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+    ( sleep "$_ls_left"; kill -TERM -"$_ls_pid" 2>/dev/null || kill -TERM "$_ls_pid" 2>/dev/null; sleep 1; kill -KILL -"$_ls_pid" 2>/dev/null || kill -KILL "$_ls_pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
     _ls_dog=$!
     wait "$_ls_pid"
     _ls_rc=$?

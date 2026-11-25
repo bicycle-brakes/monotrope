@@ -244,3 +244,15 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-25: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5946 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1239 files, 5954 commits, 12 rules.
+
+## Rejected phase-6 answer — Codex, 2026-11-25
+
+The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict was recorded and nothing was released (Codex thread: 01a213f1-5c85-7891-9b31-66ca1f15f9d2). The answer, as it came:
+
+> | P6-5 | MAJOR | SPEC | base | .beads/hooks/post-checkout, `_ls_step` | Without Perl, the watchdog sends signals only to the immediate setup process. If `make venv` starts a child such as pip and then times out, the child can keep running and modifying the worktree after the hook reports failure and Git returns. The timeout must stop the setup step, including its running children. [Criteria 10, 11] |
+> 
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: the lane setup block’s opening marker is replaced, so the required setup block cannot be located before the Beads block — catches without switch: yes.
+> 
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: text inside the Beads-managed block is changed relative to `origin/main` — catches without switch: yes.

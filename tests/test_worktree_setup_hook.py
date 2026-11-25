@@ -34,6 +34,10 @@ if [ "$1" = "-C" ]; then cd "$2" || exit 1; shift 2; fi
 printf '%s|%s\n' "$(pwd -P)" "$*" >>"$STUB_RECORD_DIR/make"
 echo "STUB-MAKE-STDOUT"
 echo "STUB-MAKE-STDERR" >&2
+if [ -n "${STUB_MAKE_CHILD:-}" ]; then
+  sleep "$STUB_MAKE_CHILD" &
+  echo $! >"$STUB_RECORD_DIR/make-child"
+fi
 if [ -n "${STUB_MAKE_SLEEP:-}" ]; then
   sleep "$STUB_MAKE_SLEEP"
   echo woke >>"$STUB_RECORD_DIR/make-woke"
@@ -595,3 +599,31 @@ def test_an_unwritable_log_is_reported(lane: Lane) -> None:
     proc = lane.new_worktree_hook(path)
     assert any("cannot be written" in line for line in proc.stderr.splitlines()), proc.stderr
     assert "lane setup: log: unavailable" in proc.stderr.splitlines(), proc.stderr
+
+
+def test_without_perl_the_watchdog_ends_the_steps_children(lane: Lane, tmp_path: Path) -> None:
+    """Phase-6 P6-5: without perl an overdue step's child process is ended with it."""
+    nopl = tmp_path / "noperl-bin3"
+    nopl.mkdir()
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if not folder or not Path(folder).is_dir():
+            continue
+        for entry in Path(folder).iterdir():
+            target = nopl / entry.name
+            if entry.name.startswith("perl") or target.exists():
+                continue
+            try:
+                target.symlink_to(entry)
+            except OSError:
+                continue
+    path_env = os.pathsep.join([lane.env["PATH"].split(os.pathsep)[0], str(nopl)])
+    proc, _ = lane.add_worktree(
+        PATH=path_env, HARNESS_LANE_SETUP_TIMEOUT="2", STUB_MAKE_SLEEP="30", STUB_MAKE_CHILD="40"
+    )
+    assert any("make venv timed out" in line for line in _failures(proc.stderr)), proc.stderr
+    child = int((lane.records / "make-child").read_text().strip())
+    time.sleep(1)
+    alive = subprocess.run(["kill", "-0", str(child)], capture_output=True).returncode == 0
+    if alive:
+        subprocess.run(["kill", "-KILL", str(child)], capture_output=True)
+    assert not alive, "the step's child outlived the watchdog"
