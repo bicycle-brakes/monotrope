@@ -51,3 +51,14 @@ Spec review commit: 79bd397e3247db9da50e0bbd16e370d5bce2130c
 | S-7 | MINOR | SPEC | fix-r1 | spec.md AC8 | The refutation "materially different load" cannot be shown from the pull request. AC8 does not require load to be recorded with either measurement (for example a load average or the other processes running), and it does not say what counts as material. A before/after pair taken under different load therefore meets AC8 as far as anyone reviewing the pull request can tell. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-10 (2026-11-25) | — |
 
 Stage-2 call, 2026-11-25: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1206 files, 5804 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1206 files, 5805 commits, 12 rules.
+## Phase 2a — Opus 5.5, 2026-11-25
+
+Spec fingerprint: sha256:fdcfb9486b7ffdee338b7ed49b3fa8d5b8228af8896fa54b464ed738e0c5927e
+
+Spec review commit: c256141e2f873a50fe9abe8c3c9318cbcab5394d
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| S-8 | MINOR | SPEC | fix-r1 | spec.md AC8; decisions.md D-3, D-10 | AC8 can be refuted by "a different machine or worker setting", but it only requires the pull request to record the duration totals, the load readings and the base revision. It does not require recording the machine or the pytest command and worker setting behind each total. So a reviewer of the pull request cannot tell a before total taken on another machine, or with `-n auto` instead of serial, from a matched pair. Those two refutation clauses cannot turn red from the evidence AC8 asks for. D-10 closed the same gap for load by requiring a recorded number; machine and worker setting still have nothing recorded. | Opus | in spec — [DETAIL] decided by the orchestrator: decisions.md D-11 (2026-11-25) | — |

@@ -44,3 +44,5 @@ reason: Test-only speed fixes with remedies stated in the bead (coding-harness-b
 
 [DETAIL] **D-10 (spec review S-7, comparable load)**: each duration in the pull request carries the one-minute load average (`os.getloadavg()[0]`) taken just before it; before and after count as comparable when those differ by at most 1.0, otherwise both are measured again. Reason: "materially different load" needs a recorded number.
 
+[DETAIL] **D-11 (spec review S-8, record the setting)**: with each before and after total the pull request records the machine (`platform.node()` and `platform.machine()`) and the exact pytest command line including its worker setting; both sides use the same command. Reason: otherwise a mismatched pair cannot be told from a matched one.
+
