@@ -305,3 +305,117 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-24: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1203 files, 5717 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1203 files, 5829 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/jobs.py` +32 -24
+> - `tests/test_jobs.py` +86 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> .....F.................................................................. [ 64%]
+> .......................................                                  [100%]
+> =================================== FAILURES ===================================
+> _________________ test_reused_recorded_group_is_never_targeted _________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/detached-job-launcher/.venv/bin/python3
+>
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10937e780>
+>
+>     def test_reused_recorded_group_is_never_targeted(monkeypatch):
+>         """A reused group leader and its members are not the recorded job."""
+>         old = "Mon Jan  1 00:00:00 2024"
+>         new = "Tue Jan  2 00:00:00 2024"
+>         record = {
+>             "command_pid": 100,
+>             "command_start": old,
+>             "wrapper_pid": 101,
+>             "groups": [{"pid": 200, "pgid": 200, "start": old}],
+>         }
+>         monkeypatch.setattr(jobs, "process_table", lambda: [(100, 1, 100, old), (200, 1, 200, new), (201, 200, 200, new)])
+> >       assert set(jobs.targets(record)) == {100}
+>
+> tests/test_jobs.py:638: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> record = {'command_pid': 100, 'command_start': 'Mon Jan  1 00:00:00 2024', 'groups': [{'pgid': 200, 'pid': 200, 'start': 'Mon Jan  1 00:00:00 2024'}], 'wrapper_pid': 101}
+>
+>     def targets(record: dict) -> dict[int, str]:
+>         """pid -> start identity of the job's command tree and its recorded process groups, never the wrapper."""
+>         table = process_table()
+>         by_pid = {pid: (ppid, pgid, start) for pid, ppid, pgid, start in table}
+>         found: dict[int, str] = {}
+>         root = record["command_pid"]
+>         row = by_pid.get(root)
+>         if row is not None and row[2] == record["command_start"]:
+>             found[root] = row[2]
+>             children: dict[int, list[int]] = {}
+>             for pid, (ppid, _pgid, _start) in by_pid.items():
+>                 children.setdefault(ppid, []).append(pid)
+>             pending = [root]
+>             while pending:
+>                 for child in children.get(pending.pop(), []):
+>                     if child not in found:
+>                         found[child] = by_pid[child][2]
+>                         pending.append(child)
+>         for group in record["groups"]:
+>             leader = by_pid.get(group["pid"])
+>             verified = leader is not None and group["start"] is not None and leader[2] == group["start"]
+>             if not verified:
+>                 continue
+>             floor = _parse_start(group["start"])
+>             for pid, (_ppid, pgid, start) in by_pid.items():
+>                 member = _parse_start(start)
+>                 if pgid == group["pgid"] and floor is not None and member is not None and member >= floor:
+>                     found[pid] = start
+>         # The job token follows descendants even after they have been reparented.
+> >       token = f"{TOKEN_ENV}={record['id']}"
+> E       KeyError: 'id'
+>
+> scripts/jobs.py:753: KeyError
+> =========================== short test summary info ============================
+> FAILED tests/test_jobs.py::test_reused_recorded_group_is_never_targeted - Key...
+> 1 failed, 110 passed in 5.49s
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-1-20261125T074255205892Z-36d2fc23.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1203 files, 5831 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_jobs.py` +1 -0
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-4: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-2-20261125T074255205892Z-36d2fc23.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 1203 files, 5832 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/test_jobs.py` +21 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: green; test files `tests/test_jobs.py`, `tests/test_kit.py`, `tests/test_machine_facts.py`, `tests/test_run_report.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6
+> - F-4: no fixed line
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/detached-job-launcher/stage2/attempts/detached-job-launcher/attempt-3-20261125T074255205892Z-36d2fc23.md
+> ```

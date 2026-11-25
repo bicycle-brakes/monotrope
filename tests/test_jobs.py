@@ -346,7 +346,7 @@ def test_start_record_contains_command_window_time_and_log(state: Path, tmp_path
     assert jobs.is_runner_verb(["python3", "/r/scripts/stage2.py", "--spec-review-inventory"]) is False
     assert jobs.is_runner_verb(["echo", "hi"]) is False
     assert not jobs.is_runner_verb(["grep", "-n", "scripts/stage2.py", "draft"])
-    assert not jobs.is_runner_verb(["python3", "scripts/stage2.py", "unknown"])
+    assert jobs.is_runner_verb(["python3", "scripts/stage2.py", "unknown"])
 
 
 @pytest.mark.usefixtures("detached")
@@ -629,6 +629,7 @@ def test_reused_recorded_group_is_never_targeted(monkeypatch):
     old = "Mon Jan  1 00:00:00 2024"
     new = "Tue Jan  2 00:00:00 2024"
     record = {
+        "id": "20240101T000000Z-abcdef",
         "command_pid": 100,
         "command_start": old,
         "wrapper_pid": 101,
@@ -636,3 +637,108 @@ def test_reused_recorded_group_is_never_targeted(monkeypatch):
     }
     monkeypatch.setattr(jobs, "process_table", lambda: [(100, 1, 100, old), (200, 1, 200, new), (201, 200, 200, new)])
     assert set(jobs.targets(record)) == {100}
+
+
+def test_future_runner_verb_is_recognized() -> None:
+    assert jobs.is_runner_verb([sys.executable, "scripts/stage2.py", "future-verb", "change"])
+    assert not jobs.is_runner_verb(["grep", "scripts/stage2.py", "future-verb"])
+    assert not jobs.is_runner_verb([sys.executable, "scripts/stage2.py", "--help"])
+
+
+def test_start_deadline_includes_hung_tmux(state, tmp_path, monkeypatch, capsys) -> None:
+    fake = tmp_path / "tmux"
+    fake.write_text("#!/bin/sh\nsleep 5\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(jobs, "tmux_path", lambda: str(fake))
+    monkeypatch.setattr(jobs, "START_WAIT", 0.5)
+    started = time.monotonic()
+    assert jobs.main(["start", "--", *SLEEPER]) == 1
+    assert time.monotonic() - started < 2
+    assert jobs.read_record(next(state.glob("*.json")))["state"] == "failed to start"
+    capsys.readouterr()
+
+
+@pytest.mark.usefixtures("detached")
+def test_stop_reparented_session_descendant(tmp_path, capsys) -> None:
+    marker = tmp_path / "pid"
+    grandchild = "import os,time; open(os.environ['PID_FILE'],'w').write(str(os.getpid())); time.sleep(120)"
+    middle = f"import subprocess,sys; subprocess.Popen([sys.executable,'-c',{grandchild!r}],start_new_session=True)"
+    parent = f"import subprocess,sys,time; subprocess.run([sys.executable,'-c',{middle!r}],start_new_session=True); time.sleep(120)"
+    os.environ["PID_FILE"] = str(marker)
+    try:
+        code, out = start_job(capsys, sys.executable, "-c", parent)
+        assert code == 0
+        job_id = started_id(out)
+        wait_for(marker.exists)
+        pid = int(marker.read_text())
+        assert running(pid)
+        assert jobs.main(["stop", job_id]) == 0
+        wait_for(lambda: not running(pid))
+    finally:
+        os.environ.pop("PID_FILE", None)
+        if marker.exists():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(marker.read_text()), signal.SIGKILL)
+
+
+@pytest.mark.usefixtures("detached")
+def test_detached_verify_waits_for_slots_and_memory(tmp_path, monkeypatch, capsys) -> None:
+    """Fault: a detached verification run while both admissions are held - one of them by its own caller -
+    or while memory is below the floor runs at once instead of waiting or refusing (criterion 8).
+
+    Under `STAGE2_PLANT_FAULT` the launcher passes the caller's held admission on to the job (the real
+    fault this test guards), so the job nests in that admission and runs at once."""
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "0")
+    holders = []
+    held = tmp_path / "held.json"
+    try:
+        for i in range(2):
+            marker = tmp_path / f"holder-{i}"
+            body = (
+                "import json, os, time; from pathlib import Path; "
+                f"json.dump({{k: os.environ.get(k) for k in {[verify_lock.LOCK_ENV, verify_lock.TOKEN_ENV]!r}}}, "
+                f"open({str(held)!r}, 'w')) if {i} == 0 else None; "
+                f"Path({str(marker)!r}).touch(); time.sleep(120)"
+            )
+            holders.append(
+                subprocess.Popen(
+                    [sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", body],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            )
+            wait_for(marker.exists)
+        # The caller holds the first admission, as a session inside a verification run would.
+        caller = json.loads(held.read_text(encoding="utf-8"))
+        assert caller[verify_lock.LOCK_ENV] and caller[verify_lock.TOKEN_ENV], "the holder published no admission"
+        for name, value in caller.items():
+            monkeypatch.setenv(name, value)
+        if os.environ.get("STAGE2_PLANT_FAULT"):
+            monkeypatch.setattr(jobs, "EXCLUDED_ENV", ())  # planted: the job inherits the caller's admission
+        result = tmp_path / "admitted"
+        body = f"from pathlib import Path; Path({str(result)!r}).touch()"
+        code, out = start_job(capsys, sys.executable, "-m", "scripts.verify_lock", "--", sys.executable, "-c", body)
+        assert code == 0
+        job_id = started_id(out)
+        time.sleep(1)
+        assert not result.exists(), "detached verification bypassed occupied admissions"
+        for name in caller:
+            monkeypatch.delenv(name)
+        holders[0].terminate()
+        holders[0].wait(timeout=10)
+        wait_for(result.exists)
+        wait_finished(job_id)
+    finally:
+        for holder in holders:
+            if holder.poll() is None:
+                holder.terminate()
+                holder.wait(timeout=10)
+    result.unlink()
+    script = f"import sys; sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r}); import verify_lock as v; v.read_available_memory=lambda: 0; v.MEMORY_POLL_SECONDS=0.05; v.MEMORY_DEADLINE_SECONDS=0.2; sys.exit(v.main(['--',sys.executable,'-c',{body!r}]))"
+    monkeypatch.setenv(verify_lock.FLOOR_ENV, "50")
+    code, out = start_job(capsys, sys.executable, "-c", script)
+    assert code == 0
+    record = wait_finished(started_id(out))
+    assert not result.exists(), "detached verification bypassed the memory floor"
+    assert record["exit"] != "0"

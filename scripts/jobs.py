@@ -60,6 +60,8 @@ KEEP_SECONDS = 14 * 86400
 RECENT_SECONDS = 86400
 STALE_START_SECONDS = 3 * START_WAIT  # a record still `starting` after this is lost
 RECORD_ENV = "HARNESS_JOB_RECORD"
+TOKEN_ENV = "HARNESS_JOB_TOKEN"
+_launch_deadline: float | None = None
 # The four values of a held verification admission (scripts/verify_lock.py); a job never inherits them.
 EXCLUDED_ENV = (
     "HARNESS_VERIFY_LOCK_HELD",
@@ -321,26 +323,11 @@ def alive(pid: int | None, start: str | None) -> bool:
 
 def is_runner_verb(argv: list[str]) -> bool:
     """True when the argument vector invokes scripts/stage2.py followed by a word that is not an option."""
-    verbs = {
-        "explore",
-        "draft",
-        "implement",
-        "repair",
-        "triage",
-        "spec-review",
-        "review-loop",
-        "release-loop",
-        "review",
-        "probe",
-        "prepare-loop",
-        "prepare-explore",
-        "session",
-    }
     if not argv or not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(argv[0]).name):
         return False
     for index, token in enumerate(argv[1:], 1):
         if token == "scripts/stage2.py" or token.endswith("/scripts/stage2.py"):
-            return index + 1 < len(argv) and argv[index + 1] in verbs
+            return index + 1 < len(argv) and bool(argv[index + 1]) and not argv[index + 1].startswith("-")
         if not token.startswith("-") or token in {"-c", "-m", "--"}:
             return False
     return False
@@ -422,11 +409,12 @@ def tmux_path() -> str | None:
 
 
 def _tmux(tmux: str, *args: str) -> subprocess.CompletedProcess:
+    timeout = 15.0 if _launch_deadline is None else max(0.001, _launch_deadline - time.monotonic())
     return subprocess.run(
         [tmux, "-L", tmux_socket(), "-f", "/dev/null", *args],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=timeout,
         check=False,
     )
 
@@ -475,8 +463,14 @@ def start(command: list[str], out: Callable[[str], None] = print) -> int:
     """Start `command` as a detached job; return the exit status (0, 1 failed start, 2 refusal)."""
     if tmux_path() is None:
         raise Refused("tmux is missing: install tmux; no command was run")
+    global _launch_deadline
+    deadline = time.monotonic() + START_WAIT
     cwd = str(Path.cwd())
-    env = {key: value for key, value in os.environ.items() if key not in EXCLUDED_ENV and key != RECORD_ENV}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in EXCLUDED_ENV and key not in (RECORD_ENV, TOKEN_ENV)
+    }
     root = state_dir()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     prune(root)
@@ -489,16 +483,19 @@ def start(command: list[str], out: Callable[[str], None] = print) -> int:
     try:
         _atomic_write(env_file, json.dumps(env))
         os.close(os.open(log, os.O_CREAT | os.O_WRONLY, 0o600))
+        _launch_deadline = deadline
         launch_window(job_id, cwd, wrapper)
     except (JobError, OSError, subprocess.TimeoutExpired) as error:
         with contextlib.suppress(OSError):
             env_file.unlink()
-        _kill_window(job_id)
+        _launch_deadline = None
+        if not isinstance(error, subprocess.TimeoutExpired):
+            _kill_window(job_id)
         with contextlib.suppress(JobError, OSError):
             _fail(path, str(error))
         out(f"job {job_id} failed to start: {error}")
         return 1
-    deadline = time.monotonic() + START_WAIT
+    _launch_deadline = None
     while True:
         record = read_record(path)
         if record["state"] == "failed to start":
@@ -537,6 +534,7 @@ def wrap(path: Path) -> int:
         env_file.unlink()
         env = {str(key): str(value) for key, value in supplied.items()}
         env[RECORD_ENV] = str(path)
+        env[TOKEN_ENV] = record["id"]
         log = Path(record["log"]).open("ab", buffering=0)  # noqa: SIM115 - held for the child's lifetime
         child = subprocess.Popen(
             record["command"],
@@ -751,6 +749,14 @@ def targets(record: dict) -> dict[int, str]:
             member = _parse_start(start)
             if pgid == group["pgid"] and floor is not None and member is not None and member >= floor:
                 found[pid] = start
+    # The job token follows descendants even after they have been reparented.
+    token = f"{TOKEN_ENV}={record['id']}"
+    for line in (_ps(["eww", "-axo", "pid=,command="]) or "").splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[0].isdigit() and token in parts[1].split():
+            pid = int(parts[0])
+            if pid in by_pid:
+                found[pid] = by_pid[pid][2]
     found.pop(record["wrapper_pid"], None)
     found.pop(os.getpid(), None)
     return found
@@ -778,15 +784,17 @@ def stop(job_id: str, out: Callable[[str], None] = print) -> int:
 
     record = update_record(path, request)  # the request is written before any signal
     first = targets(record)
-    for pid in first:
-        _signal_pid(pid, signal.SIGTERM)
+    for pid, started in first.items():
+        if process_start(pid) == started:
+            _signal_pid(pid, signal.SIGTERM)
     deadline = time.monotonic() + STOP_GRACE
     while time.monotonic() < deadline and any(process_start(pid) == start for pid, start in first.items()):
         time.sleep(0.1)
     survivors = {pid: start for pid, start in first.items() if process_start(pid) == start}
     survivors.update(targets(record))
-    for pid in survivors:
-        _signal_pid(pid, signal.SIGKILL)
+    for pid, started in survivors.items():
+        if process_start(pid) == started:
+            _signal_pid(pid, signal.SIGKILL)
     deadline = time.monotonic() + FINISH_WAIT
     while time.monotonic() < deadline:
         if read_record(path)["state"] == "finished":
