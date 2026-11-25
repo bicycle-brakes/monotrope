@@ -44,18 +44,22 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_orphan_control_does_not_write_to_checkout — an attempted checkout write goes undetected.
+- 1: tests/test_ci.py::test_orphan_control_does_not_write_to_checkout — an attempted checkout write goes undetected.
 - 2: tests/test_ci.py::test_the_glob_itself_finds_a_real_orphan_shell_script — the glob omits `.sh` or classification fails to report the orphan.
-- 3: not yet written tests/test_ci.py::test_scripts_defaults_to_checkout_inventory — the default glob reads another root or includes the wrong files.
-- 4: not yet written tests/test_ci.py::test_inventory_checks_reject_empty_inventory — either inventory check passes with an empty list.
-- 5: not yet written tests/test_ci.py::test_orphan_control_does_not_write_to_checkout — a write that is later removed goes undetected.
-- 6: not yet written tests/test_ci.py::test_orphan_write_watcher_detects_standin_write — the watcher misses a planted write in a temporary stand-in.
-- 7: not yet written tests/test_ci.py::test_orphan_write_watcher_detects_standin_write — a target outside the stand-in or inside the checkout is accepted.
-- 8: not yet written tests/test_ci.py::test_orphan_control_uses_real_caller_inputs — substituted caller inputs pass the spy check.
+- 3: tests/test_ci.py::test_scripts_defaults_to_checkout_inventory — the default glob reads another root or includes the wrong files.
+- 4: tests/test_ci.py::test_inventory_checks_reject_empty_inventory — either inventory check passes with an empty list.
+- 5: tests/test_ci.py::test_orphan_control_does_not_write_to_checkout — a write that is later removed goes undetected.
+- 6: tests/test_ci.py::test_orphan_write_watcher_detects_standin_write — the watcher misses a planted write in a temporary stand-in.
+- 7: tests/test_ci.py::test_orphan_write_watcher_detects_standin_write — a target outside the stand-in or inside the checkout is accepted.
+- 8: tests/test_ci.py::test_orphan_control_uses_real_caller_inputs — substituted caller inputs pass the spy check.
 
 ## Explore route
 
 On 2026-11-25, Explore used the Stage-1 route with `claude-haiku-5-5` because GLM 5.3 Flash through Z.ai had reached its weekly limit, as recorded in `research.md`.
+
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM 5.3 Flash via Z.ai: weekly limit at 100 % until 2026-11-29 (bead coding-harness-b5pu).
 
 ## Time used
 
@@ -63,3 +67,4 @@ On 2026-11-25, Explore used the Stage-1 route with `claude-haiku-5-5` because GL
 2026-11-25 00:57:06–00:59:08 UTC, 122 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 01:02:26–01:04:00 UTC, 94 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 01:07:58–01:09:44 UTC, 105 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 01:10:20–01:15:00 UTC, 279 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_ci.py`, `tests/test_repo_settings.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
