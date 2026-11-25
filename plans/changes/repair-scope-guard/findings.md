@@ -1235,7 +1235,7 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:9602 | If an implement or repair attempt changes only the `updated:` date in a tracked journal document, the checkpoint classifies that edit as a derived stamp and exempts it from the held-path refusal. It restores the date but can accept and commit the attempt, although every tracked journal edit must cause refusal. [Criterion 1] | Codex | taken — criterion 1: an attempt's edit of a tracked docs/journal/ document refuses the attempt even when it changes only the updated: date; the derived-stamp exemption does not apply to held journal paths | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:9602 | If an implement or repair attempt changes only the `updated:` date in a tracked journal document, the checkpoint classifies that edit as a derived stamp and exempts it from the held-path refusal. It restores the date but can accept and commit the attempt, although every tracked journal edit must cause refusal. [Criterion 1] | Codex | fixed — tests/test_stage2.py::test_journal_stamp_only_edit_is_refused | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -1243,3 +1243,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a2100b-ef71-7ab0-ba58-261d897d1928, 2026-11-25
 Reviewer session: codex 01a2100b-ef71-7ab0-ba58-261d897d1928 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1188 files, 5742 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/repair-scope-guard/plan.md, plans/changes/repair-scope-guard/spec.md — unchanged

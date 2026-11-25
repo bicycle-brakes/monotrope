@@ -21433,6 +21433,30 @@ def test_stage2_journal_paths_are_held(
         assert not (world.root / relative).exists()
 
 
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+@pytest.mark.parametrize("relative", ["docs/journal/note.md", "Docs/Journal/note.md"])
+def test_journal_stamp_only_edit_is_refused(
+    world: World, capsys: pytest.CaptureFixture[str], verb: str, relative: str
+) -> None:
+    """A tracked journal stamp edit is held even alongside otherwise valid work."""
+    journal = world.root / relative
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    original = old_header()
+    journal.write_text(original, encoding="utf-8")
+    git(world.root, "add", relative)
+    git(world.root, "commit", "-qm", "seed tracked journal")
+    changed = original.replace("updated: 2026-09-29", "updated: 2026-10-01")
+    step = work_step(verb, 1)
+    step.setdefault("plant", {})[relative] = changed
+    baseline = script_work(world, verb, [step], [GREEN])
+
+    assert world.run(verb) == 1, "a journal stamp edit must refuse the attempt"
+    assert relative in capsys.readouterr().err
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert journal.read_text(encoding="utf-8") == original
+    assert (world.root / "src/app.py").read_text(encoding="utf-8") == "value = 1\n"
+
+
 @pytest.mark.parametrize("endpoint", [stage2.CODEX, stage2.SONNET])
 def test_repair_prompts_state_scope_restrictions(world: World, endpoint: tuple[str, str, str | None]) -> None:
     """Criterion 2. Planted fault: either tool route omits the scope rule or a prohibition."""

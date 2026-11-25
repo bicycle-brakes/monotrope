@@ -9594,12 +9594,15 @@ def checkpoint(
     stamps: set[Path] = set()
     try:
         # A protected document's derived stamp may enter the run, but must not enter its commit.
+        # Journal edits belong to the orchestrator, including stamp-only edits.
         # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
         held = _held_prefixes(root)
         stamps = {
             path
             for path in changed_paths(root)
-            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path)
+            if not path.as_posix().casefold().startswith("docs/journal/")
+            and any(path.as_posix().casefold().startswith(prefix) for prefix in held)
+            and derived_leftover(root, path)
         }
         # Classify without resetting stamps: a later rollback must check its entire batch
         # before even these derived bytes are restored.
