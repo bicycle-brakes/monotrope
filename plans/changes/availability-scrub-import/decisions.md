@@ -29,3 +29,6 @@ reason: A behaviour-preserving fix with a stated remedy (bead coding-harness-vg9
 [DETAIL] **D-2 (the structural check)**: a test reads scripts/stage2_availability.py with `ast` and fails on any `import stage2` or `from stage2 import` anywhere in the module, function-local imports included. Reason: the function-local import is what the bead names; without a check it can come back.
 
 [DETAIL] **D-3 (what stays)**: the error text stored in `reading["status"]` stays exactly as today, redacted by the same `scrub`; no other function changes. Reason: behaviour-preserving fix.
+
+[DETAIL] **D-4 (spec review F-1, fragment length)**: criterion 2's refutation counts the whole key or a fragment of 8 or more characters, the threshold `scrub` already applies (`scripts/stage2.py` `scrub`; `tests/test_stage2.py` keeps a 7-character fragment); shorter fragments are outside the criterion. Reason: the change keeps the existing redaction and must not demand more than it.
+
