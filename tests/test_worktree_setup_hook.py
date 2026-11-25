@@ -682,3 +682,25 @@ def test_without_perl_a_child_ignoring_term_is_killed(lane: Lane, tmp_path: Path
     if alive:
         subprocess.run(["kill", "-KILL", pid_text], capture_output=True)
     assert not alive, "a child that ignores TERM outlived the limit"
+
+
+def test_missing_origin_main_skips_setup(lane: Lane) -> None:
+    """Phase-6 P6-1 (rejected answer 01a21477): when origin/main is absent, setup is skipped."""
+    assert lane.git("update-ref", "-d", "refs/remotes/origin/main").returncode == 0
+    proc, _ = lane.add_worktree("no-origin")
+    assert any(line.startswith("lane setup: skipped:") for line in proc.stderr.splitlines()), proc.stderr
+    assert lane.record("make") == [], "a checkout without origin/main ran setup"
+
+
+def test_ancestor_of_origin_main_runs_setup(lane: Lane) -> None:
+    """Phase-6 P6-2 (rejected answer 01a21477): an older ancestor of origin/main is trusted and runs setup."""
+    older = lane.head(lane.main)
+    (lane.main / "README.md").write_text("newer\n", encoding="utf-8")
+    assert lane.git("add", "README.md").returncode == 0
+    assert lane.git("commit", "-q", "-m", "advance origin/main").returncode == 0
+    assert lane.git("update-ref", "refs/remotes/origin/main", "HEAD").returncode == 0
+    path = lane.root / "ancestor-lane"
+    proc = lane.git("worktree", "add", "-q", "-b", "ancestor", str(path), older)
+    assert proc.returncode == 0, proc.stderr
+    assert "lane setup: ok" in proc.stderr.splitlines(), proc.stderr
+    assert lane.record("make") == [f"{path}|venv"]
