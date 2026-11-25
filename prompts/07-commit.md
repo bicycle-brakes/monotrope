@@ -126,10 +126,28 @@ state` shows `MERGED`, then reconcile the declared closures (above).
    --maintainer`. The maintainer mode skips the phase-6, change-folder and
    trailer conditions and keeps the checks, the pinned head and
    enqueue-only. It asks every time and is denied in an unattended run.
-3. A direct `gh pr merge`, `--admin` or a merge through the API is never the
-   path; the ask rules stop it.
-4. A group that fails in the queue leaves the pull request open; say so and
+3. **Two exceptions, both the maintainer's own merge** (`gh pr merge <n>
+   --merge --match-head-commit <sha>` behind the ask rule, or the GitHub app),
+   never `--admin`: (a) the pull request that adds or changes
+   `scripts/enqueue_pr.py` itself, because the script cannot vouch for a copy
+   that differs from `origin/main`'s; (b) a repository without a merge queue
+   (step 8). Every other direct merge is not a path; the ask rules stop it.
+4. **Transition:** a lane whose phase-6 block predates the `Reviewed commit:`
+   line gets a phase-6 re-check, which writes it; or the maintainer admits it
+   with `--maintainer`.
+5. Which alternative holds is read, not remembered: `gh api
+   repos/{owner}/{repo}/rules/branches/main --jq '[.[].type]'` lists
+   `merge_queue` when the queue is active (rule RB-G7).
+6. Queued is not merged: report "queued" and, only once `gh pr view <n> --json
+   state,mergeCommit` shows `MERGED`, "merged" with the merge commit.
+7. A group that fails in the queue leaves the pull request open; say so and
    start again at step 1 or 2.
+8. Only under the alternative without a queue — the ruleset requires
+   branches to be up to date before merging — does GitHub refuse a behind
+   branch, and the enqueue call fails because there is no queue: then the
+   agent runs `gh pr update-branch <n>`, waits until CI is green on the new
+   head, restates, and the maintainer merges as in step 3 (b). If the update
+   reports a conflict, the agent stops and says so.
 
 `.claude/settings.json` asks before every merge command it recognises, so the
 permission prompt appears right below the restatement; where no prompt can be

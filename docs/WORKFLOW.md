@@ -930,7 +930,13 @@ for another repository is `templates/agents-mergeable-prs.md`.
   merge"). It admits through the enqueue call pinned to the checked head,
   with no branch update first; the queue tests it on the current `main` and
   merges it. Admission is not a merge: it is reported as queued until the
-  pull request shows `MERGED`. `--admin` stays banned. Without the queue ("branches must be
+  pull request shows `MERGED`. `--admin` stays banned. The maintainer mode
+  stays attended because in Claude Code an ask rule wins over an allow rule
+  for the same command (`Bash(*enqueue_pr.py*--maintainer*)` against the
+  allow rule for the script), and the night overlay turns that ask into a
+  deny; `tests/test_merge_guard.py` pins both. The pull request that adds or
+  changes the script itself, and a repository without a merge queue, are
+  merged by the maintainer (`prompts/07-commit.md`, "The merge", step 3). Without the queue ("branches must be
   up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
