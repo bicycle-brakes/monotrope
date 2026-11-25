@@ -25,16 +25,20 @@ The orphan-script control test runs in isolation without weakening the real scri
 
 ## Problem
 
-On 2026-11-25, research found that the orphan-shell-script control test creates a file in the checkout's `scripts/` directory while other parallel tests enumerate it. Those tests can see the temporary orphan, and the kit probe can cache untracked files during that window (`research.md`, second runner exploration; confirmed in `tests/test_ci.py` at commit `790bf418`).
+On 2026-11-25, research found that `tests/test_ci.py::test_the_glob_itself_finds_a_real_orphan_shell_script` creates a file in the checkout's `scripts/` directory while other parallel tests enumerate it. Those tests can see the temporary orphan, and the kit probe can cache untracked files during that window (`research.md`, second runner exploration; confirmed in `tests/test_ci.py` at commit `790bf418`).
 
 ## Acceptance criteria
 
-1. When the orphan-shell-script control test runs, it creates its orphan only in a temporary tree outside the repository checkout.
+1. When `test_the_glob_itself_finds_a_real_orphan_shell_script` runs, it creates its orphan only in a temporary tree outside the repository checkout.
    *Refuted by:* The test creates its orphan inside the checkout, even if it later removes it.
-2. When the control test runs, the same script glob and orphan classification used by the real inventory checks report its actual temporary `.sh` file as an orphan.
-   *Refuted by:* Omitting `.sh` from the glob or treating the uncalled file as called leaves the control test green.
-3. When the real inventory checks enumerate scripts, they continue to inspect the checkout's `scripts/` directory by default.
-   *Refuted by:* A real script under that directory is omitted or a temporary tree replaces the default inventory.
+2. When the control test runs, the real `_scripts()` glob aimed at its temporary tree and the real `_heimatlose_namen()` classification report its actual temporary `.sh` file as an orphan, using the checkout's `.github/workflows/ci.yml`, `scripts/verify_all.sh` and `OHNE_AUFRUFER` read-only.
+   *Refuted by:* Removing `.sh` from `_scripts()` or treating the uncalled file as called leaves the control test green, or classification uses different caller inputs.
+3. When the real inventory checks enumerate scripts, the default `_scripts()` inventory contains the checkout's top-level `*.py` and `*.sh` files except names starting with `test_`, without recursion.
+   *Refuted by:* A qualifying top-level script is omitted, a non-qualifying file is included, or another tree is used by default.
+4. When either real inventory test runs, it asserts that its default inventory is non-empty and contains `stage2.py`.
+   *Refuted by:* Either inventory test passes with an empty inventory or one missing `stage2.py`.
+5. When the control test runs, it asserts that the checkout's `scripts/` listing is unchanged before and after the run.
+   *Refuted by:* A guard that plants a lasting write in that directory during the control test does not make it fail.
 
 ## Non-goals
 
@@ -55,4 +59,4 @@ Production scripts, CI configuration and tracker data remain untouched: the chan
 
 ## Open decisions
 
-None open. [DETAIL] Keep the existing control-test name so the kit probe's dated reference stays accurate; one hour is the phase-4 stop because this is a focused test-only correction.
+None open. [DETAIL] Keep the existing control-test name so the kit probe's dated reference stays accurate; one hour is the phase-4 stop because this is a focused test-only correction. The temporary tree holds the orphan only; real caller inputs remain read-only so classification uses the actual caller set. The inventory stays non-recursive to preserve its existing policy. The before-and-after listing provides an additional guard, not proof against a write removed before the final listing; the isolation regression must also observe writes during the run.
