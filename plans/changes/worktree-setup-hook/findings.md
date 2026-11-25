@@ -53,3 +53,45 @@ Spec review commit: 5953e6581898786c305695e90bf41301b937358f
 | S-9 | MINOR | SPEC | base | spec.md, Definition of Done (third item); Protected areas | The Definition of Done names the pull request's file list as the evidence that the protected areas are untouched. But the Beads-managed block sits in `.beads/hooks/post-checkout`, a file this change has to edit. That file appears in the list whether or not anything between the `BEGIN` and `END BEADS INTEGRATION` markers changed. An edit inside the managed block, such as changed `bd hooks run` arguments or a changed `BEADS_HOOK_TIMEOUT` default, therefore passes this item. For the managed block the item cannot go red; the file list only covers the historical handovers. | Opus | in spec — [DETAIL] decided by the orchestrator (decisions.md): a test compares the text between the BEGIN and END BEADS INTEGRATION markers with origin/main and fails on any change, so the protected managed block can go red | — |
 
 Stage-2 call, 2026-11-25: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1238 files, 5922 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1239 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1239 files, 5932 commits, 12 rules.
