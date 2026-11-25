@@ -39,6 +39,14 @@ STOP_GRACE = 5.0  # seconds between SIGTERM and SIGKILL
 KILL_WAIT = 2.0  # seconds a stop waits for killed members to vanish before it names survivors
 POLL = 0.1
 TOKEN_ENV = "HARNESS_JOB_TOKEN"
+SYSTEM_PS = next(
+    (
+        str(path)
+        for directory in ("/bin", "/usr/bin", "/usr/sbin", "/sbin")
+        if os.access(path := Path(directory) / "ps", os.X_OK) and path.is_file()
+    ),
+    None,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +69,9 @@ def _norm(text: str) -> str:
 
 def _run(args: list[str], *, any_status: bool = False, timeout: float = 10.0) -> str | None:
     """Standard output of a read-only helper, run from `/` so it never lies inside a job's directory."""
+    if args[0] != "ps" or SYSTEM_PS is None:
+        return None
+    args = [SYSTEM_PS, *args[1:]]
     env = {**os.environ, "LC_ALL": "C"}
     try:
         done = subprocess.run(

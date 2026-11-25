@@ -469,6 +469,8 @@ def start(command: list[str], out: Callable[[str], None] = print) -> int:
     """Start `command` as a detached job; return the exit status (0, 1 failed start, 2 refusal)."""
     if tmux_path() is None:
         raise Refused("tmux is missing: install tmux; no command was run")
+    if job_containment.SYSTEM_PS is None:
+        raise Refused("ps is missing from system directories; no command was run")
     global _launch_deadline
     deadline = time.monotonic() + START_WAIT
     cwd = str(Path.cwd())
@@ -767,6 +769,9 @@ def stop(job_id: str, out: Callable[[str], None] = print) -> int:
         update_record(path, note)
     for survivor in survivors:
         out(f"survivor: pid {survivor['pid']} started {survivor['start']}  {survivor['command'][:100]}")
+    if survivors:
+        out(f"job {job_id} still has surviving processes")
+        return 3
     deadline = time.monotonic() + FINISH_WAIT
     while time.monotonic() < deadline:
         if read_record(path)["state"] == "finished":

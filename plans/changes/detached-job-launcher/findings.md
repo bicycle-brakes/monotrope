@@ -543,8 +543,8 @@ Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | fix-r4 | scripts/jobs.py:761–774 | If a process survives the stop attempt but the wrapper has recorded its end, `stop` prints the survivor and then returns exit 0 with `stopped`. The command tree remains alive despite the successful result; stop must end the job’s processes. [AC 3] | Codex | taken — criterion 3: stop returns a nonzero exit (not `stopped`) whenever job_containment.end names a survivor, even when the wrapper has recorded its end; the survivors stay in the record and the output | — |
-| F-2 | MAJOR | SPEC | fix-r4 | scripts/jobs.py:558–570; scripts/job_containment.py:62–82 | If the caller’s `PATH` does not contain `ps`, an executable supplied by absolute path can start successfully, but both recorded process start times are `null`. The running job is then reported as lost and stop refuses it. The job must retain usable process identities and remain stoppable. [AC 3, AC 4, AC 17] | Codex | taken — structural (one choke point): every system tool the launcher and job_containment run (ps, lsof if any, tmux excepted) is resolved once from fixed system directories (/bin, /usr/bin, /usr/sbin, /sbin), never from the caller's PATH; when ps cannot be found there, start refuses before launching instead of recording null start times | — |
+| F-1 | MAJOR | SPEC | fix-r4 | scripts/jobs.py:761–774 | If a process survives the stop attempt but the wrapper has recorded its end, `stop` prints the survivor and then returns exit 0 with `stopped`. The command tree remains alive despite the successful result; stop must end the job’s processes. [AC 3] | Codex | fixed — tests/test_jobs.py::test_stop_reports_survivors_even_after_wrapper_finishes | — |
+| F-2 | MAJOR | SPEC | fix-r4 | scripts/jobs.py:558–570; scripts/job_containment.py:62–82 | If the caller’s `PATH` does not contain `ps`, an executable supplied by absolute path can start successfully, but both recorded process start times are `null`. The running job is then reported as lost and stop refuses it. The job must retain usable process identities and remain stoppable. [AC 3, AC 4, AC 17] | Codex | fixed — tests/test_jobs.py::test_system_ps_ignores_caller_path_and_missing_ps_refuses_start | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -552,3 +552,7 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a2130d-62e0-7113-a93a-5baaf5b3ba83, 2026-11-25
 Reviewer session: codex 01a2130d-62e0-7113-a93a-5baaf5b3ba83 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5887 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged

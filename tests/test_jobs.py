@@ -905,3 +905,39 @@ def test_token_membership_uses_environment_not_arguments(monkeypatch) -> None:
     assert backend.token_holders(token) == set(), "an argv entry is not an environment entry"
     data += token.encode() + b"\0"
     assert backend.token_holders(token) == {100, 200, 300, 400}
+
+
+@pytest.mark.usefixtures("state")
+def test_stop_reports_survivors_even_after_wrapper_finishes(monkeypatch, capsys):
+    me = os.getpid()
+    monkeypatch.setattr(jobs, "alive", lambda _pid, _start: True)
+    job_id = synthetic(command_pid=me, command_start=OLD_START)
+    survivor = {"pid": me, "start": OLD_START, "command": "survivor"}
+
+    def end(_record, _others, send):
+        assert callable(send)
+        jobs.update_record(record_path(job_id), lambda rec: rec.update(state="finished"))
+        return [survivor]
+
+    monkeypatch.setattr(job_containment, "end", end)
+    result = jobs.stop(job_id)
+    output = capsys.readouterr().out
+    assert result != 0
+    assert "stopped " not in output
+    assert "survivor" in output
+    assert jobs.read_record(record_path(job_id))["survivors"] == [survivor]
+
+
+@pytest.mark.usefixtures("detached")
+def test_system_ps_ignores_caller_path_and_missing_ps_refuses_start(monkeypatch, capsys):
+    monkeypatch.setenv("PATH", "/nonexistent")
+    code, output = start_job(capsys, *SLEEPER)
+    assert code == 0
+    job_id = started_id(output)
+    record = jobs.read_record(record_path(job_id))
+    assert record["command_start"] and record["wrapper_start"]
+    assert jobs.effective_state(record) == "running"
+    assert jobs.stop(job_id) == 0
+    monkeypatch.setattr(job_containment, "SYSTEM_PS", None, raising=False)
+    with pytest.raises(jobs.Refused, match="ps"):
+        jobs.start(SLEEPER)
