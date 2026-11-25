@@ -20,7 +20,10 @@ and ``tool_input`` (``command`` for ``Bash``); ask and deny are answered as
 exit 0 with no output.
 
 Antigravity: the shell tool is ``run_command``. Its hook payload and result
-form are taken here as the research recorded them and are confirmed only by the
+form follow the agy hooks documentation read on 2026-11-25 (``toolCall.name`` and
+``toolCall.args.CommandLine`` on stdin; ``decision`` allow, deny, ask or force_ask on
+stdout; the hook starts in the folder that holds ``hooks.json``), not this change's
+research, which had not read it; they are confirmed on the machine only by the
 one-time host check the policy documentation records; until then the adapter
 reads the tool name and command under the spellings below, expresses ask on stdout,
 and answers a deny both as ``{"decision": "deny"}`` on
