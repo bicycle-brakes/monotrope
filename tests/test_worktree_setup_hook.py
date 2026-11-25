@@ -227,6 +227,7 @@ def lane(tmp_path: Path) -> Lane:
         ["add", "-A"],
         ["commit", "-q", "-m", "init"],
         ["config", "core.hooksPath", str(hooks)],
+        ["update-ref", "refs/remotes/origin/main", "HEAD"],
     ):
         proc = subprocess.run(["git", *args], cwd=main, env=env, capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
@@ -242,7 +243,11 @@ def _starts(stderr: str) -> list[str]:
 
 
 def _results(stderr: str) -> list[str]:
-    return [line for line in stderr.splitlines() if line.startswith("lane setup: result")]
+    return [
+        line
+        for line in stderr.splitlines()
+        if line == "lane setup: ok" or (line.startswith("lane setup: failed (") and line.endswith(" checks)"))
+    ]
 
 
 def _assert_no_setup(lane: Lane, stderr: str) -> None:
@@ -398,7 +403,7 @@ def test_setup_finishes_before_worktree_add_returns(lane: Lane) -> None:
     assert lane.record("make-woke") == ["woke"]
     assert lane.record("pi") == [f"{worktree}|--version"]
     log = lane.log(worktree).read_text(encoding="utf-8")
-    assert "lane setup: result" in log
+    assert "lane setup: ok" in log or "lane setup: failed (" in log
 
 
 # Criterion 11
@@ -472,3 +477,88 @@ def test_only_one_opts_out(lane: Lane, value: str | None) -> None:
     assert lane.record("make") == [f"{worktree}|venv"]
     assert lane.record("pi") == [f"{worktree}|--version"]
     assert len(_starts(proc.stderr)) == 1, proc.stderr
+
+
+# ---------------------------------------------------------------------------
+# Review-loop round 2 (hand finish by the orchestrator, 2026-11-25)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "abc"])
+def test_invalid_limit_falls_back_with_one_warning(lane: Lane, value: str) -> None:
+    """L2-1 (decisions S-8): an invalid limit falls back to 600 and says so once."""
+    proc, _ = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT=value)
+    warnings = [line for line in proc.stderr.splitlines() if line.startswith("lane setup: warning:")]
+    assert len(warnings) == 1, proc.stderr
+    assert f"HARNESS_LANE_SETUP_TIMEOUT={value}" in warnings[0] and "using 600" in warnings[0], proc.stderr
+
+
+def test_summary_uses_the_decided_forms(lane: Lane) -> None:
+    """L2-10 (decisions S-7): 'lane setup: ok' / 'lane setup: failed (N checks)', then the log path."""
+    ok, _ = lane.add_worktree("good")
+    lines = ok.stderr.splitlines()
+    assert "lane setup: ok" in lines, ok.stderr
+    assert lines[lines.index("lane setup: ok") + 1].startswith("lane setup: log: "), ok.stderr
+    bad, _ = lane.add_worktree("bad", STUB_INSTALL_FAIL="1", STUB_YAML_FAIL="1")
+    assert "lane setup: failed (2 checks)" in bad.stderr.splitlines(), bad.stderr
+
+
+def test_every_failure_line_names_the_retry_command(lane: Lane) -> None:
+    """L2-15: a failed setup names the deliberate rerun, and the rerun works."""
+    proc, path = lane.add_worktree(STUB_INSTALL_FAIL="1")
+    failures = _failures(proc.stderr)
+    assert failures and all("retry: bash .beads/hooks/post-checkout --lane-setup" in f for f in failures), proc.stderr
+    rerun = lane.run_hook(path, "--lane-setup")
+    assert rerun.returncode == 0, rerun.stderr
+    assert "lane setup: ok" in rerun.stderr.splitlines(), rerun.stderr
+    assert len(lane.record("install")) == 2
+
+
+def test_untrusted_state_is_skipped_and_can_be_set_up_deliberately(lane: Lane) -> None:
+    """L2-5 (maintainer, security): a state off origin/main that changes the setup inputs is not run."""
+    assert lane.git("checkout", "-q", "-b", "foreign").returncode == 0
+    (lane.main / "Makefile").write_text("venv:\n\t@echo foreign\n", encoding="utf-8")
+    assert lane.git("add", "Makefile").returncode == 0
+    assert lane.git("commit", "-q", "-m", "foreign makefile").returncode == 0
+    assert lane.git("checkout", "-q", "main").returncode == 0
+    path = lane.root / "foreign-lane"
+    proc = lane.git("worktree", "add", "-q", str(path), "foreign")
+    assert proc.returncode == 0, proc.stderr
+    assert any(line.startswith("lane setup: skipped:") for line in proc.stderr.splitlines()), proc.stderr
+    assert lane.record("make") == [], "an untrusted Makefile ran"
+    rerun = lane.run_hook(path, "--lane-setup")
+    assert lane.record("make"), rerun.stderr
+
+
+def test_a_trusted_branch_with_unchanged_inputs_is_set_up(lane: Lane) -> None:
+    """L2-5: a new branch whose setup inputs equal origin/main's is trusted."""
+    proc, _ = lane.add_worktree("own")
+    assert not any(line.startswith("lane setup: skipped:") for line in proc.stderr.splitlines()), proc.stderr
+    assert lane.record("make"), proc.stderr
+
+
+def test_without_perl_the_unenforced_limit_is_named(lane: Lane, tmp_path: Path) -> None:
+    """L2-11: without perl the hook says the per-step limit is not enforced."""
+    nopl = tmp_path / "noperl-bin"
+    nopl.mkdir()
+    for folder in os.environ.get("PATH", "").split(os.pathsep):
+        if not folder or not Path(folder).is_dir():
+            continue
+        for entry in Path(folder).iterdir():
+            target = nopl / entry.name
+            if entry.name.startswith("perl") or target.exists():
+                continue
+            try:
+                target.symlink_to(entry)
+            except OSError:
+                continue
+    path_env = os.pathsep.join([lane.env["PATH"].split(os.pathsep)[0], str(nopl)])
+    proc, _ = lane.add_worktree(PATH=path_env)
+    assert any("perl not found" in line and "not enforced" in line for line in proc.stderr.splitlines()), proc.stderr
+
+
+def test_a_step_never_started_names_the_step_that_used_the_budget(lane: Lane) -> None:
+    """L2-20: when the limit is spent, the next step is reported as not started, naming the previous one."""
+    proc, _ = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT="1", STUB_MAKE_SLEEP="3")
+    text = proc.stderr
+    assert "not started" in text and "used up by make venv" in text or "make venv timed out" in text, text

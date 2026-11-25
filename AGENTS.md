@@ -154,7 +154,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
   A worktree lives under `.claude/worktrees/<name>`, is branched from a freshly fetched `origin/main`,
   and is removed after the merge; tracker access, claims and sibling directories: `docs/WORKFLOW.md` §3.
-  Each new checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  A new worktree is set up by `.beads/hooks/post-checkout` (venv and pinned Pi, only for a state on `origin/main` or with unchanged setup inputs; `HARNESS_NO_LANE_SETUP=1` skips it; `bash .beads/hooks/post-checkout --lane-setup` reruns it); otherwise run `make venv` and `bash tools/pi/install.sh` once before `make verify`
   (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
