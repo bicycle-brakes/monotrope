@@ -32,7 +32,7 @@ At the worktree examined on 2026-11-25, `scripts/stage2_availability.py` imports
 1. When an intelligence fetch or response raises an exception, the status uses the redactor on the runner supplied by the caller.
    *Refuted by:* a substituted runner redactor is not called or its result is absent from the status.
 2. When an intelligence fetch or response raises an exception containing credential material, the returned reading keeps the existing redaction and `not read` status behavior.
-   *Refuted by:* a credential fragment appears in the reading, or the error is propagated instead of returning a `not read` reading.
+   *Refuted by:* the whole credential or a fragment of eight or more characters appears in the reading, or the error is propagated instead of returning a `not read` reading. Fragments shorter than eight characters are outside this criterion.
 3. While the availability module is loaded or executed, its source contains no `import stage2` or `from stage2 import` statement at any nesting depth.
    *Refuted by:* either form appears at module level or inside a function.
 4. When intelligence data is read successfully, matching scores and per-model reasons retain their existing behavior.
@@ -57,4 +57,4 @@ At the worktree examined on 2026-11-25, `scripts/stage2_availability.py` imports
 
 ## Open decisions
 
-None open. [DETAIL] The reader takes a keyword-only runner and the import guard inspects Python syntax, as recorded in `decisions.md`; these follow the existing runner-passing pattern and catch function-local imports.
+None open. [DETAIL] The reader takes a keyword-only runner and the import guard inspects Python syntax, as recorded in `decisions.md`; these follow the existing runner-passing pattern and catch function-local imports. The redaction refutation uses the existing eight-character fragment threshold rather than requiring a stronger redactor (`decisions.md`, D-4).
