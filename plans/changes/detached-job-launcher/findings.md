@@ -517,3 +517,18 @@ Reviewer session: codex 01a212bd-e865-7ae0-95bf-82c672739439 — a fresh session
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5877 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/detached-job-launcher/design.md, plans/changes/detached-job-launcher/plan.md, plans/changes/detached-job-launcher/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1204 files, 5882 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | BLOCKER | MAINT | base | scripts/job_containment.py:126 | Stopping a job can terminate an unrelated process whose command-line arguments contain `HARNESS_JOB_TOKEN=<job-id>`. The token check searches the combined command and environment text returned by `ps`, so it treats that argument as proof of job membership and signals the process. The process may have no connection to the job. [Criterion 3; Boundary] | Codex | taken — structural (standing grant 2026-11-25; one choke point for token membership): PsBackend.token_holders reads each process's environment separately from its arguments — on macOS through sysctl KERN_PROCARGS2 (argc, then argv, then the environment block), on Linux through /proc/<pid>/environ — and a process is a token holder only when one environment entry equals exactly HARNESS_JOB_TOKEN=<job-id>; the combined `ps eww` text is no longer read; a process whose environment cannot be read is not a token holder; an argument containing the token never makes a member | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — catches without switch: yes, the assertion detects the same inherited-admission fault if introduced in the launcher.
+
+Phase 6 verdict: codex 01a212ef-babf-71a0-8c94-06cd8138ea2f, 2026-11-25
+Reviewer session: codex 01a212ef-babf-71a0-8c94-06cd8138ea2f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
