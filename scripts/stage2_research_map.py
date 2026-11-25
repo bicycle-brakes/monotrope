@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from datetime import date
 from pathlib import PurePosixPath
@@ -88,10 +89,22 @@ def _bad_json_constant(_value):
     raise ResearchMapError("non-finite finder/merge JSON value")
 
 
+def _finite_json_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        _bad_json_constant(value)
+    return number
+
+
 def _entries(report, *, merged=False):
     if isinstance(report, str):
         try:
-            report = json.loads(report, object_pairs_hook=_json_object, parse_constant=_bad_json_constant)
+            report = json.loads(
+                report,
+                object_pairs_hook=_json_object,
+                parse_constant=_bad_json_constant,
+                parse_float=_finite_json_float,
+            )
         except (ValueError, RecursionError) as error:
             raise ResearchMapError("invalid finder/merge JSON") from error
     if not isinstance(report, dict) or set(report) != set(CATEGORIES):
@@ -121,9 +134,203 @@ def _entries(report, *, merged=False):
     return result
 
 
-def validate_locator_report(report):
-    """A finder answer that is exactly the four locator lists; raises ResearchMapError otherwise."""
-    _entries(report)
+def validate_locator_report(report, schema):
+    """A finder answer that matches the shared locator schema; raises ResearchMapError otherwise (Q-3).
+
+    Every rule comes from the interpreted schema the finder calls receive, never from a
+    second copy of it: an outer-shape fault raises, an entry fault is reported as such.
+    """
+    _retained, rows = filter_locator_report(report, schema)
+    if rows:
+        row = rows[0]
+        raise ResearchMapError(
+            f"invalid entry at index {row['index']} of '{row['category']}': {'; '.join(row['errors'])}"
+        )
+
+
+FILTERED_MARKER = "every entry of this category was dropped by locator validation (finder-partial-report)"
+
+# The keywords the small interpreter below supports (decisions.md S-13, S-18): anything
+# else in the schema file is refused, so an edit cannot be silently ignored.
+_SCHEMA_ANNOTATIONS = frozenset({"description", "title", "$schema"})
+_SCHEMA_OBJECT_KEYWORDS = frozenset({"type", "properties", "required", "additionalProperties"}) | _SCHEMA_ANNOTATIONS
+_SCHEMA_ARRAY_KEYWORDS = frozenset({"type", "items", "minItems"}) | _SCHEMA_ANNOTATIONS
+_SCHEMA_ANYOF_KEYWORDS = frozenset({"anyOf"}) | _SCHEMA_ANNOTATIONS
+_SCHEMA_STRING_KEYWORDS = frozenset({"type", "pattern"}) | _SCHEMA_ANNOTATIONS
+
+
+def _check_schema_keywords(schema, allowed, where):
+    unknown = sorted(set(schema) - allowed)
+    if unknown:
+        raise ResearchMapError(f"{where} uses the unsupported schema keyword: {unknown[0]}")
+
+
+def interpret_locator_schema(value):
+    """Compile the one locator schema for finder validation and filtering (Q-3, S-13).
+
+    ``value`` is the schema text or its parsed object; the compiled form carries the
+    categories, their non-empty list rule and every entry form. A missing, malformed
+    or unsupported schema raises ``ResearchMapError`` (S-17), never a silent default.
+    """
+    if isinstance(value, str | bytes):
+        try:
+            value = json.loads(value, parse_constant=_bad_json_constant, parse_float=_finite_json_float)
+        except ValueError as error:
+            raise ResearchMapError(f"the locator schema is not valid JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise ResearchMapError("the locator schema must be a JSON object")
+    _check_schema_keywords(value, _SCHEMA_OBJECT_KEYWORDS, "the locator schema")
+    if value.get("type") != "object":
+        raise ResearchMapError("the locator schema must hold an object")
+    if value.get("additionalProperties") is not False:
+        raise ResearchMapError("the locator schema must close its properties")
+    properties, required = value.get("properties"), value.get("required")
+    if not isinstance(properties, dict) or not properties:
+        raise ResearchMapError("the locator schema needs its category properties")
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(name, str) for name in required)
+        or set(required) != set(properties)
+    ):
+        raise ResearchMapError("the locator schema must require every category")
+    if set(properties) != set(CATEGORIES):
+        raise ResearchMapError("the locator schema categories must match the merge categories")
+    categories = {name: _category_schema(name, item) for name, item in properties.items()}
+    return {"categories": categories}
+
+
+def _category_schema(name, schema):
+    where = f"the locator schema category '{name}'"
+    if not isinstance(schema, dict):
+        raise ResearchMapError(f"{where} must be a JSON object")
+    _check_schema_keywords(schema, _SCHEMA_ARRAY_KEYWORDS, where)
+    if schema.get("type") != "array":
+        raise ResearchMapError(f"{where} must hold an array")
+    minimum = schema.get("minItems")
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
+        raise ResearchMapError(f"{where} must require at least one entry")
+    items = schema.get("items")
+    if not isinstance(items, dict):
+        raise ResearchMapError(f"{where} must describe its items")
+    _check_schema_keywords(items, _SCHEMA_ANYOF_KEYWORDS, where)
+    forms = items.get("anyOf")
+    if not isinstance(forms, list) or not forms:
+        raise ResearchMapError(f"{where} needs at least one entry form")
+    branches = [_entry_form(f"{where} entry form {number}", form) for number, form in enumerate(forms, 1)]
+    return {"min_items": minimum, "branches": branches}
+
+
+def _entry_form(where, schema):
+    if not isinstance(schema, dict):
+        raise ResearchMapError(f"{where} must be a JSON object")
+    _check_schema_keywords(schema, _SCHEMA_OBJECT_KEYWORDS, where)
+    if schema.get("type") != "object" or schema.get("additionalProperties") is not False:
+        raise ResearchMapError(f"{where} must be a closed object")
+    properties, required = schema.get("properties"), schema.get("required")
+    if not isinstance(properties, dict) or not properties:
+        raise ResearchMapError(f"{where} needs its fields")
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(name, str) for name in required)
+        or not set(required) <= set(properties)
+    ):
+        raise ResearchMapError(f"{where} must require known fields")
+    fields = {name: _field_schema(f"{where} field '{name}'", item) for name, item in properties.items()}
+    return {"required": set(required), "fields": fields}
+
+
+def _field_schema(where, schema):
+    if not isinstance(schema, dict):
+        raise ResearchMapError(f"{where} must be a JSON object")
+    _check_schema_keywords(schema, _SCHEMA_STRING_KEYWORDS, where)
+    if schema.get("type") != "string":
+        raise ResearchMapError(f"{where} must hold a string")
+    pattern = schema.get("pattern")
+    if pattern is None:
+        return None
+    if not isinstance(pattern, str):
+        raise ResearchMapError(f"{where} needs its pattern as text")
+    try:
+        return re.compile(pattern)
+    except re.error as error:
+        raise ResearchMapError(f"{where} has an unusable pattern: {error}") from error
+
+
+def _entry_faults(entry, branches):
+    """The faults of one entry against the schema's entry forms; empty when one form matches.
+
+    Keys that identify one form select that form. Otherwise use the closest form
+    (fewest faults, schema order on a tie).
+    """
+    if not isinstance(entry, dict):
+        return ["the entry must be a JSON object"]
+    closest = None
+    aimed = [branch for branch in branches if set(entry) & set(branch["fields"])]
+    preferred = branches[0] if not entry else aimed[0] if len(aimed) == 1 else None
+    preferred_faults = None
+    for branch in branches:
+        foreign = sorted(set(entry) - set(branch["fields"]))
+        faults = [f"the field '{name}' is not part of the entry form" for name in foreign]
+        faults += [f"the required field '{name}' is missing" for name in sorted(branch["required"] - set(entry))]
+        for name, value in sorted(entry.items()):
+            if name not in branch["fields"]:  # already faulted as foreign to this form
+                continue
+            pattern = branch["fields"][name]
+            if not isinstance(value, str):
+                faults.append(f"the field '{name}' must be a string")
+            elif pattern is not None and pattern.search(value) is None:
+                faults.append(f"the field '{name}' does not match the schema pattern")
+        if not faults:
+            return []
+        if branch is preferred:
+            preferred_faults = faults
+        if closest is None or len(faults) < len(closest):
+            closest = faults
+    return preferred_faults or closest or ["the entry matches no entry form of the schema"]
+
+
+def filter_locator_report(report, schema):
+    """Split a finder answer into the entries that survive locator validation and the dropped rows (Q-2).
+
+    An outer-shape fault raises ``ResearchMapError`` and stops the run as today (S-2,
+    S-6); a fault inside one entry drops that entry and records its exact errors. A
+    category whose entries are all dropped keeps the fixed unread marker, so the merge
+    reproduces the retained report exactly (S-7). Path and reference form stay with the
+    existing merge resolution (S-19).
+    """
+    shape = schema.get("categories") if isinstance(schema, dict) else None
+    if not shape:
+        raise ResearchMapError("finder filtering needs the interpreted locator schema")
+    if isinstance(report, str):
+        try:
+            report = json.loads(
+                report,
+                object_pairs_hook=_json_object,
+                parse_constant=_bad_json_constant,
+                parse_float=_finite_json_float,
+            )
+        except (ValueError, RecursionError) as error:
+            raise ResearchMapError("invalid finder JSON") from error
+    if not isinstance(report, dict) or set(report) != set(shape):
+        raise ResearchMapError("the finder answer must hold exactly the schema's locator categories")
+    retained, rows = {}, []
+    kept_count = 0
+    for category, compiled in shape.items():
+        values = report[category]
+        if not isinstance(values, list) or len(values) < compiled["min_items"]:
+            raise ResearchMapError("locator category needs entries or an explicit not_read marker")
+        kept = []
+        for index, entry in enumerate(values):
+            faults = _entry_faults(entry, compiled["branches"])
+            if faults:
+                rows.append({"category": category, "index": index, "entry": entry, "errors": faults})
+            else:
+                kept.append(entry)
+        kept_count += len(kept)
+        retained[category] = kept or [{"not_read": FILTERED_MARKER}]
+    if not kept_count:
+        raise ResearchMapError("finder report has no valid entries after locator validation")
+    return retained, rows
 
 
 def _origin(entry):

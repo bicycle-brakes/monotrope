@@ -15,11 +15,13 @@ Two failure shapes are meant to snag here, both measured:
 from __future__ import annotations
 
 import ast
+import builtins
 import contextlib
 import copy
 import fcntl
 import functools
 import hashlib
+import io
 import json
 import os
 import re
@@ -3529,8 +3531,13 @@ def test_the_archived_landing_page_is_not_wired_to_anything() -> None:
 # --------------------------------------------------------------------------
 
 
-def _scripts() -> list[Path]:
-    ordner = REPO_ROOT / "scripts"
+def _scripts(root: Path = REPO_ROOT) -> list[Path]:
+    """The script inventory: top-level `*.py` and `*.sh` under `<root>/scripts/`, without `test_*`, not recursive.
+
+    `root` exists for the orphan control test, which aims the real glob at a
+    temporary tree; every real check uses the default, the checkout itself.
+    """
+    ordner = root / "scripts"
     kandidaten = list(ordner.glob("*.py")) + list(ordner.glob("*.sh"))
     return sorted(p for p in kandidaten if not p.name.startswith("test_"))
 
@@ -3565,7 +3572,9 @@ def test_every_script_has_a_caller_or_a_declared_reason() -> None:
     ci = CI_FILE.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
 
-    heimatlos = _heimatlose_namen([p.name for p in _scripts()], ci, runner, OHNE_AUFRUFER)
+    inventar = _scripts()
+    assert inventar, "the script inventory is empty — this check ran over the empty set"
+    heimatlos = _heimatlose_namen([p.name for p in inventar], ci, runner, OHNE_AUFRUFER)
     assert not heimatlos, (
         "Without a caller and without a reason:\n  "
         + "\n  ".join(heimatlos)
@@ -3602,7 +3611,7 @@ def test_an_orphan_shell_script_gets_flagged() -> None:
     )
 
 
-def test_the_glob_itself_finds_a_real_orphan_shell_script() -> None:
+def test_the_glob_itself_finds_a_real_orphan_shell_script(tmp_path: Path) -> None:
     """The second half of the control test: not only the derivation, also the glob.
 
     The previous test sends an invented name directly through
@@ -3611,26 +3620,341 @@ def test_the_glob_itself_finds_a_real_orphan_shell_script() -> None:
     (round 2), `_scripts()` globbed only `*.py`; a `.sh` would never have
     reached the candidate list, however the decision would have turned out.
 
-    Hence a real `.sh` without a caller under `scripts/` here — created and
-    deleted again within this test, so that none of it is committed and the kit
-    probe (`scripts/kit/probe.py`) never gets a look at it: the probe copies
-    according to `git ls-files`, and an untracked file does not exist for it.
+    Hence a real `.sh` without a caller — under `scripts/` of a temporary tree
+    outside the checkout (bead coding-harness-bxxt.12). Until 2026-11-25 it was
+    created in the checkout's own `scripts/`, and parallel tests enumerating
+    that directory, among them the kit probe, could see it in the window before
+    it was deleted. The glob and the classification are the real ones; only the
+    tree the glob is aimed at is temporary. The caller inputs stay the
+    checkout's `ci.yml`, `verify_all.sh` and `OHNE_AUFRUFER`, read only.
     """
-    ziel = REPO_ROOT / "scripts" / "verwaistes_werkzeug__test_ci_nie_committen.sh"
-    ziel.write_text("#!/bin/sh\necho nie aufgerufen\n", encoding="utf-8")
-    try:
-        from ci_gates import OHNE_AUFRUFER
+    assert not _inside(tmp_path, REPO_ROOT), f"the temporary tree {tmp_path} lies inside the checkout"
+    ziel, heimatlos = _run_orphan_control(tmp_path)
+    assert not _inside(ziel, REPO_ROOT), f"the orphan {ziel} was created inside the checkout"
+    assert ziel.name in heimatlos, (
+        f"{ziel.name} lies under scripts/, has no caller and no "
+        "declared reason — yet the check does not report it. The "
+        "glob in _scripts() sees no *.sh files."
+    )
 
-        ci = CI_FILE.read_text(encoding="utf-8")
-        runner = RUNNER.read_text(encoding="utf-8")
-        heimatlos = _heimatlose_namen([p.name for p in _scripts()], ci, runner, OHNE_AUFRUFER)
-        assert ziel.name in heimatlos, (
-            f"{ziel.name} lies under scripts/, has no caller and no "
-            "declared reason — yet the check does not report it. The "
-            "glob in _scripts() sees no *.sh files."
-        )
+
+_ORPHAN_NAME = "verwaistes_werkzeug__test_ci_nie_committen.sh"
+_THIS_MODULE = sys.modules[__name__]
+
+
+def _run_orphan_control(tree: Path) -> tuple[Path, list[str]]:
+    """Plant the orphan under `<tree>/scripts/`, glob that tree, classify against the checkout's caller inputs.
+
+    `_scripts` and `_heimatlose_namen` are looked up at call time, so a test can
+    swap either for a faulty one and see the control test fail.
+    """
+    from ci_gates import OHNE_AUFRUFER
+
+    ordner = tree / "scripts"
+    ordner.mkdir(parents=True, exist_ok=True)
+    ziel = ordner / _ORPHAN_NAME
+    ziel.write_text("#!/bin/sh\necho nie aufgerufen\n", encoding="utf-8")
+    ci = CI_FILE.read_text(encoding="utf-8")
+    runner = RUNNER.read_text(encoding="utf-8")
+    return ziel, _heimatlose_namen([p.name for p in _scripts(tree)], ci, runner, OHNE_AUFRUFER)
+
+
+def _inside(path: Path, root: Path) -> bool:
+    """Whether `path` is `root` or lies below it, after symlinks (macOS: /var is /private/var)."""
+    echt = Path(os.path.realpath(path))
+    wurzel = Path(os.path.realpath(root))
+    return echt == wurzel or wurzel in echt.parents
+
+
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
+
+
+@contextlib.contextmanager
+def _write_watcher() -> Iterator[list[tuple[str, Path]]]:
+    """Record every attempted write or creation through Python's file operations, as (operation, real path).
+
+    Watched: `Path.write_text`, `Path.write_bytes`, built-in and `io.open` in a
+    write mode, `os.open` with a write or create flag, `os.replace`,
+    `os.rename`, `Path.touch` and `Path.mkdir`. An attempt is recorded before it
+    runs, so a file removed later is still seen. Native writes outside these
+    Python file APIs are not seen — a limit of this watcher.
+    """
+    gesehen: list[tuple[str, Path]] = []
+
+    def notiere(operation: str, ziel: object, dir_fd: object = None) -> None:
+        if isinstance(ziel, int):
+            return
+        try:
+            roh = os.fsdecode(os.fspath(ziel))  # type: ignore[arg-type]
+        except TypeError:
+            return
+        if dir_fd is not None:
+            operation += " (unresolved dir_fd)"
+        gesehen.append((operation, Path(os.path.realpath(roh))))
+
+    def schreibmodus(mode: object) -> bool:
+        return isinstance(mode, str) and any(zeichen in mode for zeichen in "wax+")
+
+    builtin_open = builtins.open
+    io_open = io.open
+    os_open = os.open
+    os_replace = os.replace
+    os_rename = os.rename
+    write_text = Path.write_text
+    write_bytes = Path.write_bytes
+    touch = Path.touch
+    mkdir = Path.mkdir
+
+    def watched_builtin_open(file: object, mode: str = "r", *args: object, **kwargs: object) -> object:
+        if schreibmodus(mode):
+            notiere(f"open({mode!r})", file)
+        return builtin_open(file, mode, *args, **kwargs)  # type: ignore[call-overload]
+
+    def watched_io_open(file: object, mode: str = "r", *args: object, **kwargs: object) -> object:
+        if schreibmodus(mode):
+            notiere(f"io.open({mode!r})", file)
+        return io_open(file, mode, *args, **kwargs)  # type: ignore[call-overload]
+
+    def watched_os_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if flags & _WRITE_FLAGS:
+            notiere("os.open", path, kwargs.get("dir_fd"))
+        return os_open(path, flags, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_os_replace(src: object, dst: object, *args: object, **kwargs: object) -> None:
+        notiere("os.replace", src, kwargs.get("src_dir_fd"))
+        notiere("os.replace", dst, kwargs.get("dst_dir_fd"))
+        os_replace(src, dst, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_os_rename(src: object, dst: object, *args: object, **kwargs: object) -> None:
+        notiere("os.rename", src, kwargs.get("src_dir_fd"))
+        notiere("os.rename", dst, kwargs.get("dst_dir_fd"))
+        os_rename(src, dst, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_write_text(self: Path, *args: object, **kwargs: object) -> int:
+        notiere("Path.write_text", self)
+        return write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_write_bytes(self: Path, *args: object, **kwargs: object) -> int:
+        notiere("Path.write_bytes", self)
+        return write_bytes(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_touch(self: Path, *args: object, **kwargs: object) -> None:
+        notiere("Path.touch", self)
+        touch(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    def watched_mkdir(self: Path, *args: object, **kwargs: object) -> None:
+        notiere("Path.mkdir", self)
+        mkdir(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(builtins, "open", watched_builtin_open)
+        mp.setattr(io, "open", watched_io_open)
+        mp.setattr(os, "open", watched_os_open)
+        mp.setattr(os, "replace", watched_os_replace)
+        mp.setattr(os, "rename", watched_os_rename)
+        mp.setattr(Path, "write_text", watched_write_text)
+        mp.setattr(Path, "write_bytes", watched_write_bytes)
+        mp.setattr(Path, "touch", watched_touch)
+        mp.setattr(Path, "mkdir", watched_mkdir)
+        yield gesehen
+
+
+def _writes_inside(gesehen: list[tuple[str, Path]], root: Path) -> list[str]:
+    """The watcher's report: every recorded attempt whose target lies in `root`."""
+    return [
+        f"{operation} {ziel}"
+        for operation, ziel in gesehen
+        if " (unresolved dir_fd)" in operation or _inside(ziel, root)
+    ]
+
+
+def _standin_target_problems(ziel: Path, standin: Path) -> list[str]:
+    """Why a planted target is unsafe: it must lie in the stand-in and outside the real checkout."""
+    probleme: list[str] = []
+    if not _inside(ziel, standin):
+        probleme.append(f"{ziel} lies outside the stand-in {standin}")
+    if _inside(ziel, REPO_ROOT):
+        probleme.append(f"{ziel} lies inside the real checkout")
+    return probleme
+
+
+def test_orphan_control_does_not_write_to_checkout(tmp_path: Path) -> None:
+    """Criteria 1 and 5 (bead coding-harness-bxxt.12): the control test writes nothing into the checkout.
+
+    Not only `scripts/`: any watched write anywhere in the checkout counts,
+    including a temporary directory and a file removed before the test ends.
+    """
+    with _write_watcher() as gesehen:
+        test_the_glob_itself_finds_a_real_orphan_shell_script(tmp_path)
+    assert any(ziel.name == _ORPHAN_NAME for _, ziel in gesehen), (
+        "the watcher saw not even the orphan's own write — it was not active, and this test proves nothing"
+    )
+    im_checkout = _writes_inside(gesehen, REPO_ROOT)
+    assert not im_checkout, "the control test writes into the checkout:\n  " + "\n  ".join(im_checkout)
+
+
+@pytest.mark.parametrize("operation", ["open", "rename_src", "rename_dst", "replace_src", "replace_dst"])
+def test_orphan_write_watcher_rejects_dir_fd_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    """A descriptor-relative write cannot be located reliably and must fail closed."""
+    standin = tmp_path / "standin"
+    standin.mkdir()
+    (standin / "source").write_text("source", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "source").write_text("source", encoding="utf-8")
+    monkeypatch.chdir(outside)
+    fd = os.open(standin, os.O_RDONLY)
+    try:
+        with _write_watcher() as gesehen:
+            if operation == "open":
+                os.close(os.open("created", os.O_WRONLY | os.O_CREAT, 0o644, dir_fd=fd))
+            elif operation.endswith("src"):
+                getattr(os, operation.split("_")[0])("source", "destination", src_dir_fd=fd)
+            else:
+                getattr(os, operation.split("_")[0])("source", "destination", dst_dir_fd=fd)
+        assert _writes_inside(gesehen, standin), f"descriptor-relative {operation} was not reported"
     finally:
-        ziel.unlink(missing_ok=True)
+        os.close(fd)
+
+
+def test_orphan_write_watcher_detects_standin_write(tmp_path: Path) -> None:
+    """Criteria 6 and 7: a control aimed at a stand-in repository's `scripts/` is reported by the watcher.
+
+    The stand-in plays the checkout; the planted fault is the control writing
+    its orphan into the stand-in's own `scripts/`. Before it runs, the target is
+    checked to lie inside the stand-in and outside the real checkout.
+    """
+    standin = tmp_path / "standin"
+    standin.mkdir()
+    ziel = standin / "scripts" / _ORPHAN_NAME
+    probleme = _standin_target_problems(ziel, standin)
+    assert probleme == [], probleme
+    # The safety check itself refuses a target in the real checkout and one outside the stand-in.
+    assert _standin_target_problems(REPO_ROOT / "scripts" / _ORPHAN_NAME, standin)
+    assert _standin_target_problems(tmp_path / "elsewhere" / _ORPHAN_NAME, standin)
+
+    with _write_watcher() as gesehen:
+        geplant, _ = _run_orphan_control(standin)
+    assert geplant == ziel
+    assert any(ziel.name in eintrag for eintrag in _writes_inside(gesehen, standin)), (
+        f"the watcher missed the planted write to {ziel}: {gesehen}"
+    )
+
+    # Every watched operation is reported on its own, and a read is not.
+    ablage = standin / "ops"
+    with _write_watcher() as gesehen:
+        ablage.mkdir()
+        (ablage / "a.txt").write_text("a", encoding="utf-8")
+        (ablage / "b.bin").write_bytes(b"b")
+        with open(ablage / "c.txt", "w", encoding="utf-8") as handle:  # noqa: PTH123
+            handle.write("c")
+        with io.open(ablage / "d.txt", "a", encoding="utf-8") as handle:  # noqa: UP020, PTH123
+            handle.write("d")
+        os.close(os.open(ablage / "e.txt", os.O_WRONLY | os.O_CREAT, 0o644))
+        (ablage / "f.txt").touch()
+        os.replace(ablage / "a.txt", ablage / "g.txt")  # noqa: PTH105
+        os.rename(ablage / "b.bin", ablage / "h.bin")  # noqa: PTH104
+        nur_gelesen = len(gesehen)
+        (ablage / "c.txt").read_text(encoding="utf-8")
+        with open(ablage / "d.txt", encoding="utf-8") as handle:  # noqa: PTH123
+            handle.read()
+        os.close(os.open(ablage / "e.txt", os.O_RDONLY))
+    operationen = {operation.split("(")[0] for operation, ziel in gesehen if _inside(ziel, ablage)}
+    assert operationen >= {
+        "Path.mkdir",
+        "Path.write_text",
+        "Path.write_bytes",
+        "open",
+        "io.open",
+        "os.open",
+        "Path.touch",
+        "os.replace",
+        "os.rename",
+    }, operationen
+    assert len(gesehen) == nur_gelesen, f"the watcher reports reads as writes: {gesehen[nur_gelesen:]}"
+
+
+def _caller_input_problems(ci: str, runner: str, ohne_aufrufer: object) -> list[str]:
+    """Where the classification's caller inputs differ from the checkout's real ones."""
+    probleme: list[str] = []
+    if ci != CI_FILE.read_text(encoding="utf-8"):
+        probleme.append("the CI text is not the checkout's ci.yml")
+    if runner != RUNNER.read_text(encoding="utf-8"):
+        probleme.append("the runner text is not the checkout's verify_all.sh")
+    if ohne_aufrufer is not ci_gates.OHNE_AUFRUFER:
+        probleme.append("the reasons are not ci_gates.OHNE_AUFRUFER")
+    return probleme
+
+
+def test_orphan_control_uses_real_caller_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criteria 2 and 8: the control classifies against the checkout's CI, runner and `OHNE_AUFRUFER`.
+
+    A spy records the classification's inputs; the spy check itself refuses
+    blank and substituted inputs. A classification that treats the orphan as
+    called makes the control test fail.
+    """
+    echte = _heimatlose_namen
+    aufrufe: list[tuple[list[str], str, str, object]] = []
+
+    def spion(namen: list[str], ci: str, runner: str, ohne_aufrufer: dict[str, str]) -> list[str]:
+        aufrufe.append((list(namen), ci, runner, ohne_aufrufer))
+        return echte(namen, ci, runner, ohne_aufrufer)
+
+    monkeypatch.setattr(_THIS_MODULE, "_heimatlose_namen", spion)
+    test_the_glob_itself_finds_a_real_orphan_shell_script(tmp_path / "spy")
+    assert len(aufrufe) == 1, f"the control classified {len(aufrufe)} times"
+    namen, ci, runner, ohne_aufrufer = aufrufe[0]
+    assert namen == [_ORPHAN_NAME], namen
+    probleme = _caller_input_problems(ci, runner, ohne_aufrufer)
+    assert probleme == [], probleme
+
+    assert _caller_input_problems("", "", {}), "blank caller inputs pass the spy check"
+    assert _caller_input_problems(ci + "\n# scripts/" + _ORPHAN_NAME, runner, ohne_aufrufer)
+    assert _caller_input_problems(ci, runner + "\n", ohne_aufrufer)
+    assert _caller_input_problems(ci, runner, dict(ci_gates.OHNE_AUFRUFER))
+
+    monkeypatch.setattr(_THIS_MODULE, "_heimatlose_namen", lambda *_args, **_kwargs: [])
+    with pytest.raises(AssertionError):
+        test_the_glob_itself_finds_a_real_orphan_shell_script(tmp_path / "bypassed")
+
+
+def test_scripts_defaults_to_checkout_inventory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 3: the default inventory is the checkout's top-level scripts, and the glob sees `.sh`."""
+    wurzel = tmp_path / "root"
+    ordner = wurzel / "scripts"
+    (ordner / "nested").mkdir(parents=True)
+    for name in ("a.py", "b.sh", "test_c.py", "test_d.sh", "e.txt", "nested/f.py", "nested/g.sh"):
+        (ordner / name).write_text("", encoding="utf-8")
+    assert _scripts(wurzel) == [ordner / "a.py", ordner / "b.sh"]
+
+    qualifiziert = {".py", ".sh"}
+    erwartet = sorted(
+        p for p in (REPO_ROOT / "scripts").iterdir() if p.suffix in qualifiziert and not p.name.startswith("test_")
+    )
+    assert erwartet, "the checkout holds no top-level script — the comparison would run over the empty set"
+    assert _scripts() == erwartet
+    assert _scripts() == _scripts(REPO_ROOT)
+
+    def nur_py(root: Path = REPO_ROOT) -> list[Path]:
+        return sorted(p for p in (root / "scripts").glob("*.py") if not p.name.startswith("test_"))
+
+    monkeypatch.setattr(_THIS_MODULE, "_scripts", nur_py)
+    with pytest.raises(AssertionError):
+        test_the_glob_itself_finds_a_real_orphan_shell_script(tmp_path / "py-only")
+
+
+def test_inventory_checks_reject_empty_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4: both real inventory checks fail on an empty inventory instead of passing over it."""
+    monkeypatch.setattr(_THIS_MODULE, "_scripts", lambda *_args, **_kwargs: [])
+    checks = (
+        test_every_script_has_a_caller_or_a_declared_reason,
+        test_every_script_has_a_test_or_a_declared_reason,
+    )
+    for check in checks:
+        with pytest.raises(AssertionError, match="inventory is empty"):
+            check()
 
 
 def test_no_declared_reason_stands_for_a_script_that_has_a_caller() -> None:
@@ -3726,7 +4050,9 @@ def test_every_script_has_a_test_or_a_declared_reason() -> None:
     """
     from ci_gates import OHNE_TEST
 
-    ungehalten = [p.name for p in _scripts() if p.name not in OHNE_TEST and not _belegt(p)]
+    inventar = _scripts()
+    assert inventar, "the script inventory is empty — this check ran over the empty set"
+    ungehalten = [p.name for p in inventar if p.name not in OHNE_TEST and not _belegt(p)]
     assert not ungehalten, (
         "Without a test and without a reason:\n  "
         + "\n  ".join(ungehalten)

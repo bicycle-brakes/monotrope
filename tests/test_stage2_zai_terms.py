@@ -63,7 +63,7 @@ def declaration(root: Path, terms: dict | None) -> Path:
         "residenz": "anbieter-erklaert",
         "abrechnung": "abonnement",
         "darf_sehen": ["framework"],
-        "modelle": ["glm-5.3", "glm-5.3-flash"],
+        "modelle": ["glm-5.4", "glm-5.3-flash"],
     }
     if terms is not None:
         entry["modelle_terms"] = terms
@@ -90,12 +90,12 @@ def set_zai_terms(w: World, model: str, **changes: object) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("model", ["glm-5.3-flash", "glm-5.3"])
+@pytest.mark.parametrize("model", ["glm-5.3-flash", "glm-5.4"])
 def test_zai_terms_are_valid_through_their_last_utc_day(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: str
 ) -> None:
-    """Explore/implement (Flash) and the draft fallback (glm-5.3) are admitted through 2026-12-08, refused after."""
-    root = declaration(tmp_path, {m: zai_record() for m in ("glm-5.3", "glm-5.3-flash")})
+    """Explore/implement (Flash) and the draft fallback (glm-5.4) are admitted through 2026-12-08, refused after."""
+    root = declaration(tmp_path, {m: zai_record() for m in ("glm-5.4", "glm-5.3-flash")})
     on(monkeypatch, "2026-12-08")
     assert stage2.declaration_problem(root, ZAI, model) is None
     on(monkeypatch, "2026-12-09")
@@ -105,7 +105,7 @@ def test_zai_terms_are_valid_through_their_last_utc_day(
 
 def test_zai_record_needs_no_retention_or_training_reading(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The subscription record binds by its end date; the Go page's retention and training fields are not asked for."""
-    root = declaration(tmp_path, {m: zai_record() for m in ("glm-5.3", "glm-5.3-flash")})
+    root = declaration(tmp_path, {m: zai_record() for m in ("glm-5.4", "glm-5.3-flash")})
     on(monkeypatch, "2026-11-15")
     assert stage2.declaration_problem(root, ZAI, "glm-5.3-flash") is None
 
@@ -122,7 +122,7 @@ def test_zai_record_needs_no_retention_or_training_reading(tmp_path: Path, monke
 def test_an_unusable_zai_record_refuses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: dict, fragment: str
 ) -> None:
-    root = declaration(tmp_path, {"glm-5.3": zai_record(), "glm-5.3-flash": zai_record(**change)})
+    root = declaration(tmp_path, {"glm-5.4": zai_record(), "glm-5.3-flash": zai_record(**change)})
     on(monkeypatch, "2026-11-15")
     problem = stage2.declaration_problem(root, ZAI, "glm-5.3-flash")
     assert problem is not None and fragment in problem
@@ -130,9 +130,9 @@ def test_an_unusable_zai_record_refuses(
 
 def test_a_zai_model_without_its_record_refuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Once the endpoint declares terms, a listed model with no record is not admitted on silence."""
-    root = declaration(tmp_path, {"glm-5.3": zai_record()})
+    root = declaration(tmp_path, {"glm-5.4": zai_record()})
     on(monkeypatch, "2026-11-15")
-    assert stage2.declaration_problem(root, ZAI, "glm-5.3") is None
+    assert stage2.declaration_problem(root, ZAI, "glm-5.4") is None
     problem = stage2.declaration_problem(root, ZAI, "glm-5.3-flash")
     assert problem is not None and "glm-5.3-flash" in problem
 
@@ -206,9 +206,9 @@ def test_implement_over_zai_warns_within_seven_days(
 def test_expired_zai_terms_refuse_the_draft_fallback_before_its_call(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Phase 6, F6-1: `draft` preflights Codex only; the glm-5.3 attempt is refused at its own call check."""
+    """Phase 6, F6-1: `draft` preflights Codex only; the glm-5.4 attempt is refused at its own call check."""
     draft_world(world)
-    set_zai_terms(world, "glm-5.3", valid_until="2026-12-08")
+    set_zai_terms(world, "glm-5.4", valid_until="2026-12-08")
     git(world.root, "commit", "--quiet", "-am", "the subscription's end")  # a draft refuses a dirty tree
     on(monkeypatch, "2026-12-09")
     red = red_verify(OTHER_RED)["stdout"]
@@ -221,7 +221,7 @@ def test_expired_zai_terms_refuse_the_draft_fallback_before_its_call(
     assert len(world.calls("codex")) == 2, "the refusal must come at the GLM attempt, after both Codex attempts"
     assert world.calls("claude") == [], "a Z.ai draft call started on an expired subscription"
     captured = capsys.readouterr()
-    assert "the Z.ai subscription for glm-5.3 expired on 2026-12-08" in captured.out + captured.err
+    assert "the Z.ai subscription for glm-5.4 expired on 2026-12-08" in captured.out + captured.err
 
 
 # ---------------------------------------------------------------------------

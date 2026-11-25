@@ -224,6 +224,17 @@ def _wait_queued(timeout: float = 30.0) -> None:
     raise AssertionError("the scheduler never queued for admission")
 
 
+def _wait_queue_count(wanted: int, timeout: float = 30.0) -> None:
+    """Wait until the admission queue holds at least `wanted` live registrations."""
+    queue = Path(os.environ["XDG_STATE_HOME"]) / "coding-harness" / "verify.queue"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if queue.is_dir() and len(list(queue.iterdir())) >= wanted:
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"the queue never held {wanted} registrations")
+
+
 def _release(checkout: SimpleNamespace) -> None:
     (checkout.markers / "release").write_text("release", encoding="utf-8")
 
@@ -234,6 +245,9 @@ def start_holder(checkout: SimpleNamespace) -> subprocess.Popen[bytes]:
     env["SCRIPTS_DIR"] = str(REPO_ROOT / "scripts")
     env["HELD_MARKER"] = str(checkout.markers / "held")
     env["RELEASE_MARKER"] = str(checkout.markers / "release")
+    # The holder runs alone (setting 1): these regressions need an entry that must queue behind it,
+    # which a free second slot would otherwise admit at once (verify-two-slots).
+    env[verify_lock.SLOTS_ENV] = "1"
     proc = subprocess.Popen(
         [sys.executable, "-c", HOLDER_BODY],
         cwd=REPO_ROOT,
@@ -608,6 +622,206 @@ def test_two_phases_share_history_and_exclude_wait(checkout: SimpleNamespace, ga
         holder.wait(timeout=30)
 
 
+def _start_slot_holder(checkout: SimpleNamespace, name: str) -> subprocess.Popen[bytes]:
+    """One real admission in a separate process, with its own held and release markers."""
+    env = dict(os.environ)
+    env["SCRIPTS_DIR"] = str(REPO_ROOT / "scripts")
+    env["HELD_MARKER"] = str(checkout.markers / f"held-{name}")
+    env["RELEASE_MARKER"] = str(checkout.markers / f"release-{name}")
+    proc = subprocess.Popen(
+        [sys.executable, "-c", HOLDER_BODY],
+        cwd=REPO_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _wait_marker(checkout.markers / f"held-{name}")
+    return proc
+
+
+# One scheduler run in its own process: one process holds at most one
+# independent admission (criterion 6), so two concurrent runs are two
+# processes, exactly as concurrent `make verify` invocations are. The driver
+# records every gate launch with the descriptor identities (dev, ino) the
+# scheduler had published into its holder dict, and its own run account —
+# verdict, executed set, wait, and the budget the wait extended.
+SCHEDULER_BODY = """
+import io, json, os, sys
+from pathlib import Path
+sys.path.insert(0, os.environ["SCRIPTS_DIR"])
+import verify_run
+
+root = Path(os.environ["SCHED_ROOT"])
+budget = {"deadline": float(os.environ["SCHED_BUDGET"])}
+launches_path = Path(os.environ["SCHED_LAUNCHES"])
+real_gate_process = verify_run.gate_process
+
+
+def spying_gate_process(wurzel, python, lock_slot, gate, command, run_env, destination, complaints):
+    identities = [[os.fstat(descriptor).st_dev, os.fstat(descriptor).st_ino] for descriptor in lock_slot.get("fds") or ()]
+    with launches_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps([str(gate["id"]), identities]) + chr(10))
+    return real_gate_process(wurzel, python, lock_slot, gate, command, run_env, destination, complaints)
+
+
+verify_run.gate_process = spying_gate_process
+out, err = io.StringIO(), io.StringIO()
+summary = {}
+status = 0
+try:
+    result = verify_run.run_verification(root, out=out, err=err, python=sys.executable, budget=budget)
+    summary = {
+        "exit_code": result.exit_code,
+        "executed": list(result.executed),
+        "not_run": list(result.not_run),
+        "deadline": budget["deadline"],
+        "wait": result.admission_wait_seconds,
+        "green": "VERIFY GREEN" in out.getvalue(),
+    }
+except BaseException as error:
+    summary = {"error": f"{type(error).__name__}: {error}"}
+    status = 1
+Path(os.environ["SCHED_SUMMARY"]).write_text(json.dumps(summary), encoding="utf-8")
+sys.exit(status)
+"""
+
+
+def _start_scheduler_entry(checkout: SimpleNamespace, root: Path, budget: float, name: str) -> subprocess.Popen[bytes]:
+    """One scheduler run in its own process, against the shared state root."""
+    env = dict(os.environ)
+    env["SCRIPTS_DIR"] = str(REPO_ROOT / "scripts")
+    env["SCHED_ROOT"] = str(root)
+    env["SCHED_BUDGET"] = str(budget)
+    env["SCHED_LAUNCHES"] = str(checkout.markers / f"launches-{name}.json")
+    env["SCHED_SUMMARY"] = str(checkout.markers / f"summary-{name}.json")
+    return subprocess.Popen(
+        [sys.executable, "-c", SCHEDULER_BODY],
+        cwd=REPO_ROOT,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _launch_map(path: Path) -> dict[str, tuple[tuple[int, int], ...]]:
+    """The gate launches one driver recorded, as (dev, ino) descriptor identities."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return {
+        gate: tuple(tuple(identity) for identity in identities)
+        for gate, identities in (json.loads(line) for line in lines)
+    }
+
+
+def test_two_slot_scheduler_preserves_wait_context_and_descriptors(
+    checkout: SimpleNamespace, gate_script: Path
+) -> None:
+    """Two concurrent runs wait for their own slots: the wait extends the budget and both descriptor sets travel.
+
+    Planted fault: the admission wait spends the run's execution deadline, a concurrent admission's lock
+    descriptors are lost (a protected gate launches without them), or one run's verdict or wait is
+    recorded for its peer. One process holds at most one independent admission, so the two runs drive
+    the scheduler in two processes, exactly as two concurrent `make verify` invocations do; each
+    driver records its own gate launches and its own run account.
+    """
+    # Two separate checkouts against the one shared state root: their schedulers
+    # contend for the same machine-wide slots, as independent runs do.
+    root_a, root_b = checkout.root, checkout.tmp_path / "checkout-b"
+    root_b.mkdir()
+    _git_init_commit(root_b)
+    write_gates(
+        root_a,
+        [
+            _gate("left-cheap", f"python3 {gate_script} left-cheap 0"),
+            _gate("left-heavy", f"python3 {gate_script} left-heavy 0 1.2", cost="minutes"),
+        ],
+    )
+    write_gates(
+        root_b,
+        [
+            _gate("right-cheap", f"python3 {gate_script} right-cheap 0"),
+            _gate("right-heavy", f"python3 {gate_script} right-heavy 0 1.2", cost="minutes"),
+        ],
+    )
+    _git(root_a, "add", ".")
+    _git(root_a, "commit", "--quiet", "-m", "gates")
+    _git(root_b, "add", ".")
+    _git(root_b, "commit", "--quiet", "-m", "gates")
+
+    holder_one = holder_two = None
+    entry_a = entry_b = None
+    try:
+        # Both slots occupied before any scheduler starts, so both runs must queue.
+        holder_one = _start_slot_holder(checkout, "one")
+        holder_two = _start_slot_holder(checkout, "two")
+
+        entry_a = _start_scheduler_entry(checkout, root_a, 100.0, "a")
+        _wait_queue_count(1)
+        entry_b = _start_scheduler_entry(checkout, root_b, 200.0, "b")
+        _wait_queue_count(2)
+        # Both runs are registered and waiting; freeing the slots lets each take
+        # its own. The 1.2 s gate sleeps keep both protected phases alive at the
+        # same time, so both descriptor sets are open together.
+        (checkout.markers / "release-one").write_text("release", encoding="utf-8")
+        (checkout.markers / "release-two").write_text("release", encoding="utf-8")
+        _wait_log_gate("left-heavy")
+        _wait_log_gate("right-heavy")
+        assert entry_a.wait(timeout=120) == 0 and entry_b.wait(timeout=120) == 0
+        summary_a = json.loads((checkout.markers / "summary-a.json").read_text(encoding="utf-8"))
+        summary_b = json.loads((checkout.markers / "summary-b.json").read_text(encoding="utf-8"))
+        launches_a = _launch_map(checkout.markers / "launches-a.json")
+        launches_b = _launch_map(checkout.markers / "launches-b.json")
+
+        # Verdicts stay per run: green, complete, nothing attributed to the peer.
+        assert "error" not in summary_a, summary_a
+        assert "error" not in summary_b, summary_b
+        assert summary_a["exit_code"] == 0 and summary_b["exit_code"] == 0, (summary_a, summary_b)
+        assert summary_a["executed"] == ["left-cheap", "left-heavy"], summary_a
+        assert summary_b["executed"] == ["right-cheap", "right-heavy"], summary_b
+        assert summary_a["not_run"] == [] and summary_b["not_run"] == [], (summary_a, summary_b)
+        assert summary_a["green"] and summary_b["green"], (summary_a, summary_b)
+
+        # Every protected launch carried both descriptors: the same compatibility
+        # lock file (shared by both setting-2 holders) and two different slot
+        # lock files — two live admissions, never one shared pair.
+        left_heavy = launches_a.get("left-heavy")
+        right_heavy = launches_b.get("right-heavy")
+        assert left_heavy is not None and len(left_heavy) == 2, launches_a
+        assert right_heavy is not None and len(right_heavy) == 2, launches_b
+        assert left_heavy[0] == right_heavy[0], (left_heavy, right_heavy)
+        assert left_heavy[1] != right_heavy[1], (left_heavy, right_heavy)
+        # The unprotected launches carried no descriptors — only the protected ones do.
+        assert launches_a.get("left-cheap") == () and launches_b.get("right-cheap") == (), (launches_a, launches_b)
+
+        # The wait extended each run's own deadline instead of spending it.
+        assert summary_a["wait"] is not None and summary_a["wait"] > 0, summary_a
+        assert summary_b["wait"] is not None and summary_b["wait"] > 0, summary_b
+        assert summary_a["deadline"] == pytest.approx(100.0 + summary_a["wait"]), summary_a
+        assert summary_b["deadline"] == pytest.approx(200.0 + summary_b["wait"]), summary_b
+
+        # The history keeps one completion record per run, each green, each with
+        # its own admission identity and its own measured wait.
+        ends = [event for event in _history(checkout.tmp_path / "state") if event["event"] == "run_end"]
+        assert len(ends) == 2, ends
+        assert len({event["admission_id"] for event in ends}) == 2, ends
+        for end in ends:
+            assert end["verdict"] == "green", end
+            assert end["admission_requested"] is True, end
+            assert end["admission_wait_seconds"] is not None and end["admission_wait_seconds"] > 0, end
+    finally:
+        for entry in (entry_a, entry_b):
+            if entry is not None and entry.poll() is None:
+                entry.kill()
+                entry.wait(timeout=30)
+        if holder_one is not None:
+            (checkout.markers / "release-one").write_text("release", encoding="utf-8")
+            holder_one.wait(timeout=30)
+        if holder_two is not None:
+            (checkout.markers / "release-two").write_text("release", encoding="utf-8")
+            holder_two.wait(timeout=30)
+
+
 def test_unmeasurable_inputs_refuse_reuse(checkout: SimpleNamespace, gate_script: Path) -> None:
     """A failed selection, an unreadable tree and an unstable cheap pass all refuse before any green.
 
@@ -879,7 +1093,7 @@ sys.path.insert(0, {str(REPO_ROOT / "scripts")!r})
 import verify_run
 verify_run._install_run_handlers()
 try:
-    verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fd': None}}, {{}},
+    verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fds': ()}}, {{}},
         {command!r}, dict(__import__('os').environ))
 except verify_run.GateInterrupted as error:
     sys.exit(128 + error.signum)
@@ -955,7 +1169,7 @@ from pathlib import Path
 sys.path.insert(0, {str(REPO_ROOT / "scripts")!r})
 import verify_run
 verify_run.OUTPUT_DRAIN_SECONDS = 1.0
-done = verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fd': None}}, {{}},
+done = verify_run.gate_process(Path({str(tmp_path)!r}), sys.executable, {{'fds': ()}}, {{}},
     {command!r}, dict(__import__('os').environ))
 print('returned', done.returncode, flush=True)
 """
@@ -1313,7 +1527,7 @@ def test_a_signal_at_the_launch_boundary_still_ends_the_gate(tmp_path: Path, mon
     try:
         with pytest.raises(verify_run.GateInterrupted):
             verify_run.gate_process(
-                tmp_path, sys.executable, {"fd": None}, {}, "sleep 30", dict(os.environ), io.StringIO(), io.StringIO()
+                tmp_path, sys.executable, {"fds": ()}, {}, "sleep 30", dict(os.environ), io.StringIO(), io.StringIO()
             )
     finally:
         verify_run._restore_run_handlers(previous)

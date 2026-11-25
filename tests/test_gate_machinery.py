@@ -611,3 +611,143 @@ def test_a_verdict_repeats_its_blocking_lines_after_the_noise() -> None:
     only_blocks = _verdict.Verdict()
     only_blocks.block("one block")
     assert "repeated last" not in only_blocks.render()
+
+
+# --------------------------------------------------------------------------
+# plans-registry-strict — fetch every branch head, then check with branch search
+# --------------------------------------------------------------------------
+
+STRICT_DRIFT_COMMAND = (
+    "git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' "
+    "&& python3 scripts/plans_registry.py --check --strict --branches"
+)
+
+
+def _strict_drift_commands(tmp_path: Path, monkeypatch, capsys) -> dict[str, str]:
+    """The strict drift command as the generated workflow and the local run carry it."""
+    import ci_gates
+
+    doc = {
+        "schema_version": 3,
+        "tools": {"python": ["3.11", "3.12"]},
+        "gates": [
+            {
+                "id": "plans-registry-strict",
+                "title": "strict drift seed",
+                "command": STRICT_DRIFT_COMMAND,
+                "job": "drift",
+                "cost": "seconds",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "needs_tracker": True,
+                "reason": "seed for the fetch-then-check order",
+            },
+        ],
+    }
+    gate_file = tmp_path / "gates.yaml"
+    gate_file.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", gate_file)
+
+    workflow = yaml.safe_load(ci_gates.generate_ci())
+    generated = [
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("id") == "plans-registry-strict"
+    ]
+    assert len(generated) == 1, "the generated workflow must carry the strict drift gate once"
+
+    argv = ["ci_gates.py", "--commands", "--job", "drift", "--placement", "lokal", "--tsv"]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert ci_gates.main() == 0
+    local = [
+        line.split("\t", 2)[2]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("plans-registry-strict\t")
+    ]
+    assert len(local) == 1, "the local run must carry the strict drift gate once"
+    return {"generated": generated[0], "local": local[0]}
+
+
+def _run_with_fake_tools(command: str, tmp_path: Path, fetch_exit: int) -> tuple[int, list[str]]:
+    """Run a command against fixture `git` and `python3` that only log their calls."""
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    log = tmp_path / "calls.log"
+    (fake_bin / "git").write_text(
+        f'#!/bin/sh\necho "git $*" >> "{log}"\nexit {fetch_exit}\n',
+        encoding="utf-8",
+    )
+    (fake_bin / "python3").write_text(f'#!/bin/sh\necho "python3 $*" >> "{log}"\nexit 0\n', encoding="utf-8")
+    for tool in ("git", "python3"):
+        (fake_bin / tool).chmod(0o755)
+    work = tmp_path / "work"
+    work.mkdir()
+    done = subprocess.run(
+        ["/bin/bash", "-c", command],
+        cwd=work,
+        env={"PATH": f"{fake_bin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return done.returncode, calls
+
+
+FETCH_CALL = "git fetch --prune origin +refs/heads/*:refs/remotes/origin/*"
+CHECK_CALL = "python3 scripts/plans_registry.py --check --strict --branches"
+
+
+def test_strict_drift_gate_fetches_all_branches_before_registry(tmp_path: Path, monkeypatch, capsys) -> None:
+    commands = _strict_drift_commands(tmp_path, monkeypatch, capsys)
+    for route, command in commands.items():
+        route_dir = tmp_path / route
+        route_dir.mkdir()
+        code, calls = _run_with_fake_tools(command, route_dir, fetch_exit=0)
+        assert code == 0, route
+        # fetch of every head with pruning, then the strict check with branch search
+        assert calls == [FETCH_CALL, CHECK_CALL], route
+
+
+def test_failed_branch_fetch_prevents_strict_registry(tmp_path: Path, monkeypatch, capsys) -> None:
+    commands = _real_strict_drift_commands(monkeypatch, capsys)
+    for route, command in commands.items():
+        route_dir = tmp_path / route
+        route_dir.mkdir()
+        code, calls = _run_with_fake_tools(command, route_dir, fetch_exit=1)
+        assert code != 0, route
+        # the registry check must not run after a failed fetch
+        assert calls == [FETCH_CALL], route
+
+
+def _real_strict_drift_commands(monkeypatch, capsys) -> dict[str, str]:
+    import ci_gates
+
+    workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    generated = [
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("id") == "plans-registry-strict"
+    ]
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--commands", "--job", "drift", "--placement", "lokal", "--tsv"])
+    assert ci_gates.main() == 0
+    local = [
+        line.split("\t", 2)[2]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("plans-registry-strict\t")
+    ]
+    assert len(generated) == len(local) == 1
+    return {"generated": generated[0], "local": local[0]}
+
+
+def test_real_strict_drift_gate_fetches_before_check(tmp_path: Path, monkeypatch, capsys) -> None:
+    commands = _real_strict_drift_commands(monkeypatch, capsys)
+    for route, command in commands.items():
+        route_dir = tmp_path / route
+        route_dir.mkdir()
+        code, calls = _run_with_fake_tools(command, route_dir, fetch_exit=0)
+        assert code == 0
+        assert calls == [FETCH_CALL, CHECK_CALL], route

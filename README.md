@@ -19,6 +19,14 @@ script, the *runner*, starts models from other vendors for some of these
 phases and checks what they send back. Claude Code is the only fully supported
 orchestrating agent today.
 
+- **Try it in 3 minutes:** Clone the repo and run `bash scripts/verify_all.sh --ci`
+  (see [Getting started](#getting-started)).
+- **Start with Stage 1:** Claude Code alone runs all seven phases with no extra
+  vendor accounts. Multi-vendor review swarms (Stage 2) are optional.
+- **Read next:** [How it works](docs/how-it-works.md) for the full map, or
+  [Current status and limits](#current-status-and-limits) for what is built and
+  what is not.
+
 Monotrope is young: the first commit is from 2026-09-16, and it is used mainly
 to develop this repository. Using it in another repository is still a manual
 job; there is no installer. The repository and its tracker still carry the
@@ -58,8 +66,11 @@ proves nothing: it may not detect the defect at all.
 The runner checks this itself instead of trusting the agent. It runs each
 named test on the code before the repair and accepts only a real assertion
 failure; a crash, a skip or a setup error counts as "could not run", not as
-red. Then it runs `make verify` on the repaired code. If either check fails,
-the repair is refused.
+red. Where a repair changes only test code, the runner checks a planted fault
+under `STAGE2_PLANT_FAULT=1` (ADR 0023). Then it runs a targeted check on the
+touched and linked tests and gates (falling back to the full `make verify`
+when that selection cannot cover the repair safely, ADR 0025). If either check
+fails, the repair is refused.
 
 A refusal can be wrong in the safe direction. In one night run the "before"
 code already contained a fix, so the new tests passed there and the runner
@@ -88,11 +99,14 @@ reviews by other models, each in a fresh session, and keeps the evidence:
 
 The runner is the only way this repository starts a model from another vendor.
 Before each call it checks the model and endpoint against an allowlist by data
-class (`model-endpoints.yaml`) and scans everything it will send with the leak
-check (`scripts/leakcheck.py`). A block stops the call, with no fallback to
-another model. This boundary covers only calls made through the runner, not
-what the orchestrating agent does itself. Reviewers are told to read only;
-that is an instruction, not an operating-system sandbox.
+class (`model-endpoints.yaml`) and scans git-tracked content and history with
+the leak check (`scripts/leakcheck.py`; gitignored files are not scanned). A
+block stops the call, with no fallback to another model. This boundary covers
+only calls made through the runner, not what the orchestrating agent or
+user-level hooks (such as `tools/claude-code/hooks/recap.sh`, which calls
+Haiku) do outside it. Research-swarm repository seats load a pathlock
+extension; review-loop and other foreign model calls rely on read-only
+instructions rather than an operating-system sandbox.
 
 ## How a change runs
 
@@ -108,10 +122,14 @@ places; agents do the rest, and scripts check it.
 
 | # | Phase | Leaves |
 | --- | --- | --- |
-| 1 | Explore, then interview | `research.md`, `decisions.md` |
-| 2 | Spec (optional spec review, design by class) | `spec.md`, `design.md` |
+| 1 | Explore (single explorer for `spike`/`bounded`; research swarm for `feature`/`architectural`, ADR 0020) | `research.md` |
+| 1a | Interview | `decisions.md` |
+| 2 | Spec | `spec.md` |
+| 2a | Spec review *(optional / except `spike`)* | rows in `findings.md` |
+| 2b | Design *(by class)* | `design.md` (and ADR draft when `architectural`) |
 | 3 | Plan | `plan.md` |
-| 4 | Implement, then the review loop | code and tests |
+| 4 | Implement | code and tests |
+| 4b | Review loop *(Stage 2)* | loop record, released into `findings.md` after phase 6 |
 | 5 | Verify | test output |
 | 6 | Review | `findings.md` |
 | 7 | Commit | a pull request |
@@ -151,9 +169,10 @@ commits anything. The check depends on the phase:
   outside the machine-wide verify lock.
 - **Implement**: a targeted check (the touched and linked tests and gates),
   or `make verify` where that selection is not safe.
-- **Repair**: the red-first proof of each named test, then a targeted check:
-  the touched and linked test files and the gates their file kinds need. The
-  full `make verify` runs instead when that selection cannot cover the repair
+- **Repair**: the red-first proof of each named test (or a `STAGE2_PLANT_FAULT=1`
+  guard proof for test-only repairs, ADR 0023), then a targeted check: the
+  touched and linked test files and the gates their file kinds need. The full
+  `make verify` runs instead when that selection cannot cover the repair
   safely, and always before the final review.
 - **Reviews** (spec review, review loop, final review): the model only reads;
   the runner records its findings.
@@ -164,25 +183,39 @@ Those stay with the orchestrating agent and with you; so do the phase order,
 the class, and the parallel-work rules below. Those rules are followed by the
 agent; no tool enforces them.
 
+### Working in parallel
+
+One change, one bead, one branch, one worktree, one session. Every change
+branches from a fresh `origin/main` in its own linked worktree under
+`.claude/worktrees/<name>` and is removed after merge. When several sessions
+run in one repository, the first writing session owns tracker management
+(`tools/bd ready`, creating, closing, reprioritizing); other writing sessions
+only claim their own bead and add handover comments. For multi-lane day and
+night orchestration, see [Lanes](docs/orchestration.md).
+
 ## Getting started
 
 There are two different starting points.
 
 ### Explore this repository and run its checks
 
-You need Python 3.12 or later, Node 26 with npm, git and curl, on macOS or
-Linux.
+You need Python 3.12 or later, Node 26 with npm, git and curl. The pinned
+Beads installer (`tools/beads/install.sh`) currently verifies checksums for
+macOS (`darwin_arm64`) and Linux (`linux_amd64`).
 
 ```bash
 git clone https://github.com/bicycle-brakes/monotrope.git
 cd monotrope
 tools/beads/install.sh && tools/bd bootstrap --yes  # fresh clone: load the tracker
-make venv                  # local .venv from the pinned lock (Python 3.12+)
-bash tools/pi/install.sh   # pinned Pi; the real-Pi tests in make verify need it
-make verify                # all gates, cheap ones first; a red run stops early
-tools/bd ready             # open, unblocked work
+make venv                      # local .venv from the pinned lock (Python 3.12+)
+source .venv/bin/activate      # so direct Makefile targets (make test, make change) use .venv
+bash tools/pi/install.sh       # pinned Pi; the real-Pi tests in verify need it
+bash scripts/verify_all.sh --ci  # external clones: runs the CI gate set without admin ruleset scope
+tools/bd ready                 # open, unblocked work
 ```
 
+Maintainers with GitHub ruleset-read access on `bicycle-brakes/monotrope` run
+`make verify`, which additionally executes the `writer`-only `ruleset` gate.
 `tools/bd` is the pinned wrapper around the Beads tracker; use it instead of a
 bare `bd`.
 
@@ -202,7 +235,7 @@ What exists:
   `python3 scripts/kit/probe.py` runs the copied set in a throwaway repository
   and reports which tests fail there.
 
-The sibling product repository `lakeswitch-ai` runs its own instance of the
+A sibling product repository (`lakeswitch-ai`) runs an instance of the
 workflow.
 
 ### Model access
@@ -216,29 +249,34 @@ workflow.
   through the pinned Pi agent). For `explore`, `implement` and `repair`,
   `--stage2-off [REASON]` runs the verb on Anthropic models instead and
   records why; the other runner verbs have no such route.
-- The repository tracks no credentials. Which model may see which data is
-  declared in [`model-endpoints.yaml`](model-endpoints.yaml); whether a given
-  route is reachable on a given day is checked at run time, not promised here.
+- **Local Stage-2 paths:** The repository tracks no credentials. Stage-2 calls
+  read keys from `~/.config/cc-routing/secrets.env` and the leak-check denylist
+  from `~/.config/cc-routing/denylist.txt`; the Phase-1 research swarm also
+  requires `XDG_STATE_HOME` pointing to a directory outside `$HOME`. Which
+  model may see which data is declared in
+  [`model-endpoints.yaml`](model-endpoints.yaml); reachability is checked at
+  run time, not promised here.
 
 ## Current status and limits
 
-Status as stated on 2026-11-01 against `main` at `ac11da5d`; gate counts
-re-read on 2026-11-03 at `b424be3a`.
+Status re-verified on `2026-11-24` against `origin/main` at `a5b117f8`.
 
 ### Checked by tools
 
-- One gate list drives `make verify` and CI: 24 gates, of which 20 block,
-  3 report and 1 is advisory (`8c54b1a0`, 2026-11-12). Every gate has a
-  mutation test, a run that turns it red, or a stated reason in a list that
-  may only shrink.
+- One gate list drives `make verify` and CI: **24 gates** (20 block, 3 report,
+  1 advisory). Every gate has a mutation test, a run that turns it red, or a
+  stated reason in a list that may only shrink.
 - The runner checks the endpoint and runs the leak check before every call to
   another vendor, and runs the phase checks above after it.
-- A repair counts only when its test failed on the code before the repair.
+- A repair counts only when its test failed on the code before the repair (or
+  when a test-only repair proves a planted fault under `STAGE2_PLANT_FAULT=1`,
+  ADR 0023).
 - The review loop runs until a clean round or a named stop, after an
   availability probe; a cut diff never counts as clean.
 - A paid model whose terms reading has expired gets no calls.
-- The interview minimums per class, an open `[DECISION]` in a spec, the
-  presence of a question's context and the handover schema are gates.
+- The interview minimums per class, decisions handed off from a research-swarm
+  run (`research-handoff`), the presence of a question's context, criterion
+  test ledgers and the handover schema are gates.
 - `main` takes a pull request only on a green `verify` of the merge
   candidate.
 
@@ -256,9 +294,10 @@ re-read on 2026-11-03 at `b424be3a`.
 
 ### Not built yet
 
-- A validator for the change files, and a stop hook that blocks the end of a
-  turn on a red tree.
-- A sandbox around reviewers.
+- A validator for the change files (checking open `[DECISION]` tags inside
+  `spec.md` itself), and a stop hook that blocks the end of a turn on a red
+  tree.
+- An operating-system sandbox around reviewers.
 - One command to save a run stopped from outside (a killed job, a full disk)
   on a side ref: today done by hand. The runner already saves its own failed
   attempts on a side ref.
@@ -289,7 +328,9 @@ re-read on 2026-11-03 at `b424be3a`.
   parallel.
 - [Claude Code hooks and status line](tools/claude-code/README.md): what
   appears at session start, the parallel-session warning, the handover safety
-  net. These hooks show and remind; none of them is a gate.
+  net, and the night profile. Note: `beads-start.sh` reconciles merged beads in
+  the tracker, `statusline.sh` runs a periodic background `git fetch`, and
+  `recap.sh` calls Haiku; none of these hooks is a merge gate.
 - Diagrams: [who steers a change](docs/assets/readme-who-steers-a-change.png)
   and [the four classes of change](docs/assets/readme-four-classes-of-change.png).
 - [Architecture decisions](docs/adr/) and
@@ -302,11 +343,12 @@ re-read on 2026-11-03 at `b424be3a`.
 Work is tracked in Beads through `tools/bd`; a pull request names every bead
 it opens, changes or closes. One change, one branch, one worktree, one
 session. Per checkout run `make venv` and `bash tools/pi/install.sh` once,
-then `make verify`; a text-only change is gated by CI. Decision pull requests
-take effect when the maintainer merges them. Repository artefacts are in
-English. By opening a pull request you agree that your contribution may be
-distributed under the project's license and, if needed, under a commercial
-license ([`COMMERCIAL.md`](COMMERCIAL.md)).
+then `make verify` (or `bash scripts/verify_all.sh --ci` on external clones);
+a text-only change is gated by CI. Decision pull requests take effect when the
+maintainer merges them. Repository artefacts are in English. By opening a pull
+request you agree that your contribution may be distributed under the
+project's license and, if needed, under a commercial license
+([`COMMERCIAL.md`](COMMERCIAL.md)).
 
 ## License
 

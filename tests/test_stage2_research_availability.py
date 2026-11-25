@@ -8,11 +8,13 @@ returns; the catalog helper itself is covered with loopback servers in
 
 from __future__ import annotations
 
+import ast
 import copy
 import datetime as dt
 import hashlib
 import json
 import sys
+import types
 from contextlib import suppress
 from pathlib import Path
 
@@ -1108,9 +1110,61 @@ def test_intelligence_errors_redact_credential_fragments(monkeypatch, offset, le
         raise OSError(f"request failed: {fragment}")
 
     monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", broken)
-    reading = availability.read_intelligence(["model"], {})
+    reading = availability.read_intelligence(["model"], {}, runner=stage2)
     assert "not read" in reading["status"]
     assert fragment not in json.dumps(reading)
+
+
+@pytest.mark.parametrize("raised", [OSError, ValueError, KeyError])
+def test_intelligence_errors_redact_whole_credential(monkeypatch, raised):
+    key = "synthetic-credential-0123456789-abcdef"
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, key)
+
+    def broken(_key):
+        raise raised(f"request failed with credential {key} in the message")
+
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", broken)
+    try:
+        reading = availability.read_intelligence(["model"], {}, runner=stage2)
+    except Exception as error:  # an optional reading must never propagate its error
+        pytest.fail(f"read_intelligence propagated {error!r} instead of a not-read reading")
+    assert reading["status"].startswith("not read: ")
+    assert reading["scores"] == {"model": None}
+    assert key not in json.dumps(reading)
+
+
+def test_intelligence_error_uses_supplied_runner_scrub(monkeypatch):
+    # The stand-in is a distinct object from the importable `stage2` module: a reader that imported its
+    # own runner would use the real redactor and the sentinel would be missing.
+    sentinel = "SENTINEL-FROM-SUPPLIED-RUNNER"
+    calls = []
+
+    def scrub(text, key):
+        calls.append((text, key))
+        return sentinel
+
+    stand_in = types.SimpleNamespace(scrub=scrub)
+    assert stand_in is not stage2
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "synthetic-key-for-stand-in")
+
+    def broken(_key):
+        raise OSError("request failed")
+
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", broken)
+    reading = availability.read_intelligence(["model"], {}, runner=stand_in)
+    assert reading["status"] == f"not read: {sentinel}"
+    assert calls and calls[0][1] == "synthetic-key-for-stand-in"
+
+
+def test_availability_never_imports_stage2():
+    source = Path(availability.__file__).read_text(encoding="utf-8")
+    offenders = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            offenders += [(node.lineno, alias.name) for alias in node.names if alias.name.split(".")[0] == "stage2"]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").split(".")[0] == "stage2":
+            offenders.append((node.lineno, node.module))
+    assert offenders == [], f"stage2_availability imports the runner by name: {offenders}"
 
 
 @pytest.mark.parametrize(
@@ -1135,7 +1189,7 @@ def test_malformed_intelligence_never_blocks_a_receipt(fx, monkeypatch, capsys, 
 def test_unmatched_intelligence_has_per_model_reason_and_cost_only_caveat(monkeypatch):
     monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "synthetic-key")
     monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", lambda _key: intelligence_document())
-    reading = availability.read_intelligence(["longcat-2.0", "deepseek-v4.1-flash"], {})
+    reading = availability.read_intelligence(["longcat-2.0", "deepseek-v4.1-flash"], {}, runner=stage2)
     state = {
         "intelligence": reading,
         "pool": [],

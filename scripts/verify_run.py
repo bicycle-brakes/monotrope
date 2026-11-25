@@ -476,7 +476,7 @@ def _hold_launch_signals() -> tuple[list[int], Callable[[], None]]:
 def gate_process(
     root: Path,
     python: str,
-    lock_slot: dict[str, int | None],
+    lock_slot: dict[str, tuple[int, ...] | None],
     _gate: dict[str, Any],
     command: str,
     env: dict[str, str],
@@ -500,9 +500,9 @@ def gate_process(
     """
     resolved = command.replace("python3", shlex.quote(python), 1)
     pass_fds: tuple[int, ...] = ()
-    descriptor = lock_slot.get("fd")
-    if env.get(verify_lock.LOCK_ENV) and descriptor is not None:
-        pass_fds = (descriptor,)
+    descriptors = lock_slot.get("fds") or ()
+    if env.get(verify_lock.LOCK_ENV) and descriptors:
+        pass_fds = tuple(descriptors)
     # A signal between `Popen` creating the gate and its group's registration would raise before
     # the cleanup below exists and leave the gate running (row F6-3). The run's signals are held
     # back from before the launch until the `try` whose `finally` ends the group, then delivered.
@@ -636,7 +636,7 @@ def run_verification(
     budget: dict[str, float] | None = None,
     record_history: bool = True,
     python: str | None = None,
-    lock_slot: dict[str, int | None] | None = None,
+    lock_slot: dict[str, tuple[int, ...] | None] | None = None,
     admission_command: list[str] | None = None,
 ) -> RunResult:
     """Run the job's local gates in two phases and return the run's account.
@@ -647,11 +647,11 @@ def run_verification(
     given, has its `"deadline"` extended by the measured admission wait, so
     queue and memory waits never consume a caller's execution bound.
     `lock_slot`, when given, is the holder the held admission's lock
-    descriptor is published into while the protected phase runs — a callback
-    that starts protected children reads it there to hand the descriptor on,
-    exactly as the built-in executor does. `admission_command` is what the
-    holder record names while waiters queue behind this run (default: this
-    scheduler and its job).
+    descriptors are published into while the protected phase runs — a
+    callback that starts protected children reads it there to hand the
+    descriptors on, exactly as the built-in executor does.
+    `admission_command` is what the holder record names while waiters queue
+    behind this run (default: this scheduler and its job).
     """
     wurzel = Path(root)
     destination = sys.stdout if out is None else out
@@ -664,7 +664,7 @@ def run_verification(
     # The shell exports the interpreter it chose as `PYTHON`; gates run under that one,
     # exactly as the shell runner substituted it (a wrapper in the checkout stays the pinned one).
     pinned = python if python is not None else (base_env.get("PYTHON") or sys.executable)
-    slot = lock_slot if lock_slot is not None else {"fd": None}
+    slot: dict[str, tuple[int, ...] | None] = lock_slot if lock_slot is not None else {"fds": ()}
 
     def emit(text: str) -> None:
         destination.write(text + "\n")
@@ -918,13 +918,13 @@ def run_verification(
         admission_requested = True
         entered = clock()
         try:
-            with verify_lock.hold_admission(admission_command or ["verify-run", job]) as lock_fd:
+            with verify_lock.hold_admission(admission_command or ["verify-run", job]) as lock_fds:
                 waited = clock() - entered
                 admission_wait = waited
                 if budget is not None and waited > 0:
                     budget["deadline"] = budget.get("deadline", 0.0) + waited
-                if lock_fd is not None:
-                    slot["fd"] = lock_fd
+                if lock_fds is not None:
+                    slot["fds"] = tuple(lock_fds)
                 held = verify_lock.inherit_env(gate_env)
                 # 4. The stable baseline must still be there; a moved tree is
                 # reselected from the reloaded list and its complete
