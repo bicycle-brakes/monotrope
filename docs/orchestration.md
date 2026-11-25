@@ -3,8 +3,8 @@ title: "Lanes — how one session runs several changes at once"
 category: architecture
 status: proposed
 created: 2026-10-28
-last_reviewed: 2026-11-06
-updated: 2026-11-13
+last_reviewed: 2026-11-24
+updated: 2026-11-24
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-28"}
@@ -22,7 +22,7 @@ night names how many. The limits are the machine's memory,
 the local verification slots (two since the two-slot change, `HARNESS_VERIFY_SLOTS`;
 one before) and the maintainer's attention, not the
 number of lanes. This page describes how this repository runs it as of
-2026-11-06. Much of it is still kept by hand.
+2026-11-24 (`a5b117f8`). Much of it is still kept by hand.
 
 ## What a lane is
 
@@ -39,7 +39,7 @@ number of lanes. This page describes how this repository runs it as of
 
 ## The resource rule
 
-The machine has 8 GB of memory. Three parallel `make verify` runs drove the
+The maintainer's reference machine has 8 GB of memory. Three parallel `make verify` runs drove the
 load above 100 and lost two repair attempts to the runner's 30-minute step
 limit (2026-10-27/28). One verify beside two runner verbs made Claude Code
 stop two background jobs for low memory (2026-10-28, about 19:55 UTC). Since
@@ -118,8 +118,10 @@ A leak-check block or a security blocker stops the whole run.
 
 ## Merges and the morning
 
-At night nothing is merged: a merge asks the maintainer, and nobody can
-answer it then. A pull request that meets the self-merge rules is marked
+Unattended night runs launch through `tools/claude-code/night.py` (which turns
+every sourced `ask` rule into a `deny` under `--permission-mode dontAsk` so a
+permission prompt cannot stall the session). At night nothing is merged: a
+merge asks the maintainer, and nobody can answer it then. A pull request that meets the self-merge rules is marked
 ready. The morning handover lists the ready pull requests with their head
 commits, and one word from the maintainer merges them: with the merge
 queue active (rule RB-G7), that word admits them to the queue, and each counts

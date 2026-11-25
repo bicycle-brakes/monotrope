@@ -1,79 +1,57 @@
 # Roadmap
 
-What Coding Harness works on now, next and later. Themes, not tasks: task
-status stays in Beads (`tools/bd ready`). At most three themes are **Now**.
+What Monotrope (`coding-harness`) works on now, next and later. Themes, not
+tasks: task status stays in Beads (`tools/bd ready`). At most three themes are
+**Now**.
 
 **A trial** (maintainer, 2026-10-05; research note
 `docs/research/2026-10-05-likec4-roadmap-arc42.md`, part B). Every handover
-checks whether Now is still true. This file becomes a kit template only
-after it stays true through two handovers; if a handover finds it stale
-twice, it is removed.
+checks whether Now is still true. This file becomes a kit template only after
+it stays true through two handovers; if a handover finds it stale twice, it is
+removed.
 
-Last checked: 2026-10-11, `main` at `a6b7150`. Appetites are first proposals,
-set by the agent that drafted this file; the maintainer's merge confirms or
-changes them.
+Last checked: `2026-11-24`, `origin/main` at `a5b117f8`.
 
 ## Now
 
-1. **Forms and their checker.** Every change uses one form for its spec, its
-   design and its review findings, and a checker holds class, Definition of
-   Done and the design duty. Why: specs and findings are written by hand from
-   memory today, and nothing checks that a change has what its class owes.
-   Appetite: 3 sessions. The template bundle is done (coding-harness-9qo,
-   closed). Beads: change-artefact validator (coding-harness-jc3), findings
-   as checked data (coding-harness-4me; stays a table, a gate is open).
-2. **LakeSwitch reads Coding Harness.** LakeSwitch takes the workflow from a
-   pinned Coding Harness release instead of its own copy, and drops its own
-   ADR-answer pilot. Why: two copies of one rule set drift, and LakeSwitch's
-   pilot expires on 2026-12-15. Appetite: 5 sessions. Locked dependencies are
-   done (coding-harness-ei0, closed). Order, decided 2026-10-11: foundation
-   first slice (coding-harness-s6i), then release builder and pin
-   (coding-harness-dj9), then the ADR-answer principle with the full pin
-   (coding-harness-3ar; plan in
-   `docs/research/2026-10-11-adr-answer-pin-plan.md`).
-3. **Stage 2 that can be trusted.** The foreign-model runner stays live, and
-   its checks cannot be bypassed or lost. Why: on 2026-10-11 a model repaired
-   a red run by deleting tests and two failed attempts left no trace. Appetite:
-   3 sessions. Beads: every criterion names its proof (coding-harness-909,
-   ADR 0013 awaits the maintainer's merge), diagnostics of failed attempts
-   (coding-harness-cit), an ADR names its owning change (coding-harness-afa),
-   review rounds until one finds nothing — the until-clean swarm loop is in
-   flight (coding-harness-dx0, with the implementation-review swarm work item
-   coding-harness-4fk), live view of a
-   round (coding-harness-uco).
+1. **Calendar cliff and security boundaries.** Close or extend the 12 ramp
+   valves due `2026-11-30` (`coding-harness-5ane.1`) and re-read DeepSeek's
+   zero-retention terms (`coding-harness-hw7w`). Harden the concrete local and
+   runner trust boundaries surfaced by the `2026-11-24` audit
+   (`coding-harness-5ane.2`–`5ane.6`, `coding-harness-s9r`).
+2. **State-first machine state, single kit manifest, and shared primitives.**
+   Move mutable loop, lane, job, and attempt state onto locked JSON/JSONL with
+   rendered Markdown views (`coding-harness-5ane.11`, aligned with
+   `coding-harness-oebl`), unify the kit and export manifests while driving
+   `DECKEL` from 44 to 0 (`coding-harness-5ane.7`, `coding-harness-5ane.10`),
+   and consolidate YAML, atomic-write, and git primitives
+   (`coding-harness-5ane.12`).
+3. **Verification speed, runner modularization, and harness-neutral lanes.**
+   Split `scripts/stage2.py` and `tests/test_stage2.py` to unlock targeted
+   verification (`coding-harness-vg9`), prune accumulated worktrees
+   (`coding-harness-bxxt.4`), and advance harness-neutral detached job and lane
+   orchestration (`coding-harness-a6ns`, `coding-harness-bxxt`).
 
 ## Next
 
-- **The repository in English.** House rule 1 holds everywhere: the
-  matched messages with their tests, the rule set, German identifiers.
-  Moved from Now on 2026-10-05 to make room for Hermes. Bead: translate the
-  remaining German (coding-harness-yim).
-- **Stage 2 on Pi.** The interactive session and GLM runs go through Pi
-  instead of Claude Code. Waits for the maintainer's Mac smoke test planned
-  for 2026-10-14. Beads: session verb on Pi (coding-harness-351), GLM
-  through Pi (coding-harness-rwa). Stage 2 itself is live (coding-harness-bc9
-  and coding-harness-kw0, closed).
+- **Unified model registry and route resilience:** Consolidate phase-to-model
+  declarations into one registry (`coding-harness-wq1m`) and ensure fallback
+  coverage when individual providers are unavailable.
+- **Repository in English:** Translate remaining German identifiers, messages,
+  and governance texts in dedicated pull requests (`coding-harness-yim`).
+- **Missing standard entry files and gate hygiene:** Add `SECURITY.md` and
+  `CONTRIBUTING.md` (`coding-harness-5ane.15`), enforce ADR claims on
+  `architectural` changes (`coding-harness-5ane.8`, reconciled with
+  `coding-harness-6slq`), and align CI/local `interview-minimums` history
+  declarations (`coding-harness-5ane.9`).
 
 ## Later
 
-- **Safe parallel sessions:** the write guard and session start after D-60
-  (coding-harness-36z, coding-harness-9ca), the tracker export
-  (coding-harness-1jg, coding-harness-1jg.4).
-- **Public readiness:** licence, onboarding page, denylist gate
-  (coding-harness-lir).
-- **Doctrine upkeep:** corpus correction (coding-harness-bt8), per-instance
-  model routing (coding-harness-qvl), LakeSwitch decisions promoted into
-  specifications (coding-harness-mr2), workflow-entry tests
-  (coding-harness-kkh).
-- **Omnigent:** the default policy, layer 2 (coding-harness-671).
-- **Hermes runs the recurring jobs — parked** (maintainer, 2026-10-11; was
-  Now 3 since 2026-10-05). Why parked: the first job, the weekly re-check of
-  research notes, finds no note due before about 2026-12-15 (0 of 26 due on
-  2026-10-11); ADR 0010's revisit trigger 5 fired when PR #60 merged
-  (2026-10-07), so running Hermes without the leak check goes back to the
-  maintainer; and slice 2's endpoint entry conflicts with the stage-2
-  `opencode-go` entry on `main`. What is built stays: the job prompt
-  `prompts/research-recheck.md` on `main`, slices 2 and 5 on the branch
-  `feat/hermes-runner-2` at `faffe99`. Re-entry: when notes fall due, the
-  re-check runs once by hand and is measured first. Beads: the Hermes runner
-  (coding-harness-i3y), research currency (coding-harness-pu9).
+- **Runner containment and sandboxing:** Evaluate OS-level/container isolation
+  around foreign model and test runs (`coding-harness-nevd`).
+- **Empirical evals and telemetry:** Build standing pass^k / defect-detection
+  evals and structured cycle-time reports over the JSONL event log
+  (`coding-harness-phcy`, `coding-harness-zaqf`).
+- **External multi-stack transfer:** Apply the unified central-config and
+  state-first kit cleanly to upcoming TypeScript, Rust, SQL, and PySpark
+  projects.

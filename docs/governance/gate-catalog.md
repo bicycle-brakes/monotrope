@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-10-27
 last_reviewed: 2026-10-27
-updated: 2026-11-23
+updated: 2026-11-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-27"}
@@ -77,7 +77,7 @@ source (bead coding-harness-yim).
 | ruleset | The branch ruleset asks for what rule RB-M6 asks | `RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs` | verify | block | seconds | no | no | writer | The ruleset lives at GitHub and changes without a commit; GitHub shows its bypass list only to whoever may edit it, so the maintainer's own gh login measures it on the writer machine, and an unreachable API is red (RB-M6). |
 | markdownlint | Markdown passes the linter | action `DavidAnson/markdownlint-cli2-action@v20`; locally: `npx --yes markdownlint-cli2 "**/*.md" "!docs/journal/**" "!tools/pi/node_modules/**"` | verify | report | seconds | no | no | both | Prose hygiene is reported, not blocked — the linter's taste is not a merge criterion. |
 | lychee | External links resolve | action `lycheeverse/lychee-action@v2` (hosted CI only) | verify | advisory | seconds | no | no | hosted | Foreign servers; a red run here says something about the network, not the candidate. |
-| plans-registry-strict | Plans hygiene holds strictly against the outside world | `python3 scripts/plans_registry.py --check --strict` | drift | block | seconds | no | yes | both | DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo. It reads the tracker render, so the drift job hydrates too (bead 1jg.3). |
+| plans-registry-strict | Plans hygiene holds strictly against the outside world | `git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' && python3 scripts/plans_registry.py --check --strict --branches` | drift | block | seconds | no | yes | both | DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo. It reads the tracker render, so the drift job hydrates too (bead 1jg.3). |
 | research-currency | Research notes not reviewed for more than 90 days are listed | `python3 scripts/check_research_currency.py` | drift | report | seconds | no | no | both | Research about outside tools ages without a commit here, so the nightly drift run lists the notes not reviewed for more than 90 days; report is the level the maintainer chose on 2026-10-05, not a step towards block. |
 <!-- /GENERATED -->
 <!-- markdownlint-enable MD013 MD060 -->

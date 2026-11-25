@@ -16,9 +16,9 @@ not yet reviewed.
 ## What it shows
 
 ```text
-lakeswitch-ai ⎇ spec/declared-document-layer ✓ aktuell │ Opus 5 (1M context) │ ctx 259k/600k 43% (max 1M)
-⧉ 1 weitere Session: adhd-rellief-e7 (wartet) – Erledigt: Commits parat · Nächstes: Vault-Skelett mit Vorlag…
-↻ Recap: Erledigt: Scan, Haiku getestet, CLAUDE.md, lakeswitch grün, Entscheidung für adhd-rellief · Nächstes: adhd-rellief, Portfolio
+example-app ⎇ feat/add-checks ✓ aktuell │ Opus 5 (1M context) │ ctx 259k/600k 43% (max 1M)
+⧉ 1 weitere Session: notes-app (wartet) – Erledigt: Commits parat · Nächstes: Vorlagen prüfen…
+↻ Recap: Erledigt: Scan, Haiku getestet, Doku geprüft, Tests grün · Nächstes: PR öffnen
 ```
 
 | Line | Says | Comes from |
@@ -44,6 +44,8 @@ the maintainer reads them.
 | `hooks/recap.sh` | UserPromptSubmit, Stop | the rolling recap, and the automatic session note (`~/.claude/session-notes/`) |
 | `hooks/session-scan.sh` | — | the one session scan both of the above and the status line use |
 | `skills/handover/SKILL.md` | `/handover` | writes the handover as a file in the repository, by that repository's convention, and always opens a pull request for it |
+| `night.py` | CLI launcher | wraps `claude --permission-mode dontAsk` with a temporary settings overlay that turns sourced `ask` rules into `deny` rules |
+| `night-settings.json` | night profile | base settings fragment loaded by `night.py` for unattended night runs |
 
 The handover is the file in the repository, never the chat (`AGENTS.md`). The
 automatic note is only a safety net for a session that ended without one: the

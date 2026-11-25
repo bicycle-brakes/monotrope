@@ -90,6 +90,8 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
     MINOR, touches only display, messages or rare edge cases (never correctness or security), fixing it would void an
     expensive measurement or review pass, and the pull request names the limit and the bead. Otherwise it is fixed
     (maintainer, 2026-11-22).
+11. **Code before prose.** State a program reads back is a schema-validated JSON file written by code, never
+    Markdown parsed back; Markdown only where a person reads it and it cannot be avoided (maintainer, 2026-11-24).
 
 ## Communication and session continuity
 
@@ -187,6 +189,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   goes to the phase-6 review instead of a new loop run; phase 6 checks that last
   repair. Reason: a run's history cannot be reset, and asking each time stopped
   lanes overnight.
+- **At most two review-loop rounds** (maintainer, 2026-11-23): taken rows of round two are repaired, then phase 6 checks that repair instead of a third round; this narrows phase 4b until the runner enforces it (coding-harness-3rtn).
 
 ## Sibling repositories
 
