@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-24
 last_reviewed: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-a6ns.1
@@ -150,6 +150,8 @@ Runner jobs survive the launching session and remain observable (bead coding-har
 - Automatic lane advancement, scheduling, removing the wake, and changing the model routing or verification quota.
 - A new permissions policy: the central policy is separate work (bead coding-harness-a6ns.2).
 - Surviving a machine shutdown or tmux server termination; restarting a completed job automatically.
+
+**Boundary (maintainer 2026-11-25).** `jobs.py stop` reaches the command's process tree, every process carrying the job token, and the recorded process groups and sessions, and nothing else: it never signals a process by its working directory or open files, so an unrelated process in the same checkout is never ended. On macOS a descendant that clears its environment, starts a separate session and is reparented is out of reach. The lasting remedy is bead coding-harness-a6ns.3: it first measures whether a launchd job (its coalition) contains such a process on macOS, with a dedicated Unix user per job as the alternative, and adds a cgroup v2 backend on Linux.
 
 ## Protected areas
 
