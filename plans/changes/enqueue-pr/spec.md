@@ -31,33 +31,52 @@ On 2026-11-25 the research found that direct merge commands require approval, so
 
 ## Acceptance criteria
 
-1. When invoked with a pull request number whose request is open and targets `main`, whose newest phase-6 review has no open finding or explicitly reports no findings, whose required checks on its head all succeeded, and whose head commit has a `Closes-Bead` trailer naming an existing bead, the command admits that head to the enabled merge queue.
-   *Refuted by:* an eligible request is refused or its verified head is not queued.
-2. When the request is closed or targets a branch other than `main`, admission is refused.
-   *Refuted by:* either request reaches the admission command.
-3. When the newest phase-6 review has an open row, admission is refused.
-   *Refuted by:* a request with an open row reaches the admission command.
-4. When any required check on the head is missing, pending, failed or not successful, admission is refused.
-   *Refuted by:* a request with any such check reaches the admission command.
-5. When the head commit lacks a `Closes-Bead` trailer naming an existing bead, admission is refused.
-   *Refuted by:* a missing, malformed or unknown declaration reaches the admission command.
-6. When any prerequisite, its association with the request and its head, or the enabled queue cannot be established, admission is refused.
-   *Refuted by:* missing, ambiguous, stale or unreadable evidence reaches the admission command.
-7. When the head changes after verification, the previously verified head is not admitted as the new head.
-   *Refuted by:* a changed head enters the queue using the earlier evidence.
-8. When admission is attempted, it uses the verified head and cannot bypass the queue or invoke administrative merge.
-   *Refuted by:* a direct merge, administrative option or unpinned admission is issued.
-9. When admission is refused, the command identifies the failed condition.
-   *Refuted by:* a refusal leaves the operator unable to identify the failed prerequisite.
-10. When admission succeeds, the result reports queued rather than merged.
-    *Refuted by:* queue admission is reported as a completed merge.
-11. While using Claude Code, Codex or Antigravity, the guarded command is the permitted unattended admission path and direct merge commands retain their approval or night-time denial.
-    *Refuted by:* the guarded command is unavailable unattended or a direct merge becomes unattended in any of those environments.
+1. When a non-draft, same-repository pull request targeting `main` is open, not already queued, and satisfies criteria 3–10, the command admits its verified head to the merge queue.
+   *Refuted by:* an eligible head is refused or not queued.
+2. When a request is closed, targets another branch, is a draft, or comes from a fork, admission is refused.
+   *Refuted by:* any such request reaches admission.
+3. When the last `## Phase 6` block in the head's findings file neither explicitly reports no findings nor has every finding row marked `fixed` or `rejected`, admission is refused, regardless of severity.
+   *Refuted by:* an absent, ambiguous, open, taken or unrecognised latest verdict is admitted.
+4. When the head has more or fewer than one `Closes-Bead` trailer, or its bead is unknown or closed, admission is refused.
+   *Refuted by:* an absent, multiple, unknown or closed declaration reaches admission.
+5. When the pull request diff does not touch exactly one change folder whose `bead` matches the head trailer, admission is refused.
+   *Refuted by:* zero or multiple matching folders reach admission.
+6. When the latest phase-6 block lacks a reviewed commit, or the reviewed commit is not an ancestor of the head, admission is refused.
+   *Refuted by:* missing or unrelated review evidence reaches admission.
+7. When a commit after the reviewed commit is neither a record-only commit inside that change folder, an empty commit, nor a merge of main, admission is refused.
+   *Refuted by:* a subsequent code change reaches admission.
+8. When a required check from the applicable `main` ruleset is absent, pending, failed, or has a conclusion other than SUCCESS, SKIPPED or NEUTRAL on the verified head, admission is refused.
+   *Refuted by:* a missing or failing required check reaches admission, or a permitted conclusion is rejected.
+9. When a pull request has the `decision` label or touches `docs/adr/`, the script refuses admission with that reason.
+   *Refuted by:* such a request reaches admission.
+10. When any prerequisite or the applicable ruleset cannot be read or established unambiguously, admission is refused.
+    *Refuted by:* unreadable, ambiguous or missing evidence reaches admission.
+11. When admission is attempted, the GraphQL `enqueuePullRequest` mutation receives the verified head as `expectedHeadOid`.
+    *Refuted by:* a direct merge, administrative bypass, or mutation with another or missing head is issued.
+12. When the mutation rejects a moved head, the command reports `head-moved` and does not retry.
+    *Refuted by:* the command retries or fails to identify the changed head.
+13. When phase 6 records a verdict, the runner records the commit reviewed in that block.
+    *Refuted by:* a newly recorded verdict has no reviewed commit or names a different commit.
+14. When admission succeeds, the command exits 0 and reports queued, not merged.
+    *Refuted by:* success reports merged or returns a nonzero exit status.
+15. When a request is already queued, the command reports that state and exits 0 without another admission.
+    *Refuted by:* a retry enqueues again or reports an error.
+16. When a prerequisite fails, the command exits 1 and reports each independently determinable failure on stderr using its condition identifier.
+    *Refuted by:* a failed condition is omitted, has no identifier, or the command exits 0.
+17. When invocation is invalid or admission fails after verification for a reason other than a moved head, the command exits 2.
+    *Refuted by:* a usage or admission failure exits 0 or 1.
+18. When the checkout's admission script differs from `origin/main`, the script refuses before any admission call.
+    *Refuted by:* the unmodified script admits after its own blob differs from `origin/main`.
+19. While Claude Code is used, the guarded script is allowed and direct merge commands remain subject to approval, or denial under the existing night policy.
+    *Refuted by:* the guarded script is not allowed or a direct merge is allowed without the existing control.
+20. When the documented merge procedure admits a request, it names the guarded script as the admission path.
+    *Refuted by:* the procedure or decision-PR template directs admission through a direct merge command.
 
 ## Non-goals
 
-- Merging without an enabled queue, administrative bypass, closing beads, or treating queue admission as a completed merge.
-- Changing required checks or review standards, or creating a second merge entry point.
+- Direct merges, administrative bypass, closing beads, changing required checks, or treating queue admission as a completed merge.
+- Codex and Antigravity permission enforcement is follow-up work (bead `coding-harness-r7zc`); this change makes no claim that external policies are installed.
+- A design or ADR is not due for a bounded change.
 
 ## Protected areas
 
@@ -65,29 +84,33 @@ Tracker data and other changes' findings are read-only; their writers retain own
 
 ## Definition of Done
 
-- `make verify` green; all criteria demonstrated by the criterion ledger.
-- The command, tests, applicable permission policy and merge procedure move together; no ADR is proposed.
+- `make verify` green; the criterion ledger demonstrates the criteria.
+- The admission command, phase-6 runner, tests, Claude Code permission and merge procedure move together.
 - The pull request closes bead `coding-harness-va1l` and its last commit carries `Closes-Bead: coding-harness-va1l`.
 - Special runs: none.
 
 ## Open decisions
 
-[DETAIL] Fail closed when evidence cannot be associated unambiguously with the current head: this preserves the stated conditions without assuming an unknown state is safe.
+[DETAIL] Match the trailer to exactly one changed folder, read its findings at the head, and take the last phase-6 heading in file order; this makes the reviewed evidence reproducible. Explicit no-findings text must state that the reviewer reported no finding; a bare verdict with no rows is not enough.
+
+[DETAIL] Report all independently determinable failures with stable identifiers (`request-state`, `base`, `draft`, `fork`, `already-queued`, `trailer`, `change`, `phase-6`, `reviewed-commit`, `post-review`, `checks`, `decision`, `evidence`, `script-integrity`, `head-moved`); this makes unattended results actionable. A dependent check whose input is unavailable is not invented.
+
+[DETAIL] The self-check in criterion 18 detects accidental changes only: an edited script can remove its own check, and mutable imports are not protected. It is not a security boundary against a hostile checkout.
 
 [DECISION]
 
-Thema: Aufnahme von Entscheidungs-Pull-Requests in die Merge-Warteschlange.
-Absicht: Die neue Freigabe soll unbeaufsichtigtes Einreihen ermöglichen, ohne ungeklärte Architekturentscheidungen vorwegzunehmen.
-Heute: Die Repository-Regel sagt, dass eine Entscheidung durch den Merge ihres Pull Requests durch dich wirksam wird; der genaue Wortlaut der angeführten neuen Freigabe wurde nicht gelesen.
-Repository-Änderung: Das Skript muss entscheiden, ob es solche Pull Requests annimmt oder zurückweist.
-Architekturänderung: Der bestehende Entscheidungsprozess bleibt bestehen; betroffen ist, wer das Einreihen auslösen darf.
+Thema: Einreihen von Entscheidungs-Pull-Requests.
+Absicht: Die bestehende Entscheidung zur Zurückweisung und die Entscheidung für einen einzigen Einreihungsweg müssen zusammen ausführbar sein.
+Heute: Die Antwort in `decisions.md#Q-5` sagt, dass das Skript Entscheidungs-Pull-Requests zurückweist und die Maintainerin oder der Maintainer sie einreiht. `decisions.md#Q-6` bestimmt das Skript als einzigen Einreihungsweg für alle; der Prüfungsbefund S-10 nennt zusätzlich eine ausdrückliche Option für die Maintainerin oder den Maintainer, die Q-5 nicht ausdrücklich beantwortet.
+Repository-Änderung: Der Plan muss festlegen, ob das Skript bei ausdrücklicher menschlicher Aktion eine Ausnahme anbietet oder eine andere Regel gilt.
+Architekturänderung: Die Wahl bestimmt, ob eine Ausnahme im einzigen Einreihungsweg existiert; die übrigen Prüfungen bleiben bestehen.
 
-Ziel in einem Satz: Klären, ob die unbeaufsichtigte Freigabe auch Pull Requests mit Architekturentscheidungen umfasst.
-Option 1 — Entscheidungs-Pull-Requests zurückweisen: Du reihst diese weiterhin selbst ein; Nachteil: sie können den unbeaufsichtigten Ablauf anhalten.
-Option 2 — Auch Entscheidungs-Pull-Requests einreihen: Sie laufen unter denselben Prüfungen automatisch weiter; Nachteil: eine Entscheidung kann ohne deine erneute Einzelaufforderung wirksam werden.
-Empfehlung: Option 1, weil der gelesene Stand keine ausdrückliche Ausnahme für Entscheidungs-Pull-Requests belegt.
-Wenn du „ok“ sagst: Das Skript weist Entscheidungs-Pull-Requests zurück und nennt den Grund.
-Was verloren geht: Option 2 würde auch diese Pull Requests unbeaufsichtigt weiterbringen.
-Akzeptierter Nachteil: Bei Option 1 ist ein manueller Schritt nötig; bei Option 2 entfällt die erneute Einzelaufforderung vor dem Wirksamwerden.
+Ziel in einem Satz: Entscheidungs-Pull-Requests sollen auf einem eindeutig festgelegten Weg eingereiht werden.
+Option 1 — Ausdrückliche menschliche Ausnahme im Skript: Die Maintainerin oder der Maintainer reiht über das Skript ein; Nachteil: eine zusätzliche Ausnahme muss zuverlässig vor unbeaufsichtigter Nutzung geschützt werden.
+Option 2 — Skript weist immer zurück: Die Maintainerin oder der Maintainer nutzt einen anderen freigegebenen Weg; Nachteil: das Einreihen hat mehr als einen Weg.
+Empfehlung: Option 1, weil sie den festgelegten einzigen Einreihungsweg erhält.
+Wenn du „ok“ sagst: Das Skript bietet eine ausschließlich ausdrücklich menschlich freigegebene Ausnahme für Entscheidungs-Pull-Requests; die übrigen Voraussetzungen gelten weiter.
+Was verloren geht: Option 2 würde die Ausnahme im Skript vermeiden.
+Akzeptierter Nachteil: Option 1 erfordert eine geschützte Ausnahme; Option 2 erfordert einen weiteren Einreihungsweg.
 
 Welche Option und welchen zugehörigen Nachteil akzeptierst du?
