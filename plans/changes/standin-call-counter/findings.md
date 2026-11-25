@@ -121,3 +121,95 @@ Stage-2 call, 2026-11-25: review-loop · endpoint opencode-go · model glm-5.3-f
 Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1207 files, 5825 commits, 12 rules.
 
 Runner restoration, 2026-11-25: repair · attempt 1 · route codex — lifecycle fields: plans/changes/standin-call-counter/plan.md, plans/changes/standin-call-counter/spec.md — unchanged
+
+Stage-2 call, 2026-11-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1207 files, 5826 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `tests/atomic_test_log.py` +32 -9
+> - `tests/stand_in_log_guard.py` +9 -6
+> - `tests/test_atomic_test_log.py` +39 -4
+> - `tests/test_standin_call_counter.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - lifecycle fields: plans/changes/standin-call-counter/plan.md, plans/changes/standin-call-counter/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_atomic_test_log.py`, `tests/test_pi_install.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_standin_call_counter.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ........................................................................ [ 11%]
+> ................F....................................................... [ 23%]
+> ........................................................................ [ 35%]
+> ........................................................................ [ 47%]
+> ........................................................................ [ 59%]
+> ........................................................................ [ 71%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 95%]
+> ...........................                                              [100%]
+> =================================== FAILURES ===================================
+> ____________ test_runtime_check_refuses_raw_access_to_declared_logs ____________
+> [gw0] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3747/popen-gw0/test_runtime_check_refuses_raw0')
+>
+>     def test_runtime_check_refuses_raw_access_to_declared_logs(tmp_path: Path) -> None:
+>         """Probe intentional refusals outside pytest's session audit in an isolated process."""
+>         run = subprocess.run(
+>             [
+>                 sys.executable,
+>                 "-c",
+>                 "import sys; from pathlib import Path; import test_atomic_test_log as tests; "
+>                 "tests.stand_in_log_guard.install(); tests._check_raw_access_forms(Path(sys.argv[1]))",
+>                 str(tmp_path),
+>             ],
+>             cwd=HERE,
+>             capture_output=True,
+>             text=True,
+>             timeout=180,
+>         )
+> >       assert run.returncode == 0, run.stdout + run.stderr
+> E       AssertionError: Traceback (most recent call last):
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/test_atomic_test_log.py", line 1007, in _check_raw_access_forms
+> E             form()
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/test_atomic_test_log.py", line 988, in <lambda>
+> E             "open_read": lambda: open(log).read(),  # noqa: SIM115, PTH123 - the planted raw access
+> E                                  ^^^^^^^^^
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/stand_in_log_guard.py", line 124, in open
+> E             check(file, "open")
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/stand_in_log_guard.py", line 119, in check
+> E             raise RawStandInLogAccess(message)
+> E         stand_in_log_guard.RawStandInLogAccess: raw open of the declared stand-in log /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3747/popen-gw0/test_runtime_check_refuses_raw0/calls.jsonl at /Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/test_atomic_test_log.py:988: use atomic_test_log.read_records / append_record
+> E         
+> E         During handling of the above exception, another exception occurred:
+> E         
+> E         Traceback (most recent call last):
+> E           File "<string>", line 1, in <module>
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/test_atomic_test_log.py", line 1003, in _check_raw_access_forms
+> E             with pytest.raises(
+> E                  ^^^^^^^^^^^^^^
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/.venv/lib/python3.12/site-packages/_pytest/python_api.py", line 1027, in __exit__
+> E             self.excinfo.match(self.match_expr)
+> E           File "/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/.venv/lib/python3.12/site-packages/_pytest/_code/code.py", line 722, in match
+> E             assert re.search(regexp, value), msg
+> E                    ^^^^^^^^^^^^^^^^^^^^^^^^
+> E         AssertionError: Regex pattern did not match.
+> E          Regex: 'append_counted'
+> E          Input: 'raw open of the declared stand-in log /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3747/popen-gw0/test_runtime_check_refuses_raw0/calls.jsonl at /Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/tests/test_atomic_test_log.py:988: use atomic_test_log.read_records / append_record'
+> E         
+> E       assert 1 == 0
+> E        +  where 1 = CompletedProcess(args=['/Users/mikypiky/coding-harness/.claude/worktrees/standin-call-counter/.venv/bin/python3', '-c'...orktrees/standin-call-counter/tests/test_atomic_test_log.py:988: use atomic_test_log.read_records / append_record\'\n').returncode
+>
+> tests/test_atomic_test_log.py:970: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_atomic_test_log.py::test_runtime_check_refuses_raw_access_to_declared_logs
+> 1 failed, 602 passed in 189.61s (0:03:09)
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/standin-call-counter/stage2/attempts/standin-call-counter/attempt-1-20261125T073925856489Z-2158152d.md
+> ```
+
+Stage-2 call, 2026-11-25: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1207 files, 5830 commits, 12 rules.
+
+Runner restoration, 2026-11-25: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/standin-call-counter/plan.md, plans/changes/standin-call-counter/spec.md — unchanged

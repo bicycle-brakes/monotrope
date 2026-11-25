@@ -151,7 +151,7 @@ def test_removal_and_rewind_clear_history(tmp_path: Path) -> None:
 
 def _tag(log: Path) -> dict:
     status = log.stat()
-    return {"device": status.st_dev, "inode": status.st_ino, "size": status.st_size}
+    return {"device": status.st_dev, "inode": status.st_ino, "size": status.st_size, "mtime_ns": status.st_mtime_ns}
 
 
 def _write(log: Path, value) -> None:

@@ -2,9 +2,9 @@
 
 During the test session a declared stand-in log or its counter
 (`atomic_test_log.STAND_IN_FILES`, identified by its file name as the helper's
-`_declared` does) may be read or appended only through the helper's locked
-functions, `append_record`, `read_records`, `append_counted` and the counter
-reader `_load_counter` (change standin-call-counter). Only the innermost caller
+`_declared` does) may be read or appended only through the helper functions
+`append_record`, `read_records`, `append_counted` and the unlocked test
+observer's counter reader `_load_counter` (change standin-call-counter). Only the innermost caller
 outside this module and the standard library counts, so a record builder that
 `append_counted` calls back is checked like any other code. Every other `open`, `io.open`, `os.open` or `pathlib.Path`
 `open`, `read_text`, `read_bytes`, `write_text` or `write_bytes` of such a file
@@ -33,7 +33,7 @@ from pathlib import Path, PurePath
 
 import atomic_test_log
 
-# The helper functions whose own file access is the locked one.
+# The permitted helper functions include the unlocked counter observer.
 _HELPER_FUNCTIONS = frozenset({"_append_text", "read_records", "append_counted", "_load_counter"})
 _HELPER_FILE = os.path.realpath(atomic_test_log.__file__)
 _THIS_FILE = os.path.realpath(__file__)
@@ -106,9 +106,12 @@ def check(target, operation: str) -> None:
     frame = sys._getframe(2)
     if _from_helper(frame):
         return
+    counter = name in atomic_test_log.STAND_IN_COUNTERS
+    kind = "counter" if counter else "log"
+    helper = "append_counted" if counter else "read_records / append_record"
     message = (
-        f"raw {operation} of the declared stand-in log {os.fspath(target)!s} at {_caller(frame)}: "
-        "read and append it only through atomic_test_log.read_records / append_record"
+        f"raw {operation} of the declared stand-in {kind} {os.fspath(target)!s} at {_caller(frame)}: "
+        f"use atomic_test_log.{helper}"
     )
     with _lock:
         VIOLATIONS.append(message)

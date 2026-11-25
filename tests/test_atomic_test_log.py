@@ -1000,7 +1000,10 @@ def _check_raw_access_forms(tmp_path: Path) -> None:
         "f6_8_default": reader,
     }
     for name, form in forms.items():
-        with pytest.raises(stand_in_log_guard.RawStandInLogAccess, match="read_records / append_record"):
+        with pytest.raises(
+            stand_in_log_guard.RawStandInLogAccess,
+            match="read_records / append_record",
+        ):
             form()
         recorded = stand_in_log_guard.take_violations()
         assert len(recorded) == 1 and log.name in recorded[0], (name, recorded)
@@ -1228,7 +1231,7 @@ def build(index):
 print(atomic_test_log.append_counted(data, "a", build))
 """
 
-COUNTER_FIELDS = {"device", "inode", "size", "counts"}
+COUNTER_FIELDS = {"device", "inode", "size", "mtime_ns", "counts"}
 
 
 def _counted(key: str, writer: str = "test"):
@@ -1288,7 +1291,10 @@ def _check_counter_access(tmp_path: Path) -> None:
         ),
     }
     for name, form in forms.items():
-        with pytest.raises(stand_in_log_guard.RawStandInLogAccess, match="read_records / append_record"):
+        with pytest.raises(
+            stand_in_log_guard.RawStandInLogAccess,
+            match="read_records / append_record" if name == "builder_reads_log" else "append_counted",
+        ):
             form()
         recorded = stand_in_log_guard.take_violations()
         assert len(recorded) == 1, (name, recorded)
@@ -1416,7 +1422,7 @@ def _complete_counter(snapshot) -> bool:
     return (
         isinstance(snapshot, dict)
         and set(snapshot) == COUNTER_FIELDS
-        and all(type(snapshot[field]) is int for field in ("device", "inode", "size"))
+        and all(type(snapshot[field]) is int for field in ("device", "inode", "size", "mtime_ns"))
         and isinstance(snapshot["counts"], dict)
     )
 
@@ -1516,3 +1522,32 @@ for target in (log, helper.counter_path(log)):
         timeout=30,
     )
     assert run.returncode == 0, run.stdout + run.stderr
+
+
+def test_counted_builder_reentry_fails_immediately(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    for callback in (lambda: read_records(log), lambda: append_counted(log, "a", _counted("a"))):
+
+        def build(index, callback=callback):
+            callback()
+            return {"key": "a", "index": index}
+
+        with pytest.raises(RuntimeError, match="cannot re-enter"):
+            append_counted(log, "a", build, timeout=0.01)
+    assert read_records(log) == []
+
+
+def test_counted_rejects_non_string_key(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    with pytest.raises(TypeError, match="string"):
+        append_counted(log, 1, lambda _index: {"key": 1})
+    assert read_records(log) == []
+
+
+def test_counter_mtime_mismatch_rebuilds(tmp_path: Path) -> None:
+    log = _declared_log(tmp_path)
+    assert append_counted(log, "a", _counted("a")) == 0
+    status = log.stat()
+    os.utime(log, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
+    assert append_counted(log, "a", _counted("a")) == 1
+    assert read_counter(log)["mtime_ns"] == log.stat().st_mtime_ns
