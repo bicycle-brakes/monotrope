@@ -42,3 +42,11 @@ reason: The change is a test-only fix with one stated remedy and no open design 
 
 [DETAIL] **D-9 (spec review S-6, what the classification reads)**: the isolated case reads the real `.github/workflows/ci.yml`, `scripts/verify_all.sh` and `OHNE_AUFRUFER` in place, read-only; only the orphan script lives in the temporary tree. Reason: the check keeps judging against the real callers.
 
+[DETAIL] **D-10 (spec review S-7, the kit probe; amends D-7)**: the inventory tests assert only that the default `_scripts()` list is non-empty; they name no particular script, because `tests/test_ci.py` travels to the kit probe's throwaway repository while `scripts/stage2.py` does not (`scripts/kit/manifest.yaml`, bestand). Reason: a named script would turn the probe red in a foreign repository.
+
+[DETAIL] **D-11 (spec review S-8, writes during the run)**: criterion 1 is held by a test that runs the control case with file writes watched: every write the case attempts (`Path.write_text`, `Path.write_bytes`, `open` for writing) is recorded, and the test asserts none targets the repository's `scripts/`, so a write that is removed again in `finally` still turns it red. Reason: a before-and-after listing cannot see a file that is created and deleted inside the run.
+
+[DETAIL] **D-12 (spec review S-9, where the guard writes; amends D-6)**: Reading B — the guard never writes into the checkout: it runs a planted variant of the control case against a stand-in repository root under tmp_path and shows the watcher of D-11 reports the write. Reason: the guard must not bring back the shared-tree write it exists to forbid.
+
+[DETAIL] **D-13 (spec review S-10, the caller inputs)**: the control test spies on `_heimatlose_namen()` and asserts it received the checkout's `.github/workflows/ci.yml` and `scripts/verify_all.sh` texts and the module's `OHNE_AUFRUFER`, read in place. Reason: otherwise passing blank inputs stays green.
+
