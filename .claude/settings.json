@@ -14,6 +14,10 @@
     ]
   },
   "permissions": {
+    "allow": [
+      "Bash(python3 scripts/enqueue_pr.py *)",
+      "Bash(.venv/bin/python scripts/enqueue_pr.py *)"
+    ],
     "ask": [
       "Bash(gh pr merge *)",
       "Bash(gh -* pr merge*)",
@@ -27,6 +31,7 @@
       "Bash(git push *main*)",
       "mcp__*__merge_pull_request",
       "Bash(codex *)",
+      "Bash(*enqueue_pr.py*--maintainer*)",
       "mcp__omnigent__sys_advise_models"
     ],
     "deny": [

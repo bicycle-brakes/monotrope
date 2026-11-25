@@ -44,38 +44,43 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_enqueue_pr.py::test_eligible_head_is_queued — an eligible head is refused.
-- 2: not yet written tests/test_enqueue_pr.py::test_ineligible_request_is_refused — an ineligible request reaches admission.
-- 3: not yet written tests/test_enqueue_pr.py::test_latest_phase_six_is_settled — an open or ambiguous review is admitted.
-- 4: not yet written tests/test_enqueue_pr.py::test_single_open_bead_trailer — an invalid trailer is admitted.
-- 5: not yet written tests/test_enqueue_pr.py::test_unique_changed_folder_matches_bead — a missing or ambiguous match is admitted.
-- 6: not yet written tests/test_enqueue_pr.py::test_reviewed_commit_is_ancestor — missing or unrelated review evidence is admitted.
-- 7: not yet written tests/test_enqueue_pr.py::test_only_allowed_commits_follow_review — a later code change is admitted.
-- 8: not yet written tests/test_enqueue_pr.py::test_ruleset_checks_on_head — a missing check passes or a permitted conclusion fails.
-- 9: not yet written tests/test_enqueue_pr.py::test_decision_pr_refused_unattended — a decision PR is admitted in default mode.
-- 10: not yet written tests/test_enqueue_pr.py::test_unreadable_evidence_refused — an unreadable input reaches admission.
-- 11: not yet written tests/test_enqueue_pr.py::test_pinned_enqueue_mutation — the call is unpinned or can merge directly.
-- 12: not yet written tests/test_enqueue_pr.py::test_moved_head_is_not_retried — the command retries or omits the identifier.
-- 13: not yet written tests/test_stage2.py::test_phase_six_records_reviewed_commit — a verdict omits or misstates the reviewed commit.
-- 14: not yet written tests/test_enqueue_pr.py::test_admitted_result — admission reports merged or fails.
-- 15: not yet written tests/test_enqueue_pr.py::test_already_queued_is_idempotent — it admits again or fails.
-- 16: not yet written tests/test_enqueue_pr.py::test_refusals_report_all_identifiers — a determinable failure is omitted.
-- 17: not yet written tests/test_enqueue_pr.py::test_usage_and_mutation_failures — either failure returns the wrong status.
-- 18: not yet written tests/test_enqueue_pr.py::test_modified_script_refuses — an unchanged checker admits a modified blob.
-- 19: not yet written tests/test_merge_guard.py::test_enqueue_permission_preserves_merge_controls — a direct merge becomes unattended.
+- 1: tests/test_enqueue_pr.py::test_eligible_head_is_queued — an eligible head is refused.
+- 2: tests/test_enqueue_pr.py::test_ineligible_request_is_refused — an ineligible request reaches admission.
+- 3: tests/test_enqueue_pr.py::test_latest_phase_six_is_settled — an open or ambiguous review is admitted.
+- 4: tests/test_enqueue_pr.py::test_single_open_bead_trailer — an invalid trailer is admitted.
+- 5: tests/test_enqueue_pr.py::test_unique_changed_folder_matches_bead — a missing or ambiguous match is admitted.
+- 6: tests/test_enqueue_pr.py::test_reviewed_commit_is_ancestor — missing or unrelated review evidence is admitted.
+- 7: tests/test_enqueue_pr.py::test_only_allowed_commits_follow_review — a later code change is admitted.
+- 8: tests/test_enqueue_pr.py::test_ruleset_checks_on_head — a missing check passes or a permitted conclusion fails.
+- 9: tests/test_enqueue_pr.py::test_decision_pr_refused_unattended — a decision PR is admitted in default mode.
+- 10: tests/test_enqueue_pr.py::test_unreadable_evidence_refused — an unreadable input reaches admission.
+- 11: tests/test_enqueue_pr.py::test_pinned_enqueue_mutation — the call is unpinned or can merge directly.
+- 12: tests/test_enqueue_pr.py::test_moved_head_is_not_retried — the command retries or omits the identifier.
+- 13: tests/test_stage2.py::test_phase_six_records_reviewed_commit — a verdict omits or misstates the reviewed commit.
+- 14: tests/test_enqueue_pr.py::test_admitted_result — admission reports merged or fails.
+- 15: tests/test_enqueue_pr.py::test_already_queued_is_idempotent — it admits again or fails.
+- 16: tests/test_enqueue_pr.py::test_refusals_report_all_identifiers — a determinable failure is omitted.
+- 17: tests/test_enqueue_pr.py::test_usage_and_mutation_failures — either failure returns the wrong status.
+- 18: tests/test_enqueue_pr.py::test_modified_script_refuses — an unchanged checker admits a modified blob.
+- 19: tests/test_merge_guard.py::test_enqueue_permission_preserves_merge_controls — a direct merge becomes unattended.
 - 20: not a test — phase-6 review checks the three documented procedures for the guarded path.
 
-- 21: not yet written tests/test_enqueue_pr.py::test_maintainer_mode_bypasses_only_specified_conditions — a bypassed condition blocks or a retained condition is bypassed.
-- 22: not yet written tests/test_enqueue_pr.py::test_no_finding_requires_unquoted_runner_statement — quoted or absent evidence passes.
-- 23: not yet written tests/test_enqueue_pr.py::test_released_loop_rows_and_disagreements_refuse — a disputed or unsettled row passes.
-- 24: not yet written tests/test_enqueue_pr.py::test_required_checks_union — a required check from any applicable source is omitted.
+- 21: tests/test_enqueue_pr.py::test_maintainer_mode_bypasses_only_specified_conditions — a bypassed condition blocks or a retained condition is bypassed.
+- 22: tests/test_enqueue_pr.py::test_no_finding_requires_unquoted_runner_statement — quoted or absent evidence passes.
+- 23: tests/test_enqueue_pr.py::test_released_loop_rows_and_disagreements_refuse — a disputed or unsettled row passes.
+- 24: tests/test_enqueue_pr.py::test_required_checks_union — a required check from any applicable source is omitted.
 
 ## Do not touch
 
 Do not alter tracker data, required checks, other changes' findings, or perform a real queue admission in tests. Codex and Antigravity policy enforcement remains follow-up work. The implementation attempt must not edit held paths.
+
+## Runner route — 2026-11-25
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
 
 ## Time used
 
 2026-11-25 14:45:39–14:48:05 UTC, 145 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 15:24:33–15:26:55 UTC, 142 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
 2026-11-25 16:01:07–16:03:06 UTC, 119 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-25 17:12:46–17:26:46 UTC, 840 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

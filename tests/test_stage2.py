@@ -10121,6 +10121,33 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
 
+def test_phase_six_records_reviewed_commit(world: World) -> None:
+    """Criterion 13 of enqueue-pr. Planted fault: a new verdict block omits the reviewed commit, or names
+    another commit than the head the review measured (a re-check after a later commit names the old one)."""
+
+    def last_block_commits() -> list[str]:
+        text = world.text()
+        block = text[[m.start() for m in re.finditer(r"^## Phase 6", text, re.M)][-1] :]
+        assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
+        return re.findall(r"^Reviewed commit: ([0-9a-f]{40})$", block, re.M)
+
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    first = git(world.root, "rev-parse", "HEAD")
+    assert world.run("review") == 0
+    assert last_block_commits() == [first]
+
+    commit_review_findings(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a later change")
+    second = git(world.root, "rev-parse", "HEAD")
+    assert second != first
+    world.script(codex=[codex_ok("T6", "No finding.")])
+    assert world.run("review") == 0
+    assert last_block_commits() == [second], "the re-check recorded another commit than the one it reviewed"
+
+
 def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World) -> None:
     # Criterion 18. Planted fault: a re-check resumes the repair, an earlier verdict or the historical 2a thread,
     # or its verdict call gets write access.

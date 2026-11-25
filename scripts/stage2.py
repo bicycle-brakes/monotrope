@@ -542,6 +542,8 @@ VERDICT_LINE = re.compile(
     r"^Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M
 )
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
+# The runner's own line in each new phase-6 block: the full id of the commit that block reviewed.
+REVIEWED_COMMIT_KEY = "Reviewed commit: "
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 CUT_ROUNDS_LINE = re.compile(r"^Cut rounds: (\d+(?:, \d+)*)\s*$", re.M)
@@ -4988,8 +4990,11 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     return stamped == clean_after
 
 
-def require_fresh_full_verification(root: Path, change: str) -> None:
+def require_fresh_full_verification(root: Path, change: str) -> str:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
+
+    Returns the full commit id of the head that was checked: the commit the reviewer reads, which the
+    verdict block records as its `Reviewed commit:` line (plans/changes/enqueue-pr, criterion 13).
 
     A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
     committed head, except runner call audit lines and their current-date header stamp in
@@ -5052,6 +5057,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
+    return head
 
 
 def review(root: Path, change: str) -> None:
@@ -5086,7 +5092,7 @@ def review(root: Path, change: str) -> None:
         "\n\n".join(["Write only your verdict now.", PHASE6_GUARD_INSTRUCTION]),
         answer_format=PHASE6_ANSWER_FORMAT,
     )
-    require_fresh_full_verification(root, change)
+    reviewed = require_fresh_full_verification(root, change)
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
@@ -5111,6 +5117,9 @@ def review(root: Path, change: str) -> None:
             f"## Phase 6 — Codex, {today()}",
             answer_block(rows, answer, "Codex"),
             *notices,
+            # The commit this verdict reviewed, the head the fresh full check measured; the
+            # admission command (`scripts/enqueue_pr.py`) reads it back (enqueue-pr, criterion 13).
+            f"{REVIEWED_COMMIT_KEY}{reviewed}",
             f"Phase 6 verdict: codex {thread}, {today()}",
         ]
     )

@@ -88,3 +88,86 @@ Spec review commit: 343c5c33ce66636daebf48f7c0491a0764b34416
 | S-32 | MINOR | SPEC | base | `spec.md`, criteria 12 and 17 | The spec does not say how a rejection is recognised as a moved head, or where "the head GitHub reported" comes from. One builder matches the mutation's error text. Another reads the request again after any failure and compares heads. They give different exit statuses. Case: the mutation fails with a transport timeout, and the head has meanwhile moved; the result is exit 2 under error-text matching and exit 1 `head-moved` under the re-read. If GitHub's error carries no commit, criterion 12 needs a second read the spec does not mention, and no exit status is given for when that read fails. | Opus | in plan — [DETAIL] (decisions.md, round 3): after any failed mutation the script reads the request again; a changed head is head-moved (exit 1, both heads named); an unchanged head with a failed call is exit 2 | — |
 | S-33 | MINOR | SPEC | base | `spec.md`, criteria 16 and 18 and the second [DETAIL] | The fixed list of identifiers (`pr`, `head`, `change`, `trailer`, `phase-6`, `reviewed-commit`, `post-review`, `checks`, `decision`) has two gaps. No criterion says what `head` tests or when it fails. The script-integrity refusal of criterion 18 has no identifier and no place in the order: it could come before the request is read or just before the call. Nor is it said how that refusal is reported when the `origin/main` fetch fails. So a test cannot check "using its condition identifier" for these two refusals without the implementer inventing names. | Opus | in plan — [DETAIL] (decisions.md, round 3): head fails when the head cannot be read or is not the commit the checks ran on; the script-integrity refusal gets the identifier script and comes first, before the request is read; a failed origin/main fetch reports script with the fetch error | — |
 | S-34 | MINOR | SPEC | base | `spec.md`, criteria 8 and 24 | The spec does not say what happens when the union of required checks is readable but empty, for example because the required-status-checks rule was removed from the `main` ruleset. Criterion 8 can then never fail, and criterion 1 admits the request with no CI evidence. A queue without required checks also merges it without CI. The research topic, however, conditions the grant on `make verify` being green on the head. A builder must decide whether an empty set admits, or refuses as evidence that cannot be established (criterion 10). Case: every source is readable, no source requires a check, and `verify` failed on the head. | Opus | in plan — [DETAIL] (decisions.md, round 3): an empty required-check set refuses as evidence (no CI evidence, no admission) | — |
+
+Stage-2 call, 2026-11-25: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1238 files, 5932 commits, 12 rules.
+
+Stage-2 call, 2026-11-25: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1238 files, 5938 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/enqueue-pr/plan.md` +23 -23
+> - `scripts/enqueue_pr.py` +979 -0
+> - `scripts/stage2.py` +11 -2
+> - `tests/test_enqueue_pr.py` +951 -0
+> - `tests/test_merge_guard.py` +43 -0
+> - `tests/test_stage2.py` +27 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed `tests/test_enqueue_pr.py`.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> bringing up nodes...
+> bringing up nodes...
+>
+> ......................................................x........F         [100%]
+> =================================== FAILURES ===================================
+> ____________________ test_phase_six_records_reviewed_commit ____________________
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3930/popen-gw...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_phase_six_records_reviewed_commit(world: World) -> None:
+>         """Criterion 13 of enqueue-pr. Planted fault: a new verdict block omits the reviewed commit, or names
+>         another commit than the head the review measured (a re-check after a later commit names the old one)."""
+>     
+>         def last_block_commits() -> list[str]:
+>             text = world.text()
+>             block = text[text.rindex("## Phase 6") :]
+>             assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
+>             return re.findall(r"^Reviewed commit: ([0-9a-f]{40})$", block, re.M)
+>     
+>         world.script(codex=[codex_ok("T5", "No finding.")])
+>         commit_review_findings(world)
+>         first = git(world.root, "rev-parse", "HEAD")
+>         assert world.run("review") == 0
+>         assert last_block_commits() == [first]
+>     
+>         commit_review_findings(world)
+>         (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+>         git(world.root, "add", "-A")
+>         git(world.root, "commit", "--quiet", "-m", "a later change")
+>         second = git(world.root, "rev-parse", "HEAD")
+>         assert second != first
+>         world.script(codex=[codex_ok("T6", "No finding.")])
+>         assert world.run("review") == 0
+> >       assert last_block_commits() == [second], "the re-check recorded another commit than the one it reviewed"
+>
+> tests/test_stage2.py:10148: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+>     def last_block_commits() -> list[str]:
+>         text = world.text()
+>         block = text[text.rindex("## Phase 6") :]
+> >       assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
+> E       ValueError: substring not found
+>
+> tests/test_stage2.py:10131: ValueError
+> ----------------------------- Captured stdout call -----------------------------
+> review: full `make verify` green on 33cc7ee22dd1 before the reviewer starts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> review: verdict appended to plans/changes/demo/findings.md; session codex T5
+> review: full `make verify` green on 3ab04b0d2699 before the reviewer starts
+> INFO  (1):
+>   - leak check clean: 33 files, 5 commits, 1 rules, 1 prompt texts
+> review: verdict appended to plans/changes/demo/findings.md; session codex T6
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_phase_six_records_reviewed_commit - ValueEr...
+> 1 failed, 62 passed, 1 xfailed in 21.32s
+> ```
