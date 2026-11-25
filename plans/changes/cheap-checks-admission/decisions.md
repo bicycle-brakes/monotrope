@@ -31,3 +31,14 @@ context: |
   Architecture change: none; the lock rule of 24ag stays.
 
 In the context of runner checks that run outside the verify lock by design, facing unbounded pytest workers on an 8 GB machine, we decided to keep them outside the lock and cap their workers like the targeted pytest, to achieve lower machine load without changing the lock rule, accepting that a capped kit probe may take longer. — 2026-11-25
+
+## Details decided by the orchestrator
+
+[DETAIL] **D-1 (spec review S-1, the kit probe is serial)**: the kit probe's pytest runs without `-n`, so it is one serial process and needs no worker cap; criterion 2 becomes a check that the probe stays serial (no `-n` in its pytest command), and the cap applies to the runner's cheap-check pytest only. Reason: measured in scripts/kit/probe.py 455-464; capping a serial run changes nothing (Q-1 stays: no lock change).
+
+[DETAIL] **D-2 (S-2, where the worker number comes from)**: `cheap_checks` computes its worker number with the same function the targeted pytest uses (`targeted_pytest_env`), independent of what the caller's environment carries; the ENV_ALLOW gap for `PYTEST_XDIST_AUTO_NUM_WORKERS` stays with coding-harness-9bv1. Reason: no runner caller supplies the variable today, so a caller-supplied setting would never apply.
+
+[DETAIL] **D-3 (S-3, both call sites)**: criterion 1 covers both `cheap_checks` call sites — the targeted check's body and the full-mode preparation. Reason: both start the same unthrottled pytest.
+
+[DETAIL] **D-4 (S-4, scope of the policy)**: only pytest launches of the cheap checks get the cap; `run_gates`, its other gates and its other callers (the draft's and the hand-off's document checks) are unchanged. Reason: the other gates are not pytest and are not the load the bead names.
+
