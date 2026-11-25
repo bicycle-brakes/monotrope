@@ -159,6 +159,131 @@ ROW_ID = re.compile(r"(?=[A-Za-z0-9._-]*\d)[A-Za-z0-9][A-Za-z0-9._-]*")
 # Duplicate targets use exactly the same grammar as readable row IDs.
 FINDING_ID = ROW_ID
 DUPLICATE_MARKER = re.compile(r"\b(?:same\s+as|duplicate\s+of|repeats?\s+of|repeats?)", re.I)
+# Historical duplicate status cells measured from plans/ on 2026-11-25 (baseline 47a6ad4f).
+# Exact cells are frozen: prose is evidence, not an open-ended target grammar.
+LEGACY_DUPLICATE_STATUSES = {
+    "fixed — not a test — duplicate of l3-7 in substance (the per-call refusal already runs through fixed_test_proof since round 3); the docstring now says what each leg proves": [
+        "L3-7"
+    ],
+    "fixed — orchestrator hand edit 1e2de53c: same as l1-2": ["L1-2"],
+    "fixed — orchestrator hand edit 74ba4f6a: same as l1-2": ["L1-2"],
+    "fixed — orchestrator hand edit: same as l4-4": ["L4-4"],
+    "fixed — tests/test_omnigent_deny_layers.py::test_start_hook_wires_reconciliation_before_prime; same as l1-1 and l1-3 (7c5d5b87)": [
+        "L1-1",
+        "L1-3",
+    ],
+    "rejected — duplicate of l1-1": ["L1-1"],
+    "rejected — duplicate of l1-1 (orchestrator, 2026-10-26)": ["L1-1"],
+    "rejected — duplicate of l1-1 (same per-line check)": ["L1-1"],
+    "rejected — duplicate of l1-1 (same reviewer, same mechanism, same lines)": ["L1-1"],
+    "rejected — duplicate of l1-10": ["L1-10"],
+    "rejected — duplicate of l1-11": ["L1-11"],
+    "rejected — duplicate of l1-12": ["L1-12"],
+    "rejected — duplicate of l1-2 (same reviewer, same mechanism, same lines)": ["L1-2"],
+    "rejected — duplicate of l1-2; workflow.md and decisions.md stay true once l1-2 is repaired (orchestrator, 2026-10-26)": [
+        "L1-2"
+    ],
+    "rejected — duplicate of l1-3": ["L1-3"],
+    "rejected — duplicate of l1-3 (orchestrator, 2026-10-26)": ["L1-3"],
+    "rejected — duplicate of l1-4 (orchestrator, 2026-10-26)": ["L1-4"],
+    "rejected — duplicate of l1-4 and l4-3: german reason cells are translated at their source, decisions/gates.yaml, in a pull request of its own (house rule 1, bead coding-harness-yim)": [
+        "L1-4",
+        "L4-3",
+    ],
+    "rejected — duplicate of l1-4, l4-3 and l6-4: german governance prose is translated in a pull request of its own, and new text is english (house rule 1, bead coding-harness-yim)": [
+        "L1-4",
+        "L4-3",
+        "L6-4",
+    ],
+    "rejected — duplicate of l1-4, l4-3, l6-4 and l7-3: german governance prose is translated in a pull request of its own, and new text is english (house rule 1, bead coding-harness-yim)": [
+        "L1-4",
+        "L4-3",
+        "L6-4",
+        "L7-3",
+    ],
+    "rejected — duplicate of l1-4: german reason cells are translated at their source, decisions/gates.yaml, in a pull request of its own (house rule 1, bead coding-harness-yim)": [
+        "L1-4"
+    ],
+    "rejected — duplicate of l1-5": ["L1-5"],
+    "rejected — duplicate of l2-1": ["L2-1"],
+    "rejected — duplicate of l2-1 (same _free_candidate filter)": ["L2-1"],
+    "rejected — duplicate of l2-1 (same text, other reviewer).": ["L2-1"],
+    "rejected — duplicate of l2-2 (same mechanism, other reviewer); repaired with l2-2.": ["L2-2"],
+    "rejected — duplicate of l2-2 (same workflow.md sentence and test)": ["L2-2"],
+    "rejected — duplicate of l2-3 (same defect in terms_problem)": ["L2-3"],
+    "rejected — duplicate of l2-3 and l2-4 and l2-5: a held path (decisions/gates.yaml human-decided; templates/ and agents.md human-written, provenance.yaml); the exact text goes to the maintainer in the morning (bead coding-harness-qut1 notes)": [
+        "L2-3",
+        "L2-4",
+        "L2-5",
+    ],
+    "rejected — duplicate of l2-4": ["L2-4"],
+    "rejected — duplicate of l2-4 (same mechanism, same lines, other reviewer); repaired with l2-4 and l2-13.": [
+        "L2-4"
+    ],
+    "rejected — duplicate of l2-5 and l4-3: agents.md is human-written (provenance.yaml); the exact text goes to the maintainer in the morning (bead coding-harness-qut1 notes)": [
+        "L2-5",
+        "L4-3",
+    ],
+    "rejected — duplicate of l2-5: agents.md is human-written (provenance.yaml); the exact text goes to the maintainer in the morning (bead coding-harness-qut1 notes)": [
+        "L2-5"
+    ],
+    "rejected — duplicate of l2-7 (same mechanism: the partial batch makes the reuse planner list reused slots as not planned); repaired with l2-7.": [
+        "L2-7"
+    ],
+    "rejected — duplicate of l6-1 (the same answer repeated by the reviewer).": ["L6-1"],
+    "rejected — false: repeat of l1-6 and l3-3 with the same reason; the answer record keeps what was shown at answer time": [
+        "L1-6",
+        "L3-3",
+    ],
+    "rejected — false: repeat of l1-6; `shown` records the proposal as the maintainer saw it when answering, and the adr takes effect only with the decision pull request's merge": [
+        "L1-6"
+    ],
+    "rejected — false: repeat of l5-2 with the same reason; the destination is judged at dispatch and at selection": [
+        "L5-2"
+    ],
+    "rejected — repeats l2-2: the `run_codex` docstring now names the verbs a codex route may carry; the lookup stops before the call, and no route pairs implement with codex; a refusal message would be new runner scope, named in the pr as an accepted limit": [
+        "L2-2"
+    ],
+    "rejected — same as l1-1": ["L1-1"],
+    "rejected — same as l1-1 (fixed in abc123)": ["L1-1"],
+    "rejected — same as l1-11": ["L1-11"],
+    "rejected — same as l1-2": ["L1-2"],
+    "rejected — same as l1-2: ac2 is met by storing a fallback as kind full; a full-fallback producer would be a new guarantee.": [
+        "L1-2"
+    ],
+    "rejected — same as l1-3": ["L1-3"],
+    "rejected — same as l1-5": ["L1-5"],
+    "rejected — same as l1-5 (orchestrator, 2026-10-26)": ["L1-5"],
+    "rejected — same as l1-5: findings.md that cannot be appended to stops every verb anyway, and the error being raised already ends the run (orchestrator, 2026-10-26)": [
+        "L1-5"
+    ],
+    "rejected — same as l1-6": ["L1-6"],
+    "rejected — same as l1-7": ["L1-7"],
+    "rejected — same as l2-11: the q-1 record stays as answered; the pull request names the real size of the block as an accepted limit.": [
+        "L2-11"
+    ],
+    "rejected — same as l3-1: scripts/ramp_valves.py does not travel with the kit (scripts/export/manifest.yaml: only scripts/kit/ and named files carry; everything else drops), so no kit instance runs it and criterion 4 is untouched; the framework behaviour is the deliberate decision of row l2-10": [
+        "L3-1"
+    ],
+    "rejected — same as l3-2 and l4-4: the baseline is the orchestrator's measurement before the pull request (spec, definition of done)": [
+        "L3-2",
+        "L4-4",
+    ],
+    "rejected — same as l3-2: the baseline is the orchestrator's measurement after acceptance and before the pull request (spec, definition of done)": [
+        "L3-2"
+    ],
+    "rejected — same as l5-1: the limit change is pull request #382, merged into this branch only so the runner can check this change; it leaves this diff once #382 is on main.": [
+        "L5-1"
+    ],
+    "rejected — same as l5-3: accepted limit named in the pr; a reworded declaration fails loudly as not measured": [
+        "L5-3"
+    ],
+    "rejected — same as l6-3: the old name would state the opposite of what the test asserts; the other change's findings are a historical record at their own commit": [
+        "L6-3"
+    ],
+    "rejected — superseded by q-4: same as l8-1": ["L8-1"],
+    "rejected — the same as l1-1: plan step 7, done by the orchestrator in 5eb38120": ["L1-1"],
+}
 # A pipe not escaped by a backslash; `\\|` counts as escaped, as GitHub reads it.
 _PIPE = re.compile(r"(?<!\\)\|")
 
@@ -419,31 +544,17 @@ def parse_status(status: str) -> StatusParse:
     ids = rf"{FINDING_ID.pattern}(?:\s+and\s+{FINDING_ID.pattern})*"
     # The canonical form ends its targets before the optional reason.
     canonical = re.fullmatch(rf"\s*—\s*duplicate\s+of\s+(?P<ids>{ids})(?::.*)?", detail, re.I)
-    legacy_ids = rf"{FINDING_ID.pattern}(?:(?:\s+and\s+|\s+/\s+|,\s+){FINDING_ID.pattern})*"
-    legacy = re.fullmatch(
-        rf".*?{DUPLICATE_MARKER.pattern}\s+(?P<ids>{legacy_ids})(?![A-Za-z0-9._-])(?P<tail>.*)",
-        detail,
-        re.I,
-    )
-    if (
-        not (kind == "rejected" and canonical)
-        and legacy
-        and any(
-            not re.fullmatch(r"\d{4}-\d{2}-\d{2}", item)
-            for item in FINDING_ID.findall(legacy.group("tail").split(":", 1)[0])
-        )
-    ):
-        return StatusParse(None, [], False, names_id)
-    duplicate = canonical if kind == "rejected" and canonical else legacy
-    targets = (
-        []
-        if duplicate is None
-        else [
-            target
-            for target in FINDING_ID.findall(duplicate.group("ids"))
-            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target)
-        ]
-    )
+    if kind == "rejected" and canonical:
+        targets = FINDING_ID.findall(canonical.group("ids"))
+    elif cell.lower() in LEGACY_DUPLICATE_STATUSES:
+        targets = LEGACY_DUPLICATE_STATUSES[cell.lower()]
+    else:
+        # A named legacy marker outside the measured corpus is unreadable.
+        unquoted = re.sub(r"`[^`]*`", "", cell)
+        marker = re.search(rf"{DUPLICATE_MARKER.pattern}\s+({FINDING_ID.pattern})", unquoted, re.I)
+        if marker and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", marker.group(1)):
+            return StatusParse(None, [], False, names_id)
+        targets = []
     return StatusParse(outcome, sorted(set(targets)), True, names_id)
 
 

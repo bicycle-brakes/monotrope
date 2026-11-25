@@ -56,12 +56,11 @@ def test_legacy_duplicate_reason_and_unparsed_id_fail_gate(tmp_path):
     status = "rejected — same as L1-1: see L2-2"
     head = commit(root, {PATH: HEADER + table(("L1-1", "fixed"), ("L1-2", status))})
     assert any("L1-2" in item for item in gate.measure(root, base, head))
-    assert reader.duplicate_targets(status) == ["L1-1"]
+    assert not reader.known_status(status)
     result = reader.read_change(
         "c1", PATH, "## Phase 6 — Codex, 2026-11-01\n" + table(("L1-1", "fixed"), ("L1-2", status))
     )
-    assert not result.gaps
-    assert next(row for row in result.findings if row.id == "L1-2").duplicate
+    assert result.gaps
     assert gate.marks_duplicate("unreadable status mentioning L1-1")
 
 
