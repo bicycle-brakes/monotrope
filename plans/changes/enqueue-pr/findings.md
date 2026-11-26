@@ -512,3 +512,21 @@ Stage-2 call, 2026-11-26: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1280 files, 6012 commits, 12 rules.
 
 Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1283 files, 6023 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:580 | A released loop row with a settled status and an unrecognised Phase 6 mark such as `banana` is accepted. The mark establishes neither agreement nor disagreement, so the verdict evidence is ambiguous and admission must be refused. [Criterion 10] | Codex | taken — structural remedy (second closed-vocabulary finding beside settled()): add strict agreed() allowlist beside settled() in scripts/enqueue_pr.py so released_problems() refuses any Phase 6 mark other than agree (with optional delimiter), keeping specific messages for missing/no-answer and disagree | — |
+| F-2 | [DIVERGENT] BLOCKER | SPEC | base | plans/changes/enqueue-pr/spec.md:107; scripts/enqueue_pr.py:750 | The spec permits a merge of main only when its tree equals the clean merge result of its parents. The implementation also accepts a merge whose regenerated `plans/INDEX.md` differs from that result, including an index-only conflict. The phase-2a row S-26 says the latter rule was decided and placed in the spec, but the current spec states the former. [Criterion 7] | Codex | rejected — S-26 status is answered — [DETAIL] (decisions.md, round 3), not in spec; decisions.md line 184 explicitly keeps spec.md at its round-3 reviewed fingerprint while applying S-24..S-34 (same convention agreed on L4-3 for S-25) | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: removes the reviewed-commit label from the verdict block read by the test, simulating an omitted reviewed commit — catches without switch: yes; the assertions also check the unmodified block for the label and the exact reviewed commit.
+
+Reviewed commit: 28ad4ef0ae9c086ddd292dd5278bc98d2b2cb707
+
+Phase 6 verdict: codex 01a2192d-2380-76f0-b2f3-bb3d2079d9af, 2026-11-26
+Reviewer session: codex 01a2192d-2380-76f0-b2f3-bb3d2079d9af — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
