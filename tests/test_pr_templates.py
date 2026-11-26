@@ -80,7 +80,7 @@ def test_the_template_tells_an_agent_how_to_merge() -> None:
     comments = re.findall(r"<!--(.*?)-->", _decision(), re.S)
     assert len(comments) == 1, "one comment for agents, invisible on the phone"
     comment = comments[0]
-    for needed in ("decide(", '"decision"', "--match-head-commit"):
+    for needed in ("decide(", '"decision"', "scripts/enqueue_pr.py", "--maintainer"):
         assert needed in comment, f"the agent's comment lacks {needed!r}"
 
 
