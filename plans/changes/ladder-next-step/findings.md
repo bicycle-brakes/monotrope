@@ -546,3 +546,14 @@ Stage-2 call, 2026-11-26: review (loop marks) · endpoint openai-codex · model 
 Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1281 files, 6049 commits, 12 rules.
 
 Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/ladder-next-step/plan.md, plans/changes/ladder-next-step/spec.md — unchanged
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1281 files, 6055 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:13821 | A successful repair of a phase-6 finding publishes `review` as the next verb. The specification requires every successful `repair` to publish `review-loop` with `repair` as its producer, so a consumer receives a different instruction from the one promised. [Criterion 23] | Codex | rejected — explicitly settled by round-5 decision S-22 (decisions.md:220, findings.md round-5 S-22, docs/WORKFLOW.md, pinned by tests/test_stage2.py::test_phase6_repair_publishes_review_instruction): a repair of a phase-6 finding publishes `review`, never `review-loop` | — |
+
+Phase 6 verdict: codex 01a219cc-32d1-7482-ab4f-9a8db887c481, 2026-11-26
+Reviewer session: codex 01a219cc-32d1-7482-ab4f-9a8db887c481 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
