@@ -508,7 +508,7 @@ def _furniture(cells: list[str]) -> bool:
 
 
 def settled(status: str) -> bool:
-    return status.strip().lower().startswith(("fixed", "rejected"))
+    return bool(re.fullmatch(r"(?:fixed|rejected)(?:\s*(?:—|:|-|\().*)?", status.strip(), re.IGNORECASE))
 
 
 def last_phase6_block(text: str) -> list[str] | None:

@@ -420,7 +420,7 @@ Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:510 | A finding whose status is `fixed pending repair` or `rejected until reviewed` is accepted because the status check only tests its prefix. These unresolved or unrecognised statuses must refuse admission. [Criterion 3] | Codex | taken — criterion 3: settled() must accept only canonical fixed/rejected statuses (alone or followed by delimiter such as —, :, - or (), or via findings_reader status rules) and refuse unresolved phrases like `fixed pending repair` or `rejected until reviewed` | — |
+| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:510 | A finding whose status is `fixed pending repair` or `rejected until reviewed` is accepted because the status check only tests its prefix. These unresolved or unrecognised statuses must refuse admission. [Criterion 3] | Codex | fixed — tests/test_enqueue_pr.py::test_unresolved_status_prefixes_refuse_admission | — |
 | F-2 | MAJOR | SPEC | base | scripts/enqueue_pr.py:725 | A commit after the reviewed commit can change `spec.md` inside the change folder and still pass as record-only. The altered acceptance criteria were never reviewed, so this is not a record-only commit. [Criterion 7] | Codex | rejected — spec.md Open decisions [DETAIL] (line 107) explicitly defines record-only commits as changing only paths inside the change folder or `plans/INDEX.md`; changing this definition would diverge from the reviewed spec | — |
 | F-3 | MAJOR | SPEC | base | scripts/enqueue_pr.py:769 | A pull request with an otherwise valid, readable ruleset that requires no checks is refused because the required set is empty. An established empty set has no missing or failing required checks and must not by itself prevent admission. [Criteria 1 and 8] | Codex | rejected — decided in spec-review round 3 (decisions.md S-34, 2026-11-25): an empty required-check set refuses as evidence (no CI evidence, no admission) | — |
 | F-4 | MAJOR | SPEC | base | scripts/enqueue_pr.py:1033 | An already queued pull request returns an error if the local script differs from `origin/main`, because script integrity is checked before queue state. An already queued request must report that state and exit 0 before evaluating other conditions. [Criterion 15] | Codex | rejected — decided in spec-review round 3 (decisions.md S-33, 2026-11-25): script-integrity check runs first before reading the pull request, verified by tests/test_enqueue_pr.py::test_already_queued_is_idempotent | — |
@@ -508,3 +508,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-26: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1280 files, 6010 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1280 files, 6012 commits, 12 rules.
+
+Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged

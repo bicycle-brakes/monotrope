@@ -340,6 +340,22 @@ PHASE6_CASES = {
 }
 
 
+@pytest.mark.parametrize("status", ["fixed pending repair", "rejected until reviewed", "fixedness", "rejectedly"])
+def test_unresolved_status_prefixes_refuse_admission(
+    make: Callable[..., World], capsys: pytest.CaptureFixture[str], status: str
+) -> None:
+    world = make(record=lambda reviewed, _main: {FINDINGS: phase6(reviewed, body=table(status))})
+    err = refused(world, capsys)
+    assert "phase-6:" in err
+
+
+@pytest.mark.parametrize(
+    "status", ["fixed", "rejected", "fixed — proof", "rejected: reason", "fixed - proof", "rejected (reason)"]
+)
+def test_canonical_settled_statuses_are_accepted(status: str) -> None:
+    assert ep.settled(status)
+
+
 @pytest.mark.parametrize("case", list(PHASE6_CASES))
 def test_latest_phase_six_is_settled(make: Callable[..., World], capsys: pytest.CaptureFixture[str], case: str) -> None:
     """Criterion 3. Planted fault: an absent, ambiguous, open, taken or unrecognised latest verdict is admitted,

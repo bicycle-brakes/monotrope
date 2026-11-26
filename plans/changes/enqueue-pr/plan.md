@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-25
 last_reviewed: 2026-11-25
-updated: 2026-11-25
+updated: 2026-11-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-va1l
@@ -86,3 +86,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai 
 2026-11-25 17:12:46–17:26:46 UTC, 840 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
 2026-11-25 20:24:34–20:27:42 UTC, 188 s — repair · attempt 1 · route codex · model gpt-6.1-terra · rejected · measured by the runner
 2026-11-25 20:27:58–20:38:35 UTC, 636 s — repair · attempt 2 · route codex-repair · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_enqueue_pr.py`, `tests/test_merge_guard.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
+2026-11-26 15:42:11–15:45:54 UTC, 223 s — repair · attempt 1 · route codex · model gpt-6.1-terra · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_enqueue_pr.py`, `tests/test_merge_guard.py`, `tests/test_pr_templates.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
