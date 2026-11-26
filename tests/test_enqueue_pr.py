@@ -1057,6 +1057,27 @@ def test_maintainer_mode_needs_the_full_option(spelling: str) -> None:
         ep.parse_args(["54", spelling])
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--maintainer", "7"],
+        ["--maintainer"],
+        ["--", "7", "--maintainer"],
+        ["--", "7"],
+        ["7", "--maintainer", "--maintainer"],
+    ],
+)
+def test_maintainer_flag_before_number_is_refused(
+    make: Callable[..., World], capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    """Phase-6 F-1: `--maintainer` or any flag before `<number>` is refused with exit 2 so no accepted
+    spelling can bypass the `* --maintainer*` permission rule."""
+    world = make()
+    assert world.run(*argv) == 2, argv
+    assert capsys.readouterr().err.startswith("usage: ")
+    assert world.gh.calls == [], "an invalid flag order reached GitHub"
+
+
 def test_decision_map_uses_main_and_longest_prefix(make, capsys):
     """Loop rows L3-5 and L4-1. Planted fault: reading the working tree or a stale local origin/main ref instead
     of the fetched main commit, or ignoring longest-prefix overrides in provenance.yaml."""

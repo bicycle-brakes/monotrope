@@ -991,21 +991,27 @@ def is_human_decided(path: str, entries: list[tuple[str, bool]]) -> bool:
     return max(matches)[1] if matches else False
 
 
-class _Parser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:  # type: ignore[override]
-        raise UsageError(message)
-
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    # No abbreviations: only the literal --maintainer selects maintainer mode (loop row L2-2).
-    parser = _Parser(prog="enqueue_pr.py", add_help=False, allow_abbrev=False)
-    parser.add_argument("number")
-    parser.add_argument("--maintainer", action="store_true")
-    args = parser.parse_args(argv)
-    if not re.fullmatch(r"[1-9][0-9]{0,9}", args.number):
-        raise UsageError(f"the pull request number {args.number!r} is no positive integer")
-    args.number = int(args.number)
-    return args
+    """Accept only `<positive-integer>` or `<positive-integer> --maintainer`.
+
+    The permission rules in `scripts/agent_policy.py` and `.claude/settings.json`
+    guard `--maintainer` after the pull request number (`* --maintainer*`).
+    Refusing any flag or `--` before `<number>` (and any abbreviation, loop row L2-2)
+    ensures no spelling accepted here can enter maintainer mode outside those rules.
+    """
+    if not argv:
+        raise UsageError("the pull request number is required")
+    if len(argv) > 2:
+        raise UsageError(f"unexpected argument(s): {' '.join(argv[2:])}")
+    number_raw = argv[0]
+    if not re.fullmatch(r"[1-9][0-9]{0,9}", number_raw):
+        raise UsageError(f"the pull request number {number_raw!r} is no positive integer")
+    maintainer = False
+    if len(argv) == 2:
+        if argv[1] != "--maintainer":
+            raise UsageError(f"unrecognised argument {argv[1]!r}; only literal --maintainer is accepted after <number>")
+        maintainer = True
+    return argparse.Namespace(number=int(number_raw), maintainer=maintainer)
 
 
 def script_integrity(root: Path, script: Path) -> list[str]:

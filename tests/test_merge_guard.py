@@ -194,6 +194,13 @@ def test_enqueue_permission_preserves_merge_controls() -> None:
     assert not blocked, f"the guarded command is still stopped by {blocked}"
     assert any(mg.covers(rule, ENQUEUE_MAINTAINER) for rule in ask), "maintainer mode runs without approval by day"
     assert any(mg.covers(rule, ENQUEUE_MAINTAINER) for rule in night_denies), "maintainer mode is not denied at night"
+    venv_maintainer = "Bash(.venv/bin/python scripts/enqueue_pr.py 54 --maintainer)"
+    assert any(mg.covers(rule, venv_maintainer) for rule in ask), "venv maintainer mode runs without approval by day"
+    assert any(mg.covers(rule, venv_maintainer) for rule in night_denies), "venv maintainer mode is not denied at night"
+    import enqueue_pr as ep
+
+    with pytest.raises(ep.UsageError):
+        ep.parse_args(["--maintainer", "54"])
 
 
 def test_merge_field_reads_do_not_trigger_the_brake() -> None:
