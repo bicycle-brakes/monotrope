@@ -12,6 +12,7 @@ owner: Data Architect
 provenance: human-written
 tags: [research]
 class: architectural
+neighbours: []
 ---
 
 # state first records — Research
