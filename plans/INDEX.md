@@ -768,4 +768,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/test-ci-shared-tree/plan.md`](changes/test-ci-shared-tree/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/test-ci-shared-tree/research.md`](changes/test-ci-shared-tree/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/test-ci-shared-tree/spec.md`](changes/test-ci-shared-tree/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/worktree-setup-hook/decisions.md`](changes/worktree-setup-hook/decisions.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/findings.md`](changes/worktree-setup-hook/findings.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/plan.md`](changes/worktree-setup-hook/plan.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/research.md`](changes/worktree-setup-hook/research.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook/spec.md`](changes/worktree-setup-hook/spec.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
