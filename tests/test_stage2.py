@@ -35024,6 +35024,29 @@ def test_spent_ladder_retains_paid_exclusion_reasons(world: World, capsys: pytes
     assert "no paid model of the declaration is admissible" not in err
 
 
+def test_spent_ladder_reports_current_paid_model_exclusions(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6: current exclusions are reported even when the snapshot has no paid stage."""
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": [], "flash": [], "rungs": []}
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    ns_edit_entry(
+        world,
+        lambda _entry, data: data.__setitem__(
+            "ausgeschlossen", [{"was": "planted", "klasse": "framework", "modelle": list(TEST_LADDER)}]
+        ),
+    )
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n")
+    for model in TEST_LADDER:
+        reason = stage2.paid_problem(world.root, stage2.endpoint_entry(world.root), model)
+        assert reason is not None and reason in err, model
+        assert reason not in out
+    ns_edit_entry(world, lambda _entry, data: data.__setitem__("ausgeschlossen", []))
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n")
+    assert "no paid model of the declaration is admissible" not in err
+
+
 def test_spent_ladder_with_no_completed_round_stops(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 7. Planted fault: a run that completed no round exits other than 2, names a step or goes on to phase 6."""
     world.record().parent.mkdir(parents=True, exist_ok=True)

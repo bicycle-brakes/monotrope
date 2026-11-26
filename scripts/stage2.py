@@ -25,7 +25,7 @@ between the rule and the call.
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
-    python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
+    python3 scripts/stage2.py review-loop  <change>   # one round, until clean or a consumed ladder names the next step
     python3 scripts/stage2.py triage       <change> 'L1-1=taken — not a test' 'The finding only strengthens a test.'   # record a decided loop row locally: no model, no proof mark
     # Triage refuses ordinary taken for test-only locations; use taken — not a test — <reason>.
     # The Broke a test proof mark stays the runner's; triage supplies no repair evidence.
@@ -13850,7 +13850,7 @@ def rate_limited(outcome: object) -> bool:
 
 @capture_terms_warnings()
 def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
-    """One round of phase 4b, until a round is clean (ADR 0021).
+    """One round of phase 4b, until clean or a consumed ladder names the next step (ADR 0021).
 
     A fresh run discovers its free members through a forced live refresh and
     pins the stage snapshot; every later call takes the run's next unconsumed
@@ -14058,7 +14058,7 @@ def _name_next_step(
             # The declaration names paid models while the snapshot holds no paid stage: the reasons come
             # from the declaration as it stands now, never from the snapshot's time.
             problems = "; ".join(
-                reason for model in dict.fromkeys(declared) if (reason := terms_problem(entry, model)) is not None
+                reason for model in dict.fromkeys(declared) if (reason := paid_problem(root, entry, model)) is not None
             )
             if problems:
                 print(f"review-loop: no paid model of the declaration is admissible: {problems}", file=sys.stderr)
