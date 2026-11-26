@@ -15,7 +15,7 @@ review:
   status: pending
   approved_by: null
   approved_at: null
-updated: 2026-11-25
+updated: 2026-11-26
 ---
 
 # Resume here
@@ -212,8 +212,8 @@ refused), 1tn1 (Codex pre-tool hook), 363r.5 (model list clean-up), 363r.6
 - **pi-work-route (363r.3):** the maintainer confirmed the seats for run 3
   (repository and online trios deepseek-v4.1-flash, mimo-v2.6-flash,
   glm-5.3-flash). A session-only one-shot wake at **23:13** probes Claude,
-  re-runs `prepare-explore` and starts run 3 with
-  `XDG_STATE_HOME=/Users/Shared/coding-harness-research`; if Claude is still
+  re-runs `prepare-explore` and starts run 3 with `XDG_STATE_HOME` set to the
+  shared research state directory under `/Users/Shared/`; if Claude is still
   limited it retries 30 minutes later. A new session must re-create that wake.
 - This handover PR (#464) is being admitted to the merge queue on the
   maintainer's request.
