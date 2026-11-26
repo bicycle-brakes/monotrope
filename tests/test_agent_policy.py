@@ -707,6 +707,14 @@ def test_generated_configuration_drift_fails(tmp_path: Path) -> None:
     assert any(".agents/hooks.json" in problem for problem in ap.check(missing))
 
 
+def test_agent_policy_drift_goes_red_when_a_generated_file_drifts(tmp_path: Path) -> None:
+    clean = _fresh_root(tmp_path / "clean")
+    assert ap.main(["--root", str(clean), "check"]) == 0
+    drifted = _fresh_root(tmp_path / "drifted")
+    (drifted / ".agents" / "hooks.json").unlink()
+    assert ap.main(["--root", str(drifted), "check"]) == 1
+
+
 def test_layer_two_and_night_protection(tmp_path: Path) -> None:
     root = _fresh_root(tmp_path / "root")
     policy_file = root / "tools" / "omnigent" / "policy.yaml"
