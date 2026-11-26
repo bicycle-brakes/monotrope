@@ -573,3 +573,13 @@ Reviewed commit: 4312ad264a1b75b3d86cd2b94bceb1bdb0191cf0
 
 Phase 6 verdict: codex 01a219c7-2403-75c0-a77e-4ecc39196009, 2026-11-26
 Reviewer session: codex 01a219c7-2403-75c0-a77e-4ecc39196009 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+## Hand steps for the orchestrator — 2026-11-26
+
+The runner handed the taken rows below to the orchestrator before any model call: each row's `Where` names a path the runner does not commit. The runner left every Status and `Broke a test` cell of these rows unchanged.
+
+- F-1 — `.claude/settings.json` — runner-held path
+
+Each row's Status and `Broke a test` cells live in: F-1 in findings.md.
+
+Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
