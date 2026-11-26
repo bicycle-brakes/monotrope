@@ -1,0 +1,11 @@
+{
+  "coding-harness-start": {
+    "SessionStart": [
+      {
+        "command": "./hooks/session-start.sh",
+        "timeout": 30,
+        "type": "command"
+      }
+    ]
+  }
+}
