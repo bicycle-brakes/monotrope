@@ -13,7 +13,11 @@ a deny. The overlay carries nothing else: inherited non-permission settings
 stay in their native layers, and Claude Code still reads them there. It then
 starts `claude --settings <overlay> --permission-mode dontAsk` with the
 remaining arguments as an argv list, waits for the child, removes the overlay
-and forwards the child's exit status.
+and forwards the child's exit status. The child's environment carries
+`HARNESS_UNATTENDED=1`, so the agent-policy hook (`scripts/agent_policy_hooks.py`)
+turns an ask into a deny as well (plans/changes/agent-policy-list). The
+installed copy under `~/.claude` takes this on only when the maintainer
+reinstalls it (`tools/claude-code/install.sh`).
 
 An unattended session cannot answer a permission question, so the profile
 refuses instead of waiting. The launch stops before `claude` runs when a
@@ -42,6 +46,14 @@ FRAGMENT_NAME = "night-settings.json"
 
 # Arguments that would silently replace or bypass the night profile.
 PROFILE_FLAGS = ("--settings", "--permission-mode", "--dangerously-skip-permissions")
+
+# The signal the agent-policy hook reads: an unattended run, where every ask is a deny.
+UNATTENDED = {"HARNESS_UNATTENDED": "1"}
+
+
+def child_environment(base: dict[str, str] | None = None) -> dict[str, str]:
+    """The child's environment: the launcher's own, marked unattended."""
+    return {**(dict(os.environ) if base is None else base), **UNATTENDED}
 
 
 class SettingsError(Exception):
@@ -170,7 +182,10 @@ def main(argv: list[str] | None = None) -> int:
         overlay_path = overlay_dir / "settings.json"
         overlay_path.write_text(json.dumps(overlay, indent=2) + "\n", encoding="utf-8")
         try:
-            done = subprocess.run([CLAUDE, "--settings", str(overlay_path), "--permission-mode", "dontAsk", *argv])
+            done = subprocess.run(
+                [CLAUDE, "--settings", str(overlay_path), "--permission-mode", "dontAsk", *argv],
+                env=child_environment(),
+            )
         except FileNotFoundError:
             print("night.py: 'claude' was not found on the PATH", file=sys.stderr)
             return 127
