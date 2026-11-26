@@ -1013,6 +1013,8 @@ def test_maintainer_mode_needs_the_full_option(spelling: str) -> None:
 
 
 def test_decision_map_uses_main_and_longest_prefix(make, capsys):
+    """Loop rows L3-5 and L4-1. Planted fault: reading the working tree or a stale local origin/main ref instead
+    of the fetched main commit, or ignoring longest-prefix overrides in provenance.yaml."""
     world = make(change={**DEFAULT_CHANGE, "docs/governance/fehler-katalog.md": "change"})
     mapping = "paths:\n  - prefix: docs/governance/\n    allowed: [human-decided]\n  - prefix: docs/governance/fehler-katalog.md\n    allowed: [ai-drafted-reviewed]\n  - prefix: docs/mixed/\n    allowed: [human-decided, ai-drafted-reviewed]\n"
     git(world.root, "checkout", "--quiet", "-b", "mapping", world.base)
@@ -1022,9 +1024,12 @@ def test_decision_map_uses_main_and_longest_prefix(make, capsys):
     write(world.root, {"provenance.yaml": "paths: []\n"})
     admitted(world, capsys)
     reserved = make(change={**DEFAULT_CHANGE, "docs/governance/quality.md": "change"})
+    stale_base = reserved.base
     git(reserved.root, "checkout", "--quiet", "-b", "mapping", reserved.base)
     reserved.commit({"provenance.yaml": mapping}, "map")
     git(reserved.root, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    # Force local origin/main back to the stale base commit to prove the fetched main commit is read (L4-1).
+    git(reserved.root, "update-ref", "refs/remotes/origin/main", stale_base)
     git(reserved.root, "checkout", "--quiet", "feat")
     write(reserved.root, {"provenance.yaml": "paths: []\n"})
     assert "decision:" in refused(reserved, capsys)
@@ -1032,6 +1037,8 @@ def test_decision_map_uses_main_and_longest_prefix(make, capsys):
 
 
 def test_malformed_provenance_refuses(make, capsys):
+    """Loop row L3-6. Planted fault: letting invalid YAML in provenance.yaml raise an unhandled exception
+    instead of refusing under the decision condition."""
     world = make()
     git(world.root, "checkout", "--quiet", "-b", "mapping", world.base)
     world.commit({"provenance.yaml": "paths: [broken\n"}, "bad map")
@@ -1046,6 +1053,7 @@ def test_malformed_provenance_refuses(make, capsys):
 
 
 def test_malformed_released_row_refuses():
+    """Loop row L3-7. Planted fault: silently skipping malformed or unescaped-pipe lines in a released loop block."""
     for row in (
         "| L1-1 | MAJOR | CODE | x | y | bad | pipe | m | open | — | — |",
         "| wrong | MAJOR | CODE | x | y | finding | m | open | — | — |",
@@ -1055,6 +1063,7 @@ def test_malformed_released_row_refuses():
 
 
 def test_merge_check_uses_shared_engine(monkeypatch, tmp_path):
+    """Loop row L3-8. Planted fault: re-implementing git merge-tree parsing instead of calling pr_sync.merge_tree."""
     calls = []
     monkeypatch.setattr(ep, "_is_ancestor", lambda *_args: True)
     monkeypatch.setattr(pr_sync, "merge_tree", lambda *args: (calls.append(args) or ("a" * 40, [])))
@@ -1068,11 +1077,13 @@ def test_merge_check_uses_shared_engine(monkeypatch, tmp_path):
 
 
 def test_unicode_reviewer_no_finding():
+    """Loop row L3-9. Planted fault: rejecting a non-ASCII reviewer name on a no-finding verdict line."""
     block = ["## Phase 6", "Émile reported no finding.", VERDICT]
     assert ep.phase6_problems(block) == []
 
 
 def test_failed_enqueue_rereads_queue_state(make, capsys):
+    """Loop row L3-10. Planted fault: reporting not-queued after a transport error when GitHub accepted the mutation."""
     world = make()
     world.gh.enqueue_error = "connection lost"
     original = world.gh.pull_request

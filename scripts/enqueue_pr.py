@@ -925,7 +925,8 @@ def _attended_conditions(
         if adr:
             out.fail("decision", [f"the pull request touches {ADR_DIR} ({adr}); it is the maintainer's"])
         try:
-            mapping = human_decided_prefixes(root)
+            assert main is not None
+            mapping = human_decided_prefixes(root, main)
             reserved = ", ".join(
                 path for path in paths if not path.startswith(ADR_DIR) and is_human_decided(path, mapping)
             )
@@ -945,10 +946,10 @@ def _attended_conditions(
 # ---------------------------------------------------------------------------
 
 
-def human_decided_prefixes(root: Path) -> list[tuple[str, bool]]:
-    """Read the authoritative main-branch map, including non-reserved overrides."""
+def human_decided_prefixes(root: Path, ref: str = "origin/main") -> list[tuple[str, bool]]:
+    """Read the authoritative main-branch map from `ref`, including non-reserved overrides."""
     try:
-        data = yaml.safe_load(show(root, "origin/main", "provenance.yaml"))
+        data = yaml.safe_load(show(root, ref, "provenance.yaml"))
     except yaml.YAMLError as error:
         raise Unreadable(f"invalid YAML: {error}") from None
     if not isinstance(data, dict) or not isinstance(data.get("paths"), list):
