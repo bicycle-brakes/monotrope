@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-25
 created: 2026-11-25
 last_reviewed: 2026-11-25
-updated: 2026-11-25
+updated: 2026-11-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-363r.3
@@ -222,3 +222,35 @@ Stage-2 call, 2026-11-25: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/changes/pi-work-route/design.md`
 > - `plans/changes/pi-work-route/plan.md`
 > - `plans/changes/pi-work-route/spec.md`
+
+Stage-2 call, 2026-11-26: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1279 files, 6021 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 45 characters left out …]
+> - plans/changes/pi-work-route/spec.md is missing after the draft.
+> - plans/changes/pi-work-route/plan.md is missing after the draft.
+> ```
+
+Stage-2 call, 2026-11-26: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason the first draft attempt failed · leak check clean over 1279 files, 6021 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner verification scope: document checks only, no tests ran; result: red; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: ` [… 45 characters left out …]
+> - plans/changes/pi-work-route/spec.md is missing after the draft.
+> - plans/changes/pi-work-route/plan.md is missing after the draft.
+> ```
+
+Stage-2 call, 2026-11-26: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.4 · reason two Codex draft attempts failed · leak check clean over 1279 files, 6021 commits, 12 rules.
+
+> Attempt 3 (glm) failed its call: claude call failed: exit 1 ([claude-code:unrecognized_model] {"model":"glm-5.4","query_source":"sdk"})
+>
+> the attempt is saved at refs/stage2/attempts/pi-work-route/draft-attempt-3-20261126T183037710036Z (0ac6cc205b65); `git diff ba17925c124d refs/stage2/attempts/pi-work-route/draft-attempt-3-20261126T183037710036Z` shows it.
