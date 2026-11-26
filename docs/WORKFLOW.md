@@ -1815,8 +1815,9 @@ dated skip, an exclusion, a removal, unread retention or training terms)
 counts as consumed; a Flash stage counts as consumed only when no member is
 admitted and no unconsumed admitted rung could replace one. With at least one
 completed round since the last restart, `review-loop` exits 0 after the
-existing stops (undecided or unmarked rows, origin and record integrity, the
-clean stop, the repair brake) and prints exactly one line on standard output:
+existing stops (undecided rows, unmarked `fixed` rows, origin and record
+integrity, the clean stop, the repair brake) and prints exactly one line on
+standard output:
 `next: repair <change>` while any round of the run since the last restart holds
 a taken row that no repair has marked `fixed` — an unmarked taken row
 included — and `next: review <change>` once every taken row is repaired. A
@@ -1827,7 +1828,8 @@ schema version 1, change, verb `review`, `repair`, `hand` or `review-loop`, row
 ids, producing verb and UTC time) to `next.json` beside `loop.md`, never into
 Markdown; a failed validation or write exits 1 without the line. Every
 `review-loop` call removes the previous `next.json` first; a successful
-`repair` writes one for `review-loop`; `triage`, `release-loop` (also
+`repair` writes one for `review-loop` (or `review` when the repaired batch held
+a phase-6 row); `triage`, `release-loop` (also
 `--stage-failed` and `--restart`) and the phase-6 release remove it. A run
 without a completed round whose stages are consumed still refuses with exit 2.
 After the last repair, phase 6 follows as ever: a fresh full `make verify` and

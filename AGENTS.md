@@ -186,9 +186,9 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **An exhausted review ladder goes to phase 6** (maintainer, 2026-11-20): when
   every stage of a `review-loop` run is consumed and the last round was not
   clean, the runner names the next step: `next: review <change>` once every
-  taken row of that round is repaired, `next: repair <change>` before; phase 6
-  checks that last repair. Reason: a run's history cannot be reset, and asking
-  each time stopped lanes overnight.
+  taken row since the last restart is repaired, `next: repair <change>` before;
+  phase 6 checks that last repair. Reason: a run's history cannot be reset, and
+  asking each time stopped lanes overnight.
 - **At most two review-loop rounds** (maintainer, 2026-11-23): taken rows of round two are repaired, then phase 6 checks that repair instead of a third round; this narrows phase 4b until the runner enforces it (coding-harness-3rtn).
 
 ## Sibling repositories
