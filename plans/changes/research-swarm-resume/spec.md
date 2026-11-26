@@ -28,11 +28,11 @@ The maintainer recorded that consecutive runs with unchanged selection and tree 
 
 ## Acceptance criteria
 
-1. When a research swarm resumes a stored incomplete run under the store's matching-resume rule (`changed_against_stored`, including after committing the first run's appended publication to `research.md` and its `updated:` restamp so `HEAD` has moved) with the same selection, each repository-topic prompt for topics 1–8 is byte-identical to its corresponding prompt in the first run.
-   *Refuted by:* A corresponding prompt for any of topics 1–8 differs because of a run identifier, publication growth, `updated:` restamp, moved `HEAD`, timestamp, changing commit count or another non-frozen input.
+1. When a research swarm resumes a stored incomplete run under the store's matching-resume rule (`changed_against_stored`, including after committing an earlier incomplete run's appended publication to `research.md` and its `updated:` restamp so `HEAD` has moved, and across multi-run chains such as run 1 → run 2 → run 3) with the same selection, each repository-topic prompt for topics 1–8 is byte-identical to its corresponding prompt in the origin run.
+   *Refuted by:* A corresponding prompt for any of topics 1–8 differs between run 1 and a matching resumed run 2 or run 3 because of a run identifier, publication growth, `updated:` restamp, moved `HEAD`, timestamp, changing commit count or another non-frozen input.
    *Basis:* `decisions.md#Q-1`.
-2. When one repository-topic seat fails in the first run and the matching resumed run succeeds, every other finished, valid repository-topic seat is reused without another launch.
-   *Refuted by:* A successful repository-topic seat is launched again or its stored result is not adopted.
+2. When one repository-topic seat fails in the first run and a matching resumed run runs (or fails another seat and resumes again in a third run), every finished, valid repository-topic seat from an earlier run in the chain is reused without another launch and validates against the same replayed baseline inputs (`sources`, `map`, `history`) that produced its prompt.
+   *Refuted by:* A successful repository-topic seat from run 1 or run 2 is launched again, rejected by validation against drifted post-publication `research.md`/HEAD state, or its stored result is not adopted.
    *Basis:* `decisions.md#Q-1`.
 3. When that failed repository-topic seat is resumed, it is launched again rather than adopted as a successful result.
    *Refuted by:* The failed seat is reused or never launched.
@@ -40,15 +40,15 @@ The maintainer recorded that consecutive runs with unchanged selection and tree 
 4. When a binding, seat identity, model, prompt hash or result validity fails the existing reuse checks, the affected result is not reused.
    *Refuted by:* A mismatched or invalid result is adopted despite the existing checks.
    *Basis:* `decisions.md#Q-1`; `research.md`, “The reuse decision”.
-5. When a repository-topic prompt for topics 1–8 is built on run 1 or on a matching resumed run, it preserves the finder map's resolved excerpts and (for topic 6) the `# Mapped history (data)` section derived from the first run's stored frozen inputs rather than omitting them.
-   *Refuted by:* A repository-topic prompt drops mapped source excerpts or topic 6 drops `# Mapped history (data)` or lacks the history entries `validate_research_report` requires for commit citations.
+5. When a repository-topic prompt for topics 1–8 is built on run 1 or on any matching resumed run in the chain, its `# Finder map (data)` packet preserves every resolved entry's non-empty locator, `extent` (start and end line) and `excerpt_sha256` from the origin run's frozen inputs (matching run 1), and topic 6 preserves `# Mapped history (data)` from the origin run's baseline `HEAD`, while validation (`validate_topic`), judge composition (`compose`), and published `map`/`history` fences use those same replayed baseline inputs.
+   *Refuted by:* A repository-topic prompt drops or blanks resolved map `extent` or `excerpt_sha256` fields, topic 6 drops `# Mapped history (data)`, or validation/composition reads drifted post-publication `research.md` or moved-`HEAD` history that disagrees with the prompt.
    *Basis:* `decisions.md#Q-1`.
 
 ## Non-goals
 
-- Changing the frozen-binding or exact prompt-hash contract, the selection of seats, or the research swarm's availability and retry policies.
+- Changing the matching-resume comparison rules (`changed_against_stored`), the exact `prompt_sha256` / slot-identity reuse checks, the selection of seats, or the research swarm's availability and retry policies. (Adding replayable origin-baseline fields to the stored run record so matching resumes can replay run 1's inputs is explicitly in scope.)
 - Maintaining prompt-hash compatibility with slots stored under a pre-fix drifted prompt hash: pre-fix slots whose prompt hash still matches and validates are reused under criterion 4, and any pre-fix slot recorded under a drifted hash is recomputed once without clearing the store or relaxing validation.
-- Repairing unrelated research-swarm failures or changing published research content beyond what the existing contract requires.
+- Repairing unrelated research-swarm failures or altering published research semantics beyond recording the replayed baseline inputs consistently on a resumed run.
 
 ## Protected areas
 
@@ -56,8 +56,8 @@ Model configuration, leak checks, and unrelated changes remain untouched: this i
 
 ## Definition of Done
 
-- `make verify` green; the two-run regression (including a committed publication between runs and non-empty mapped excerpts and topic-6 history) and the existing reuse boundary tests pass.
-- Documentation or ADR changes: none expected.
+- `make verify` green; a deterministic three-run regression (run 1 fails seat A and commits its publication -> run 2 reuses all other seats, fails seat B and commits its publication -> run 3 reuses seats from both run 1 and run 2 and launches only seat B, with non-empty resolved `extent`/`excerpt_sha256` and topic-6 `# Mapped history (data)`) and the existing reuse boundary tests pass.
+- Documentation changes: update `docs/WORKFLOW.md` Q-13 if the stored run record carries additional replayable baseline fields; no ADR changes expected.
 - Protected areas and non-goals remain untouched, shown by the pull request's file list.
 - The pull request closes bead `coding-harness-f6qj`, and its last commit carries `Closes-Bead: coding-harness-f6qj`.
 - Special runs: none.
@@ -68,8 +68,14 @@ None open.
 
 [DETAIL] A four-hour phase-4 appetite is a reversible stop for this bounded fix; it keeps the investigation and regression proportionate to the stated scope.
 
-[DETAIL] Spec-review S-1 (matching resume definition): Adopt Reading B — a matching resume follows the store's existing `changed_against_stored` contract, including resuming after committing the first incomplete run's appended `research.md` publication (moved `HEAD`, appended tail and `updated:` restamp). Repository-topic prompts (including map excerpts resolved from `research.md` and topic 6's `# Mapped history (data)`) derive from the stored first-run inputs rather than the moved `HEAD` or appended tail (decided under the bounded standing grant for non-BLOCKER spec-review rows).
+[DETAIL] Spec-review S-1 (matching resume definition): Adopt Reading B — a matching resume follows the store's existing `changed_against_stored` contract, including resuming after committing an earlier incomplete run's appended `research.md` publication (moved `HEAD`, appended tail and `updated:` restamp). Repository-topic prompts (including map entries resolved from `research.md` and topic 6's `# Mapped history (data)`) derive from the origin run's stored baseline inputs rather than the moved `HEAD` or appended tail (bounded standing grant).
 
-[DETAIL] Spec-review S-2 (evidence preservation): Byte-identity is achieved by stabilizing/replaying the stored first-run inputs (criterion 5), never by dropping mapped excerpts or `# Mapped history (data)` from repository-topic prompts (decided under the bounded standing grant).
+[DETAIL] Spec-review S-2 & S-7 (evidence preservation): Repository prompts carry resolved finder-map `extent` and `excerpt_sha256` (not full excerpt text, Reading A of S-7) and topic 6 carries `# Mapped history (data)`. Byte-identity is achieved strictly by replaying the origin run's baseline inputs (criterion 5), never by dropping or blanking `extent`, `excerpt_sha256`, or `# Mapped history (data)` (bounded standing grant).
 
-[DETAIL] Spec-review S-3 (pre-fix stores): Existing `plan_reuse` and `validate_research_report` checks stay strict (criterion 4 and Non-goals); pre-fix stored slots with matching hashes and valid results are reused, while pre-fix slots with previously drifted hashes are recomputed once without wiping the store (decided under the bounded standing grant).
+[DETAIL] Spec-review S-3 (pre-fix stores): Existing `plan_reuse` and `validate_research_report` checks stay strict (criterion 4 and Non-goals); pre-fix stored slots with matching hashes and valid results are reused, while pre-fix slots with previously drifted hashes are recomputed once without wiping the store (bounded standing grant).
+
+[DETAIL] Spec-review S-4 (stored baseline fields): Adopt Reading A — persisting the replayable origin-baseline inputs (such as baseline `HEAD` and the frozen origin `research.md` snapshot or resolved baseline inputs) in the stored run record is allowed and does not weaken `changed_against_stored` or prompt-hash validation; `docs/WORKFLOW.md` Q-13 may be updated to note the stored baseline fields (bounded standing grant).
+
+[DETAIL] Spec-review S-5 (multi-run resume chains): Adopt Reading A — when run 2 resumes run 1, run 2 persists run 1's replayed origin-baseline inputs into run 2's stored run record so run 3 (reading only the latest stored run) reproduces the exact same origin prompts and reuses seats launched in both run 1 and run 2 (verified by the three-run regression in DoD; bounded standing grant).
+
+[DETAIL] Spec-review S-6 (consistent replay across prompt, validation, judge and publication): Adopt Reading B — a matching resumed run replays the origin baseline `sources`, `map` and `history` consistently across prompt building, `validate_topic`, `compose`/judge packet and published `map`/`history` fences (keeping its own `run_id` and recording the replayed baseline `HEAD` truthfully), so citations valid in run 1 always validate on resume (bounded standing grant).
