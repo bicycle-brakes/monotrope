@@ -294,7 +294,6 @@ if name == "pin-pi":
     name = "pi"
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
-previous = read_records(log)
 argv = sys.argv[1:]
 if name == "claude" and argv == ["--version"]:
     sys.stdout.write(scenario.get("claude_version", "2.1.328 (Claude Code)") + "\\n")
@@ -342,8 +341,14 @@ else:
 candidates = [f"{kind}:{topic}:{model.split('/')[-1]}", f"{kind}:{topic}", kind]
 used = next((key for key in candidates if key in scenario), candidates[-1])
 steps = scenario.get(used, [])
-index = sum(1 for call in previous if call.get("key") == used)
-step = steps[index] if index < len(steps) else (steps[-1] if steps and scenario.get("repeat_last") else {})
+
+
+def select(index):
+    return steps[index] if index < len(steps) else (steps[-1] if steps and scenario.get("repeat_last") else {})
+
+
+# The earlier calls of the selected key come from the counter beside the log;
+# the step is selected and its record appended under the log's lock.
 record = {
     "name": name,
     "program_path": program_path,
@@ -355,7 +360,7 @@ record = {
     "env": dict(os.environ),
     "cwd": os.getcwd(),
     "t0": time.time(),
-    "sleep": step.get("sleep", 0),
+    "sleep": 0,
     "stdin": stdin_text,
     "system_prompt": system_prompt,
     "prompt": prompt,
@@ -369,7 +374,16 @@ record = {
     if os.path.isdir(os.environ.get("HOME", ""))
     else None,
 }
-append_record(log, record)
+chosen = {}
+
+
+def build(index):
+    chosen["step"] = select(index)
+    return dict(record, sleep=chosen["step"].get("sleep", 0))
+
+
+append_counted(log, used, build)
+step = chosen["step"]
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 receipts = os.environ.get("STAGE2_PUBLIC_RECEIPTS")
 if receipts and step.get("receipts"):

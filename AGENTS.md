@@ -119,7 +119,7 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   `docs/journal/handover/`. Record the objective, completed work and evidence,
   decisions and preferences, unfinished work/blockers, branch/commit/PR,
   parallel-session ownership, and one concrete resumption action. Preserve
-  prior records with a dated addendum; task status stays in Beads.
+  prior records with a dated addendum; task status stays in Beads. The morning handover carries the findings-per-model table for main (`git fetch origin`, then `make findings-per-model REV=origin/main`; a local `main` may be stale) and for each unmerged change branch that gained rows that night, including an earlier branch of a lane (`make findings-per-model` on that branch), each with its cutoff commit.
 - Link the handover in the closing message; the next session resumes from it.
 - A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
 - **Night runs stay plain** (maintainer, 2026-10-12): `ROADMAP.md` is the one map and the
@@ -176,13 +176,13 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
   step) and resumes or restarts there. One change at a time, with few agents
-  and a visible queue. A long runner job starts in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
+  and a visible queue. Every runner verb and every bare `make verify` starts detached through `python3 scripts/jobs.py start -- <command>` and so outlives the session; `jobs.py list` shows its state and exit (ADR 0026). Other long commands start in the harness's background mode, one job per call — never with `&` or `nohup` inside a command, which ends without a notice and leaves a lane idle unseen (maintainer, 2026-11-04). Every night run arms a recurring 30-minute wake, keeps the machine awake, and checks and logs its lanes as described in `docs/WORKFLOW.md`, ‘Night runs’.
 - **Pull requests stay mergeable:** synced daily, asked about after five working
-  days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
+  days, three per hot file, sliced over ~800 lines, merged through the merge queue at their exact head — the orchestrator admits one itself once phase 6 is clean, `make verify` is green on its head and its last commit carries `Closes-Bead` (standing grant, maintainer 2026-11-25) (without it: one at a time against the new head once every check completed); questions in one 15:00 block (`docs/WORKFLOW.md`).
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without asking; style rows
-  are accepted limits named in the PR. A second finding of one mechanism ends case repair; a mechanism no choke point closes gets a `Boundary` in its spec; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
+  are accepted limits named in the PR. A second finding of one mechanism ends case repair: the orchestrator takes the structural remedy at one choke point itself and names it in bead notes and handover (standing grant, maintainer 2026-11-25); a `Boundary` (a mechanism no choke point closes), a spec or criterion change and security stay the maintainer's; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
 - **An exhausted review ladder goes to phase 6** (maintainer, 2026-11-20): when
   `review-loop` refuses because every stage of its run is consumed and the last
   round was not clean, and every taken row of that round is repaired, the lane

@@ -115,6 +115,16 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Local tracker-writer command — `make close-merged` and the repository session-start hook run it; "
         "it writes the tracker, so CI never does (tests/test_close_merged_beads.py runs it)"
     ),
+    "findings_per_model.py": (
+        "Local command, not a gate — `make findings-per-model` runs it to count accepted review findings per "
+        "model at one commit for the morning handover; it measures and decides nothing "
+        "(bead coding-harness-qut1; tests/test_findings_per_model.py runs it)"
+    ),
+    "findings_reader.py": (
+        "Library — the one reader of findings.md rows, imported by scripts/findings_per_model.py and by "
+        "scripts/check_finding_duplicates.py (the gate finding-duplicates); tests/test_findings_per_model.py "
+        "imports it"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "
@@ -152,6 +162,17 @@ OHNE_AUFRUFER: dict[str, str] = {
     "research_census.py": (
         "Library - the research metadata census (explore-provenance); tests/test_explore_provenance.py "
         "imports it, and the pytest gate runs it there. It only reads research files, never rewrites them"
+    ),
+    "jobs.py": (
+        "Entry point, not a gate — the detached job launcher (start, list, stop) that the night orchestrator "
+        "calls on the maintainer's machine; it needs a live tmux server and real processes, which no CI "
+        "checkout can stand in for; tests/test_jobs.py runs it against isolated state roots (bead "
+        "coding-harness-a6ns.1)"
+    ),
+    "job_containment.py": (
+        "Library - the one owner of finding and ending a detached job's processes; scripts/jobs.py stop "
+        "imports it, and tests/test_jobs.py runs it against real processes and a stand-in backend (bead "
+        "coding-harness-a6ns.1)"
     ),
     "machine_facts.py": (
         "Entry point, not a gate — the local, read-only machine-facts snapshot shown at night-run start "
