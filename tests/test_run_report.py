@@ -11,9 +11,12 @@ that turns it red; the fault is the ledger's em-dash text of its criterion.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -1057,3 +1060,67 @@ def test_orchestrator_minutes_and_measurement_notes_stay_unread(tmp_path: Path) 
     out = "\n".join(run_report.change_block(folder, "alpha"))
     assert "time recorded: 600 s" in out
     assert "unread lines: 4 — the time subtotal is incomplete" in out
+
+
+# ---------------------------------------------------------------------------
+# Detached jobs (bead coding-harness-a6ns.1)
+# ---------------------------------------------------------------------------
+
+LONG_AGO = "Mon Jan 1 00:00:00 2001"
+
+
+@pytest.fixture(autouse=True)
+def _isolated_job_records(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The report reads the job records of the state root: never those of the machine running the tests."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("job-state")))
+
+
+def write_detached(command: list[str], pid: int | None, *, wrapper_alive: bool = True) -> str:
+    """One job record on disk; the wrapper is this test process, or a process that does not exist."""
+    jobs = run_report.jobs
+    job_id = jobs.new_job_id()
+    record = jobs.new_record(job_id, command, "/work", f"/state/{job_id}.log")
+    me = os.getpid()
+    record.update(
+        state="running",
+        command_pid=pid,
+        command_start=LONG_AGO,
+        wrapper_pid=me if wrapper_alive else 2**22 + 17,
+        wrapper_start=jobs.process_start(me) if wrapper_alive else LONG_AGO,
+    )
+    jobs.write_record(jobs.state_dir() / f"{job_id}.json", record)
+    return job_id
+
+
+def test_report_includes_running_detached_job(tmp_path: Path, capsys) -> None:
+    """Fault: a running detached job known only from its record is omitted, a job the process table
+    already recognized is counted twice, or lost and unreadable records are not named (criterion 7)."""
+    make_change(tmp_path, "alpha")
+    command = ["python3", "scripts/stage2.py", "implement", "alpha"]
+    recorded_only = write_detached(command, 5001)
+    also_in_ps = write_detached(command, 5002)
+    lost = write_detached(command, 5003, wrapper_alive=False)
+    (run_report.jobs.state_dir() / "20260101T000000Z-abcdef.json").write_text("{not json", encoding="utf-8")
+    run = fake_run({PS_ARGV: ps_output("5002 00:30:00 python3 scripts/stage2.py implement alpha")})
+    code, out = run_main(tmp_path, capsys, run=run, proc_dir=proc_fixture(tmp_path))
+    assert code == 0
+    row = next(line for line in out.splitlines() if recorded_only in line)
+    assert "pid 5001 · implement · change alpha" in row and "running" in row
+    assert out.count("pid 5002") == 1, "the process and its record were both counted"
+    assert also_in_ps not in out
+    assert next(line for line in out.splitlines() if lost in line).count("lost") == 1
+    assert "20260101T000000Z-abcdef" in out and "record unreadable" in out
+
+
+def test_detached_non_runner_hides_arguments(tmp_path: Path, capsys) -> None:
+    """Fault: an argument, a prompt or a path of a detached command that is not a runner verb reaches the
+    report (criterion 23)."""
+    make_change(tmp_path, "alpha")
+    other = write_detached(["/usr/local/bin/mytool", "--prompt", "SENTINEL-SECRET alpha"], 6001)
+    lookalike = write_detached(["python3", "scripts/stage2.py", "not-a-verb", "SENTINEL-SECRET"], 6002)
+    code, out = run_main(tmp_path, capsys, proc_dir=proc_fixture(tmp_path))
+    assert code == 0
+    assert "SENTINEL-SECRET" not in out and "--prompt" not in out and "/usr/local" not in out
+    assert "scripts/stage2.py" not in out and "not-a-verb" not in out
+    assert next(line for line in out.splitlines() if other in line).startswith("    pid 6001 · mytool ·")
+    assert next(line for line in out.splitlines() if lookalike in line).startswith("    pid 6002 · python3 ·")

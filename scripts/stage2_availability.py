@@ -95,8 +95,10 @@ def _normal(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.split("(")[0].lower())
 
 
-def read_intelligence(models: list[str], slugs: dict[str, str]) -> dict:
+def read_intelligence(models: list[str], slugs: dict[str, str], *, runner) -> dict:
     """The index per model id, or a reading marked not read with its reason; it never stops a preparation.
+
+    An error is redacted with the supplied runner's `scrub`, never with a second import of the runner.
 
     A model matches an entry by its declared slug in `intelligence_slugs`, else by its id against the
     entry's slug or name with case, punctuation and a parenthesised effort label ignored. Several matching
@@ -142,10 +144,8 @@ def read_intelligence(models: list[str], slugs: dict[str, str]) -> dict:
             else ("not read: no matching index entry with a numeric score")
         )
     except Exception as error:  # Optional intelligence must never prevent a selection receipt.
-        from stage2 import scrub
-
         reading["scores"] = dict.fromkeys(models)
-        reading["status"] = "not read: " + scrub(str(error).replace(key, "[key]"), key)[:200]
+        reading["status"] = "not read: " + runner.scrub(str(error).replace(key, "[key]"), key)[:200]
     return reading
 
 
@@ -1248,6 +1248,7 @@ def prepare_research(
     state["intelligence"] = read_intelligence(
         sorted({key.split("/", 1)[1] for key, item in selection.models.items() if item["state"] == "selected"}),
         block.get("intelligence_slugs") or {},
+        runner=runner,
     )
     print(research_report(state))
     missing = [(label, number) for label, numbers in state["unfilled"].items() for number in numbers]

@@ -1,9 +1,12 @@
 """The runtime check on declared stand-in logs (change flaky-swarm-leak-test, decisions.md#Q-5).
 
-During the test session a declared stand-in log (`atomic_test_log.STAND_IN_LOGS`,
-identified by its file name as the helper's `_declared` does) may be read or
-appended only through the helper's locked functions, `append_record` and
-`read_records`. Every other `open`, `io.open`, `os.open` or `pathlib.Path`
+During the test session a declared stand-in log or its counter
+(`atomic_test_log.STAND_IN_FILES`, identified by its file name as the helper's
+`_declared` does) may be read or appended only through the helper functions
+`append_record`, `read_records`, `append_counted` and the unlocked test
+observer's counter reader `_load_counter` (change standin-call-counter). Only the innermost caller
+outside this module and the standard library counts, so a record builder that
+`append_counted` calls back is checked like any other code. Every other `open`, `io.open`, `os.open` or `pathlib.Path`
 `open`, `read_text`, `read_bytes`, `write_text` or `write_bytes` of such a file
 raises `RawStandInLogAccess` and is recorded; `tests/conftest.py` fails the
 test that made a recorded access even when the code under test swallowed the
@@ -30,8 +33,8 @@ from pathlib import Path, PurePath
 
 import atomic_test_log
 
-# The helper functions whose own file access is the locked one.
-_HELPER_FUNCTIONS = frozenset({"_append_text", "read_records"})
+# The permitted helper functions include the unlocked counter observer.
+_HELPER_FUNCTIONS = frozenset({"_append_text", "read_records", "append_counted", "_load_counter"})
 _HELPER_FILE = os.path.realpath(atomic_test_log.__file__)
 _THIS_FILE = os.path.realpath(__file__)
 _STDLIB = str(Path(os.__file__).resolve().parent) + os.sep
@@ -72,11 +75,14 @@ def _real_file(code_file: str) -> str:
 
 
 def _from_helper(frame) -> bool:
+    """Whether the innermost caller outside this module and the standard library is a locked helper function."""
     while frame is not None:
         code = frame.f_code
-        if code.co_name in _HELPER_FUNCTIONS and _real_file(code.co_filename) == _HELPER_FILE:
-            return True
-        frame = frame.f_back
+        where = _real_file(code.co_filename)
+        if where == _THIS_FILE or where.startswith(_STDLIB):
+            frame = frame.f_back
+            continue
+        return code.co_name in _HELPER_FUNCTIONS and where == _HELPER_FILE
     return False
 
 
@@ -84,7 +90,7 @@ def _caller(frame) -> str:
     """The first frame outside this module and the standard library."""
     while frame is not None:
         where = _real_file(frame.f_code.co_filename)
-        if where != _THIS_FILE and not where.startswith(_STDLIB) and not frame.f_code.co_filename.startswith("<"):
+        if where != _THIS_FILE and not where.startswith(_STDLIB):
             return f"{frame.f_code.co_filename}:{frame.f_lineno}"
         frame = frame.f_back
     return "unknown location"
@@ -95,14 +101,17 @@ def check(target, operation: str) -> None:
     if _state["suspended"]:
         return
     name = _name(target)
-    if name not in atomic_test_log.STAND_IN_LOGS:
+    if name not in atomic_test_log.STAND_IN_FILES:
         return
     frame = sys._getframe(2)
     if _from_helper(frame):
         return
+    counter = name in atomic_test_log.STAND_IN_COUNTERS
+    kind = "counter" if counter else "log"
+    helper = "append_counted" if counter else "read_records / append_record"
     message = (
-        f"raw {operation} of the declared stand-in log {os.fspath(target)!s} at {_caller(frame)}: "
-        "read and append it only through atomic_test_log.read_records / append_record"
+        f"raw {operation} of the declared stand-in {kind} {os.fspath(target)!s} at {_caller(frame)}: "
+        f"use atomic_test_log.{helper}"
     )
     with _lock:
         VIOLATIONS.append(message)

@@ -200,6 +200,7 @@ import check_frontmatter_current  # noqa: E402
 import check_interview_minimums  # noqa: E402
 import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
+import jobs  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
 import plans_registry  # noqa: E402
@@ -531,7 +532,7 @@ FREE_DIFF_MAX_TOTAL = 2000
 # (`CallFailed`) instead of ending in a summary it answers on. The pinned Pi 1.5.0 evidence is
 # `tests/test_pi_contract.py::test_real_context_overflow_fails_without_compaction`; the historical
 # `docs/research/2026-11-03-pi-context-overflow.md` measured Pi 1.2.0.
-REVIEW_DIFF_MAX_LINES = 2000
+REVIEW_DIFF_MAX_LINES = 4000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -1142,6 +1143,8 @@ def launch(
                         pass_fds=pass_fds,
                     )
                     _LIVE_GROUPS.add(process.pid)
+                    # Under a detached job the group joins the job's record, so `jobs.py stop` reaches it.
+                    jobs.register_group(process.pid)
             # Cancellation may have arrived while Popen was starting in a worker.
             if _LAUNCH_STOPPED.is_set():
                 raise NotStarted("the runner was interrupted during launch")
@@ -3103,8 +3106,8 @@ def bounded_review_diff(diff: str) -> tuple[str, str | None]:
 
     The caller writes the second half into the round record: a clean answer over a cut diff is not a
     clean answer about the change, and the record must say which of the two it was. The free round is
-    bounded too (R-12 of the review-swarm review): it carries the same diff, and an uncapped prompt
-    would read as a limit that is none.
+    bounded too (R-12 of the review-swarm review): it carries its own selected diff (the implementation
+    diff, not the full change diff), and an uncapped prompt would read as a limit that is none.
     """
     # Split on "\n" only, as git counts: `splitlines()` also splits on CR and form feed, which inflates the
     # count and rewrites the kept part's line ends (O191-4).
@@ -6905,6 +6908,140 @@ def changed_paths(
     return paths
 
 
+def file_inventory(root: Path, env: dict[str, str] | None = None) -> set[Path]:
+    """Every path git currently sees: indexed entries and untracked non-ignored files.
+
+    The repair scope guard compares this with the pre-attempt inventory, so a new file is one the
+    inventory lacked at the attempt's start: an untracked non-ignored file, an indexed addition (an
+    explicitly indexed ignored file included) or a rename destination. An untracked ignored file
+    reaches neither listing, so it is never new for this guard (bead coding-harness-t83, S-2).
+    """
+    paths: set[Path] = set()
+    for raw in [
+        *_git_bytes(root, "ls-files", "-z", "--cached", env=env).split(b"\0"),
+        *_git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0"),
+    ]:
+        if not raw:
+            continue
+        try:
+            name = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            name = raw.decode("utf-8", errors="surrogateescape")
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts or name not in (path.as_posix(), path.as_posix() + "/"):
+            raise Refused("a staged or untracked path cannot be mapped safely")
+        paths.add(path)
+    return paths
+
+
+def ignore_rules_state(root: Path, inventory: set[Path]) -> dict[str, bytes]:
+    """Freeze the contents of ignore rules, including self-ignored rule files."""
+    ignored = ignored_snapshot(root)
+    exclude = _git_output(root, "rev-parse", "--git-path", "info/exclude").strip()
+    sources = {".git/info/exclude": root / exclude}
+    configured = _git_output(root, "config", "--path", "--get", "core.excludesFile", allow={1: ""}).strip()
+    if configured:
+        sources[".git/stage2-configured-excludes"] = root / configured
+    sources.update({rel.as_posix(): root / rel for rel in inventory | set(ignored) if rel.name == ".gitignore"})
+    state = {}
+    for name, path in sources.items():
+        try:
+            state[name] = path.read_bytes()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise Refused(f"cannot snapshot ignore rules {name}: {error}") from error
+    return state
+
+
+def attempt_new_files(
+    root: Path,
+    before: set[Path],
+    rules_before: dict[str, bytes],
+    ignored_before: dict[Path, tuple[int, int]] | None,
+) -> set[Path]:
+    """Fail closed on every inventory error, so callers take the restoration path."""
+    try:
+        return _attempt_new_files(root, before, rules_before, ignored_before)
+    except Exception as error:
+        raise Refused(f"inventory failed: {error}") from error
+
+
+def _attempt_new_files(
+    root: Path,
+    before: set[Path],
+    rules_before: dict[str, bytes],
+    ignored_before: dict[Path, tuple[int, int]] | None,
+) -> set[Path]:
+    """Judge newly appearing paths by the rules frozen at the start of the call."""
+    after = file_inventory(root)
+    new = after - before
+    if ignored_before is None:
+        return new
+    ignored_after = ignored_snapshot(root)
+    if ignore_rules_state(root, after) == rules_before:
+        return new
+    candidates = (new | (set(ignored_after) - before)) - set(ignored_before)
+    if not candidates:
+        indexed = _git_bytes(root, "ls-files", "-z", "--cached")
+        return new & {Path(os.fsdecode(name)) for name in indexed.split(b"\0") if name}
+    # A separate temporary worktree reconstructs the original per-directory rules, so Git
+    # applies its own matching semantics without changing the attempt's files or index.
+    with tempfile.TemporaryDirectory(prefix="stage2-ignore-") as scratch:
+        temp = Path(scratch)
+        _git_output(temp, "init", "-q")
+        for name, content in rules_before.items():
+            path = temp / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        excludes = temp / ".git/stage2-configured-excludes"
+        excludes.touch(exist_ok=True)
+        names = b"".join(os.fsencode(path.as_posix()) + b"\0" for path in sorted(candidates))
+        result = run_git(
+            temp,
+            "-c",
+            f"core.excludesFile={excludes}",
+            "check-ignore",
+            "--no-index",
+            "-z",
+            "--stdin",
+            stdin=names,
+            allow={1: ""},
+        )
+        originally_ignored = {Path(os.fsdecode(name)) for name in result.stdout.split(b"\0") if name}
+    # Indexed additions always count, even if the original rules ignored them.
+    indexed = set()
+    for raw in _git_bytes(root, "ls-files", "-z", "--cached").split(b"\0"):
+        if raw:
+            indexed.add(Path(os.fsdecode(raw)))
+    return (candidates - originally_ignored) | ((after - before) & indexed)
+
+
+def remove_stray_files(root: Path, stray: Iterable[Path]) -> list[str]:
+    """Delete an attempt's new files outside the repair scope, index entries included; name what went."""
+    paths = sorted(stray)
+    # Verification can replace a parent after the inventory was captured. Check the
+    # whole batch before changing the index or deleting any path.
+    for relative in paths:
+        problem = restoration_parent_problem(root, root / relative)
+        if problem is not None:
+            raise Refused(f"cleanup of {relative.as_posix()} is refused: its parent {problem}")
+    removed: list[str] = []
+    for relative in paths:
+        _git_output(
+            root, "--literal-pathspecs", "rm", "--cached", "-q", "--ignore-unmatch", "-f", "--", relative.as_posix()
+        )
+        path = root / relative
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+        else:
+            continue
+        removed.append(relative.as_posix())
+    return removed
+
+
 def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
     """Run Git without decoding path output or translating pathspec stdin."""
     try:
@@ -6985,7 +7122,9 @@ def derived_leftover(root: Path, relative: Path) -> bool:
     if relative.as_posix() == "plans/INDEX.md":
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
-        return True
+        return not bool(
+            _git_bytes(root, "--literal-pathspecs", "ls-files", "-z", "--cached", "--", relative.as_posix())
+        )
     # The two versions are compared with the frontmatter `updated:` line masked, never through a parsed diff:
     # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3). Both are
     # read as bytes and decoded without newline translation, so a CRLF to LF conversion is a change (P243-1).
@@ -7064,12 +7203,15 @@ SAVE_IDENTITY = {
 }
 
 
-def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
+def save_attempt(
+    root: Path, baseline: str, change: str, label: str, *, stray: Iterable[str] = (), reason: str = ""
+) -> str:
     """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
 
     A failed call is not a worthless one: a run that hits a spent budget after hours of edits still
     holds them (bead coding-harness-znc). The snapshot goes through a temporary index, so the real
-    index and the files stay untouched; tracked and untracked files go in, gitignored ones do not.
+    index and the files stay untouched; tracked and untracked files go in, together with named stray files.
+    A scope refusal records its reason in the saved commit message.
     The temporary index is seeded with the baseline, as in `worktree_tree`, so a file tracked although
     ignored stays in the snapshot. The commit's parent is the baseline, so `git diff <baseline> <ref>`
     shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
@@ -7085,9 +7227,29 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
         try:
             _git_output(root, "read-tree", baseline, env=env)
             _git_output(root, "add", "-A", "--", ".", env=env)
+            names = list(stray)
+            if names:
+                _git_bytes(
+                    root,
+                    "--literal-pathspecs",
+                    "add",
+                    "-f",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                    env=env,
+                    stdin=b"".join(os.fsencode(name) + b"\0" for name in names),
+                )
             tree = _git_output(root, "write-tree", env=env).strip()
             commit = _git_output(
-                root, "commit-tree", tree, "-p", baseline, "-m", f"stage2: saved {label} of {change}", env=env
+                root,
+                "commit-tree",
+                tree,
+                "-p",
+                baseline,
+                "-m",
+                f"stage2: saved {label} of {change}",
+                *(["-m", reason] if reason else []),
+                env=env,
             ).strip()
             _git_output(root, "update-ref", ref, commit)
         except (Refused, OSError) as error:
@@ -7247,6 +7409,22 @@ def restore_baseline(
     ignored = f"ignored paths removed: {', '.join(removed)}" if removed else ""
     inner = "; ".join(part for part in (undone, ignored) if part)
     return f"the runner restored the worktree to {baseline[:12]} ({inner}); rerun the verb or add --stage2-off."
+
+
+def restore_after_inventory_failure(
+    root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None
+) -> str:
+    """Restore or explicitly refuse when an unmeasurable inventory makes a retry unsafe."""
+    try:
+        result = restore_baseline(root, baseline, keep, ignored_before)
+        touched, created = plan_baseline_restore(root, keep, ignored_before, baseline)
+        if touched or created:
+            raise RestorationRefused(f"restoration is incomplete after inventory failure: {result}")
+        return result
+    except RestorationRefused:
+        raise
+    except Exception as error:
+        raise RestorationRefused(f"restoration after inventory failure is refused: {error}") from error
 
 
 def time_log(path: Path) -> str:
@@ -8596,10 +8774,12 @@ def cheap_checks(
             problems.append(protect_diagnostics(f"no pytest interpreter at `{PYTEST[0]}`; `make venv` builds it.", key))
         else:
             try:
+                # The targeted worker policy bounds `-n auto` outside the admission (bead
+                # coding-harness-bxxt.13); a copy, so the caller's dictionary never carries it.
                 done = launch(
                     [*PYTEST, *tests],
                     root,
-                    env,
+                    targeted_pytest_env(root, env),
                     key,
                     timeout=TOOL_SECONDS,
                     limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
@@ -9497,6 +9677,9 @@ RUNNER_HELD = (
     ".beads/",
     "AGENTS.md",
     "README.md",
+    # Handovers and the journal are the orchestrator's record, never an attempt's (bead
+    # coding-harness-t83: a Codex repair wrote its own handover on 2026-10-15).
+    "docs/journal/",
 )
 
 
@@ -9545,6 +9728,12 @@ def checkpoint(
     ignored_before: dict[Path, tuple[int, int]] | None = None,
     message: str | None = None,
     keep: set[Path] | None = None,
+    repair_scope: frozenset[str] | None = None,
+    scope_baseline: set[Path] | None = None,
+    attempt_label: str | None = None,
+    scope_new: set[Path] | None = None,
+    scope_rules: dict[str, bytes] | None = None,
+    scope_ignored: dict[Path, tuple[int, int]] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
@@ -9556,12 +9745,15 @@ def checkpoint(
     stamps: set[Path] = set()
     try:
         # A protected document's derived stamp may enter the run, but must not enter its commit.
+        # Journal edits belong to the orchestrator, including stamp-only edits.
         # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
         held = _held_prefixes(root)
         stamps = {
             path
             for path in changed_paths(root)
-            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path)
+            if not path.as_posix().casefold().startswith("docs/journal/")
+            and any(path.as_posix().casefold().startswith(prefix) for prefix in held)
+            and derived_leftover(root, path)
         }
         # Classify without resetting stamps: a later rollback must check its entire batch
         # before even these derived bytes are restored.
@@ -9589,6 +9781,46 @@ def checkpoint(
             preserve_attempt_failure(safety_error, Refused(reason))
             raise
         raise CheckpointRolledBack(f"{reason}; {restored}")
+    if repair_scope is not None and scope_baseline is not None:
+        # A repair's new files are confined to its frozen scope: the change folder, `tests/` and the
+        # taken rows' Where grants (bead coding-harness-t83). Held paths took precedence above; an
+        # edit to an existing tracked file is not a new file; and what the runner itself derives
+        # (the rendered index, a stamp, its bytecode) is not the attempt's to answer for.
+        try:
+            if scope_new is None:
+                # No measurement from the call itself: judge against the pre-attempt inventory the
+                # same way (L3-3), with the rules and ignored files the caller froze, if any.
+                candidates = attempt_new_files(root, scope_baseline, scope_rules or {}, scope_ignored)
+            else:
+                # Measured right after the call, before verification: what `make verify` or the
+                # targeted check itself writes is never the attempt's stray (L2-11). A candidate the
+                # checks removed again is gone.
+                candidates = {path for path in scope_new if os.path.lexists(root / path)}
+            stray = sorted(relative.as_posix() for relative in candidates if not within_scope(relative, repair_scope))
+        except Refused as error:
+            # An unreadable inventory fails this attempt like an unreadable held-path map: the edits
+            # go first, so nothing the runner could not classify stays in the tree (L2-9).
+            try:
+                restored = restore_after_inventory_failure(root, baseline, set(keep or ()) - stamps, ignored_before)
+            except RestorationRefused as safety_error:
+                preserve_attempt_failure(safety_error, error)
+                raise
+            raise CheckpointRolledBack(
+                f"the repair scope guard could not read the file inventory ({error}); {restored}"
+            ) from error
+        if stray:
+            names = ", ".join(f"`{path}`" for path in stray)
+            reason = (
+                "the repair left new files outside its scope (the change folder, `tests/` and the taken "
+                f"rows' Where cells grant the rest): {names}. No commit was made."
+            )
+            saved = save_attempt(root, baseline, change, attempt_label or "attempt", stray=stray, reason=reason)
+            try:
+                restored = restore_baseline(root, baseline, set(keep or ()) - stamps, ignored_before)
+            except RestorationRefused as safety_error:
+                preserve_attempt_failure(safety_error, Refused(reason))
+                raise
+            raise CheckpointRolledBack(f"{reason} {saved}; {restored}")
     if stamps:
         preflight_recovery(
             root, [root / path for path in sorted(stamps)], aliases=alias_baseline(root, baseline, ignored_before)
@@ -9662,7 +9894,9 @@ def _red_own_selector(nodeid: str, selector: str) -> bool:
     return nodeid == selector or nodeid.startswith(selector + "[")
 
 
-def _red_record_fault(record: bytes | None, token: str, selector: str, *, passing: bool = False) -> str | None:
+def _red_record_fault(
+    record: bytes | None, token: str, selector: str, *, passing: bool = False, check_exit: bool = True
+) -> str | None:
     """Why the outcome record cannot prove this invocation red first, or None when it can.
 
     The record must be this selector's and this invocation's (a fresh token binds it to one run),
@@ -9694,7 +9928,9 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
     if not isinstance(session, dict) or session.get("finished") is not True:
         return "the outcome record shows no finished session; the run's outcome cannot be proven"
     expected_exit = 0 if passing else 1
-    if session.get("exitstatus") != expected_exit:
+    # `check_exit=False` reads the record for what the cases did, when pytest's own exit already
+    # refused the run: the refusal then names the first true outcome, not the session status.
+    if check_exit and session.get("exitstatus") != expected_exit:
         expected_run = "passing" if passing else "failing"
         return f"the session ended {session.get('exitstatus')!r}, not as a {expected_run} run"
     errors, selected, phases = (parsed.get("collection_errors"), parsed.get("selected"), parsed.get("phases"))
@@ -9775,8 +10011,46 @@ def _red_record_fault(record: bytes | None, token: str, selector: str, *, passin
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
     if not passing and not red:
+        if not check_exit:
+            return "the named test passed; no selected call failed"
         return "no selected call failed by an assertion or pytest's own failed outcome; the run is green for the requested test"
     return None
+
+
+RED_DIAGNOSTIC_LINES = 40
+RED_DIAGNOSTIC_CHARS = 4000
+RED_DIAGNOSTIC_MARKER = "[... truncated]"
+
+
+def _red_record_selected(record: bytes | None) -> bool:
+    """Whether the outcome record exists and holds at least one selected case."""
+    if record is None:
+        return False
+    try:
+        parsed = json.loads(record.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return False
+    return isinstance(parsed, dict) and isinstance(parsed.get("selected"), list) and bool(parsed["selected"])
+
+
+def _red_pre_record_diagnostic(done: subprocess.CompletedProcess, key: str | None) -> str:
+    """The protected tail of pytest's combined output, within the line and character caps.
+
+    The whole text is protected before any cut, so no secret is split across the cut; a protection
+    failure raises `Refused` and nothing of the output is shown. The cap counts the marker.
+    """
+    combined = "\n".join(part for part in ((done.stdout or ""), (done.stderr or "")) if part.strip())
+    safe = protect_diagnostics(combined, key).strip("\n")
+    lines = safe.splitlines()
+    if len(lines) <= RED_DIAGNOSTIC_LINES and len(safe) <= RED_DIAGNOSTIC_CHARS:
+        return safe
+    kept = lines[-(RED_DIAGNOSTIC_LINES - 1) :]
+    while len(kept) > 1 and len("\n".join([RED_DIAGNOSTIC_MARKER, *kept])) > RED_DIAGNOSTIC_CHARS:
+        kept = kept[1:]
+    if kept:
+        available = RED_DIAGNOSTIC_CHARS - len(RED_DIAGNOSTIC_MARKER) - 1
+        kept[-1] = kept[-1][-available:]
+    return "\n".join([RED_DIAGNOSTIC_MARKER, *kept])
 
 
 def _remove_private(path: Path) -> str | None:
@@ -10117,6 +10391,33 @@ def guard_test_proof(root: Path, test: str, key: str | None, tools: dict[str, st
     return _attempt_tree_proof(root, test, key, tools, planted=False, leg="clean guard proof")
 
 
+def _red_first_refusal(
+    test: str, selector: str, token: str, recorded: bytes | None, done, key: str | None
+) -> str | None:
+    """Compose the pytest verdict from its exit, recorded outcome and protected diagnostic."""
+    if done.returncode == 1 and recorded is not None:
+        fault = _red_record_fault(recorded, token, selector)
+        return f"{test}: {scrub(fault, key)}" if fault is not None else None
+    detail = _red_record_fault(recorded, token, selector, check_exit=False)
+    if detail is None and recorded is not None:
+        detail = "the named test had a qualifying assertion or pytest failure"
+    outcome = (
+        f"{test}: pytest ended {done.returncode} on the baseline's code; "
+        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
+    )
+    if detail is not None:
+        label = "the recorded outcome: " if recorded is not None else ""
+        outcome += f"; {label}{scrub(detail, key)}"
+    if not _red_record_selected(recorded):
+        try:
+            shown = _red_pre_record_diagnostic(done, key)
+        except Refused as error:
+            shown = f"[output withheld: {scrub(str(error), key)}]"
+        if shown:
+            outcome += "\npytest output (protected, capped):\n" + shown
+    return outcome
+
+
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a private repository of its own; None when it was red.
 
@@ -10250,15 +10551,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             except (CallFailed, verify_lock.VerifyLockError) as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
-                if done.returncode != 1:
-                    outcome = (
-                        f"{test}: pytest ended {done.returncode} on the baseline's code; "
-                        "red first needs exit 1 with an assertion failure or pytest's own failed outcome"
-                    )
-                else:
-                    fault = _red_record_fault(_red_report_bytes(report), token, selector)
-                    if fault is not None:
-                        outcome = f"{test}: {scrub(fault, key)}"
+                outcome = _red_first_refusal(test, selector, token, _red_report_bytes(report), done, key)
     except (CallFailed, Refused, OSError, verify_lock.VerifyLockError) as error:
         outcome = f"{test}: {scrub(str(error), key)}"
     finally:
@@ -10686,6 +10979,61 @@ def where_locations(cell: str, root: Path = REPO_ROOT) -> list[str]:
     return locations
 
 
+def repair_scope_locations(
+    cell: str, change: str, root: Path, tracking: WhereTracking | None = None
+) -> list[tuple[str, bool]]:
+    """One Where cell's repair-scope grants as (path, descendants) pairs; it reads `where_named_tokens` only.
+
+    No second grammar and no refusal (bead coding-harness-t83, L2-1/2/4/7/8/12/14): a path that names
+    a tracked file grants it; a path that is not tracked yet grants that exact path when it looks
+    like one (it has a `/` or an extension); a directory grants its tree only when the cell writes
+    it with a trailing slash; a bare word that merely names a tracked directory, and prose, grant
+    nothing. A bare file name resolves against the change folder first.
+    """
+    tracking = where_tracking(root) if tracking is None else tracking
+    folder = f"plans/changes/{change}/"
+    grants: list[tuple[str, bool]] = []
+    for token, path in where_named_tokens(cell, root, tracking):
+        if _WHERE_LOCATION.sub("", token.rstrip(_WHERE_TRAILING)).endswith("/"):
+            grants.append((path.rstrip("/") + "/", True))
+        elif path.endswith("/"):
+            continue  # a bare word naming a tracked directory is prose, not a grant
+        elif "/" not in path and f"{folder}{path}" in tracking.exact:
+            grants.append((f"{folder}{path}", False))
+        elif path in tracking.exact or "/" in path or re.search(r"\.[A-Za-z0-9_-]+$", path):
+            grants.append((path, False))
+    return grants
+
+
+def repair_scope(cells: list[str], change: str, root: Path) -> frozenset[str]:
+    """The frozen repair scope: the change folder, `tests/` and the taken rows' Where grants.
+
+    Built before the first model call from the rows as they stand, so an attempt-written plan or
+    finding text can never enlarge what its own checkpoint accepts and the plan is never a source
+    (bead coding-harness-t83, S-3). A file entry
+    is exact, a directory entry carries its trailing slash.
+    """
+    scope = {f"plans/changes/{change}/", "tests/"}
+    tracking = where_tracking(root)
+    for cell in cells:
+        for path, _descendants in repair_scope_locations(cell, change, root, tracking):
+            scope.add(path)
+    return frozenset(scope)
+
+
+def within_scope(relative: Path, scope: frozenset[str]) -> bool:
+    """Whether a new file's exact path stands inside the frozen repair scope."""
+    posix = relative.as_posix()
+    for entry in scope:
+        if entry.endswith("/"):
+            # A directory grant covers descendants only, not a file or symlink at the directory path.
+            if posix.startswith(entry):
+                return True
+        elif posix == entry:
+            return True
+    return False
+
+
 def where_is_test_only(cell: str, root: Path = REPO_ROOT) -> bool:
     """Whether a `Where` cell names at least one repository location and every location is below `tests/`.
 
@@ -10811,12 +11159,27 @@ def where_named_paths(cell: str, root: Path = REPO_ROOT, tracking: WhereTracking
     a tracked file is not required, and an unknown token stays literal instead of refusing. A cell
     naming only an external URL, an outside path or bare prose names nothing.
     """
-    tracking = where_tracking(root) if tracking is None else tracking
     named: list[str] = []
+    for _token, path in where_named_tokens(cell, root, tracking):
+        if path not in named:
+            named.append(path)
+    return named
+
+
+def where_named_tokens(
+    cell: str, root: Path = REPO_ROOT, tracking: WhereTracking | None = None
+) -> list[tuple[str, str]]:
+    """Every (raw token, normalized path) pair a `Where` cell names: the one grammar all its readers share.
+
+    The repair scope reads the raw token as well, because only a directory written with a trailing
+    slash grants its tree (spec, Terms); the classification itself stays `_where_token_path`.
+    """
+    tracking = where_tracking(root) if tracking is None else tracking
+    named: list[tuple[str, str]] = []
     for token in _WHERE_TOKEN_SPLIT.split(_WHERE_LINK.sub(lambda match: f" {match[1]} {match[2]} ", cell)):
         path = _where_token_path(token, root, tracking)
-        if path is not None and path not in named:
-            named.append(path)
+        if path is not None:
+            named.append((token, path))
     return named
 
 
@@ -11691,6 +12054,7 @@ def run_attempts(
     verify_mode: str = "full",  # implement and repair: "targeted" (bead coding-harness-0swp); draft keeps its own path
     new_file_guard: bool = False,  # implement: new production code without a reachable test refuses the attempt
     protect_lifecycle: bool = False,  # repair: the change's lifecycle fields go back before any check reads them
+    repair_scope: frozenset[str] | None = None,  # repair: new files outside this frozen scope refuse the checkpoint
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -11824,6 +12188,24 @@ def run_attempts(
             before = worktree_tree(root)
         except (Refused, OSError) as error:
             before, unmeasured = "", str(error)
+        # The scope guard's own baseline: every path git sees right before the call, so the
+        # checkpoint's new files are measured against this attempt's start, never a sibling's
+        # leftover (bead coding-harness-t83, S-1). Without a baseline no model may start: its
+        # new files could otherwise become the next route's baseline.
+        scope_before: set[Path] | None = None
+        scope_rules: dict[str, bytes] = {}
+        scope_problem: str | None = None
+        scope_new: set[Path] | None = None
+        scope_ignored: dict[Path, tuple[int, int]] | None = None
+        if repair_scope is not None:
+            try:
+                scope_before = file_inventory(root)
+                scope_rules = ignore_rules_state(root, scope_before)
+                scope_ignored = ignored_snapshot(root)
+            except (Refused, OSError) as error:
+                raise Refused(
+                    f"the repair scope guard could not read the file inventory before the call ({error})"
+                ) from error
         call_error: CallFailed | None = None
         answer = ""
         evidence: str | None = None
@@ -11919,7 +12301,7 @@ def run_attempts(
             if endpoint == CODEX:
                 try:
                     head_now = _git_output(root, "rev-parse", "HEAD").strip()
-                except Refused as error:
+                except (Refused, OSError) as error:
                     raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
                 if head_now != baseline:
                     # A moved HEAD stops the run without a rewrite: resetting a commit the model made
@@ -12037,6 +12419,13 @@ def run_attempts(
             else:
                 files = unmeasured
                 work_unmeasured = unmeasured
+            if scope_before is not None:
+                # The attempt's new files, measured before verification writes anything of its own
+                # (L2-11) and judged by the ignore rules the attempt started under (L2-3).
+                try:
+                    scope_new = attempt_new_files(root, scope_before, scope_rules, scope_ignored)
+                except Refused as error:
+                    scope_problem = f"the repair scope guard could not read the file inventory after the call ({error})"
             # findings.md is runner-owned: an attempt's edits to its own audit file go back before any
             # post-run check reads model-written state, so the edit alone never spends the attempt
             # (spec, criterion 8). The whole batch stands checked before the first write; a refusal
@@ -12160,6 +12549,8 @@ def run_attempts(
             # A structurally broken protected document rejects the attempt even when every check
             # would pass on the restored bytes (status-fields-restore).
             problems = [*work_problems, *lifecycle_problems, *problems]
+            if scope_problem is not None:
+                problems.append(scope_problem)
             # An unchanged hard-linked plan can escape changed-document preparation. Validate the
             # logging destination independently before deciding the result, even in that case.
             try:
@@ -12190,6 +12581,52 @@ def run_attempts(
                     restore_work_input(root, path, content)
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
+            scope_inventory_failed = scope_before is not None and scope_problem is not None and scope_new is None
+            if scope_inventory_failed:
+                # Without the post-call inventory no retry can safely inherit the tree: a stray
+                # would become part of the next attempt's baseline. Restore and stop this run.
+                try:
+                    restored = restore_after_inventory_failure(root, baseline, allowed, ignored_before)
+                except RestorationRefused as safety_error:
+                    preserve_attempt_failure(safety_error, Refused(scope_problem))
+                    raise
+                problems.append(restored)
+            if problems:
+                # A failed verification never reaches checkpoint's held-path rollback.
+                # Refuse journal edits here too, before a retry can inherit them.
+                journal = [
+                    path.as_posix()
+                    for path in changed_paths(root)
+                    if path.as_posix().casefold().startswith("docs/journal/")
+                ]
+                if journal:
+                    reason = "the attempt changed paths a stage-2 run does not commit: " + ", ".join(
+                        f"`{path}`" for path in journal
+                    )
+                    try:
+                        restored = restore_baseline(root, baseline, allowed, ignored_before)
+                    except RestorationRefused as safety_error:
+                        preserve_attempt_failure(safety_error, Refused(reason))
+                        raise
+                    raise CheckpointRolledBack(f"{reason}; {restored}")
+            if problems and repair_scope is not None and scope_new is not None:
+                # A failed attempt's new files outside the scope never survive it, whatever failed -
+                # a check, a rejected answer or the last route: the next route's checkpoint would
+                # commit them through `git add -A` without naming them (L2-5, L3-1, L3-4), and the
+                # next run would stop at preflight on them.
+                try:
+                    outside = {path for path in scope_new if not within_scope(path, repair_scope)}
+                    removed = remove_stray_files(root, outside)
+                except (Refused, OSError) as error:
+                    raise RestorationRefused(
+                        f"the repair scope guard could not remove the attempt's new files ({error}); retry stopped"
+                    ) from error
+                else:
+                    if removed:
+                        problems.append(
+                            "the repair scope guard removed the attempt's new files outside its scope: "
+                            + ", ".join(f"`{name}`" for name in removed)
+                        )
             if problems:
                 previous_failures = failed_test_ids(problems)
                 # The restore notes stand first, then the format line: the next model learns that its
@@ -12276,6 +12713,8 @@ def run_attempts(
                     f"{ctx.findings.relative_to(root)}"
                 )
                 terminal_failure.__cause__ = cannot_start
+            elif scope_inventory_failed:
+                terminal_failure = CallFailed(f"{scope_problem}; {restored}")
             logged = True
             persist_time_entry(
                 root,
@@ -12295,7 +12734,13 @@ def run_attempts(
                 baseline_time,
                 inputs_before,
                 accepted=not problems,
-                retry=bool(problems) and attempt < len(routes) and cannot_start is None and not exposed,
+                retry=(
+                    bool(problems)
+                    and attempt < len(routes)
+                    and cannot_start is None
+                    and not exposed
+                    and not scope_inventory_failed
+                ),
                 original=terminal_failure,
             )
             if terminal_failure is not None:
@@ -12320,7 +12765,21 @@ def run_attempts(
                 if scope_record:
                     message += "\n\n" + SCOPE_COMMIT_HEADING + "\n" + "\n".join(scope_record)
                 try:
-                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                    checkpoint(
+                        root,
+                        ctx.change,
+                        baseline,
+                        key,
+                        ignored_before,
+                        message=message,
+                        keep=allowed,
+                        repair_scope=repair_scope,
+                        scope_baseline=scope_before,
+                        scope_new=scope_new,
+                        scope_rules=scope_rules,
+                        scope_ignored=scope_ignored,
+                        attempt_label=f"{verb}-attempt-{attempt}",
+                    )
                 except CheckpointRolledBack as error:
                     # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
                     # refused commit's restore just undid the work for; findings.md is kept by that
@@ -12865,6 +13324,13 @@ def draft(root: Path, change: str) -> None:
         else:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
+        blocked = [path for path in uncommittable(root, change, keep) if path.casefold().startswith("docs/journal/")]
+        if blocked:
+            reason = "the attempt changed paths a stage-2 run does not commit: " + ", ".join(
+                f"`{path}`" for path in blocked
+            )
+            restored = restore_baseline(root, baseline, allowed, ignored_before)
+            raise CheckpointRolledBack(f"{reason}; {restored}")
         put = put_back(root, baseline, keep)
         put = [path for path in put if Path(path) not in started_with]
         if put:
@@ -12947,6 +13413,23 @@ def draft(root: Path, change: str) -> None:
     )
 
 
+# Stated in words, not as a resolved path list (S-5): the guard is the enforcement, the prompt the
+# warning. Both repair endpoints share this block, so both variants carry the same rule.
+REPAIR_SCOPE_RULE = (
+    "## Repair scope\n\n"
+    "Your new files stay inside this change's own folder (`plans/changes/{change}/`), inside `tests/`, "
+    "and at the paths the taken rows' Where cells name - a named file grants that file, a directory "
+    "grants the files below it only when the cell writes it with a trailing `/`, and a trailing "
+    "`:line` selector is dropped. Create no new file outside this scope: at the checkpoint the runner "
+    "compares every new file against that scope and refuses the attempt, saves it under a local ref, "
+    "restores the baseline and stops the run. Editing an existing tracked file outside the scope is "
+    "not restricted by this rule; only new files are. Never write handover or journal files - "
+    "`docs/journal/` is the orchestrator's record - nor any other held path, and do not enlarge the "
+    "scope by editing the plan or your own findings rows. An untracked file git ignores (a test or "
+    "tool cache) is not a new file; an ignored file explicitly added to the index is."
+)
+
+
 def repair_prompt(
     ctx: Context,
     baseline: str,
@@ -12962,6 +13445,7 @@ def repair_prompt(
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
+        REPAIR_SCOPE_RULE.format(change=ctx.change),
         # A command-capable Codex runs the must-runs itself; the file-tools route delegates the same
         # checks to the runner. The repair owes its findings' proofs and the written ledger entries;
         # missing unwritten tests are named without being owed, and no missing id reaches its pytest
@@ -13050,6 +13534,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     eligible = [(place, row) for place, row in taken if row[0] not in handed]
     ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    # The scope is frozen from the rows as they stand, before any model runs: the plan is never a
+    # source and an attempt's own plan, findings or row writes cannot enlarge it (spec, criteria 7
+    # and 8; bead coding-harness-t83). Held paths keep their precedence at the checkpoint.
+    scope = repair_scope([row[4] for _, row in taken], change, root)
     ignored_before = ignored_snapshot(root)
 
     # A row already listed with the same held paths in an earlier block of this findings.md is
@@ -13235,6 +13723,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         retain_answer=True,
         verify_mode="targeted",
         protect_lifecycle=True,
+        repair_scope=scope,
     )
 
 

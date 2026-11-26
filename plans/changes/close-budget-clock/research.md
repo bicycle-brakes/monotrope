@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-24
+updated: 2026-11-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-0n4s

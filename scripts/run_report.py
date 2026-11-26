@@ -51,6 +51,7 @@ from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import jobs  # noqa: E402
 import time_records  # noqa: E402
 
 try:
@@ -464,6 +465,41 @@ def parse_processes(ps_text: str, changes: frozenset[str]) -> list[ProcessRow]:
     return rows
 
 
+def detached_job_lines(changes: frozenset[str], seen_pids: set[str]) -> list[str]:
+    """One line per running or recently lost detached job, read from the job records (bead coding-harness-a6ns.1).
+
+    A job whose started command PID the process table already recognized is counted once: its record row is
+    dropped. A runner verb shows its verb and known change; any other command shows its program name only,
+    never an argument. Records that cannot be read are said so. Nothing is written.
+    """
+    lines = []
+    try:
+        rows = jobs.report_jobs()
+    except Exception as error:  # a report never crashes
+        return [f"{NOT_READ} (detached jobs: internal error: {type(error).__name__})"]
+    for row in rows:
+        if row["state"] == "unreadable":
+            lines.append(f"detached job {_bounded(row['id'], 40)} · {NOT_READ} (record unreadable)")
+            continue
+        pid = row["command_pid"]
+        if pid is not None and str(pid) in seen_pids:
+            continue
+        tokens = row["command"]
+        process = None
+        if row["runner_verb"] and stage2 is not None:
+            process = _stage2_row(tokens, str(pid), "", changes)
+        if process is not None:
+            label, change = process.label, process.change
+        else:
+            label, change = _bounded(Path(tokens[0]).name, 40), NOT_READ
+        shown = NOT_READ if pid is None else str(pid)
+        lines.append(
+            f"pid {shown} · {label} · change {change} · detached job {row['id']}"
+            f" · {row['state']} · started {row['started_at']}"
+        )
+    return lines
+
+
 # ---------------------------------------------------------------------------
 # Live figures: memory
 # ---------------------------------------------------------------------------
@@ -635,6 +671,7 @@ def live_block(run: RunCommand, proc_dir: Path | None, changes: frozenset[str]) 
     out = ["live figures:"]
     if stage2 is None:
         out.append("  runner processes: not read (runner verb definitions unavailable)")
+    rows: list[ProcessRow] = []
     try:
         rows = parse_processes(run(["ps", "-axo", "pid,etime,command"]), changes)
     except SourceError as error:
@@ -645,6 +682,10 @@ def live_block(run: RunCommand, proc_dir: Path | None, changes: frozenset[str]) 
             out.extend(f"    pid {row.pid} · {row.label} · change {row.change} · elapsed {row.elapsed}" for row in rows)
         else:
             out.append("    none matched")
+    detached = detached_job_lines(changes, {row.pid for row in rows})
+    if detached:
+        out.append("  detached jobs:")
+        out.extend(f"    {line}" for line in detached)
     snapshot = macos_memory(run) if proc_dir is None else linux_memory(proc_dir)
     out.append("  memory:")
     out.append(f"    available: {snapshot.available}")
