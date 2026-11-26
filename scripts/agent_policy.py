@@ -591,7 +591,10 @@ def decide_tool(name: str) -> Decision:
     """The decision for a non-shell tool call, by its (normalised) name."""
     normalised = normalise_tool_name(name)
     shown = f"`{name}`" if normalised == name else f"`{name}` (as {normalised})"
-    return _matched(normalised, shown)
+    try:
+        return _matched(normalised, shown)
+    except PolicyRuleError as exc:
+        return Decision(DENY, (f"policy fault: {exc}",))
 
 
 # ---------------------------------------------------------------------------
@@ -638,23 +641,37 @@ def _is_ours(group: object) -> bool:
     if not isinstance(hooks, list):
         return False
 
-    def runs_policy(command: object) -> bool:
-        if not isinstance(command, str):
+    def runs_policy(command: object, _depth: int = 0) -> bool:
+        if not isinstance(command, str) or _depth > MAX_NESTING:
             return False
         # The generated Antigravity interpreter is a shell expansion with spaces.
         interpreter = REGISTRATIONS["antigravity"]["hooks"][0]["command"].split(" scripts/", 1)[0]
-        command = command.replace(interpreter, "python3")
+        replaced = command.replace(interpreter, "python3")
         try:
-            words = shlex.split(command)
-        except ValueError:
-            return False
-        for index, word in enumerate(words):
-            if not word.endswith("/scripts/" + HOOK_SCRIPT) and word != "scripts/" + HOOK_SCRIPT:
-                continue
-            previous = words[index - 1] if index else ""
-            if re.fullmatch(r"python(?:[0-9]+(?:\.[0-9]+)*)?", previous.rsplit("/", 1)[-1]):
+            parts = split_command(replaced)
+        except ShellSyntaxError:
+            parts = [replaced]
+        for part in parts:
+            try:
+                outer, nested = nested_commands(part)
+                decoded = decode_ansi_quotes(outer) if outer else ""
+                words = shlex.split(decoded) if decoded else []
+            except (ShellSyntaxError, ValueError):
+                words, nested, decoded = [], [], ""
+            while words and _ASSIGNMENT.fullmatch(words[0]):
+                words.pop(0)
+            for index, word in enumerate(words):
+                if not word.endswith("/scripts/" + HOOK_SCRIPT) and word != "scripts/" + HOOK_SCRIPT:
+                    continue
+                previous = words[index - 1] if index else ""
+                if re.fullmatch(r"python(?:[0-9]+(?:\.[0-9]+)*)?", previous.rsplit("/", 1)[-1]):
+                    return True
+                if index == 0:
+                    return True
+            inner = shell_c_command(decoded) if decoded else None
+            if inner is not None and runs_policy(inner, _depth + 1):
                 return True
-            if index == 0 or previous in ("&&", "||", ";", "|"):
+            if any(runs_policy(item, _depth + 1) for item in nested):
                 return True
         return False
 

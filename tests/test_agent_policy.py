@@ -906,6 +906,30 @@ def test_antigravity_asks_when_attended() -> None:
         assert antigravity(payload, {"HARNESS_UNATTENDED": "1"})[0] == DENY
 
 
+def test_antigravity_tool_call_envelope_is_checked() -> None:
+    shell_call = {
+        "hookEventName": "PreToolUse",
+        "stepIdx": 1,
+        "toolCall": {"id": "toolu_01", "name": "run_command", "args": {"CommandLine": "gh pr merge 54"}},
+    }
+    safe_call = {
+        "hookEventName": "PreToolUse",
+        "stepIdx": 2,
+        "toolCall": {"id": "toolu_02", "name": "run_command", "args": {"CommandLine": "git status -sb"}},
+    }
+    mcp_call = {
+        "hookEventName": "PreToolUse",
+        "stepIdx": 3,
+        "toolCall": {"id": "toolu_03", "name": "github.merge_pull_request", "args": {}},
+    }
+    assert antigravity(safe_call)[0] == ABSTAIN
+    assert antigravity(shell_call)[0] == ASK
+    assert antigravity(shell_call, {"HARNESS_UNATTENDED": "1"})[0] == DENY
+    assert antigravity(mcp_call)[0] == ASK
+    assert antigravity(mcp_call, {"HARNESS_UNATTENDED": "1"})[0] == DENY
+    assert antigravity({"toolCall": "not-an-object"})[0] == DENY
+
+
 def test_duplicate_rule_is_policy_fault(monkeypatch: pytest.MonkeyPatch) -> None:
     pattern = next(iter(mg.MERGE_ASK_RULES))
     monkeypatch.setitem(ap.OWN_ASK_RULES, pattern, "duplicate")
@@ -913,6 +937,10 @@ def test_duplicate_rule_is_policy_fault(monkeypatch: pytest.MonkeyPatch) -> None
     assert result.kind == DENY
     assert f"the policy names the rule {pattern} twice" in result.message()
     assert "cannot be split" not in result.message()
+    tool_result = ap.decide_tool("github.merge_pull_request")
+    assert tool_result.kind == DENY
+    assert f"the policy names the rule {pattern} twice" in tool_result.message()
+    assert antigravity(tool("github.merge_pull_request"))[0] == DENY
 
 
 def test_missing_shared_rule_reports_both_sources_once(tmp_path: Path) -> None:
@@ -944,12 +972,21 @@ def test_a_render_fault_blocks_with_the_reason_on_stderr(host: str, monkeypatch:
 
 
 @pytest.mark.parametrize("host", ["claude-code", "antigravity"])
-def test_edited_hook_command_is_replaced_without_removing_foreign_mentions(tmp_path: Path, host: str) -> None:
+@pytest.mark.parametrize(
+    "edited_command",
+    [
+        "python3 scripts/agent_policy_hooks.py changed-host",
+        "sh -c 'cd .. && python3 scripts/agent_policy_hooks.py antigravity'",
+    ],
+)
+def test_edited_hook_command_is_replaced_without_removing_foreign_mentions(
+    tmp_path: Path, host: str, edited_command: str
+) -> None:
     root = _fresh_root(tmp_path / host)
     path = root / (".claude/settings.json" if host == "claude-code" else ".agents/hooks.json")
     config = _read(path)
     group = _ours(config)
-    group["hooks"][0]["command"] = "python3 scripts/agent_policy_hooks.py changed-host"
+    group["hooks"][0]["command"] = edited_command
     foreign = {"matcher": "Write", "hooks": [{"command": "echo scripts/agent_policy_hooks.py"}]}
     config["hooks"]["PreToolUse"].append(foreign)
     _write(path, config)

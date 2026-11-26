@@ -117,11 +117,17 @@ def _first(payload: dict, keys: tuple[str, ...]) -> object:
 
 
 def parse_antigravity(payload: dict) -> Call:
-    """Antigravity's pre-tool input: the tool name, and the command for `run_command`."""
-    name = _text(_first(payload, ANTIGRAVITY_NAME_KEYS), "the tool name")
+    """Antigravity's pre-tool input: `toolCall.name` and `toolCall.args.CommandLine` (or flat spellings)."""
+    if "toolCall" in payload:
+        source = payload["toolCall"]
+        if not isinstance(source, dict):
+            raise HookInputError("toolCall is not an object")
+    else:
+        source = payload
+    name = _text(_first(source, ANTIGRAVITY_NAME_KEYS), "the tool name")
     if name not in ANTIGRAVITY_SHELL_TOOLS:
         return Call("tool", name)
-    tool_input = _first(payload, ANTIGRAVITY_INPUT_KEYS)
+    tool_input = _first(source, ANTIGRAVITY_INPUT_KEYS)
     if not isinstance(tool_input, dict):
         raise HookInputError("the tool input is missing or not an object")
     return Call("shell", _text(_first(tool_input, ANTIGRAVITY_COMMAND_KEYS), "the command"))

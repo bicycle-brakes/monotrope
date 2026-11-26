@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-25
+updated: 2026-11-26
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -883,13 +883,13 @@ every `$( )` or backtick substitution. `python3 scripts/agent_policy.py write`
 renders `.claude/settings.json` and `.agents/hooks.json` and re-renders
 `tools/omnigent/policy.yaml` through the Omnigent renderer; the gate
 `agent-policy-drift` fails when either drifts. An ask becomes a deny when
-`HARNESS_UNATTENDED` is set to anything but `0` (set by the unattended
-launchers).
+`HARNESS_UNATTENDED` is set to a nonempty value other than `0` (set by the
+unattended launchers).
 
 | Host | State | How |
 | --- | --- | --- |
-| Claude Code | supported pending the recorded host check, with a named gap | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`. |
-| Antigravity | pending the recorded host check (supported if it shows the hook sees `HARNESS_UNATTENDED`; otherwise attended-only) | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools); the hook starts in `.agents/`, the command changes to the repository root. Host check: not yet recorded. |
+| Claude Code | pending the recorded host check (named gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`) | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Host check: not yet recorded. |
+| Antigravity | supported (host check recorded on `agy` 1.5.17, macOS, 2026-11-25) | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools). Measured on `agy` 1.5.17: the hook starts in `.agents/` (`cd ..` reaches the repository root), inherits `HARNESS_UNATTENDED=1`, lets `run_command` proceed on empty stdout with exit 0, and blocks `run_command` on exit 2 (`deny`), exit 1 (crash) and hook timeout (`signal: killed`). |
 | Codex | not supported | no pre-tool hook found in `.codex/hooks.json`; measured in bead coding-harness-1tn1. |
 
 ### Pull requests stay mergeable
