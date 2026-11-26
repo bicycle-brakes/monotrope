@@ -51,13 +51,15 @@ def expect_refusal(root: Path, fault: str) -> None:
 
 
 def test_checked_in_limits_have_decided_values() -> None:
-    # Criterion 1. Planted fault: the checked-in file disagrees with the interview's decision
-    # (finders 40 since the maintainer's raise of 2026-11-19, run 160), misses one of the six limits or states one in another unit.
+    # Criterion 1. Planted fault: the checked-in file disagrees with the maintainer's decided limits
+    # (all limits raised 1.5x on 2026-11-26 after the judge hit the 900s timeout: run 240, judge 22.5),
+    # misses one of the six limits or states one in another unit.
     limits = stage2_research_limits.load(REPO_ROOT)
-    assert limits.run_minutes == 160.0
-    assert limits.role_minutes == {"finders": 40.0, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
-    assert limits.run_seconds == 160.0 * 60.0, "the run limit is minutes, converted to seconds"
-    assert limits.role_seconds("finders") == 40.0 * 60.0
+    assert limits.run_minutes == 240.0
+    assert limits.role_minutes == {"finders": 60.0, "merge": 15.0, "sentence": 7.5, "topics": 15.0, "judge": 22.5}
+    assert limits.run_seconds == 240.0 * 60.0, "the run limit is minutes, converted to seconds"
+    assert limits.role_seconds("finders") == 60.0 * 60.0
+    assert limits.role_seconds("judge") == 22.5 * 60.0
 
 
 def test_each_root_reads_its_current_limits(tmp_path: Path) -> None:

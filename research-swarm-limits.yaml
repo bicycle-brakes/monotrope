@@ -6,10 +6,10 @@
 # values it read at its start. A missing, unknown or implausible value refuses
 # the invocation with exit 2: every role must stay at or below the run, and
 # the judge strictly below it.
-run_minutes: 160
+run_minutes: 240  # Raised 1.5x from 160 (maintainer, 2026-11-26).
 role_minutes:
-  finders: 40  # Each source finder (maintainer, 2026-11-19: 20 timed out on this repository).
-  merge: 10  # The source-map merger.
-  sentence: 5  # The public topic author.
-  topics: 10  # Each of the eleven topic researchers.
-  judge: 15  # The final reconciliation judge.
+  finders: 60  # Each source finder (maintainer, 2026-11-19: 20 -> 40; 2026-11-26: 1.5x -> 60).
+  merge: 15  # The source-map merger (maintainer, 2026-11-26: 1.5x -> 15).
+  sentence: 7.5  # The public topic author (maintainer, 2026-11-26: 1.5x -> 7.5).
+  topics: 15  # Each of the eleven topic researchers (maintainer, 2026-11-26: 1.5x -> 15).
+  judge: 22.5  # The final reconciliation judge (maintainer, 2026-11-26: 1.5x -> 22.5 after 900s timeout).
