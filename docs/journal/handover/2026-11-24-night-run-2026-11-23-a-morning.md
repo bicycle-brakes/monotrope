@@ -15,7 +15,7 @@ review:
   status: pending
   approved_by: null
   approved_at: null
-updated: 2026-11-24
+updated: 2026-11-25
 ---
 
 # Resume here
