@@ -541,8 +541,8 @@ Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | BLOCKER | MAINT | base | tests/test_stage2.py::test_phase_six_records_reviewed_commit | With `STAGE2_PLANT_FAULT=1`, the test replaces the reviewed-commit label only in its local copy of the runner’s output. It does not plant a fault in the runner or the verdict it writes, so the switched failure does not demonstrate that the guard catches a real fault. | Codex | taken — guard test — patch the runner's reviewed-commit writer inside stage2.py when STAGE2_PLANT_FAULT=1 (not a test-local string copy) so the guard proves it catches an omitted Reviewed commit line from review() | — |
-| F-2 | MAJOR | SPEC | base | scripts/enqueue_pr.py::phase6_problems | A phase-6 block can contain an unresolved finding row missing its leading or trailing pipe, followed by an unquoted no-finding statement. The malformed row is ignored, so the request can be admitted despite ambiguous review evidence. It must be refused. [Criteria 3 and 10] | Codex | taken — structural remedy (shared table-row guard in phase6_problems and released_problems): detect any non-quoted line carrying pipe delimiters that fails split_row (e.g. missing leading/trailing pipe) as an unrecognised table line instead of silently ignoring it; add tests in tests/test_enqueue_pr.py | — |
+| F-1 | BLOCKER | MAINT | base | tests/test_stage2.py::test_phase_six_records_reviewed_commit | With `STAGE2_PLANT_FAULT=1`, the test replaces the reviewed-commit label only in its local copy of the runner’s output. It does not plant a fault in the runner or the verdict it writes, so the switched failure does not demonstrate that the guard catches a real fault. | Codex | fixed — guard test — tests/test_stage2.py::test_phase_six_records_reviewed_commit | — |
+| F-2 | MAJOR | SPEC | base | scripts/enqueue_pr.py::phase6_problems | A phase-6 block can contain an unresolved finding row missing its leading or trailing pipe, followed by an unquoted no-finding statement. The malformed row is ignored, so the request can be admitted despite ambiguous review evidence. It must be refused. [Criteria 3 and 10] | Codex | fixed — tests/test_enqueue_pr.py::test_malformed_table_rows_refuse_admission | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -552,3 +552,7 @@ Reviewed commit: a5ca65d036817753eff82ae75eac65d3ee4978d9
 
 Phase 6 verdict: codex 01a21946-e203-7f50-955c-9ef6f2ddb014, 2026-11-26
 Reviewer session: codex 01a21946-e203-7f50-955c-9ef6f2ddb014 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1283 files, 6032 commits, 12 rules.
+
+Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged

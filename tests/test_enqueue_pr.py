@@ -415,6 +415,27 @@ def test_released_loop_rows_and_disagreements_refuse(
         assert "L9-9" not in err, "a quoted kept line was read as a released row"
 
 
+@pytest.mark.parametrize("missing", ["leading", "trailing"])
+@pytest.mark.parametrize("section", ["phase6", "released"])
+def test_malformed_table_rows_refuse_admission(
+    make: Callable[..., World], capsys: pytest.CaptureFixture[str], missing: str, section: str
+) -> None:
+    row = "| F-1 | MAJOR | SPEC | criterion | file | symbol | open | open |"
+    if section == "released":
+        row = "| L1-1 | MAJOR | SPEC | criterion | file | symbol | open | open | — | agree |"
+    malformed = row[1:] if missing == "leading" else row[:-1]
+    body = f"{NO_FINDING}\n\n{malformed}" if section == "phase6" else NO_FINDING
+    after = f"## Phase 4b — loop rows, released 2026-11-25\n\n{malformed}" if section == "released" else ""
+    world = make(record=lambda reviewed, _main: {FINDINGS: phase6(reviewed, body=body, after=after)})
+    assert "unrecognised table line" in refused(world, capsys)
+
+
+def test_quoted_malformed_table_lines_are_ignored() -> None:
+    quoted = "> F-1 | MAJOR | unresolved"
+    assert not ep.phase6_problems(phase6("a" * 40, body=f"{NO_FINDING}\n\n{quoted}").splitlines())
+    assert not ep.released_problems(f"## Phase 4b — loop rows, released\n\n{quoted}")
+
+
 @pytest.mark.parametrize("mark", ["banana", "agreement", "agree pending", "agreed"])
 def test_unrecognised_released_mark_refuses(mark: str) -> None:
     problems = ep.released_problems(released((FIXED, mark)))

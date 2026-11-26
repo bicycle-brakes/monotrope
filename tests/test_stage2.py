@@ -10122,15 +10122,22 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
 
-def test_phase_six_records_reviewed_commit(world: World) -> None:
+def test_phase_six_records_reviewed_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 13 of enqueue-pr. Planted fault: a new verdict block omits the reviewed commit, or names
     another commit than the head the review measured (a re-check after a later commit names the old one)."""
+
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        real_append = stage2.append
+
+        def omit_reviewed_commit(path: Path, text: str) -> None:
+            text = re.sub(r"^Reviewed commit: [0-9a-f]{40}\n\n", "", text, flags=re.M)
+            real_append(path, text)
+
+        monkeypatch.setattr(stage2, "append", omit_reviewed_commit)
 
     def last_block_commits() -> list[str]:
         text = world.text()
         block = text[[m.start() for m in re.finditer(r"^## Phase 6", text, re.M)][-1] :]
-        if os.environ.get("STAGE2_PLANT_FAULT") == "1":
-            block = block.replace(stage2.REVIEWED_COMMIT_KEY, "missing reviewed commit")
         assert stage2.REVIEWED_COMMIT_KEY in block, "reviewed commit line is missing"
         assert "Phase 6 verdict: codex" in block, "phase 6 verdict line is missing"
         assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")

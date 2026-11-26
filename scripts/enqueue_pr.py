@@ -503,6 +503,11 @@ def split_row(line: str) -> list[str] | None:
     return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
 
 
+def malformed_table_line(line: str, cells: list[str] | None) -> bool:
+    """Reject non-quoted pipe-bearing lines that cannot be parsed as table rows."""
+    return cells is None and "|" in line and not line.lstrip().startswith(">")
+
+
 def _furniture(cells: list[str]) -> bool:
     return cells[0].lower() in {"id", "#"} or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
 
@@ -531,6 +536,9 @@ def phase6_problems(block: list[str]) -> list[str]:
     rows: list[list[str]] = []
     for line in block[1:]:
         cells = split_row(line)
+        if malformed_table_line(line, cells):
+            problems.append(f"an unrecognised table line in the block: {line.strip()[:80]}")
+            continue
         if cells is None or _furniture(cells):
             continue
         if len(cells) != FINDING_COLUMNS:
@@ -569,6 +577,9 @@ def released_problems(text: str) -> list[str]:
             inside = False
             continue
         cells = split_row(line) if inside else None
+        if inside and malformed_table_line(line, cells):
+            problems.append(f"an unrecognised table line in the released block: {line.strip()[:80]}")
+            continue
         if cells is None or _furniture(cells):
             continue
         if len(cells) != RELEASED_COLUMNS or not LOOP_ID.fullmatch(cells[0]):
