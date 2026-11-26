@@ -43,14 +43,28 @@ _ls_step() {
     _ls_rc=$?
   else
     # Without Perl: a shell watchdog ends the step's process after the time left.
-    # Job control gives the step its own process group, so the watchdog ends its children too.
-    set -m
-    "$@" >>"$_ls_log" 2>&1 </dev/null &
-    _ls_pid=$!
-    set +m
+    # setsid (Linux) or job control (macOS) gives the step its own process group,
+    # so the watchdog ends its children too even on non-interactive dash without a TTY.
+    if command -v setsid >/dev/null 2>&1; then
+      setsid "$@" >>"$_ls_log" 2>&1 </dev/null &
+      _ls_pid=$!
+    else
+      set -m
+      "$@" >>"$_ls_log" 2>&1 </dev/null &
+      _ls_pid=$!
+      set +m
+    fi
     # The watchdog holds no inherited descriptor (git waits for the hook's stderr to close),
     # and its own sleep is ended with it.
-    ( sleep "$_ls_left"; kill -TERM -"$_ls_pid" 2>/dev/null || kill -TERM "$_ls_pid" 2>/dev/null; sleep 1; kill -KILL -"$_ls_pid" 2>/dev/null || kill -KILL "$_ls_pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+    (
+      sleep "$_ls_left"
+      _ls_kids=$(ps -o pid= -o ppid= 2>/dev/null | awk -v p="$_ls_pid" '$2 == p {print $1}')
+      kill -TERM -"$_ls_pid" 2>/dev/null || kill -TERM "$_ls_pid" 2>/dev/null
+      for _ls_k in $_ls_kids; do kill -TERM "$_ls_k" 2>/dev/null; done
+      sleep 1
+      kill -KILL -"$_ls_pid" 2>/dev/null || kill -KILL "$_ls_pid" 2>/dev/null
+      for _ls_k in $_ls_kids; do kill -KILL "$_ls_k" 2>/dev/null; done
+    ) </dev/null >/dev/null 2>&1 &
     _ls_dog=$!
     wait "$_ls_pid"
     _ls_rc=$?
@@ -105,7 +119,7 @@ _lane_setup() {
     return 0
   fi
   _ls_log="$_ls_gitdir/lane-setup.log"
-  if ! : >"$_ls_log" 2>/dev/null; then
+  if ! { command true >"$_ls_log"; } 2>/dev/null; then
     _ls_say "lane setup: warning: the log $_ls_log cannot be written; step output is discarded"
     _ls_log=/dev/null
   fi
