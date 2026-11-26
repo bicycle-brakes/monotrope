@@ -54,6 +54,7 @@ The orchestrator checks the detached verification job's exit before phase 6. Do 
 - 3: tests/test_stage2_swarm.py::test_a_resumed_run_is_a_new_run_within_its_slot_budget — the failed seat is reused or not relaunched.
 - 4: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — a mismatched binding, identity or prompt is reused.
 - 4: tests/test_stage2_research_store.py::test_interrupted_and_invalid_results_are_not_reused_and_are_named — an invalid result is adopted.
+- 5: not yet written tests/test_stage2_swarm.py::test_repository_prompts_preserve_mapped_excerpts_and_history — mapped excerpts or topic-6 mapped history are omitted or dropped across run 1 and resumed run 2.
 
 ## Time used
 
