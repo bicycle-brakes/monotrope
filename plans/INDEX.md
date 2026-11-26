@@ -689,7 +689,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/phase6-english/plan.md`](changes/phase6-english/plan.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/phase6-english/research.md`](changes/phase6-english/research.md) | draft | none | 2026-11-22 | coding-harness-tscc |
 | [`changes/phase6-english/spec.md`](changes/phase6-english/spec.md) | draft | none | 2026-11-22 | coding-harness-tscc |
+| [`changes/phase6-guard-evidence/decisions.md`](changes/phase6-guard-evidence/decisions.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/findings.md`](changes/phase6-guard-evidence/findings.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/plan.md`](changes/phase6-guard-evidence/plan.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
 | [`changes/phase6-guard-evidence/research.md`](changes/phase6-guard-evidence/research.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/spec.md`](changes/phase6-guard-evidence/spec.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
 | [`changes/red-first-baseline/decisions.md`](changes/red-first-baseline/decisions.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/findings.md`](changes/red-first-baseline/findings.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/plan.md`](changes/red-first-baseline/plan.md) | draft | none | 2026-11-21 | coding-harness-7aso |
