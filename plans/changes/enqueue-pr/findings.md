@@ -556,3 +556,20 @@ Reviewer session: codex 01a21946-e203-7f50-955c-9ef6f2ddb014 — a fresh session
 Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1283 files, 6032 commits, 12 rules.
 
 Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6055 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | BLOCKER | SPEC | base | .claude/settings.json:46; scripts/enqueue_pr.py::parse_args | `python3 scripts/enqueue_pr.py --maintainer 54` is accepted by the argument parser, but the maintainer permission rule requires an argument before `--maintainer`. The broad allow rule covers this spelling, so an unattended Claude Code session can use maintainer mode and skip the review, trailer and decision checks. [Criterion 19; Non-goals] | Codex | taken — enforce strict positional grammar `<number> [--maintainer]` in scripts/enqueue_pr.py::parse_args so only `[<positive-int>]` or `[<positive-int>, "--maintainer"]` is accepted (rejecting `--maintainer 54`, `-- 54 --maintainer`, and any flag before `<number>` with UsageError exit 2), keeping scripts/agent_policy.py and tests/test_agent_policy.py intact; add tests in tests/test_enqueue_pr.py and tests/test_merge_guard.py | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: the patched append operation removes the reviewed-commit line from the verdict the runner writes — catches without switch: yes; the assertions inspect the written verdict and compare its commit with each reviewed head.
+
+Reviewed commit: 4312ad264a1b75b3d86cd2b94bceb1bdb0191cf0
+
+Phase 6 verdict: codex 01a219c7-2403-75c0-a77e-4ecc39196009, 2026-11-26
+Reviewer session: codex 01a219c7-2403-75c0-a77e-4ecc39196009 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
