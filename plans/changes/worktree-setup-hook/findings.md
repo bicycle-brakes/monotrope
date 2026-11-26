@@ -302,3 +302,19 @@ The review call's answer was neither six-cell findings nor exactly `No finding.`
 > Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the setup section’s opening marker, preventing the test from establishing its position — catches without switch: yes.
 > 
 > Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: changes text inside the protected Beads-managed block — catches without switch: yes.
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1279 files, 5999 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MINOR | SPEC | implementation | .beads/hooks/post-checkout, timeout parsing | With `HARNESS_LANE_SETUP_TIMEOUT=18446744073709551616`, shell arithmetic wraps the positive limit to zero, so setup reports that its time was used up without starting `make venv`. A positive timeout must allow setup to run for the specified limit. [Criterion 11] | Codex | rejected — accepted limit (bead coding-harness-h7mu): 2^64-second HARNESS_LANE_SETUP_TIMEOUT overflow is a rare 64-bit shell arithmetic edge case on an operator variable | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the lane-setup opening marker from the hook text — catches without switch: yes, if that marker is removed from the hook.
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: changes text inside the protected Beads-managed block — catches without switch: yes, if that change is made in the hook.
+
+Phase 6 verdict: codex 01a2175c-8431-7032-bc80-cb98403c9950, 2026-11-26
+Reviewer session: codex 01a2175c-8431-7032-bc80-cb98403c9950 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
