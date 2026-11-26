@@ -802,9 +802,20 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    writes the worktree's path into the tracked `.gitignore`, which is one more
    change in the diff. Sibling directories beside the repository are retired
    (D-5); worktrees that still sit there are finished and removed, not moved.
-3. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
+3. **Set up on creation.** The versioned hook `.beads/hooks/post-checkout`
+   runs `make venv`, `bash tools/pi/install.sh` and two checks (the venv imports
+   `yaml`, `tools/pi/pi --version` equals the pin) in the foreground when
+   `git worktree add` creates a worktree, bounded by
+   `HARNESS_LANE_SETUP_TIMEOUT` (default 600 s). It runs only for a trusted
+   state: the checked-out commit is on `origin/main`; otherwise it
+   skips and names the deliberate command `bash .beads/hooks/post-checkout
+   --lane-setup`, which also reruns a failed setup. `HARNESS_NO_LANE_SETUP=1`
+   skips it. Output: `lane setup: start`, one `LANE SETUP FAILED:` line per
+   failure, then `lane setup: ok` or `lane setup: failed (N checks)` and the
+   log path (`lane-setup.log` in the worktree's Git directory).
+4. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
    produces a pull request that is behind before it opens.
-4. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
+5. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
    checkout's tracker through the shared git directory — no variable, no
    redirect file, no copy. Concurrent writers lose nothing and a contested
    claim has exactly one winner (measured 2026-09-23 with bd 1.3.0). Who may
@@ -812,7 +823,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    other session claims its one bead with `tools/bd update <id> --claim
    --actor <session>` and leaves its handover comment on that bead, nothing
    more. After tracker writes: `tools/bd dolt push` first, `git push` second.
-5. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
+6. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
    authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
    is started from the worktree's directory, so its hooks, its
    `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
@@ -833,7 +844,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    and there only the rule in `.claude/settings.json` holds. Not yet measured: whether `omnigent claude`
    started inside a worktree keeps that directory as the session's working
    directory in every case.
-6. **After the merge, the worktree goes.** `git worktree remove
+7. **After the merge, the worktree goes.** `git worktree remove
    .claude/worktrees/<name>` and the branch with it. A worktree nobody works in
    is a place where a later session finds an old state and takes it for the
    current one.
@@ -851,7 +862,7 @@ is not a tool question but a division of work.
    environment, not an artefact in this repository — there is nothing to
    install and nothing to configure.
 3. **`permissions.deny` in `.claude/settings.json`.** It holds two things:
-   Omnigent's writing tools (item 5 above) and
+   Omnigent's writing tools (item 6 above) and
    `Edit(//**/.omnigent/config.yaml)`, so no session rewrites the policy that
    holds them. The template's brakes on the irreversible — production deploy,
    `bundle destroy`, force push, `rm -rf`, writes under `docs/decisions/` — are
