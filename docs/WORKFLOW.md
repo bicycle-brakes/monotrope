@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-25
+updated: 2026-11-26
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:

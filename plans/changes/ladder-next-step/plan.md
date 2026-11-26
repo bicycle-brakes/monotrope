@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-20
 last_reviewed: 2026-11-24
-updated: 2026-11-25
+updated: 2026-11-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-hwll
