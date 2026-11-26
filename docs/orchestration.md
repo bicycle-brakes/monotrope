@@ -106,12 +106,17 @@ When an item waits for the slot, for an answer or for CI, its lane takes the
 next remote step of its next item. Three events park a change, never its
 lane:
 
-- **An interview question.** A `feature` change owes the maintainer's
-  answers. At night it runs its explore and stops before the interview. A
-  `bounded` change records a reasoned skip where the bead already holds the
-  direction.
-- **The appetite.** It is a stop, not an estimate. At night the orchestrator
-  may answer cut, park or drop, never continue.
+- **An interview question.** A `feature` or `architectural` change owes the
+  maintainer's answers. Unattended it runs phase 1 (taking `prepare-explore`'s
+  seat recommendation directly; DeepSeek remains in the swarm until
+  `2026-11-30`), writes drafted ADR-0018 interview questions into the bead's
+  notes, and parks before the interview. A `bounded` change records a reasoned
+  skip where the bead already holds the direction, answers non-`BLOCKER`
+  spec-review rows as `[DETAIL]` in `decisions.md`, and proceeds without a
+  separate plan-card stop (standing grant, maintainer 2026-11-25).
+- **The appetite.** It is a stop, not an estimate. Unattended, a change is
+  parked once +50 % buffer (150 % of the declared appetite) is spent, never
+  extended silently (maintainer, 2026-11-25).
 - **A further case of the same mechanism** at a phase-6 re-check, but only
   when its remedy would be a `Boundary`, change the spec or its criteria, or
   touch security; otherwise the orchestrator takes the structural remedy at
@@ -121,9 +126,7 @@ A leak-check block or a security blocker stops the whole run.
 
 ## Merges and the morning
 
-Unattended night runs launch through `tools/claude-code/night.py` (which turns
-every sourced `ask` rule into a `deny` under `--permission-mode dontAsk` so a
-permission prompt cannot stall the session). A pull request is admitted to
+Unattended runs launch through `tools/claude-code/night.py` for Claude Code or `tools/antigravity/night.py` with a run settings file for Antigravity (turning every `ask` into `deny` so a permission prompt cannot stall the session; multi-day Antigravity runs add a 2-hour watchdog sidecar and daily `09:00` plus final handover pull requests). A pull request is admitted to
 the merge queue by the orchestrator itself, by day or night, once phase 6 is clean, `make verify` is green on its head and its last commit carries
 the `Closes-Bead` trailer (standing grant, maintainer 2026-11-25); every other
 merge asks the maintainer. The morning handover lists the queued and the
