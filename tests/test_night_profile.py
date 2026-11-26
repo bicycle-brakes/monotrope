@@ -408,7 +408,7 @@ def test_child_launch_errors_are_reported(
     monkeypatch.setattr(night, "user_settings_path", lambda: tmp_path / "absent.json")
     overlays = []
 
-    def fail_launch(argv: list[str]) -> None:
+    def fail_launch(argv: list[str], **_kwargs: object) -> None:
         overlays.append(Path(argv[2]))
         raise failure
 
