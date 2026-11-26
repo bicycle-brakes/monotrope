@@ -49,13 +49,18 @@ The orchestrator checks the detached verification job's exit before phase 6. Do 
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2_swarm.py::test_repository_prompts_stay_stable_across_published_resume — any corresponding prompt changes after the first publication.
-- 2: not yet written tests/test_stage2_swarm.py::test_repository_resume_reuses_all_successful_seats — a successful seat is relaunched or its result is not adopted.
+- 1: tests/test_stage2_swarm.py::test_repository_prompts_stay_stable_across_published_resume — any corresponding prompt changes after the first publication.
+- 2: tests/test_stage2_swarm.py::test_repository_resume_reuses_all_successful_seats — a successful seat is relaunched or its result is not adopted.
 - 3: tests/test_stage2_swarm.py::test_a_resumed_run_is_a_new_run_within_its_slot_budget — the failed seat is reused or not relaunched.
 - 4: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — a mismatched binding, identity or prompt is reused.
 - 4: tests/test_stage2_research_store.py::test_interrupted_and_invalid_results_are_not_reused_and_are_named — an invalid result is adopted.
-- 5: not yet written tests/test_stage2_swarm.py::test_repository_prompts_preserve_mapped_excerpts_and_history — resolved finder-map `extent`/`excerpt_sha256` or topic-6 `# Mapped history (data)` are omitted, blanked, or disagree with validation across a three-run chain.
+- 5: tests/test_stage2_swarm.py::test_repository_prompts_preserve_mapped_excerpts_and_history — resolved finder-map `extent`/`excerpt_sha256` or topic-6 `# Mapped history (data)` are omitted, blanked, or disagree with validation across a three-run chain.
+
+## Runner route — 2026-11-26
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
 
 ## Time used
 
 2026-11-26 19:58:35–20:01:28 UTC, 173 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-26 21:12:30–21:28:38 UTC, 968 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_atomic_test_log.py`, `tests/test_check_criterion_ledger.py`, `tests/test_check_interview_minimums.py`, `tests/test_check_question_context.py`, `tests/test_explorer_reviewer_agents.py`, `tests/test_frontmatter_current.py`, `tests/test_leakcheck.py`, `tests/test_model_endpoints.py`, `tests/test_outcome_test.py`, `tests/test_pi_contract.py`, `tests/test_research_capture.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_fail_fast.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_session.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_standin_call_counter.py`, `tests/test_templates.py`, `tests/test_workflow_entry.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner

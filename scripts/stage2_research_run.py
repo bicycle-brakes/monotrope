@@ -26,6 +26,8 @@ refuses the invocation before anything starts.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import contextlib
 import dataclasses
 import hashlib
@@ -68,6 +70,36 @@ from stage2_research_snapshot import (
 from stage2_research_store import SLOT_ID, STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
+
+_HEAD = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+
+
+def origin_record(head: str, research: bytes) -> dict:
+    """The replayable origin baseline a stored run carries (Q-13): its baseline HEAD and research bytes.
+
+    A matching resume may run on a moved HEAD and a research.md that grew by an earlier run's
+    publication and `updated:` restamp. Every other frozen path must match the stored binding, so
+    these two inputs are all a resume needs to rebuild the origin run's map, history and prompts.
+    """
+    return {
+        "head": head,
+        "research": {"base64": base64.b64encode(research).decode("ascii"), "sha256": _sha256(research)},
+    }
+
+
+def stored_origin(binding: object) -> tuple[str, bytes] | None:
+    """The origin baseline a stored binding carries; None when absent or malformed (a pre-fix store)."""
+    record = binding.get("origin") if isinstance(binding, dict) else None
+    if not isinstance(record, dict):
+        return None
+    try:
+        head = record["head"]
+        data = base64.b64decode(record["research"]["base64"], validate=True)
+        if not isinstance(head, str) or not _HEAD.fullmatch(head) or _sha256(data) != record["research"]["sha256"]:
+            return None
+    except (KeyError, TypeError, ValueError, binascii.Error):
+        return None
+    return head, data
 
 
 def free_slot_id(stage: str, topic: int, model: str) -> str:
@@ -439,7 +471,11 @@ class Run:
         self.source = None
         self.not_reused: list[tuple[str, str]] = []
         self.map: dict | None = None
-        self.history: dict | None = None
+        self.history: dict | None = None  # the origin baseline's history: prompts, reuse, judge, publication
+        self.live_history: dict | None = None  # this run's own freeze: validation of newly launched seats
+        self.origin_head: str | None = None
+        self.origin_research: bytes | None = None
+        self.origin_sources: dict[str, bytes] = {}
         self.sentence: str | None = None
         self.reports: list[dict] = []
         self.outcomes: list[dict] = []
@@ -550,7 +586,15 @@ class Run:
                 research = BLOCK.sub("", self.research_bytes.decode("utf-8"))
                 corrected = runner.research_publication(research.encode(), producer=SWARM_PUBLISHER, day=BRIEF_DAY)
                 self.brief_research = _without_updated(corrected)
-            self.binding = stored_binding(
+            # A matching resume replays the origin run's baseline (its HEAD and research bytes), carried
+            # forward through every resumed run, so the repository prompts stay byte-identical; a run
+            # without a usable source, or a pre-fix source without the record, is its own origin.
+            origin = stored_origin(previous) if previous is not None else None
+            if origin is None:
+                origin = (self.manifest["head"], self.research_bytes)
+            self.origin_head, self.origin_research = origin
+            self.origin_sources = {**self.sources, self.research_rel: self.origin_research}
+            binding = stored_binding(
                 self.manifest,
                 self.research_rel,
                 self.research_bytes,
@@ -558,6 +602,7 @@ class Run:
                 publication_day=self.publication_day,
                 brief=self.brief_research,
             )
+            self.binding = self.with_origin(binding)
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
@@ -567,6 +612,16 @@ class Run:
                 print(f"swarm: not reusing the earlier run - {reason}")
         self.brief = self.build_brief()
         self.agents = self.sources.get("AGENTS.md", b"").decode("utf-8", errors="replace")
+
+    def with_origin(self, binding: dict) -> dict:
+        """The stored binding plus the replayable origin baseline; the reuse comparison ignores it."""
+        assert self.origin_head is not None and self.origin_research is not None
+        return {**binding, "origin": origin_record(self.origin_head, self.origin_research)}
+
+    @property
+    def replayed(self) -> bool:
+        """True when the origin baseline differs from this run's own freeze."""
+        return self.origin_head != self.manifest["head"] or self.origin_research != self.research_bytes
 
     def all_seats(self) -> list[dict]:
         return [
@@ -1339,7 +1394,7 @@ class Run:
         if final.get("prompt_sha256") != digest(self.correction_prompt(entry, first)):
             return None
         try:
-            self.validate_topic(entry, final)
+            self.validate_topic(entry, final, reused=True)
         except ResearchReportError:
             return None
         return final
@@ -1357,7 +1412,7 @@ class Run:
                 "launched_in": record.get("launched_in") or self.source.run_id,
             }
         self.records[slot_id]["final_attempt"] = final["slot_id"]
-        return self.validate_topic(self.entries[slot_id], final)
+        return self.validate_topic(self.entries[slot_id], final, reused=True)
 
     # -- stages ----------------------------------------------------------------------------------
 
@@ -1439,7 +1494,7 @@ class Run:
     def map_merge(self, record: dict) -> dict:
         try:
             return stage2_research_map.merge_research_map(
-                self.finder_reports, payload_text(record["stdout"]), self.sources, self.given, self.own_spec
+                self.finder_reports, payload_text(record["stdout"]), self.origin_sources, self.given, self.own_spec
             )
         except stage2_research_map.ResearchMapError as error:
             if error.exit_code == 2:
@@ -1502,11 +1557,19 @@ class Run:
 
     def stage_history(self) -> None:
         assert self.map is not None
+        assert self.origin_head is not None
         paths = sorted({entry["path"] for entry in self.map["entries"] if entry["status"] == "resolved"})
         try:
+            # The prompts carry the origin baseline's history; seats launched by this run are also
+            # validated against the history at this run's own frozen HEAD.
             self.history = build_research_history(
-                self.root, self.manifest["head"], paths, deadline=time.monotonic() + PREPARATION_SECONDS
+                self.root, self.origin_head, paths, deadline=time.monotonic() + PREPARATION_SECONDS
             )
+            self.live_history = self.history
+            if self.origin_head != self.manifest["head"]:
+                self.live_history = build_research_history(
+                    self.root, self.manifest["head"], paths, deadline=time.monotonic() + PREPARATION_SECONDS
+                )
         except ResearchHistoryError as error:
             raise Stop(f"the local history could not be collected ({error}); no topic starts.", 1) from error
 
@@ -1555,19 +1618,38 @@ class Run:
                 )
         return entries
 
-    def validate_topic(self, entry: dict, record: dict) -> dict:
+    def validate_topic(self, entry: dict, record: dict, *, reused: bool | None = None) -> dict:
+        """Validate one topic answer; a reused one against the replayed origin baseline only.
+
+        A seat this run launched read the live worktree: it validates against this run's own freeze
+        and, failing that, against the origin baseline its prompt packet carried (spec criterion 2).
+        """
         assert self.map is not None
         topic = entry["topic"]
-        return validate_research_report(
-            topic_report_payload(record["stdout"]),
-            run_id=self.run_id,
-            topic=topic,
-            seat=self.seat_id(entry),
-            sources=self.sources,
-            history=self.history if topic == 6 else None,
-            receipts=stage2_swarm.parse_receipts(record.get("receipts", "")) if topic >= 9 else (),
-            neighbours=[item["path"] for item in self.map["neighbours"]] if topic == 5 else (),
-        )
+        if reused is None:
+            reused = bool(record.get("reused_from"))
+
+        def check(sources: dict[str, bytes], history: dict | None) -> dict:
+            return validate_research_report(
+                topic_report_payload(record["stdout"]),
+                run_id=self.run_id,
+                topic=topic,
+                seat=self.seat_id(entry),
+                sources=sources,
+                history=history if topic == 6 else None,
+                receipts=stage2_swarm.parse_receipts(record.get("receipts", "")) if topic >= 9 else (),
+                neighbours=[item["path"] for item in self.map["neighbours"]] if topic == 5 else (),
+            )
+
+        if reused or not self.replayed:
+            return check(self.origin_sources, self.history)
+        try:
+            return check(self.sources, self.live_history)
+        except ResearchReportError as live_error:
+            try:
+                return check(self.origin_sources, self.history)
+            except ResearchReportError:
+                raise live_error from None
 
     def judge_instructions(self) -> str:
         return self.prompt_file("judge.md").rstrip() + "\n\n" + JUDGE_RUNNER_RULES
@@ -1605,7 +1687,7 @@ class Run:
 
         def valid(entry, record) -> bool:
             try:
-                self.validate_topic(entry, record)
+                self.validate_topic(entry, record, reused=True)  # only stored results reach the reuse check
             except ResearchReportError:
                 return False
             return True
@@ -1845,6 +1927,8 @@ class Run:
             "receipt_id": self.selection.get("report_id"),
             "head": self.manifest["head"],
             "digest": self.manifest["digest"],
+            # The baseline HEAD whose map and history this run replays (its own on a first run).
+            "origin_head": self.origin_head,
             "untracked": self.manifest["untracked"],
             "free_selected": self.free,
             "free_count": len(self.free),
@@ -1909,18 +1993,16 @@ class Run:
         def bind(text: str) -> None:
             addition = text.rstrip().encode() + b"\n"
             separator = (b"" if prepared.endswith(b"\n") else b"\n") + b"\n"
-            self.store.set_append(
-                self.run_id,
-                stored_binding(
-                    self.manifest,
-                    self.research_rel,
-                    self.research_bytes,
-                    append=separator + addition,
-                    publication=prepared,
-                    publication_day=self.publication_day,
-                    brief=self.brief_research,
-                ),
+            binding = stored_binding(
+                self.manifest,
+                self.research_rel,
+                self.research_bytes,
+                append=separator + addition,
+                publication=prepared,
+                publication_day=self.publication_day,
+                brief=self.brief_research,
             )
+            self.store.set_append(self.run_id, self.with_origin(binding))
 
         text = self.compose(status)
         staging = None

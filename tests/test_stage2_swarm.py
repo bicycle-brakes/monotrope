@@ -2248,6 +2248,164 @@ def test_a_resumed_run_is_a_new_run_within_its_slot_budget(sworld: SwarmWorld) -
     assert second["resume"]["source_run"] == first["run_id"] and second["resume"]["usable"] is True
 
 
+# A matching resume after a committed publication (research-swarm-resume, criteria 1, 2 and 5): the
+# finder map holds a locator into research.md, whose extent the appended publication grows, and every
+# run's publication is committed before the next run, so HEAD and the research.md tail both move.
+
+RESEARCH_REL = "plans/changes/demo/research.md"
+SEAT_A_KEY, SEAT_A_SLOT, SEAT_A_CALL = "repository:4:mimo-v2.6-pro", "topics-4-2", (4, "mimo-v2.6-pro")
+SEAT_B_KEY, SEAT_B_SLOT, SEAT_B_CALL = "repository:7:deepseek-v4.1-flash", "topics-7-1", (7, "deepseek-v4.1-flash")
+
+
+def research_locator_report() -> str:
+    """The fixture's locators plus one Markdown heading in research.md that runs to the end of the file."""
+    body = json.loads(locator_report())
+    body["rules"].append({"path": RESEARCH_REL, "reference": "Research", "reason": "the research so far"})
+    return json.dumps(body)
+
+
+@dataclass
+class ResumeChain:
+    """What three chained runs built and launched: per run its repository prompts, calls and record."""
+
+    codes: list[int]
+    prompts: list[dict[int, str]]
+    calls: list[list[dict]]
+    manifests: list[dict]
+    maps: list[dict]
+
+
+def three_run_chain(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> ResumeChain:
+    """Run 1 fails seats A and B, run 2 resumes it and fails only B, run 3 resumes run 2.
+
+    The prompts are the ones the run itself builds (a spy around `repository_prompt`), so nothing
+    substitutes an equal prompt; the publication of runs 1 and 2 is committed before the next run,
+    and each run's own `updated:` restamp lands on the frozen file.
+    """
+    chain = ResumeChain([], [], [], [], [])
+    original = stage2_research_run.Run.repository_prompt
+
+    def spy(run, topic):
+        text = original(run, topic)
+        chain.prompts[-1][topic] = text
+        return text
+
+    monkeypatch.setattr(stage2_research_run.Run, "repository_prompt", spy)
+    failing = [{SEAT_A_KEY: [{"exit": 2}], SEAT_B_KEY: [{"exit": 2}]}, {SEAT_B_KEY: [{"exit": 2}]}, {}]
+    for number, faults in enumerate(failing):
+        sworld.complete(finder={"stdout": research_locator_report()}, **faults)
+        (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
+        chain.prompts.append({})
+        chain.codes.append(sworld.run())
+        chain.calls.append(sworld.calls())
+        chain.manifests.append(manifest_of(sworld))
+        chain.maps.append(map_of(sworld.research.read_text(encoding="utf-8")))
+        if number < 2:
+            commit_publication(sworld)
+    return chain
+
+
+def commit_publication(world: SwarmWorld) -> None:
+    """Commit the run's appended publication and restamp of research.md alone: HEAD moves, nothing else."""
+    subprocess.run(["git", "add", "--", RESEARCH_REL], cwd=world.root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+         "commit", "--quiet", "-m", "publish"],
+        cwd=world.root, check=True, capture_output=True,
+    )  # fmt: skip
+
+
+def test_a_stored_origin_round_trips_and_a_malformed_one_is_ignored() -> None:
+    # Planted fault: a tampered or malformed origin record is replayed, or a valid one does not round-trip.
+    head = "a" * 40
+    record = stage2_research_run.origin_record(head, b"# Research\n")
+    assert stage2_research_run.stored_origin({"origin": record}) == (head, b"# Research\n")
+    assert stage2_research_run.stored_origin({}) is None, "a pre-fix binding has no origin"
+    tampered = {**record, "research": {**record["research"], "sha256": "0" * 64}}
+    for bad in (tampered, {**record, "head": "HEAD"}, {"head": head}, {**record, "research": {"base64": "%"}}, "x"):
+        assert stage2_research_run.stored_origin({"origin": bad}) is None
+
+
+def data_section(prompt: str, title: str) -> object:
+    """The JSON value that follows one `# <title> (data)` heading of a prompt."""
+    marker = f"# {title} (data)\n\n"
+    assert marker in prompt, f"the prompt has no {title} section"
+    return json.JSONDecoder().raw_decode(prompt.split(marker, 1)[1])[0]
+
+
+def test_repository_prompts_stay_stable_across_published_resume(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 1. Planted fault: a resumed run rebuilds a repository-topic prompt from its moved HEAD
+    # or from the published, restamped research.md, so the prompt differs from the origin run's.
+    chain = three_run_chain(sworld, monkeypatch)
+    assert chain.codes == [1, 1, 0]
+    heads = [manifest["head"] for manifest in chain.manifests]
+    assert len(set(heads)) == 3, "each resumed run froze a HEAD moved by the committed publication"
+    assert all(manifest["resume"]["usable"] is True for manifest in chain.manifests[1:])
+    for number, prompts in enumerate(chain.prompts):
+        assert sorted(prompts) == list(range(1, 9)), f"run {number + 1} built every repository-topic prompt"
+        for topic in range(1, 9):
+            assert prompts[topic] == chain.prompts[0][topic], f"run {number + 1}: the topic {topic} prompt drifted"
+
+
+def test_repository_resume_reuses_all_successful_seats(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 2. Planted fault: a successful repository seat of run 1 or run 2 is launched again, or its
+    # stored result is rejected by validation against the drifted research.md or HEAD and not adopted.
+    chain = three_run_chain(sworld, monkeypatch)
+    assert chain.codes == [1, 1, 0]
+
+    def repository(number: int) -> list[tuple[int, str]]:
+        return sorted((call["topic"], call["model"]) for call in chain.calls[number] if call["kind"] == "repository")
+
+    assert len(repository(0)) == 24
+    assert repository(1) == sorted([SEAT_A_CALL, SEAT_B_CALL]), "run 2 launches only the two failed seats"
+    assert sorted(call["kind"] for call in chain.calls[1]) == ["repository", "repository"]
+    assert repository(2) == [SEAT_B_CALL], "run 3 launches only the seat that failed again"
+    assert sorted(call["kind"] for call in chain.calls[2]) == ["judge", "repository"], "run 3 reaches the judge"
+    first, second, _third = (manifest["run_id"] for manifest in chain.manifests)
+    third = chain.manifests[2]
+    assert third["status"] == "complete"
+    topics = {
+        slot["slot_id"]: slot
+        for slot in third["slots"]
+        if slot["stage"] == "topics" and isinstance(slot["topic"], int) and slot["topic"] <= 8
+    }
+    assert len(topics) == 24 and all(slot["outcome"] == "ok" for slot in topics.values())
+    reused = {slot_id for slot_id, slot in topics.items() if slot["reused_from"]}
+    assert reused == set(topics) - {SEAT_B_SLOT}, "every successful seat is adopted"
+    assert topics[SEAT_B_SLOT]["launched"] is True
+    assert topics[SEAT_A_SLOT]["reused_from"] == second and topics[SEAT_A_SLOT]["launched_in"] == second
+    carried = reused - {SEAT_A_SLOT}
+    assert all(topics[slot]["reused_from"] == second and topics[slot]["launched_in"] == first for slot in carried)
+
+
+def test_repository_prompts_preserve_mapped_excerpts_and_history(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 5. Planted fault: byte-identity is reached by dropping or blanking the resolved extent or
+    # excerpt hash or the topic-6 history, or the map and history follow the moved HEAD and grown file.
+    chain = three_run_chain(sworld, monkeypatch)
+    origin = chain.manifests[0]["head"]
+    first_map = data_section(chain.prompts[0][1], "Finder map")
+    research = [entry for entry in first_map["entries"] if entry["path"] == RESEARCH_REL]
+    assert len(research) == 1 and research[0]["status"] == "resolved"
+    extent = research[0]["extent"]
+    assert extent["start_line"] and extent["end_line"] >= extent["start_line"] and research[0]["excerpt_sha256"]
+    for number, prompts in enumerate(chain.prompts):
+        for topic in range(1, 9):
+            assert data_section(prompts[topic], "Finder map") == first_map, f"run {number + 1}, topic {topic}"
+        assert "# Mapped history (data)" not in prompts[1], "only topic 6 carries the mapped history"
+        history = data_section(prompts[6], "Mapped history")
+        assert isinstance(history, dict) and history["frozen_head"] == origin
+        assert history["paths"].get(RESEARCH_REL), "the mapped research.md keeps its origin history"
+        manifest = chain.manifests[number]
+        assert manifest["origin_head"] == origin, "the record names the replayed origin HEAD"
+        assert chain.maps[number] == chain.maps[0], "the published map is the replayed origin map"
+        assert chain.maps[number]["entries"] == first_map["entries"]
+    assert all(manifest["head"] != origin for manifest in chain.manifests[1:]), "head stays each run's own freeze"
+
+
 def test_only_finished_valid_results_are_reused_and_others_are_named(sworld: SwarmWorld) -> None:
     # Criterion 53. Planted fault: an invalid, timed-out or cancelled result is reused or left unnamed.
     sworld.complete(
