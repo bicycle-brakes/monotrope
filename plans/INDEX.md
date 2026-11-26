@@ -612,6 +612,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/close-budget-clock/plan.md`](changes/close-budget-clock/plan.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
 | [`changes/close-budget-clock/research.md`](changes/close-budget-clock/research.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
 | [`changes/close-budget-clock/spec.md`](changes/close-budget-clock/spec.md) | draft | none | 2026-11-21 | coding-harness-0n4s |
+| [`changes/detached-job-launcher/decisions.md`](changes/detached-job-launcher/decisions.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/design.md`](changes/detached-job-launcher/design.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/findings.md`](changes/detached-job-launcher/findings.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/plan.md`](changes/detached-job-launcher/plan.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/research.md`](changes/detached-job-launcher/research.md) | draft | none | 2026-11-23 | coding-harness-a6ns.1 |
+| [`changes/detached-job-launcher/spec.md`](changes/detached-job-launcher/spec.md) | draft | none | 2026-11-24 | coding-harness-a6ns.1 |
 | [`changes/drift-lane-branches/decisions.md`](changes/drift-lane-branches/decisions.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/findings.md`](changes/drift-lane-branches/findings.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/plan.md`](changes/drift-lane-branches/plan.md) | draft | none | 2026-11-21 | coding-harness-l54q |
@@ -622,6 +628,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/finder-partial-report/plan.md`](changes/finder-partial-report/plan.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/research.md`](changes/finder-partial-report/research.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
 | [`changes/finder-partial-report/spec.md`](changes/finder-partial-report/spec.md) | draft | none | 2026-11-19 | coding-harness-yd8w |
+| [`changes/findings-per-model/decisions.md`](changes/findings-per-model/decisions.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
+| [`changes/findings-per-model/findings.md`](changes/findings-per-model/findings.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
+| [`changes/findings-per-model/plan.md`](changes/findings-per-model/plan.md) | draft | none | 2026-11-18 | coding-harness-qut1 |
+| [`changes/findings-per-model/research.md`](changes/findings-per-model/research.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
+| [`changes/findings-per-model/spec.md`](changes/findings-per-model/spec.md) | draft | none | 2026-11-18 | coding-harness-qut1 |
 | [`changes/flaky-swarm-leak-test/decisions.md`](changes/flaky-swarm-leak-test/decisions.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/findings.md`](changes/flaky-swarm-leak-test/findings.md) | draft | none | 2026-11-13 | coding-harness-yb1l |
 | [`changes/flaky-swarm-leak-test/plan.md`](changes/flaky-swarm-leak-test/plan.md) | draft | partial | 2026-11-13 | coding-harness-yb1l |
@@ -725,6 +736,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/standin-call-counter/decisions.md`](changes/standin-call-counter/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
+| [`changes/standin-call-counter/findings.md`](changes/standin-call-counter/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
+| [`changes/standin-call-counter/plan.md`](changes/standin-call-counter/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
+| [`changes/standin-call-counter/research.md`](changes/standin-call-counter/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
+| [`changes/standin-call-counter/spec.md`](changes/standin-call-counter/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
 | [`changes/swarm-test-speed/decisions.md`](changes/swarm-test-speed/decisions.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/findings.md`](changes/swarm-test-speed/findings.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |
 | [`changes/swarm-test-speed/plan.md`](changes/swarm-test-speed/plan.md) | draft | partial | 2026-10-28 | coding-harness-dca4 |

@@ -209,7 +209,8 @@ def worktree_field(run: RunCommand, worktree: Path | None) -> str:
 
 
 def jobs_field(run: RunCommand, worktree: Path | None) -> list[str]:
-    """The runner and verification invocations of one `ps` snapshot, recognized by the run report.
+    """The runner and verification invocations of one `ps` snapshot, recognized by the run report,
+    and the running detached jobs of the job records (bead coding-harness-a6ns.1), counted once.
 
     Rows carry PID, elapsed time, verb and a known change or `not read` -
     never raw command arguments - and invocations are counted, not
@@ -226,6 +227,7 @@ def jobs_field(run: RunCommand, worktree: Path | None) -> list[str]:
         with contextlib.suppress(run_report.SourceError):
             # attribution stays `not read`; readable rows still render
             changes = frozenset(run_report.active_changes(worktree))
+    seen: set[str] = set()
     try:
         raw = run(["ps", "-axo", "pid,etime,command"])
         table = raw.splitlines()
@@ -247,12 +249,15 @@ def jobs_field(run: RunCommand, worktree: Path | None) -> list[str]:
         rows = run_report.parse_processes(raw, changes)
     except run_report.SourceError as error:
         lines.append(str(error))
+        # the detached records are an independent source: they still render
+        lines.extend(run_report.detached_job_lines(changes, seen))
         return lines
-    if not rows:
-        if run_report.stage2 is not None:
-            lines.append("none matched")
-        return lines
+    seen = {row.pid for row in rows}
     lines.extend(f"pid {row.pid} · {row.label} · change {row.change} · elapsed {row.elapsed}" for row in rows)
+    detached = run_report.detached_job_lines(changes, seen)
+    lines.extend(detached)
+    if not rows and not detached and run_report.stage2 is not None:
+        lines.append("none matched")
     return lines
 
 

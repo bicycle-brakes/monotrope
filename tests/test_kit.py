@@ -419,3 +419,43 @@ def test_research_handoff_checker_and_tests_travel() -> None:
         rule = probe.rolle(path)
         assert rule is not None and rule[0] == "mechanismus", path
         assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+
+
+def test_finding_duplicates_gate_and_dependencies_travel() -> None:
+    """The carried gate must include its script, reader and fixture tests."""
+    for path in (
+        "scripts/check_finding_duplicates.py",
+        "scripts/findings_reader.py",
+        "tests/test_finding_duplicates.py",
+    ):
+        rule = probe.rolle(path)
+        assert rule is not None and rule[0] == "mechanismus", path
+        assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+
+
+def test_detached_launcher_travels_with_dependencies() -> None:
+    """Criterion 10 of detached-job-launcher: the launcher, its tests and every repository module it
+    imports travel as mechanism, each by a rule of its own.
+
+    Planted fault: the launcher travels while a module it imports, or its tests, stay behind in a catch-all.
+    """
+    import ast
+
+    source = REPO_ROOT / "scripts" / "jobs.py"
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0
+    }
+    local = sorted(name for name in imported if (REPO_ROOT / "scripts" / f"{name}.py").is_file())
+    for path in ("scripts/jobs.py", "tests/test_jobs.py", *(f"scripts/{name}.py" for name in local)):
+        rule = probe.rolle(path)
+        assert rule is not None and rule[0] == "mechanismus", path
+        assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"
+    # The tests import the verification module for its constants; it travels as well.
+    assert probe.rolle("scripts/verify_lock.py")[0] == "mechanismus"

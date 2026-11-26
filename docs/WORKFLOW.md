@@ -2316,8 +2316,11 @@ day session would ask:
    and the run continues. The runner automates this once bead
    coding-harness-m98e lands.
 2. **A further case of the same mechanism at a phase-6 re-check:** record
-   the finding, park that pull request and continue with the next queue
-   item; the maintainer decides it in the morning.
+   the finding and take the structural remedy that closes the mechanism at
+   one choke point, recorded in the bead notes and named in the handover
+   (standing grant, maintainer 2026-11-25). Only a `Boundary`, a remedy that
+   changes the spec or its criteria, or a security question parks that pull
+   request for the maintainer; the run continues with the next queue item.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the
@@ -2382,6 +2385,18 @@ exists, the session reports the missing keep-awake, as it does a missing
 delivery facility, instead of declaring the run ready. No scheduler adapter is
 introduced for this. The wake is time-based: it returns even when every
 lane looks busy, and lane idleness alone triggers nothing.
+
+**Detached runner jobs (ADR 0026).** Every runner verb and every bare
+`make verify` of a night run starts through `python3 scripts/jobs.py start
+-- <command>`, which runs it in its own window of the dedicated tmux server
+`coding-harness`, so the job outlives the orchestrating session. At each
+wake the session reads a job's completion with `python3 scripts/jobs.py
+list`: `running`, `finished` with its exit status or `signal N`, `lost`, or
+`failed to start`; the job's log lies beside its record in the jobs state
+directory, and `scripts/run_report.py` shows the same records. The launcher
+sends no completion notice of its own, so the 30-minute wake stays until
+`lanes.py advance` lands. Commands outside the runner keep the harness
+background mode.
 
 At each wake the session works one fixed order: rearm once for 30 minutes
 and retain the new handle before any lane work; read the lane file; check
