@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/agent_policy_hooks.py\" claude-code",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash|.*merge_pull_request"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
@@ -31,7 +43,8 @@
       "Bash(git push *main*)",
       "mcp__*__merge_pull_request",
       "Bash(codex *)",
-      "Bash(*enqueue_pr.py*--maintainer*)",
+      "Bash(python3 scripts/enqueue_pr.py * --maintainer*)",
+      "Bash(.venv/bin/python scripts/enqueue_pr.py * --maintainer*)",
       "mcp__omnigent__sys_advise_models"
     ],
     "deny": [
