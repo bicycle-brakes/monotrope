@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-11-25
+updated: 2026-11-26
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -2296,6 +2296,31 @@ day session would ask:
    (standing grant, maintainer 2026-11-25). Only a `Boundary`, a remedy that
    changes the spec or its criteria, or a security question parks that pull
    request for the maintainer; the run continues with the next queue item.
+3. **Class routing and bounded grants (maintainer, 2026-11-25):** An
+   unattended run pulls ready beads by priority across two parallel lanes.
+   `bounded` and `spike` changes run through to a pull request and queue
+   admission; for `bounded` changes the orchestrator answers phase-2a
+   spec-review rows except `BLOCKER`s itself as `[DETAIL]` in `decisions.md`
+   and starts implementation without a separate plan-card sign-off (security,
+   `Boundary` and spec/criterion changes still park). `feature` and
+   `architectural` changes run phase 1 (`prepare-explore`'s seat
+   recommendation is taken directly; DeepSeek stays in the swarm until its
+   data terms expire on `2026-11-30`), record drafted ADR-0018 interview
+   questions in the bead's notes (`tools/bd update <id> --append-notes` then
+   `tools/bd dolt push`), and park so the lane takes the next ready bead.
+4. **Appetite buffer (maintainer, 2026-11-25):** An unattended lane parks a
+   change for appetite only once a +50 % buffer (150 % of the declared
+   appetite) is spent; it never extends an appetite silently.
+5. **Multi-day Antigravity runs (maintainer, 2026-11-25):** A 72-hour
+   unattended run on Antigravity (`agy` with `gemini-4-neon-high`, started
+   with `HARNESS_UNATTENDED=1` and a run settings file where every `ask` is
+   `deny`) pairs the 30-minute session wake with an independent 2-hour
+   watchdog sidecar (`~/.gemini/config/sidecars/`), opens handover pull
+   requests daily at `09:00` local time and at the end of the run (with a
+   call and cost report), and notifies through Antigravity Remote Control
+   only on stop events (leak-check `BLOCK`, security `BLOCKER`, broken
+   `main`, or all admitted routes down). Other sessions may work in their
+   own worktrees without writing the tracker.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the
