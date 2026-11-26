@@ -1,0 +1,60 @@
+---
+title: "Plan — research-swarm-resume"
+status: draft
+implementation_status: none
+date: 2026-11-26
+last_reviewed: 2026-11-26
+updated: 2026-11-26
+supersedes: null
+superseded_by: null
+bead: coding-harness-f6qj
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-11-26"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [plan, research-swarm, resume]
+---
+
+# Plan — research-swarm-resume
+
+```text
+For you:     Finished repository research survives a failed seat and is reused on resume.
+Done when:   A two-run regression proves stable prompts and selective reuse; reuse guards and make verify pass.
+Appetite:    4 hours of phase 4 including repairs; stop at the limit.
+Not now:     Changes to model routing, security checks or the existing reuse contract.
+Pre-mortem:  suppose it failed: most likely because the test misses the input that changes between real runs.
+Starts unless you say stop.
+```
+
+## Files and steps
+
+1. Change `tests/test_stage2_swarm.py`: extend the deterministic two-run swarm fixture with a repository locator into research content affected by publication, capture actual prompts and launches across both runs, fail one repository seat on run one, and assert all eight topic prompts, the other successful repository seats and the failed seat's retry. Exercise the real publication and resume path rather than substituting equal prompts.
+2. Change `scripts/stage2_research_run.py`: trace every input to `repository_prompt`, including the finder map's resolved excerpts and mapped history, against the stored frozen binding and reproduced drift; correct the input at its common source so matching resumes reconstruct identical prompts while real input changes still invalidate reuse. Keep map, history, publication and security semantics intact; do not weaken `plan_reuse` or its validation.
+3. Change `tests/test_stage2_research_store.py`: add a focused boundary regression if existing tests do not cover the corrected input's drift; retain the existing binding, identity, prompt-hash and invalid-result tests. Update this change's `findings.md` as reviews require.
+4. If diagnosis locates the source in `scripts/stage2_research_map.py`, `scripts/stage2_research_snapshot.py` or `scripts/stage2_research_history.py`, change only the responsible file at the shared input boundary and cover it in `tests/test_stage2_research_deep_review.py`; otherwise leave those files untouched. The orchestrator owns any held-path edits; none are planned.
+
+Explore fallback, 2026-11-26: Stage 1 through `claude-code-plan`, model `claude-haiku-5-5`, because GLM through Z.ai was at its weekly limit (`research.md`).
+
+## Verification
+
+```sh
+.venv/bin/python -m pytest tests/test_stage2_swarm.py tests/test_stage2_research_store.py tests/test_stage2_research_deep_review.py -q
+python3 scripts/check_interview_minimums.py --change research-swarm-resume
+python3 scripts/check_criterion_ledger.py
+python3 scripts/plans_registry.py --check
+python3 scripts/jobs.py start -- make verify
+```
+
+The orchestrator checks the detached verification job's exit before phase 6. Do not touch model configuration, leak checks, availability, prompts, templates, other changes or the existing reuse contract.
+
+## Criterion ledger
+
+- 1: not yet written tests/test_stage2_swarm.py::test_repository_prompts_stay_stable_across_published_resume — any corresponding prompt changes after the first publication.
+- 2: not yet written tests/test_stage2_swarm.py::test_repository_resume_reuses_all_successful_seats — a successful seat is relaunched or its result is not adopted.
+- 3: tests/test_stage2_swarm.py::test_a_resumed_run_is_a_new_run_within_its_slot_budget — the failed seat is reused or not relaunched.
+- 4: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — a mismatched binding, identity or prompt is reused.
+- 4: tests/test_stage2_research_store.py::test_interrupted_and_invalid_results_are_not_reused_and_are_named — an invalid result is adopted.
+
+## Time used
+
+2026-11-26 19:58:35–20:01:28 UTC, 173 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
