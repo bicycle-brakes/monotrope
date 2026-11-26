@@ -511,6 +511,10 @@ def settled(status: str) -> bool:
     return bool(re.fullmatch(r"(?:fixed|rejected)(?:\s*(?:—|:|-|\().*)?", status.strip(), re.IGNORECASE))
 
 
+def agreed(mark: str) -> bool:
+    return bool(re.fullmatch(r"agree(?:\s*(?:—|:|-|\().*)?", mark.strip(), re.IGNORECASE))
+
+
 def last_phase6_block(text: str) -> list[str] | None:
     """The lines of the last `## Phase 6` block in file order, up to the next `## ` heading."""
     lines = text.splitlines()
@@ -576,8 +580,10 @@ def released_problems(text: str) -> list[str]:
             problems.append(f"released loop row {loop_id} stands `{cells[7]}`, not fixed or rejected")
         if cells[9].strip().lower() in {"—", "no answer", ""}:
             problems.append(f"phase 6 has no answer for released loop row {loop_id}")
-        if cells[9].strip().lower().startswith("disagree"):
+        elif cells[9].strip().lower().startswith("disagree"):
             problems.append(f"phase 6 disagrees with released loop row {loop_id}: {cells[9][:80]}")
+        elif not agreed(cells[9]):
+            problems.append(f"phase 6 has an unrecognised mark for released loop row {loop_id}: {cells[9][:80]}")
     return problems
 
 

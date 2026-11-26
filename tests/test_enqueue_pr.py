@@ -415,6 +415,14 @@ def test_released_loop_rows_and_disagreements_refuse(
         assert "L9-9" not in err, "a quoted kept line was read as a released row"
 
 
+@pytest.mark.parametrize("mark", ["banana", "agreement", "agree pending", "agreed"])
+def test_unrecognised_released_mark_refuses(mark: str) -> None:
+    problems = ep.released_problems(released((FIXED, mark)))
+    assert any("unrecognised" in problem and "L1-1" in problem for problem in problems)
+    for valid in ("agree", "AGREE — reason", "agree: reason", "agree - reason", "agree (reason)"):
+        assert not ep.released_problems(released((FIXED, valid)))
+
+
 # ---------------------------------------------------------------------------
 # Criteria 4 and 5: the trailer and the change folder
 # ---------------------------------------------------------------------------
