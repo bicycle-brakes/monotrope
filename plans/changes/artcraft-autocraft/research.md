@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-21
 last_reviewed: 2026-11-21
-updated: 2026-11-25
+updated: 2026-11-26
 supersedes: null
 superseded_by: null
 bead: coding-harness-68kr
@@ -18,6 +18,45 @@ tags: [research]
 ---
 
 # artcraft autocraft — Research
+
+## Brief
+
+**Subject.** A conference talk (slides 26 to 40, shared by the maintainer on 2026-11-21) presents
+the Artcraft desktop apps and AutoCraft, an open-source *software factory*: a pipeline that ingests
+community issues from about 25 app repositories, deduplicates and classifies them, lets coding
+agents write the fix and open a pull request, keeps humans in the loop for schema, migrations, API
+and compliance work, post-trains its models on merged pull requests, and ships builds and
+releases. The apps are written in Rust instead of Electron. The talk also reports heavy CI load
+(286,884 runs in 30 days, 38 minutes median to green, one in two pushes failing). It is **not** an
+art or game "crafting" feature. Source input, facts only:
+`docs/research/2026-11-21-artcraft-autocraft-talk-slides.md` (read it first).
+
+**Questions (maintainer, 2026-11-21).**
+
+1. How does the team build its apps and its factory: stages, scheduling, tracking, model routing,
+   human review points?
+2. Which technical base lies under them: Rust instead of Electron, which GUI stack, which CI and
+   release setup?
+3. Why is it successful — measured, not claimed? What do the public repositories and the
+   dashboard counts show, and what do they not show (for example, 1 % of closed items merged by the
+   pipeline)?
+4. What can this harness take from it, as candidate architecture decisions, each with its
+   evidence?
+
+**Comparison points in this repository.** The AutoCraft stages against our seven phases and the
+night run; their human-in-the-loop split against our question protocol; their pipeline board and
+per-step cost trail against the rule that night runs stay plain; their "breaker tripped" circuit
+breaker against our appetite and round caps; their classifier agreement and post-training against
+our findings-per-model measures; their CI strain against our own CI measurements; Rust and the Rust
+GUI state against the maintainer's long-term Rust direction.
+
+**Online topics** use public sources only: the public Artcraft and AutoCraft repositories and
+documentation, public writing on issue-to-pull-request software factories, agentic triage and
+deduplication, post-training from merged changes, CI load in agent-heavy repositories, and the
+state of Rust desktop GUI frameworks.
+
+**Out of scope.** The research-swarm runner itself and the run records below; they are this
+change's machinery, not its subject.
 
 <!-- research-swarm/v2 run 8fd060a30480fe9e8d4f5a86a2388466 -->
 
