@@ -318,3 +318,19 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 
 Phase 6 verdict: codex 01a2175c-8431-7032-bc80-cb98403c9950, 2026-11-26
 Reviewer session: codex 01a2175c-8431-7032-bc80-cb98403c9950 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1279 files, 6010 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-1 | MINOR | SPEC | base | .beads/hooks/post-checkout:131–138 | With `HARNESS_LANE_SETUP_TIMEOUT=18446744073709551616`, shell arithmetic can wrap the positive value to zero. A trusted new worktree then reports that the setup limit was used up before `make venv` starts and skips installation, although the requested limit has not elapsed. [Criteria 1, 2 and 11] | Codex | rejected — accepted limit (bead coding-harness-h7mu): 2^64-second HARNESS_LANE_SETUP_TIMEOUT overflow is a rare 64-bit shell arithmetic edge case on an operator variable | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: the in-memory hook text loses the lane-setup opening marker — catches without switch: yes, if that marker is removed from the hook.
+> Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: the in-memory Beads-managed block has its descriptive text changed — catches without switch: yes, if that text is changed in the hook.
+
+Phase 6 verdict: codex 01a2187e-af03-7122-826b-c5ca2f554f34, 2026-11-26
+Reviewer session: codex 01a2187e-af03-7122-826b-c5ca2f554f34 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
