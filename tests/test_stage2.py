@@ -25863,8 +25863,12 @@ def test_free_round_needs_no_eligible_paid_ladder(world: World, capsys: pytest.C
     assert {rung_of(call) for call in world.reviews("pi")} == set(TEST_FREE)
     assert "skipped" in capsys.readouterr().out
     decide_record(world, status=FIXED)
-    assert world.run("review-loop") == 2
-    assert "every stage" in capsys.readouterr().err
+    # Unread paid terms leave no admissible stage: the consumed ladder names review
+    # (ladder-next-step, criteria 1 and 12), and no paid model is called.
+    calls = len(world.reviews("pi"))
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: review demo\n"
+    assert len(world.reviews("pi")) == calls
 
 
 @pytest.mark.parametrize("member", [TEST_FLASH[0], "undeclared-paid"])
@@ -35334,6 +35338,32 @@ def test_successful_repair_publishes_review_loop_instruction(world: World) -> No
     }
     stamp = dt.datetime.strptime(written["written_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC)
     assert before <= stamp <= after
+
+
+def test_lifecycle_invalidation_holds_locks(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A concurrent publisher cannot acquire the relevant locks before invalidation."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    world.write_findings(VERDICT)
+    original = stage2.drop_next_step
+    observed = []
+
+    def checked_drop(root: Path, change: str) -> None:
+        held = []
+        for lock in (stage2.holding_supersession(change, root), stage2.holding_record(change, root)):
+            try:
+                with lock:
+                    held.append(False)
+            except stage2.Refused:
+                held.append(True)
+        observed.append(held)
+        original(root, change)
+
+    monkeypatch.setattr(stage2, "drop_next_step", checked_drop)
+    stage2.release(world.root, "demo")
+    stage2.supersede_loop(world.root, "demo", [key], "continue")
+    assert observed == [[True, False], [True, True]], "invalidation must occur under lifecycle locks"
 
 
 def test_lifecycle_actions_remove_next_instruction(world: World) -> None:

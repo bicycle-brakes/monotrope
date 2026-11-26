@@ -5388,10 +5388,11 @@ def taken_awaiting_refusal(rows: list[list[str]], consequence: str) -> str | Non
     Returns None when no such row waits.
     """
     unmarked = {row[0] for row in rows if row[7].lower().startswith("taken") and not marks_a_test(row[8])}
-    refusal = undecided_refusal([row for row in rows if row[0] not in unmarked], consequence)
-    if refusal:
-        raise Refused(refusal)
-    return undecided_refusal(rows, consequence) if unmarked else None
+    full = undecided_refusal(rows, consequence)
+    if undecided_refusal([row for row in rows if row[0] not in unmarked], consequence):
+        # Another waiting row holds the loop anyway: the refusal names every waiting row, as before.
+        raise Refused(full or "")
+    return full if unmarked else None
 
 
 def undecided_refusal(rows: list[list[str]], consequence: str) -> str | None:
@@ -6000,9 +6001,8 @@ def superseded_by(root: Path, change: str, after_round: int | None = None) -> st
 def release(root: Path, change: str) -> list[list[str]]:
     with holding_supersession(change, root):
         rows = _release_locked(root, change)
-    # A successful release - the phase-6 one included - ends the run's instruction, also when
-    # the loop record was gone already.
-    drop_next_step(root, change)
+        # A successful release ends the instruction even when the record was gone already.
+        drop_next_step(root, change)
     return rows
 
 
@@ -6364,7 +6364,6 @@ def _supersede_accounting_line(
 def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> None:
     with holding_supersession(change, root):
         _supersede_loop_locked(root, change, keys, reason)
-    drop_next_step(root, change)
 
 
 def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str) -> None:
@@ -6538,6 +6537,7 @@ def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str
                     f"the accounting line could not be written ({error}); the archive stands; repeat the "
                     "command with the same keys to complete it."
                 ) from error
+        drop_next_step(root, change)
         print(
             f"release-loop: the loop of {change} restarts after round {highest}; the next review-loop is a fresh run."
         )
