@@ -202,6 +202,7 @@ import check_question_context  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import next_step  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2_free  # noqa: E402
 import stage2_go  # noqa: E402
@@ -5376,6 +5377,20 @@ def undecided(rows: list[list[str]]) -> list[str]:
     return waiting
 
 
+def taken_awaiting_refusal(rows: list[list[str]], consequence: str) -> str | None:
+    """Raise the refusal for every waiting row except a taken one without its `Broke a test` mark.
+
+    That row is decided and only awaits its repair. Its own refusal is returned, not raised, so the
+    caller holds the loop with it unless a consumed ladder names `repair` instead (next-step rule).
+    Returns None when no such row waits.
+    """
+    unmarked = {row[0] for row in rows if row[7].lower().startswith("taken") and not marks_a_test(row[8])}
+    refusal = undecided_refusal([row for row in rows if row[0] not in unmarked], consequence)
+    if refusal:
+        raise Refused(refusal)
+    return undecided_refusal(rows, consequence) if unmarked else None
+
+
 def undecided_refusal(rows: list[list[str]], consequence: str) -> str | None:
     """The refusal that holds the verbs while a row of the record waits, or None when none does.
 
@@ -5633,6 +5648,72 @@ def next_stage(state: dict) -> dict | None:
         if stage["key"] not in consumed:
             return stage
     return None
+
+
+def model_admission_problem(root: Path, entry: dict, model: str) -> str | None:
+    """Why the current declaration does not admit this paid model now, or None (next-step rule).
+
+    One check for rungs and Flash members: a model the declaration no longer lists, expired, missing or
+    malformed terms, a dated skip, an exclusion, or unread retention or training terms.
+    """
+    declared = [str(item) for item in entry.get("modelle") or []]
+    if model not in declared:
+        return f"the model {model} is not in the current declaration"
+    return paid_problem(root, entry, model)
+
+
+def stage_is_eligible(root: Path, entry: dict | None, state: dict, stage: dict) -> bool:
+    """Whether an unconsumed stage can still run under the current declaration.
+
+    A free stage is eligible. A rung is eligible when its model is admitted. A Flash stage stays eligible
+    while one member is admitted or an unconsumed, admitted rung outside the stage could replace a failed one.
+    An unreadable declaration leaves every stage eligible: the round itself refuses then.
+    """
+    if stage["kind"] == "free" or entry is None:
+        return True
+
+    def admitted(model: str) -> bool:
+        return model_admission_problem(root, entry, model) is None
+
+    if stage["kind"] == "paid":
+        return admitted(stage["members"][0])
+    if any(admitted(model) for model in stage["members"]):
+        return True
+    consumed = set(state["consumed"])
+    return any(f"rung:{model}" not in consumed and admitted(model) for model in state["paid"]["rungs"])
+
+
+def passed_over_models(root: Path, entry: dict | None, state: dict) -> list[tuple[str, str]]:
+    """Each unconsumed paid model the current declaration does not admit, with its reason, in stage order."""
+    if entry is None:
+        return []
+    consumed = set(state["consumed"])
+    named: dict[str, str] = {}
+    for stage in stages_of(state):
+        if stage["key"] in consumed or stage["kind"] == "free":
+            continue
+        for model in stage["members"]:
+            problem = model_admission_problem(root, entry, model)
+            if problem is not None:
+                named.setdefault(model, problem)
+    return list(named.items())
+
+
+def publish_next_step(root: Path, change: str, verb: str, producer: str, row_ids: list[str] | None = None) -> None:
+    """Write the run's `next.json` after validation; a failure raises `CallFailed` and names no step."""
+    try:
+        record = next_step.build(change, verb, producer, clock_now().utc, row_ids)
+        next_step.publish(record_dir(change, root), record)
+    except (next_step.InvalidNextStep, OSError) as error:
+        raise CallFailed(f"the next-step instruction could not be published ({error}); no step is named.") from error
+
+
+def drop_next_step(root: Path, change: str) -> None:
+    """Delete the run's `next.json`; a failed deletion raises `CallFailed` rather than leave stale state."""
+    try:
+        next_step.invalidate(record_dir(change, root))
+    except OSError as error:
+        raise CallFailed(f"the previous next-step instruction could not be removed ({error}).") from error
 
 
 def replace_record(path: Path, text: str) -> None:
@@ -5915,7 +5996,11 @@ def superseded_by(root: Path, change: str, after_round: int | None = None) -> st
 
 def release(root: Path, change: str) -> list[list[str]]:
     with holding_supersession(change, root):
-        return _release_locked(root, change)
+        rows = _release_locked(root, change)
+    # A successful release - the phase-6 one included - ends the run's instruction, also when
+    # the loop record was gone already.
+    drop_next_step(root, change)
+    return rows
 
 
 def _release_locked(root: Path, change: str) -> list[list[str]]:
@@ -6073,6 +6158,7 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     # The round and the consumption in one write, as for a finished round (R-6).
     state["consumed"] = [*state["consumed"], stage["key"]]
     write_round(change, block, state, root)
+    drop_next_step(root, change)
     print(f"release-loop: stage {stage['key']} retired ({model}); the reason is in the loop record.")
 
 
@@ -6117,6 +6203,7 @@ def restart_loop(root: Path, change: str, reason: str) -> None:
     if reason.startswith(SUPERSEDED_CLAUSE + " ") or reason == SUPERSEDED_CLAUSE:
         reason = "reason: " + reason
     append(findings_path, f"Loop restarted: {today()} after round {last} — {reason}")
+    drop_next_step(root, change)
     print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
 
 
@@ -6274,6 +6361,7 @@ def _supersede_accounting_line(
 def supersede_loop(root: Path, change: str, keys: list[str], reason: str) -> None:
     with holding_supersession(change, root):
         _supersede_loop_locked(root, change, keys, reason)
+    drop_next_step(root, change)
 
 
 def _supersede_loop_locked(root: Path, change: str, keys: list[str], reason: str) -> None:
@@ -11401,6 +11489,7 @@ def triage(root: Path, change: str, row_status: str | None, reason: str | None) 
                     "a repair that cannot exist. Write `taken — not a test — <reason>` instead."
                 )
             _write_triage_row(change, row, status, record, root)
+            drop_next_step(root, change)
     except OSError as error:
         raise CallFailed(f"the loop record could not be replaced ({error}); the prior record stands.") from error
     print(f"triage: {row} recorded as {status}")
@@ -13530,6 +13619,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     handed = set(hand_ids)
     eligible = [(place, row) for place, row in taken if row[0] not in handed]
     ids = [row[0] for _, row in eligible]  # the commit subject names only the repaired rows
+    # Before anything can change the record: the instruction written before this repair is stale from here.
+    drop_next_step(root, change)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     # The scope is frozen from the rows as they stand, before any model runs: the plan is never a
     # source and an attempt's own plan, findings or row writes cannot enlarge it (spec, criteria 7
@@ -13722,6 +13813,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         protect_lifecycle=True,
         repair_scope=scope,
     )
+    # The repair is committed and its rows are marked: a loop repair returns to `review-loop`,
+    # while a repair of phase-6 rows names `review`, the documented re-check (decisions S-22).
+    next_verb = "review" if any(place == "phase-6" for place, _ in eligible) else "review-loop"
+    publish_next_step(root, change, next_verb, "repair")
 
 
 def prepare_loop(root: Path, change: str) -> None:
@@ -13759,17 +13854,23 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     stage. The stops come before any stage: undecided or evidence-incomplete
     rows first, then a clean previous round, then the repair brake (two
     consecutive rounds whose accepted findings all begin `fix-r`), then spent
-    stages - each naming the round or the maintainer, and none reset by a
-    release or an edited configuration (ADR 0021, decision 9). One call
-    completes one round; a swarm's members run concurrently and merge into one
-    heading and one id series; an attempt whose every member failed completes
-    no round and consumes no stage.
+    stages - none reset by a release or an edited configuration (ADR 0021,
+    decision 9). A spent ladder with a completed round since the last restart
+    starts nothing: it prints `next: repair <change>` while a taken row of that
+    run awaits its repair and `next: review <change>` otherwise, publishes the
+    same instruction to `next.json`, and exits 0; a spent run without a
+    completed round refuses. One call completes one round; a swarm's members
+    run concurrently and merge into one heading and one id series; an attempt
+    whose every member failed completes no round and consumes no stage.
     """
+    # The previous instruction is stale from the moment this call starts, whatever it reports.
+    drop_next_step(root, change)
     record = read_record(change, root)
+    # A taken row without its `Broke a test` mark waits for a repair, not for a decision: it holds the
+    # loop as before, except on a consumed ladder, which names `repair` (next-step rule).
+    awaiting_repair: str | None = None
     if record is not None:
-        refusal = undecided_refusal(record_rows(record), "decide them first")
-        if refusal:
-            raise Refused(refusal)
+        awaiting_repair = taken_awaiting_refusal(record_rows(record), "decide them first")
     findings_text = ""
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
@@ -13794,9 +13895,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     # A round that found nothing has a heading but no row: it is counted by its heading.
     last = max(max(history, default=0), rounds_run(record, findings_text))
     if last > floor:
-        refusal = undecided_refusal(history.get(last, []), "decide them first")
-        if refusal:
-            raise Refused(refusal)
+        awaiting_repair = taken_awaiting_refusal(history.get(last, []), "decide them first") or awaiting_repair
         if clean_round(history.get(last, []), last) and not round_was_cut(record, last, findings_text):
             raise CleanStop(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
         if (
@@ -13843,6 +13942,36 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 state["free"]["skipped"] = "free stage skipped: no implementation source diff"
                 print(f"review-loop: {state['free']['skipped']}")
                 stage = next_stage(state)
+        try:
+            declared_entry: dict | None = endpoint_entry(root)
+        except Refused:
+            declared_entry = None
+        consumed_keys = set(state["consumed"])
+        spent = last > floor and not any(
+            stage_is_eligible(root, declared_entry, state, item)
+            for item in stages_of(state)
+            if item["key"] not in consumed_keys
+        )
+        if spent:
+            # A consumed ladder names the next step and starts nothing (next-step rule): `repair` while a
+            # taken row of this run awaits its repair, `review` once every one is repaired.
+            _name_next_step(root, change, state, declared_entry, history)
+            return
+        if awaiting_repair:
+            raise Refused(awaiting_repair)
+        passed_notes: list[str] = []
+        if declared_entry is not None and stage is not None:
+            for candidate in stages_of(state):
+                if candidate["key"] in consumed_keys:
+                    continue
+                if stage_is_eligible(root, declared_entry, state, candidate):
+                    stage = candidate
+                    break
+                for model in candidate["members"]:
+                    problem = model_admission_problem(root, declared_entry, model)
+                    if problem is not None:
+                        print(f"review-loop: passed over {model}: {problem}", file=sys.stderr)
+                        passed_notes.append(f"Notice: passed over {model}: {problem}.")
         if stage is None:
             message = (
                 "every stage of this run is consumed and the last round was not clean; the loop stops and "
@@ -13883,7 +14012,18 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 "green before the next round starts."
             )
         try:
-            _review_round(root, change, record, findings_text, state, stage, free_input, free_cut, receipt_taken)
+            _review_round(
+                root,
+                change,
+                record,
+                findings_text,
+                state,
+                stage,
+                free_input,
+                free_cut,
+                receipt_taken,
+                passed_notes=passed_notes,
+            )
             return
         except FreeStageUnavailable as dropped:
             # Every free member was rate-limited or unavailable at review size: the run drops the free
@@ -13899,6 +14039,34 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 ) from None
 
 
+def _name_next_step(
+    root: Path, change: str, state: dict, entry: dict | None, history: dict[int, list[list[str]]]
+) -> None:
+    """Report a consumed ladder's next step: diagnostics on standard error, the instruction on standard output.
+
+    `repair` when any round since the last restart holds a taken row no repair has marked `fixed`,
+    otherwise `review`. The instruction is published to `next.json` first; when that fails, nothing is
+    printed on standard output and the call fails with exit 1. No model starts and no history changes.
+    """
+    if entry is not None:
+        declared = [str(model) for model in entry.get("modelle") or []]
+        paid = state["paid"]
+        if declared and not (paid.get("ladder") or paid.get("flash") or paid.get("rungs")):
+            # The declaration names paid models while the snapshot holds no paid stage: the reasons come
+            # from the declaration as it stands now, never from the snapshot's time.
+            problems = "; ".join(
+                reason for model in dict.fromkeys(declared) if (reason := terms_problem(entry, model)) is not None
+            )
+            if problems:
+                print(f"review-loop: no paid model of the declaration is admissible: {problems}", file=sys.stderr)
+    for model, reason in passed_over_models(root, entry, state):
+        print(f"review-loop: passed over {model}: {reason}", file=sys.stderr)
+    unrepaired = any(row[7].lower().startswith("taken") for number in sorted(history) for row in history[number])
+    verb = "repair" if unrepaired else "review"
+    publish_next_step(root, change, verb, "review-loop")
+    print(f"next: {verb} {change}")
+
+
 @capture_address_notices()
 def _review_round(
     root: Path,
@@ -13910,6 +14078,8 @@ def _review_round(
     free_input: str | None,
     free_cut: str | None,
     receipt_taken: bool,
+    *,
+    passed_notes: list[str] | None = None,
 ) -> None:
     """One round of `review_loop` on its chosen stage: prompts, calls, the written round."""
     round_number = highest_assigned_round(record, findings_text, root=root, change=change) + 1
@@ -13936,16 +14106,42 @@ def _review_round(
     for member in members:
         endpoints[member] = (OPENCODE, member, "max")
         prompts[member] = prompt_for(member)
-    ctx = preflight(root, change, endpoints[members[0]], admission_problem=_free_admission(free, state))
+    pre_refused: dict[str, AdmissionRefused] = {}
+    if stage["kind"] == "paid-swarm":
+        try:
+            swarm_entry: dict | None = endpoint_entry(root)
+        except Refused:
+            swarm_entry = None
+        if swarm_entry is not None:
+            for member in members:
+                problem = model_admission_problem(root, swarm_entry, member)
+                if problem is not None:
+                    pre_refused[member] = AdmissionRefused(problem)
+                    print(f"review-loop: passed over {member}: {problem}", file=sys.stderr)
+    dispatched = [member for member in members if member not in pre_refused]
+    if dispatched:
+        preflight_ep = endpoints[dispatched[0]]
+    else:
+        spent_rungs = {k[len("rung:") :] for k in state["consumed"] if k.startswith("rung:")}
+        admissible_rung = next(
+            (
+                m
+                for m in state["paid"]["rungs"]
+                if m not in spent_rungs and model_admission_problem(root, swarm_entry or {}, m) is None
+            ),
+            members[0],
+        )
+        preflight_ep = (OPENCODE, admissible_rung, "max")
+    ctx = preflight(root, change, preflight_ep, admission_problem=_free_admission(free, state))
     ctx.models_store = state["free"].get("models_store")
     # Every member is checked in the parent before any starts; one BLOCK aborts
     # the round without a fallback (criterion 3).
     checked = {
         member: checked_prompt(ctx, endpoints[member], prompts[member], _free_admission(free, state))
-        for member in members
+        for member in dispatched
     }
     audited = 0
-    notes: list[str] = []
+    notes: list[str] = list(passed_notes or [])
     malformed_blocks: list[str] = []
     try:
         key = reviewer_key()
@@ -13988,20 +14184,24 @@ def _review_round(
         # call and without touching the run's history (spec criterion 5).
         if not free:
             entry = endpoint_entry(root)
-            for member in members:
+            for member in dispatched:
                 problem = terms_problem(entry, member)
                 if problem:
                     raise Refused(problem)
         # Audit only after the final admission check allows the initial dispatch.
         if not ctx.findings.exists():
-            ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
-        for member in members:
+            ctx.findings.write_text(findings_header(ctx, producer_for(preflight_ep)), encoding="utf-8")
+        for member in dispatched:
             append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
             audited += 1
         # One deadline for the round: a replacement must live inside it, or a round could take a member
         # limit per call (R-8 of the review-swarm review).
         deadline = monotonic_now() + REVIEWER_MINUTES * 60
-        answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
+        answers: dict[str, str | BaseException] = dict(pre_refused)
+        if dispatched:
+            answers.update(
+                run_swarm(ctx, dispatched, {m: prompts[m] for m in dispatched}, key, free=free, deadline=deadline)
+            )
         replaced: list[str] = []
 
         def ask_malformed_again(member: str) -> None:
