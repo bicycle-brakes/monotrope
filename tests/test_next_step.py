@@ -111,3 +111,15 @@ def test_invalidate_removes_the_file_and_tolerates_none(tmp_path: Path) -> None:
     next_step.invalidate(tmp_path)
     assert not (tmp_path / "next.json").exists()
     next_step.invalidate(tmp_path)
+
+
+def test_schema_timestamp_rejects_impossible_calendar_dates() -> None:
+    """The schema's own pattern rejects impossible dates without Python's extra validator."""
+    import re
+
+    timestamp = next_step.load_schema()["properties"]["written_at"]
+    assert timestamp.get("format") == "date-time"
+    for value in ("2026-99-99T99:99:99Z", "2026-02-30T00:00:00Z", "1900-02-29T00:00:00Z"):
+        assert not re.search(timestamp["pattern"], value), value
+    for value in ("2026-02-28T23:59:59Z", "2000-02-29T00:00:00Z", "2024-02-29T00:00:00Z"):
+        assert re.search(timestamp["pattern"], value), value

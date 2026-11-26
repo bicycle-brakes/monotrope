@@ -35536,3 +35536,26 @@ def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.delenv(jobs.RECORD_ENV)
     stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
     assert len(jobs.read_record(path)["groups"]) == 1
+
+
+def test_released_earlier_unmarked_fixed_row_stops_next_step(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """An earlier released fixed row needs its evidence even when the latest row is marked."""
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]})
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.findings.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if "| L1-1 |" in line:
+            cells = stage2.split_row(line)
+            cells[8] = ""
+            lines[index] = render_row(cells) + "\n"
+            break
+    else:
+        pytest.fail("released row missing")
+    world.findings.write_text("".join(lines), encoding="utf-8")
+    ns_write_rounds(world, {2: [("L2-1", FIXED, "no")]})
+    code, out, err = ns_run(world, capsys)
+    assert code == 2, (out, err)
+    assert out == ""
+    assert "fixed rows without their `Broke a test` mark (L1-1)" in err

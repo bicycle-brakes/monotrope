@@ -13895,10 +13895,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     # After a maintainer's restart the stops read only the rounds that followed it (restart amendment).
     floor = restart_floor(findings_text)
     history = {number: rows for number, rows in history_rounds(record, findings_text).items() if number > floor}
+    for rows in history.values():
+        awaiting_repair = taken_awaiting_refusal(rows, "decide them first") or awaiting_repair
     # A round that found nothing has a heading but no row: it is counted by its heading.
     last = max(max(history, default=0), rounds_run(record, findings_text))
     if last > floor:
-        awaiting_repair = taken_awaiting_refusal(history.get(last, []), "decide them first") or awaiting_repair
         if clean_round(history.get(last, []), last) and not round_was_cut(record, last, findings_text):
             raise CleanStop(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
         if (

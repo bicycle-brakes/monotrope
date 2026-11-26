@@ -33,6 +33,7 @@ _KEYWORDS = {
     "enum",
     "minLength",
     "pattern",
+    "format",
     "items",
     "minItems",
     "maxItems",
@@ -72,6 +73,8 @@ def _check(value: object, schema: dict, path: str) -> list[str]:
     unknown = set(schema) - _KEYWORDS - _ANNOTATIONS
     if unknown:
         raise InvalidNextStep(f"the schema uses unsupported keywords at {path}: {', '.join(sorted(unknown))}")
+    if "format" in schema and schema["format"] != "date-time":
+        raise InvalidNextStep(f"the schema declares an unsupported format at {path}: {schema['format']}")
     problems: list[str] = []
     if "type" in schema and not _type_ok(value, schema["type"]):
         return [f"{path}: expected {schema['type']}"]
@@ -82,6 +85,11 @@ def _check(value: object, schema: dict, path: str) -> list[str]:
     if isinstance(value, str):
         if len(value) < schema.get("minLength", 0):
             problems.append(f"{path}: must not be empty")
+        if schema.get("format") == "date-time":
+            try:
+                dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                problems.append(f"{path}: is not a date-time")
         if "pattern" in schema and not re.search(schema["pattern"], value):
             problems.append(f"{path}: does not match {schema['pattern']}")
     if isinstance(value, list):

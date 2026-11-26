@@ -488,8 +488,8 @@ Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:13893 | A released earlier round can contain a `fixed` row without its required `Broke a test` mark while a later round contains a valid fixed row. The runner checks the mark only in the current record and the latest historical round, then prints `next: review`; the missing evidence mark must stop the instruction. [Acceptance criteria 4 and 5] | Codex | taken — check every post-restart round in history.values() (not only record_rows and history[last]) for unmarked fixed rows so an unmarked fixed row in an earlier post-restart round stops next: review; add regression test in tests/test_stage2.py | — |
-| P6-2 | MAJOR | SPEC | base | scripts/next_step_schema.json:18 | The declared schema accepts a timestamp such as `2026-99-99T99:99:99Z`: its pattern checks the shape but not whether the date and time exist. The Python validator rejects it separately, but a consumer validating against the declared schema alone accepts a malformed UTC time. [Acceptance criterion 17] | Codex | taken — tighten written_at in scripts/next_step_schema.json (add calendar-valid UTC pattern + format date-time) so the declared JSON schema itself rejects impossible instants like 2026-99-99T99:99:99Z and 2026-02-30T00:00:00Z; add schema-level test in tests/test_next_step.py | — |
+| P6-1 | MAJOR | SPEC | base | scripts/stage2.py:13893 | A released earlier round can contain a `fixed` row without its required `Broke a test` mark while a later round contains a valid fixed row. The runner checks the mark only in the current record and the latest historical round, then prints `next: review`; the missing evidence mark must stop the instruction. [Acceptance criteria 4 and 5] | Codex | fixed — tests/test_stage2.py::test_released_earlier_unmarked_fixed_row_stops_next_step | — |
+| P6-2 | MAJOR | SPEC | base | scripts/next_step_schema.json:18 | The declared schema accepts a timestamp such as `2026-99-99T99:99:99Z`: its pattern checks the shape but not whether the date and time exist. The Python validator rejects it separately, but a consumer validating against the declared schema alone accepts a malformed UTC time. [Acceptance criterion 17] | Codex | fixed — tests/test_next_step.py::test_schema_timestamp_rejects_impossible_calendar_dates | — |
 
 Phase 6 verdict: codex 01a21994-7bb7-7eb3-b651-89417ca85e24, 2026-11-26
 Reviewer session: codex 01a21994-7bb7-7eb3-b651-89417ca85e24 — a fresh session reviewed: no phase-2a session was recorded
@@ -542,3 +542,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-26: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1281 files, 6046 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1281 files, 6049 commits, 12 rules.
+
+Runner restoration, 2026-11-26: repair · attempt 1 · route codex — lifecycle fields: plans/changes/ladder-next-step/plan.md, plans/changes/ladder-next-step/spec.md — unchanged
