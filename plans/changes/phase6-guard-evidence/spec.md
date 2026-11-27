@@ -28,23 +28,23 @@ On 2026-11-26, inspection of three recorded rejected reviews showed that valid f
 
 ## Acceptance criteria
 
-1. When valid guard evidence uses case-insensitive `yes` (bare, with optional trailing `.`/`!`, or followed by optional punctuation `[,;:.!—–-]` and whitespace plus prose, e.g. `yes.`, `yes. <text>`, `yes — <text>`, `Yes.`) or case-insensitive `no` followed by optional punctuation `[,;:.—–-]` and whitespace plus a non-empty reason (e.g. `no. <reason>`, `no — <reason>`, `no – <reason>`, `no - <reason>`, `No, <reason>`), a phase-6 answer with a valid verdict accepts it.
+1. When valid guard evidence uses case-insensitive `yes` (`(?i:yes)`) — bare, with optional trailing `.` or `!`, or followed by optional separator punctuation `[,;:.!—–-]` (with optional spaces around dashes `—`, `–`, `-`) plus whitespace and prose (e.g. `yes.`, `yes!`, `yes. <text>`, `yes — <text>`, `Yes.`) — or case-insensitive `no` (`(?i:no)`) followed by whitespace or optional separator punctuation `[,;:.!—–-]` (with optional spaces around dashes) plus whitespace and a non-empty reason containing at least one word character (`\w`) (e.g. `no. <reason>`, `no! <reason>`, `no — <reason>`, `no – <reason>`, `no - <reason>`, `No, <reason>`), a phase-6 answer with a valid verdict accepts it.
    *Refuted by:* Any of those verdict forms causes a valid verdict to be rejected.
    *Basis:* `decisions.md#Q-1`.
-2. When valid guard evidence wraps the full test node ID or file path in backticks (`` `tests/<path>.py::test_<name>` `` or `` `tests/<path>.py`::test_<name> ``) or carries a non-empty parametrized test suffix `\[[^\]]+\]` (e.g. `[case-1]`, `[a b]`, `[1.5-x/y]`, rejecting empty `[]`), a phase-6 answer with a valid verdict accepts it.
-   *Refuted by:* A valid verdict with backtick-wrapped node ID/path or non-empty parametrized `[...]` suffix is rejected, or an empty `[]` suffix is accepted.
+2. When valid guard evidence wraps the full test node ID (with or without parametrized suffix: `` `tests/<path>.py::test_<name>` `` or `` `tests/<path>.py::test_<name>[<id>]` ``) or the file path alone (`` `tests/<path>.py`::test_<name> `` or `` `tests/<path>.py`::test_<name>[<id>] ``) in paired backticks, or carries an unquoted non-empty parametrized test suffix `\[[^\]]+\]` (e.g. `[case-1]`, `[a b]`, `[1.5-x/y]`), a phase-6 answer with a valid verdict accepts it; empty `[]`, unpaired backticks (e.g. `` `tests/x.py::test_y ``), and a parametrized suffix split outside a backticked node ID (`` `tests/x.py::test_y`[case] ``) are rejected.
+   *Refuted by:* A valid verdict with paired backtick-wrapped node ID/path (including combined backticks + `[<id>]`) or non-empty `[...]` suffix is rejected, or empty `[]`, an unpaired backtick, or `` `tests/x.py::test_y`[case] `` is accepted.
    *Basis:* `decisions.md#Q-1`.
 3. When a valid phase-6 answer contains guard evidence beside six-cell finding rows or `No finding.`, the recorded answer retains the evidence and its verdict.
    *Refuted by:* Either verdict form is rejected or the recorded answer loses the evidence or verdict.
    *Basis:* `decisions.md#Q-1`.
-4. When a guard-evidence line has a blank/missing fault (`fault:` followed by no non-whitespace text before ` — catches without switch:`), a prefix only (`Guard evidence: ...`), a verdict word other than case-insensitive `yes`/`no` (e.g. `maybe`), or bare `no`/`no.`/`no!` without a non-empty reason, the phase-6 answer is rejected even beside a valid verdict; a single non-whitespace character fault (e.g. `fault: x`) counts as non-empty so verdict-refusal tests test the verdict rule itself.
-   *Refuted by:* Any such malformed line is accepted beside a finding or `No finding.`, or a single-character fault fails the fault check instead of the verdict check.
+4. When a guard-evidence line has a blank/missing fault (`fault:` followed by no non-whitespace text before ` — catches without switch:`), a prefix only (`Guard evidence: ...`), wrong case on the fixed labels (`guard evidence:`, `FAULT:`, `CATCHES WITHOUT SWITCH:` — case-insensitivity applies only to `yes`/`no`), a verdict word other than `(?i:yes|no)` (e.g. `maybe`), unlisted verdict punctuation (e.g. `yes?`, `yes…`), or a `no` without a substantive reason (bare `no`, `no.`, `no!`, or punctuation-only tail such as `no —`, `no -`, `no .` with no `\w` character), the phase-6 answer is rejected even beside a valid verdict; a single non-whitespace character fault (e.g. `fault: x`) counts as non-empty so verdict-refusal tests test the verdict rule itself.
+   *Refuted by:* Any such malformed or out-of-grammar line is accepted beside a finding or `No finding.`, or a single-character fault fails the fault check instead of the verdict check.
    *Basis:* `decisions.md#Q-1`.
 5. When guard evidence appears without a phase-6 verdict, the answer is rejected.
    *Refuted by:* Evidence alone releases a verdict.
    *Basis:* `decisions.md#Q-1`.
-6. When guard evidence uses any form already accepted today, the phase-6 answer continues to accept it beside a valid verdict.
-   *Refuted by:* A previously valid bare `yes`, a space-separated `yes <text>` or `no <reason>` without punctuation, or a `yes` or reasoned `no` with comma, semicolon or colon and prose is rejected.
+6. When guard evidence uses any valid form already accepted today (excluding punctuation-only non-reasons like `no —` or `no .` that AC4 rejects), the phase-6 answer continues to accept it beside a valid verdict.
+   *Refuted by:* A previously valid bare `yes`, a space-separated `yes <text>` or `no <reason>` (with word-character reason text) without punctuation, or a `yes` or reasoned `no` with comma, semicolon or colon and prose/reason is rejected.
    *Basis:* `decisions.md#Q-1`; `research.md`, runner exploration.
 
 ## Non-goals
@@ -78,3 +78,5 @@ None open.
 [DETAIL] Spec-review S-3 (prompt constants): Adopt Reading A (Protected areas & Non-goals) — leave `PHASE6_GUARD_EVIDENCE` and `PHASE6_ANSWER_FORMAT` untouched; change only the parser regex/helper and tests.
 
 [DETAIL] Spec-review S-4, S-5 & S-6 (fault length, parametrized IDs, space-only forms): A non-empty fault requires at least one non-whitespace character (`\S.*?`), and verdict-refusal tests use realistic multi-character faults (AC4); parametrized suffixes match `\[[^\]]+\]` rejecting empty `[]` (AC2); AC6 explicitly refutes regressions on space-only `yes <text>` and `no <reason>` (all decided under bounded standing grant).
+
+[DETAIL] Spec-review S-7, S-8, S-9 & S-10 (round 2): Adopt uniform separator set `[,;:.!—–-]` (with optional spaces around dashes) for both `yes` and `no` (S-7, Reading B); require at least one `\w` character in a `no` reason so punctuation-only tails like `no —`, `no -`, `no .` are refused and excluded from AC6 (S-8, Reading B); restrict case-insensitivity strictly to `(?i:yes|no)` and explicitly refuse wrong-case labels, unlisted verdict punctuation (`yes?`, `yes…`), and unpaired backticks (S-9); allow combined backticks + parametrized suffix inside the backticked node ID or after a backticked file path, refusing split `` `node`[id] `` (S-10) (all decided under bounded standing grant).
