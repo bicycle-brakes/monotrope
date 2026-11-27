@@ -802,9 +802,20 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    writes the worktree's path into the tracked `.gitignore`, which is one more
    change in the diff. Sibling directories beside the repository are retired
    (D-5); worktrees that still sit there are finished and removed, not moved.
-3. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
+3. **Set up on creation.** The versioned hook `.beads/hooks/post-checkout`
+   runs `make venv`, `bash tools/pi/install.sh` and two checks (the venv imports
+   `yaml`, `tools/pi/pi --version` equals the pin) in the foreground when
+   `git worktree add` creates a worktree, bounded by
+   `HARNESS_LANE_SETUP_TIMEOUT` (default 600 s). It runs only for a trusted
+   state: the checked-out commit is on `origin/main`; otherwise it
+   skips and names the deliberate command `bash .beads/hooks/post-checkout
+   --lane-setup`, which also reruns a failed setup. `HARNESS_NO_LANE_SETUP=1`
+   skips it. Output: `lane setup: start`, one `LANE SETUP FAILED:` line per
+   failure, then `lane setup: ok` or `lane setup: failed (N checks)` and the
+   log path (`lane-setup.log` in the worktree's Git directory).
+4. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
    produces a pull request that is behind before it opens.
-4. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
+5. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
    checkout's tracker through the shared git directory — no variable, no
    redirect file, no copy. Concurrent writers lose nothing and a contested
    claim has exactly one winner (measured 2026-09-23 with bd 1.3.0). Who may
@@ -812,7 +823,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    other session claims its one bead with `tools/bd update <id> --claim
    --actor <session>` and leaves its handover comment on that bead, nothing
    more. After tracker writes: `tools/bd dolt push` first, `git push` second.
-5. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
+6. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
    authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
    is started from the worktree's directory, so its hooks, its
    `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
@@ -833,7 +844,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    and there only the rule in `.claude/settings.json` holds. Not yet measured: whether `omnigent claude`
    started inside a worktree keeps that directory as the session's working
    directory in every case.
-6. **After the merge, the worktree goes.** `git worktree remove
+7. **After the merge, the worktree goes.** `git worktree remove
    .claude/worktrees/<name>` and the branch with it. A worktree nobody works in
    is a place where a later session finds an old state and takes it for the
    current one.
@@ -851,7 +862,7 @@ is not a tool question but a division of work.
    environment, not an artefact in this repository — there is nothing to
    install and nothing to configure.
 3. **`permissions.deny` in `.claude/settings.json`.** It holds two things:
-   Omnigent's writing tools (item 5 above) and
+   Omnigent's writing tools (item 6 above) and
    `Edit(//**/.omnigent/config.yaml)`, so no session rewrites the policy that
    holds them. The template's brakes on the irreversible — production deploy,
    `bundle destroy`, force push, `rm -rf`, writes under `docs/decisions/` — are
@@ -870,6 +881,27 @@ devcontainer is an operating resource of this repository; the concept document
 on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
+
+### One agent policy for every harness
+
+`scripts/agent_policy.py` is the one place that decides whether an agent may
+run a command: it reads the merge asks of `scripts/merge_guard.py`, the
+Omnigent rules of `scripts/omnigent_policy.py` and its own rules (`codex`,
+the enqueue script's `--maintainer` mode), and splits a shell line as the
+shell reads it, checking every part, every `bash/sh/zsh -c` string behind
+known wrappers (`env`, `sudo`, `timeout`, `nohup`, `nice`, `xargs`, …) and
+every `$( )` or backtick substitution. `python3 scripts/agent_policy.py write`
+renders `.claude/settings.json` and `.agents/hooks.json` and re-renders
+`tools/omnigent/policy.yaml` through the Omnigent renderer; the gate
+`agent-policy-drift` fails when either drifts. An ask becomes a deny when
+`HARNESS_UNATTENDED` is set to a nonempty value other than `0` (set by the
+unattended launchers).
+
+| Host | State | How |
+| --- | --- | --- |
+| Claude Code | pending the recorded host check (named gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`) | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Host check: not yet recorded. |
+| Antigravity | supported (host check recorded on `agy` 1.5.17, macOS, 2026-11-25) | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools). Measured on `agy` 1.5.17: the hook starts in `.agents/` (`cd ..` reaches the repository root), inherits `HARNESS_UNATTENDED=1`, lets `run_command` proceed on empty stdout with exit 0, and blocks `run_command` on exit 2 (`deny`), exit 1 (crash) and hook timeout (`signal: killed`). |
+| Codex | not supported | no pre-tool hook found in `.codex/hooks.json`; measured in bead coding-harness-1tn1. |
 
 ### Pull requests stay mergeable
 
@@ -2323,6 +2355,31 @@ day session would ask:
    (standing grant, maintainer 2026-11-25). Only a `Boundary`, a remedy that
    changes the spec or its criteria, or a security question parks that pull
    request for the maintainer; the run continues with the next queue item.
+3. **Class routing and bounded grants (maintainer, 2026-11-25):** An
+   unattended run pulls ready beads by priority across two parallel lanes.
+   `bounded` and `spike` changes run through to a pull request and queue
+   admission; for `bounded` changes the orchestrator answers phase-2a
+   spec-review rows except `BLOCKER`s itself as `[DETAIL]` in `decisions.md`
+   and starts implementation without a separate plan-card sign-off (security,
+   `Boundary` and spec/criterion changes still park). `feature` and
+   `architectural` changes run phase 1 (`prepare-explore`'s seat
+   recommendation is taken directly; DeepSeek stays in the swarm until its
+   data terms expire on `2026-11-30`), record drafted ADR-0018 interview
+   questions in the bead's notes (`tools/bd update <id> --append-notes` then
+   `tools/bd dolt push`), and park so the lane takes the next ready bead.
+4. **Appetite buffer (maintainer, 2026-11-25):** An unattended lane parks a
+   change for appetite only once a +50 % buffer (150 % of the declared
+   appetite) is spent; it never extends an appetite silently.
+5. **Multi-day Antigravity runs (maintainer, 2026-11-25):** A 72-hour
+   unattended run on Antigravity (`agy` with `gemini-4-neon-high`, started
+   with `HARNESS_UNATTENDED=1` and a run settings file where every `ask` is
+   `deny`) pairs the 30-minute session wake with an independent 2-hour
+   watchdog sidecar (`~/.gemini/config/sidecars/`), opens handover pull
+   requests daily at `09:00` local time and at the end of the run (with a
+   call and cost report), and notifies through Antigravity Remote Control
+   only on stop events (leak-check `BLOCK`, security `BLOCKER`, broken
+   `main`, or all admitted routes down). Other sessions may work in their
+   own worktrees without writing the tracker.
 
 **The night profile (since the night-stall-guard change, 2026-11-09; bead
 coding-harness-ibde).** An unattended session starts Claude Code through the

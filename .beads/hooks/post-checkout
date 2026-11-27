@@ -2,6 +2,172 @@
 # Route the bare `bd` below through the pinned wrapper (tools/bd). Kept outside
 # the managed section, so `bd hooks install` preserves it.
 PATH="$(git rev-parse --show-toplevel)/tools/beads/bin:$PATH"; export PATH
+# --- BEGIN LANE SETUP (bead coding-harness-wg4z) ---
+# A new worktree (all-zero previous object, branch-checkout flag 1) gets its
+# own .venv and pinned Pi here, in the foreground and above the Beads-managed
+# block, so a Beads failure cannot skip it. HARNESS_NO_LANE_SETUP=1 opts out;
+# HARNESS_LANE_SETUP_TIMEOUT bounds the whole setup (default 600 seconds).
+# Setup runs only for a trusted state (see _ls_trusted); otherwise it is
+# skipped with one line naming the deliberate command (--lane-setup).
+# Step output goes to lane-setup.log in the worktree's Git directory; stderr
+# shows one start line, a LANE SETUP FAILED line per failure (with the retry
+# command) and the summary 'lane setup: ok' or 'lane setup: failed (N checks)'
+# followed by the log path. A setup failure never changes the exit status.
+_ls_perl='my $t = shift @ARGV; my $pid = fork; defined $pid or die "lane setup: fork failed: $!\n"; if ($pid == 0) { setpgrp(0, 0); exec { $ARGV[0] } @ARGV or do { print STDERR "lane setup: cannot run $ARGV[0]: $!\n"; exit 127 }; } setpgrp($pid, $pid); $SIG{ALRM} = sub { kill "TERM", -$pid; sleep 1; kill "KILL", -$pid; waitpid($pid, 0); print STDERR "lane setup: stopped after ${t}s\n"; exit 124 }; alarm $t; waitpid($pid, 0); my $rc = $?; alarm 0; exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);'
+_ls_retry='bash .beads/hooks/post-checkout --lane-setup'
+_ls_say() {
+  printf '%s\n' "$1" >&2
+  printf '%s\n' "$1" >>"$_ls_log" 2>/dev/null
+}
+_ls_fail() {
+  _ls_failed=$((_ls_failed + 1))
+  if [ "$_ls_log" = /dev/null ]; then
+    _ls_say "LANE SETUP FAILED: $1; log: unavailable; retry: $_ls_retry"
+  else
+    _ls_say "LANE SETUP FAILED: $1; log: $_ls_log; retry: $_ls_retry"
+  fi
+}
+_ls_step() {
+  _ls_label=$1
+  shift
+  [ -z "$_ls_stopped" ] || return 0
+  _ls_left=$((_ls_deadline - $(date +%s)))
+  if [ "$_ls_left" -le 0 ]; then
+    _ls_stopped=1
+    _ls_fail "$_ls_label not started: the ${_ls_limit}s limit (HARNESS_LANE_SETUP_TIMEOUT) was used up by ${_ls_prev:-the setup}"
+    return 0
+  fi
+  printf '== %s\n' "$_ls_label" >>"$_ls_log"
+  if [ -n "$_ls_perl_ok" ]; then
+    perl -e "$_ls_perl" "$_ls_left" "$@" >>"$_ls_log" 2>&1 </dev/null
+    _ls_rc=$?
+  else
+    # Without Perl: a shell watchdog ends the step's process after the time left.
+    # setsid (Linux) or job control (macOS) gives the step its own process group,
+    # so the watchdog ends its children too even on non-interactive dash without a TTY.
+    if command -v setsid >/dev/null 2>&1; then
+      setsid "$@" >>"$_ls_log" 2>&1 </dev/null &
+      _ls_pid=$!
+    else
+      set -m
+      "$@" >>"$_ls_log" 2>&1 </dev/null &
+      _ls_pid=$!
+      set +m
+    fi
+    # The watchdog holds no inherited descriptor (git waits for the hook's stderr to close),
+    # and its own sleep is ended with it.
+    (
+      sleep "$_ls_left"
+      _ls_kids=$(ps -o pid= -o ppid= 2>/dev/null | awk -v p="$_ls_pid" '$2 == p {print $1}')
+      kill -TERM -"$_ls_pid" 2>/dev/null || kill -TERM "$_ls_pid" 2>/dev/null
+      for _ls_k in $_ls_kids; do kill -TERM "$_ls_k" 2>/dev/null; done
+      sleep 1
+      kill -KILL -"$_ls_pid" 2>/dev/null || kill -KILL "$_ls_pid" 2>/dev/null
+      for _ls_k in $_ls_kids; do kill -KILL "$_ls_k" 2>/dev/null; done
+    ) </dev/null >/dev/null 2>&1 &
+    _ls_dog=$!
+    wait "$_ls_pid"
+    _ls_rc=$?
+    if [ "$(date +%s)" -ge "$_ls_deadline" ]; then
+      # The limit was reached: whatever of the step's group ignored TERM gets KILL now,
+      # before the watchdog (which would have sent it a second later) is ended.
+      kill -KILL -"$_ls_pid" 2>/dev/null
+      _ls_rc=124
+    fi
+    pkill -P "$_ls_dog" 2>/dev/null
+    kill "$_ls_dog" 2>/dev/null
+    wait "$_ls_dog" 2>/dev/null
+  fi
+  if [ "$_ls_rc" -eq 124 ] && [ "$(date +%s)" -ge "$_ls_deadline" ]; then
+    _ls_stopped=1
+    _ls_fail "$_ls_label timed out at the ${_ls_limit}s setup limit (HARNESS_LANE_SETUP_TIMEOUT)"
+  elif [ "$_ls_rc" -ne 0 ]; then
+    _ls_fail "$_ls_label (exit $_ls_rc)"
+  fi
+  _ls_prev=$_ls_label
+}
+_ls_summary() {
+  if [ "$_ls_failed" -eq 0 ]; then
+    _ls_say "lane setup: ok"
+  else
+    _ls_say "lane setup: failed ($_ls_failed checks)"
+  fi
+  if [ "$_ls_log" = /dev/null ]; then
+    _ls_say "lane setup: log: unavailable"
+  else
+    _ls_say "lane setup: log: $_ls_log"
+  fi
+}
+# A trusted state: the checked-out commit is on origin/main (maintainer
+# 2026-11-25, phase-6 P6-1: any other state could carry a GNUmakefile or
+# another input make reads first, so no list of "unchanged inputs" is safe).
+_ls_trusted() {
+  git rev-parse -q --verify origin/main >/dev/null 2>&1 || return 1
+  git merge-base --is-ancestor HEAD origin/main 2>/dev/null
+}
+_lane_setup() {
+  _ls_failed=0
+  _ls_stopped=
+  _ls_prev=
+  _ls_log=/dev/null
+  _ls_root=$(git rev-parse --show-toplevel 2>/dev/null) || _ls_root=
+  _ls_gitdir=$(git rev-parse --absolute-git-dir 2>/dev/null) || _ls_gitdir=
+  _ls_say "lane setup: start: ${_ls_root:-unknown worktree}"
+  if [ -z "$_ls_root" ] || [ -z "$_ls_gitdir" ]; then
+    _ls_fail "locate the new worktree"
+    _ls_summary
+    return 0
+  fi
+  _ls_log="$_ls_gitdir/lane-setup.log"
+  if ! { command true >"$_ls_log"; } 2>/dev/null; then
+    _ls_say "lane setup: warning: the log $_ls_log cannot be written; step output is discarded"
+    _ls_log=/dev/null
+  fi
+  if ! cd "$_ls_root"; then
+    _ls_fail "cd into $_ls_root"
+    _ls_summary
+    return 0
+  fi
+  _ls_raw=${HARNESS_LANE_SETUP_TIMEOUT-}
+  _ls_limit=$(printf '%s' "$_ls_raw" | sed 's/^0*//')
+  case "$_ls_limit" in
+    ''|*[!0-9]*)
+      [ -z "$_ls_raw" ] || _ls_say "lane setup: warning: HARNESS_LANE_SETUP_TIMEOUT=$_ls_raw is not a positive whole number of seconds; using 600"
+      _ls_limit=600 ;;
+  esac
+  _ls_deadline=$(($(date +%s) + _ls_limit))
+  _ls_perl_ok=
+  if command -v perl >/dev/null 2>&1; then
+    _ls_perl_ok=1
+  else
+    _ls_say "lane setup: perl not found; the ${_ls_limit}s limit is enforced by a shell watchdog instead"
+  fi
+  if [ -z "$_ls_deliberate" ] && ! _ls_trusted; then
+    _ls_say "lane setup: skipped: the checked-out commit is not on origin/main (or origin/main is unknown); to set up deliberately: $_ls_retry"
+    return 0
+  fi
+  _ls_step "make venv" make venv
+  _ls_step "bash tools/pi/install.sh" bash tools/pi/install.sh
+  _ls_step "yaml import check" .venv/bin/python3 -c 'import yaml'
+  _ls_pin=$(sed -n 's/^[[:space:]]*"@earendil-works\/pi-coding-agent":[[:space:]]*"\([^"]*\)".*/\1/p' tools/pi/package.json 2>/dev/null | head -n 1)
+  _ls_step "pi version check" sh -c 'want=$1; [ -n "$want" ] || { echo "tools/pi/package.json declares no pin"; exit 1; }; [ -f tools/pi/pi ] || { echo "tools/pi/pi is missing"; exit 1; }; got=$(tools/pi/pi --version) || { echo "tools/pi/pi --version failed"; exit 1; }; echo "tools/pi/pi --version printed $got; pinned $want"; [ "$got" = "$want" ]' lane-setup-pi "$_ls_pin"
+  _ls_summary
+}
+if [ "$1" = --lane-setup ]; then
+  # Deliberate (re)run in the current worktree, e.g. after a failed or skipped setup.
+  _ls_deliberate=1
+  (_lane_setup)
+  exit 0
+fi
+case "$1" in
+  *[!0]*|'') ;;
+  *)
+    if [ "$3" = 1 ] && [ "${HARNESS_NO_LANE_SETUP-}" != 1 ]; then
+      (_lane_setup)
+    fi
+    ;;
+esac
+# --- END LANE SETUP ---
 # --- BEGIN BEADS INTEGRATION v1.1.2 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
