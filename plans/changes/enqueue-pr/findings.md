@@ -605,3 +605,22 @@ Reviewer session: codex 01a219f8-987a-74e1-bb7b-0ae9e0d442fa — a fresh session
 Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6066 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6072 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R1 | BLOCKER | SPEC | phase-6 review | `scripts/enqueue_pr.py`, `commit_problems` | A commit after the reviewed commit may change any file under the change folder, including `spec.md` or executable code, and still pass as record-only. The command can therefore enqueue a head containing substantive changes that phase 6 never reviewed. [Criterion 7] | Codex | taken — Criterion 7: restrict post-review record-only commits to plans/changes/<folder>/findings.md and plans/INDEX.md only, rejecting spec.md or any other file in the change folder | — |
+| R2 | BLOCKER | SPEC | phase-6 review | `spec.md`, criterion 7; `decisions.md`, S-26 | [DIVERGENT] The spec allows a merge of main only when its tree equals the clean merge result. The recorded answer to the spec review also allows a regenerated `plans/INDEX.md` to differ, and the implementation admits that case. The sources give opposite admission results for the same merge. [Criterion 7] | Codex | fixed — not a test — orchestrator hand edit 999a0221 reconciling spec.md [DETAIL] with decisions.md S-26 | no |
+| R3 | MAJOR | MAINT | phase-6 review | `scripts/enqueue_pr.py`, `GitHub.required_checks` and `union_required` | Classic branch protection can require a check from a particular GitHub App, but the command reads the branch summary and treats classic checks as names alone. A successful check with the same name from a different App can therefore satisfy the command even though the required App has not reported. | Codex | taken — Criteria 8 and 24: read classic protection/required_status_checks (when protected) and enforce classic app_id in union_required | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: removes the reviewed-commit line from the phase-6 block as it is appended — catches without switch: yes; the assertions require that line and the exact reviewed head.
+
+Reviewed commit: 768847fca22b8d58cdf4ee893b0c80e47b29acdd
+
+Phase 6 verdict: codex 01a21aa2-134f-78c1-ae40-4c9e30d0c5a4, 2026-11-27
+Reviewer session: codex 01a21aa2-134f-78c1-ae40-4c9e30d0c5a4 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
