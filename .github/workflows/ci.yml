@@ -149,6 +149,10 @@ jobs:
         id: gate-schema
         if: ${{ !cancelled() }}
         run: python3 scripts/ci_gates.py --check-schema
+      - name: Claude Code permissions and the hook registrations are what the agent policy renders
+        id: agent-policy-drift
+        if: ${{ !cancelled() }}
+        run: python3 scripts/agent_policy.py check
       - name: ci.yml is exactly what the gate file generates
         id: ci-drift
         if: ${{ !cancelled() }}

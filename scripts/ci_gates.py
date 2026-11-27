@@ -88,6 +88,7 @@ COST_CLASSES: tuple[str, ...] = ("seconds", "minutes")
 # Wer hier einen Eintrag streicht, braucht einen Schritt in der Gate-Datei;
 # tests/test_ci.py haelt beide Seiten zusammen.
 OHNE_AUFRUFER: dict[str, str] = {
+    "enqueue_pr.py": "Operator command for guarded queue admission; the orchestrator runs it, not CI.",
     "_verdict.py": ("Bibliothek — das gemeinsame Exit-Vokabular der Scripts, kein eigenstaendiges Werkzeug"),
     "adoption.py": (
         "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
@@ -268,6 +269,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
         "tests/test_stage2_go_access.py runs it against synthetic address records"
     ),
+    "next_step.py": (
+        "Library of scripts/stage2.py, never an entry point of its own: the one validator against "
+        "scripts/next_step_schema.json and the one atomic writer of the `next.json` instruction beside the "
+        "loop record; tests/test_next_step.py runs it"
+    ),
     "time_records.py": (
         "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "
         "scripts/harness.py time-log and scripts/stage2.py persist through it and the run report reads "
@@ -288,6 +294,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
         "answer with it, or logs one measured time span into a change's plan (time-log); "
         "tests/test_harness_decide_adr.py and tests/test_harness_time_log.py run it"
+    ),
+    "agent_policy_hooks.py": (
+        "Hook adapter - Claude Code and Antigravity start it before a tool call on the agent's machine, "
+        "which no CI step can do; tests/test_agent_policy.py runs it"
     ),
     "merge_guard.py": (
         "Library — the one list of ask rules that stop an agent before it merges; "

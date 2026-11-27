@@ -148,8 +148,13 @@ def _reference(citation, topic, sources, history, receipts):
     return missing
 
 
-def _evidence(citations, topic, sources, history, receipts):
-    references = [_reference(item, topic, sources, history, receipts) for item in citations]
+def _evidence(citations, topic, sources, history, receipts, alternate):
+    references = []
+    for citation in citations:
+        reference = _reference(citation, topic, sources, history, receipts)
+        if not reference["supported"] and alternate is not None:
+            reference = _reference(citation, topic, alternate[0], alternate[1], receipts)
+        references.append(reference)
     valid = bool(references) and all(item["supported"] for item in references)
     if not valid:
         return "unsupported", [{key: value for key, value in item.items() if key != "excerpt"} for item in references]
@@ -162,7 +167,9 @@ def _evidence(citations, topic, sources, history, receipts):
     return "valid", references
 
 
-def validate_research_report(raw, *, run_id, topic, seat, sources, history=None, receipts=(), neighbours=()):
+def validate_research_report(
+    raw, *, run_id, topic, seat, sources, history=None, receipts=(), neighbours=(), alternate=None
+):
     """Validate one raw report without consulting peer reports or a judge.
 
     The caller supplies trusted run/topic/endpoint-qualified seat identities.
@@ -273,7 +280,7 @@ def validate_research_report(raw, *, run_id, topic, seat, sources, history=None,
     result = {"raw": copy.deepcopy(value), "run_id": run_id, "topic": topic, "seat": seat, **copy.deepcopy(value)}
     result["claims"] = []
     for claim in claims:
-        status, resolved = _evidence(claim["evidence"], topic, sources, history, receipts)
+        status, resolved = _evidence(claim["evidence"], topic, sources, history, receipts, alternate)
         result["claims"].append(
             {
                 **copy.deepcopy(claim),

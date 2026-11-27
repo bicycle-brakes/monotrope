@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round or a consumed ladder — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a consumed ladder names `repair` for an open taken row and `review` once every one is repaired; a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -802,9 +802,20 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    writes the worktree's path into the tracked `.gitignore`, which is one more
    change in the diff. Sibling directories beside the repository are retired
    (D-5); worktrees that still sit there are finished and removed, not moved.
-3. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
+3. **Set up on creation.** The versioned hook `.beads/hooks/post-checkout`
+   runs `make venv`, `bash tools/pi/install.sh` and two checks (the venv imports
+   `yaml`, `tools/pi/pi --version` equals the pin) in the foreground when
+   `git worktree add` creates a worktree, bounded by
+   `HARNESS_LANE_SETUP_TIMEOUT` (default 600 s). It runs only for a trusted
+   state: the checked-out commit is on `origin/main`; otherwise it
+   skips and names the deliberate command `bash .beads/hooks/post-checkout
+   --lane-setup`, which also reruns a failed setup. `HARNESS_NO_LANE_SETUP=1`
+   skips it. Output: `lane setup: start`, one `LANE SETUP FAILED:` line per
+   failure, then `lane setup: ok` or `lane setup: failed (N checks)` and the
+   log path (`lane-setup.log` in the worktree's Git directory).
+4. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
    produces a pull request that is behind before it opens.
-4. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
+5. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
    checkout's tracker through the shared git directory — no variable, no
    redirect file, no copy. Concurrent writers lose nothing and a contested
    claim has exactly one winner (measured 2026-09-23 with bd 1.3.0). Who may
@@ -812,7 +823,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    other session claims its one bead with `tools/bd update <id> --claim
    --actor <session>` and leaves its handover comment on that bead, nothing
    more. After tracker writes: `tools/bd dolt push` first, `git push` second.
-5. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
+6. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
    authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
    is started from the worktree's directory, so its hooks, its
    `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
@@ -833,7 +844,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    and there only the rule in `.claude/settings.json` holds. Not yet measured: whether `omnigent claude`
    started inside a worktree keeps that directory as the session's working
    directory in every case.
-6. **After the merge, the worktree goes.** `git worktree remove
+7. **After the merge, the worktree goes.** `git worktree remove
    .claude/worktrees/<name>` and the branch with it. A worktree nobody works in
    is a place where a later session finds an old state and takes it for the
    current one.
@@ -851,7 +862,7 @@ is not a tool question but a division of work.
    environment, not an artefact in this repository — there is nothing to
    install and nothing to configure.
 3. **`permissions.deny` in `.claude/settings.json`.** It holds two things:
-   Omnigent's writing tools (item 5 above) and
+   Omnigent's writing tools (item 6 above) and
    `Edit(//**/.omnigent/config.yaml)`, so no session rewrites the policy that
    holds them. The template's brakes on the irreversible — production deploy,
    `bundle destroy`, force push, `rm -rf`, writes under `docs/decisions/` — are
@@ -870,6 +881,27 @@ devcontainer is an operating resource of this repository; the concept document
 on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
+
+### One agent policy for every harness
+
+`scripts/agent_policy.py` is the one place that decides whether an agent may
+run a command: it reads the merge asks of `scripts/merge_guard.py`, the
+Omnigent rules of `scripts/omnigent_policy.py` and its own rules (`codex`,
+the enqueue script's `--maintainer` mode), and splits a shell line as the
+shell reads it, checking every part, every `bash/sh/zsh -c` string behind
+known wrappers (`env`, `sudo`, `timeout`, `nohup`, `nice`, `xargs`, …) and
+every `$( )` or backtick substitution. `python3 scripts/agent_policy.py write`
+renders `.claude/settings.json` and `.agents/hooks.json` and re-renders
+`tools/omnigent/policy.yaml` through the Omnigent renderer; the gate
+`agent-policy-drift` fails when either drifts. An ask becomes a deny when
+`HARNESS_UNATTENDED` is set to a nonempty value other than `0` (set by the
+unattended launchers).
+
+| Host | State | How |
+| --- | --- | --- |
+| Claude Code | pending the recorded host check (named gap: when the hook fails, Claude Code's own matcher does not look inside `sh -c`) | generated ask/deny rules plus the PreToolUse adapter; the night overlay turns asks into denies. Host check: not yet recorded. |
+| Antigravity | supported (host check recorded on `agy` 1.5.17, macOS, 2026-11-25) | `.agents/hooks.json` PreToolUse adapter (`run_command` and MCP `merge_pull_request` tools). Measured on `agy` 1.5.17: the hook starts in `.agents/` (`cd ..` reaches the repository root), inherits `HARNESS_UNATTENDED=1`, lets `run_command` proceed on empty stdout with exit 0, and blocks `run_command` on exit 2 (`deny`), exit 1 (crash) and hook timeout (`signal: killed`). |
+| Codex | not supported | no pre-tool hook found in `.codex/hooks.json`; measured in bead coding-harness-1tn1. |
 
 ### Pull requests stay mergeable
 
@@ -922,13 +954,21 @@ for another repository is `templates/agents-mergeable-prs.md`.
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
 - **Merging a series, one at a time.** With the merge queue active on
-  `main` (rule RB-G7, bead coding-harness-eh42), a pull request the
-  maintainer asked to merge, restated and green, is admitted with the same
-  `gh pr merge <n> --merge --match-head-commit <sha>` and no branch update
-  first; the queue tests it on the current `main` and merges it. Admission
-  is not a merge: it is reported as queued until the pull request shows
-  `MERGED`. The maintainer's request, the restatement, the exact head and
-  the ban on `--admin` hold as before. Without the queue ("branches must be
+  `main` (rule RB-G7, bead coding-harness-eh42), every pull request enters
+  through `scripts/enqueue_pr.py <n>` (bead coding-harness-va1l): the
+  orchestrator runs it itself once phase 6 is clean, and a decision PR or
+  another request the default refuses only with `--maintainer` on the
+  maintainer's request after the restatement (`prompts/07-commit.md`, "The
+  merge"). It admits through the enqueue call pinned to the checked head,
+  with no branch update first; the queue tests it on the current `main` and
+  merges it. Admission is not a merge: it is reported as queued until the
+  pull request shows `MERGED`. `--admin` stays banned. The maintainer mode
+  stays attended because in Claude Code an ask rule wins over an allow rule
+  for the same command (`Bash(*enqueue_pr.py*--maintainer*)` against the
+  allow rule for the script), and the night overlay turns that ask into a
+  deny; `tests/test_merge_guard.py` pins both. The pull request that adds or
+  changes the script itself, and a repository without a merge queue, are
+  merged by the maintainer (`prompts/07-commit.md`, "The merge", step 3). Without the queue ("branches must be
   up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
@@ -1242,7 +1282,16 @@ in a store outside the repository (`stage2_research_store.py`). A later run of
 the same change resumes: a slot is reused only when its resume binding (the
 digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
 prompt hash match and its result was ok and validates; nothing else is reused,
-and the run gets its own run id, deadlines and receipt.
+and the run gets its own run id, deadlines and receipt. The stored run record
+also carries the origin baseline: the baseline HEAD and the frozen
+`research.md` bytes of the run that started the resume chain. A matching resume
+can run on a HEAD moved by an earlier run's committed publication. It replays
+that baseline for the finder map, the mapped history and the repository-topic
+prompts, so those prompts stay byte-identical. It also passes the baseline
+forward to the next run. Reused results validate against the baseline, and
+seats the resumed run launches validate against its own freeze or the baseline.
+The published manifest keeps its own `head` and `digest` and names the
+baseline as `origin_head`.
 
 **The handoff is checked (gate `research-handoff`).** The runner derives an
 obligation inventory from the reports (accepted `[DECISION]` questions, class
@@ -1302,9 +1351,10 @@ into a shell. Thirteen verbs exist:
   free swarm the `free_stage` rule selects live, round 2 the three cheapest
   reachable admitted models for an availability-enabled run (a legacy
   declaration uses `flash_swarm`), then one eligible ladder rung each, until a
-  round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
-  refusal and exit 3 a loop that finished with a clean round (R-11 of the
-  review-swarm review).
+  round is clean or the ladder is consumed (ADR 0021). Exit 0 means a round
+  was written, or that a consumed ladder named its next step without writing
+  a round (see below); exit 2 a refusal and exit 3 a loop that finished with
+  a clean round (R-11 of the review-swarm review).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
   With `--stage-failed <model> --reason <text>` it retires the stage that model
   belongs to instead: the stage is consumed, the reason and a `## Stage failed`
@@ -1764,7 +1814,7 @@ documented 2026-10-25 source re-read and expire 2026-10-31.
 
 After implementation and before phase 6, `review-loop` runs one round per
 call, and the loop runs **until a round is clean — every row of a round
-decided and none accepted (ADR 0021).** Round 1 is the **free swarm**: a
+decided and none accepted (ADR 0021) — or the ladder is consumed.** Round 1 is the **free swarm**: a
 forced live catalog refresh (`pi update --models` before `pi --list-models`,
 no stale cache listed) discovers the models the `opencode-go` provider offers,
 and the `free_stage` rule in `model-endpoints.yaml` — provider, id suffix,
@@ -1807,7 +1857,33 @@ A member whose answer is malformed — no six-cell row and not exactly `No findi
 format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
 keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).
 When every stage of a run is consumed and the last round was not clean, the
-loop stops and reports to the maintainer — no model is substituted. The rows
+ladder is consumed and the loop starts nothing: no model is substituted, and
+no maintainer decision is needed for that alone. A rung or Flash member the
+current declaration no longer admits (expired, missing or malformed terms, a
+dated skip, an exclusion, a removal, unread retention or training terms)
+counts as consumed; a Flash stage counts as consumed only when no member is
+admitted and no unconsumed admitted rung could replace one. With at least one
+completed round since the last restart, `review-loop` exits 0 after the
+existing stops (undecided rows, unmarked `fixed` rows, origin and record
+integrity, the clean stop, the repair brake) and prints exactly one line on
+standard output:
+`next: repair <change>` while any round of the run since the last restart holds
+a taken row that no repair has marked `fixed` — an unmarked taken row
+included — and `next: review <change>` once every taken row is repaired. A
+cut last round with no accepted finding names `review` as well. Diagnostics,
+such as each passed-over model with its reason, go to standard error. The same
+instruction is written as schema-validated JSON (`scripts/next_step_schema.json`:
+schema version 1, change, verb `review`, `repair`, `hand` or `review-loop`, row
+ids, producing verb and UTC time) to `next.json` beside `loop.md`, never into
+Markdown; a failed validation or write exits 1 without the line. Every
+`review-loop` call removes the previous `next.json` first; a successful
+`repair` writes one for `review-loop` (or `review` when the repaired batch held
+a phase-6 row); `triage`, `release-loop` (also
+`--stage-failed` and `--restart`) and the phase-6 release remove it. A run
+without a completed round whose stages are consumed still refuses with exit 2.
+After the last repair, phase 6 follows as ever: a fresh full `make verify` and
+the independent reviewer's read of the whole diff, also when the loop's diff was
+cut, come before the release. The rows
 go into a **loop record** outside the worktree and outside the git directory
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it
@@ -2287,7 +2363,10 @@ day session would ask:
    fails too, Sonnet 5.5 takes that one step — a repair through
    `stage2.py repair <change> --stage2-off "<reason>"`, a phase-6 review or
    re-check through a read-only Sonnet 5.5 sub-agent whose rows the
-   orchestrator records unchanged. The step carries a note with the reason,
+   orchestrator records unchanged, in the runner's form: the block ends
+   with `Reviewed commit: <full sha of the reviewed head>` and, when no row
+   is found, the line `Sonnet reported no finding.`, so
+   `scripts/enqueue_pr.py` reads it like a runner verdict. The step carries a note with the reason,
    and the run continues. The runner automates this once bead
    coding-harness-m98e lands.
 2. **A further case of the same mechanism at a phase-6 re-check:** record
