@@ -44,3 +44,16 @@ Spec review commit: 082e38af6672a26f1a752c387299d787627972e9
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
 | S-4 | [AMBIGUITY] | SPEC | fix-r1 | spec.md AC5 (lead sentence and *Refuted by:*), Open decisions [DETAIL] S-2 ("`## Phase 6` blocks keep refusing the line"); scripts/enqueue_pr.py `malformed_table_line`, `phase6_problems`, `released_problems` | AC5's lead sentence covers only "a different malformed pipe-bearing line … in a released loop block". The two clauses added in round 1 and the refutation leave out the pipe condition: "a non-JSON `Loop state:` line, or a `Loop state:` line in a `## Phase 6` block is silently accepted". This allows two readings. (a) Only `Loop state:` lines that contain a `\|` are refused. That is how the code already works, because `malformed_table_line` flags only lines containing `\|`, and `phase6_problems` and `released_problems` skip any other line that is not a row. Under (a) nothing is built for Phase 6 blocks, which matches S-2's "keep refusing". (b) Every such line is refused, with or without a pipe. That would add a new refusal to `phase6_problems` and, for non-JSON lines, to `released_problems`, which means changing "other admission prerequisites" (a non-goal). Two cases give different results: a released block containing `Loop state: {not json}` (no pipe), and the last `## Phase 6` block containing `Loop state: {"free": {}}` (valid JSON, no pipe). Reading (a) admits both, and AC5's refutation as written counts that as a failure. Reading (b) refuses both. So a test written from the refutation text fails against a build that follows reading (a). | Opus | in spec — reading a (pipe-bearing lines only, as today) in AC5 and [DETAIL] S-4 (bounded standing grant) | — |
+
+Stage-2 call, 2026-11-27: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · leak check clean over 1323 files, 6142 commits, 12 rules.
+## Phase 2a — Opus 5.5, 2026-11-27
+
+Spec fingerprint: sha256:1137604fb1dedd89f970703137c27e4eb500a5cf65131d33943530f5d63651d2
+
+Spec review commit: f11122f541658802e696487909330f3d4d83fcde
+
+Opus reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> No finding.
