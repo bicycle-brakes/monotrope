@@ -5276,3 +5276,50 @@ def test_reused_seat_uses_launch_snapshot_not_later_publication() -> None:
     result = run.validate_topic({"topic": 4}, record, reused=True)
     assert "Later addition." not in result["claims"][0]["resolved"][0]["excerpt"]
     assert result["claims"][1]["evidence_status"] != "valid"
+
+
+def test_legacy_carried_seat_without_launch_snapshot_reuses_valid_result() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run2"
+    run.research_rel = "research.md"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Live\nNew evidence.\n"}
+    run.launch_research = {}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Origin"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report), "launched_in": "run1"}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a legacy seat with valid origin evidence must be reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_new_topic_six_rejects_intermediate_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    old, origin, latest = "a" * 40, "b" * 40, "c" * 40
+    monkeypatch.setattr(stage2_research_run, "build_research_history", lambda *_args, **_kwargs: {"commits": {}})
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.root = Path()
+    run.map = {"entries": [], "neighbours": []}
+    run.origin_head = origin
+    run.origin_research = b"origin"
+    run.manifest = {"head": latest}
+    run.source = SimpleNamespace(usable=True, run={"binding": {"history_commits": {old: {"hash": old}}}})
+    run.binding = {}
+    run.store = SimpleNamespace(set_append=lambda *_args: None)
+    run.run_id = "run3"
+    run.stage_history()
+    run.origin_sources = run.sources = {"research.md": b"# Evidence\ntext\n"}
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = [old]
+    try:
+        result = run.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=False)
+    except stage2_research_run.ResearchReportError:
+        return
+    assert result["claims"][0]["evidence_status"] != "valid", "intermediate history must not validate a new seat"

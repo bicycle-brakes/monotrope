@@ -1604,8 +1604,6 @@ class Run:
         }
         self.binding = self.with_origin(self.binding)
         self.store.set_append(self.run_id, self.binding)
-        # Keep the prompt and publication packet frozen; only validation sees accumulated evidence.
-        self.live_history = {**self.live_history, "commits": self.history_commits}
 
     def topic_entries(self) -> list[dict]:
         entries = []
@@ -1660,6 +1658,8 @@ class Run:
             reused = bool(record.get("reused_from"))
         origin = (self.origin_sources, self.history if topic == 6 else None)
         live = (self.sources, self.live_history if topic == 6 else None)
+        if reused and topic == 6:
+            live = (live[0], {**self.live_history, "commits": self.history_commits})
         launched_in = record.get("launched_in") or getattr(getattr(self, "source", None), "run_id", None)
         origin_run_id = getattr(self, "origin_run_id", None)
         primary, alternate = (
@@ -1669,10 +1669,9 @@ class Run:
             snapshots = getattr(self, "launch_research", None)
             if snapshots is not None:
                 launch = stored_origin({"origin": snapshots.get(launched_in)})
-                if launch is None:
-                    raise ResearchReportError("launch research snapshot unavailable")
-                primary = ({**self.sources, self.research_rel: launch[1]}, live[1])
-                alternate = origin
+                if launch is not None:
+                    primary = ({**self.sources, self.research_rel: launch[1]}, live[1])
+                    alternate = origin
         return validate_research_report(
             topic_report_payload(record["stdout"]),
             run_id=self.run_id,
