@@ -5252,3 +5252,27 @@ def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch
     except stage2_research_run.ResearchReportError as exc:
         pytest.fail(f"a previously valid publication commit must remain reusable: {exc}")
     assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_reused_seat_uses_launch_snapshot_not_later_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.research_rel = "research.md"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nLater addition.\n# Later\nNew evidence.\n"}
+    launch = b"# Evidence\nOriginal.\n"
+    run.launch_research = {"run2": stage2_research_run.origin_record("a" * 40, launch)}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    second = dict(report["claims"][0])
+    second["evidence"] = ["research.md::Later"]
+    second["id"] = "C2"
+    report["claims"].append(second)
+    record = {"stdout": json.dumps(report), "launched_in": "run2"}
+    result = run.validate_topic({"topic": 4}, record, reused=True)
+    assert "Later addition." not in result["claims"][0]["resolved"][0]["excerpt"]
+    assert result["claims"][1]["evidence_status"] != "valid"

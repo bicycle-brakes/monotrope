@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -597,6 +598,7 @@ class Run:
             if previous is not None:
                 self.origin_run_id = previous.get("origin_run_id") or self.source.run_id
             self.origin_sources = {**self.sources, self.research_rel: self.origin_research}
+            self.launch_research = dict(previous.get("launch_research", {})) if previous else {}
             binding = stored_binding(
                 self.manifest,
                 self.research_rel,
@@ -605,11 +607,12 @@ class Run:
                 publication_day=self.publication_day,
                 brief=self.brief_research,
             )
-            self.binding = self.with_origin(binding)
-            self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
+            self.run_id = secrets.token_hex(16)
             if self.origin_run_id is None:
                 self.origin_run_id = self.run_id
+            self.launch_research[self.run_id] = origin_record(self.manifest["head"], self.research_bytes)
             self.binding = self.with_origin(binding)
+            self.store.start_run(self.change, self.selection.get("report_id"), self.binding, run_id=self.run_id)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
         # A stored security refusal is named before any model call (F-37, criterion 56): run, slot, reason.
@@ -627,6 +630,7 @@ class Run:
             "origin": origin_record(self.origin_head, self.origin_research),
             "origin_run_id": getattr(self, "origin_run_id", None),
             "history_commits": getattr(self, "history_commits", {}),
+            "launch_research": getattr(self, "launch_research", {}),
         }
 
     @property
@@ -1661,6 +1665,14 @@ class Run:
         primary, alternate = (
             (origin, None) if reused and origin_run_id and launched_in == origin_run_id else (live, origin)
         )
+        if reused and topic <= 8 and launched_in and launched_in != origin_run_id:
+            snapshots = getattr(self, "launch_research", None)
+            if snapshots is not None:
+                launch = stored_origin({"origin": snapshots.get(launched_in)})
+                if launch is None:
+                    raise ResearchReportError("launch research snapshot unavailable")
+                primary = ({**self.sources, self.research_rel: launch[1]}, live[1])
+                alternate = origin
         return validate_research_report(
             topic_report_payload(record["stdout"]),
             run_id=self.run_id,
