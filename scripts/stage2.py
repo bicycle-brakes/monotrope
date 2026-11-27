@@ -4993,6 +4993,31 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     return stamped == clean_after
 
 
+def review_tree_standing(
+    root: Path, change: str, env: dict[str, str] | None = None
+) -> tuple[str, list[str], tuple[bytes, bytes] | None]:
+    head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
+    dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
+    audit = None
+    name = f"plans/changes/{change}/findings.md"
+    path = root / name
+    entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
+    if (
+        name in dirty
+        and entries.startswith("100644 ")
+        and path.is_file()
+        and not path.is_symlink()
+        and not path.stat().st_mode & 0o111
+    ):
+        committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
+        indexed = _git_bytes(root, "show", f":{name}", env=env)
+        content = path.read_bytes()
+        if all(review_audit_only(committed, body) for body in (indexed, content)):
+            dirty.remove(name)
+            audit = (indexed, content)
+    return head, dirty, audit
+
+
 def require_fresh_full_verification(root: Path, change: str) -> str:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
 
@@ -5019,24 +5044,8 @@ def require_fresh_full_verification(root: Path, change: str) -> str:
         root,
     )
 
-    def standing() -> tuple[str, list[str], tuple[bytes, bytes] | None]:
-        head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
-        dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
-        audit = None
-        name = f"plans/changes/{change}/findings.md"
-        path = root / name
-        if name in dirty and path.is_file() and not path.is_symlink() and not path.stat().st_mode & 0o111:
-            committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
-            indexed = _git_bytes(root, "show", f":{name}", env=env)
-            content = path.read_bytes()
-            entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
-            if entries.startswith("100644 ") and all(review_audit_only(committed, body) for body in (indexed, content)):
-                dirty.remove(name)
-                audit = (indexed, content)
-        return head, dirty, audit
-
     try:
-        head, dirty, audit = standing()
+        head, dirty, audit = review_tree_standing(root, change, env)
     except (Refused, OSError) as error:
         raise Refused(f"the current head could not be read for the full check before phase 6 ({error})") from error
     if dirty:
@@ -5047,7 +5056,7 @@ def require_fresh_full_verification(root: Path, change: str) -> str:
         )
     problems = full_verify(root, env, None, change)
     try:
-        after = standing()
+        after = review_tree_standing(root, change, env)
     except (Refused, OSError) as error:
         raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
     if after != (head, dirty, audit):
@@ -5115,6 +5124,14 @@ def review(root: Path, change: str) -> None:
     replaced_thread: str | None = None
     if german_verdict(rows):
         answer, rows, thread, replaced_thread = language_replacement(ctx, answer, rows, thread, notices)
+    try:
+        current_head, dirty, _ = review_tree_standing(root, change)
+        untracked = set(_git_output(root, "ls-files", "--others", "--exclude-standard", "-z").split("\0"))
+        dirty = [name for name in dirty if name not in untracked]
+    except (Refused, OSError) as error:
+        raise CallFailed(f"the checkout could not be read after the reviewer call ({error})") from error
+    if current_head != reviewed or dirty:
+        raise CallFailed("the head or working tree changed during phase 6 review; no verdict was recorded")
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",

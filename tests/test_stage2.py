@@ -34841,3 +34841,25 @@ def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.delenv(jobs.RECORD_ENV)
     stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
     assert len(jobs.read_record(path)["groups"]) == 1
+
+
+@pytest.mark.parametrize("change_kind", ["dirty", "head"])
+def test_phase_six_refuses_checkout_changed_during_review(
+    world: World, monkeypatch: pytest.MonkeyPatch, change_kind: str
+) -> None:
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    original = stage2.run_codex
+
+    def changing_reviewer(*args, **kwargs):
+        answer = original(*args, **kwargs)
+        (world.root / "src" / "app.py").write_text("changed during review\n", encoding="utf-8")
+        if change_kind == "head":
+            git(world.root, "add", "src/app.py")
+            git(world.root, "commit", "--quiet", "-m", "change during review")
+        return answer
+
+    monkeypatch.setattr(stage2, "run_codex", changing_reviewer)
+    assert world.run("review") != 0
+    assert "Reviewed commit:" not in world.text()
+    assert "Phase 6 verdict:" not in world.text()

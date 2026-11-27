@@ -253,7 +253,7 @@ def union_required(rules: Any, branch: Any) -> set[str | tuple[str, int]]:
     for context in contexts:
         if not isinstance(context, str) or not context:
             raise Unreadable("a classic required status check of main has no name")
-        required.add(context)
+    classic_names = set()
     for check in checks:
         context = check.get("context") if isinstance(check, dict) else None
         if not isinstance(context, str) or not context:
@@ -263,7 +263,9 @@ def union_required(rules: Any, branch: Any) -> set[str | tuple[str, int]]:
             app_id = None
         if app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0):
             raise Unreadable("a classic required check has an invalid app_id")
+        classic_names.add(context)
         required.add((context, app_id) if app_id is not None else context)
+    required.update(context for context in contexts if context not in classic_names)
     return required
 
 

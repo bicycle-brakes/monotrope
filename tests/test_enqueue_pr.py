@@ -1226,3 +1226,29 @@ def test_classic_required_check_uses_app_identity(tmp_path: Path) -> None:
         )(),
         "a",
     )
+
+
+def test_classic_duplicate_context_respects_required_app() -> None:
+    classic = {
+        "protection": {
+            "required_status_checks": {
+                "contexts": ["verify", "legacy"],
+                "checks": [{"context": "verify", "app_id": 42}],
+            }
+        }
+    }
+    required = ep.union_required([], classic)
+    github = type(
+        "GH",
+        (),
+        {
+            "required_checks": lambda _self, _branch: required,
+            "head_checks": lambda _self, _head: [
+                ("verify", "SUCCESS", 42),
+                ("verify", "FAILURE", 99),
+                ("legacy", "SUCCESS"),
+            ],
+        },
+    )()
+    assert not ep.checks_problems(github, "head")
+    assert ("verify", 42) in required and "verify" not in required

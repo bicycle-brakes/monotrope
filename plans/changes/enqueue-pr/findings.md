@@ -635,8 +635,8 @@ Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:252 | Classic branch protection returns both `contexts` and app-specific `checks` for the same required check. The command treats both as separate requirements, so a failed check with the same name from another app causes refusal even when the required app’s check succeeded. The eligible head should be admitted. [Criteria 1, 8, 24] | Codex | taken — Criteria 1, 8, 24: when classic protection returns app-specific checks entries, do not also require the duplicate plain contexts string for that same check name, with regression test | — |
-| R2 | MAJOR | SPEC | base | scripts/stage2.py:5098 | If another process changes the checkout after the pre-review verification but before or during the reviewer call, the reviewer can read the changed files while the verdict still records the earlier commit. The runner does not recheck the head or working tree after the call, so the recorded commit can differ from what was reviewed. [Criterion 13] | Codex | taken — Criterion 13: recheck HEAD and working-tree cleanliness after the phase-6 reviewer call before recording Reviewed commit and refuse if HEAD or tracked files changed, with regression test | — |
+| R1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:252 | Classic branch protection returns both `contexts` and app-specific `checks` for the same required check. The command treats both as separate requirements, so a failed check with the same name from another app causes refusal even when the required app’s check succeeded. The eligible head should be admitted. [Criteria 1, 8, 24] | Codex | fixed — tests/test_enqueue_pr.py::test_classic_duplicate_context_respects_required_app | — |
+| R2 | MAJOR | SPEC | base | scripts/stage2.py:5098 | If another process changes the checkout after the pre-review verification but before or during the reviewer call, the reviewer can read the changed files while the verdict still records the earlier commit. The runner does not recheck the head or working tree after the call, so the recorded commit can differ from what was reviewed. [Criterion 13] | Codex | fixed — tests/test_stage2.py::test_phase_six_refuses_checkout_changed_during_review | — |
 
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
@@ -646,3 +646,130 @@ Reviewed commit: 0a4690aa2def89ae70299cd9ae05e1e112eac71b
 
 Phase 6 verdict: codex 01a21b0f-5cf0-7fc1-a19f-3404ea3fbf4f, 2026-11-27
 Reviewer session: codex 01a21b0f-5cf0-7fc1-a19f-3404ea3fbf4f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6085 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/enqueue_pr.py` +3 -1
+> - `scripts/stage2.py` +27 -18
+> - `tests/test_enqueue_pr.py` +26 -0
+> - `tests/test_stage2.py` +22 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: full `make verify` ran (result: red) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure
+> - `make verify` exited 1
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ python3 -m pytest tests/ -q -n auto
+> [… 146 lines of this gate left out …]
+> review: verdict appended to plans/changes/demo/findings.md; session codex T1
+> release-loop: 3 loop rows appended to plans/changes/demo/findings.md
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> review: 2 of 3 loop rows marked
+> review: full `make verify` green on 507579b5a830 before the reviewer starts
+> INFO  (1):
+>   - leak check clean: 32 files, 4 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: the checkout could not be read after the reviewer call (git show failed (exit 128): fatal: path 'plans/changes/demo/findings.md' exists on disk, but not in '507579b5a8300a9ae836b1ab85fdb778d886b25b')
+> ____________________ test_each_call_runs_its_own_leak_check ____________________
+> [gw3] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-8k9u2xn0/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |')
+>
+>     def test_each_call_runs_its_own_leak_check(world: World) -> None:
+>         world.write_record([("L1-1", "taken — test_a", "no")])
+>         world.script(codex=[codex_ok("T1", rows(1), plant={"leak.txt": LEAK}), codex_ok("T1", "L1-1: agree")])
+> >       assert world.run("review") == 2
+> E       AssertionError: assert 1 == 2
+> E        +  where 1 = run('review')
+> E        +    where run = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/verify-run-8k9u2xn0/pytest-of-mikypiky/...---|---|---|---|---|---|---|\n| R1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1 unique body | Opus 5.5 | open | — |').run
+>
+> tests/test_stage2.py:2264: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> review: full `make verify` green on ac6c036abd57 before the reviewer starts
+> INFO  (1):
+>   - leak check clean: 33 files, 3 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> [verify-lock] admitted
+> [verify-lock] available memory cannot be measured; proceeding without a reading
+> failed: the head or working tree changed during phase 6 review; no verdict was recorded
+> =============================== warnings summary ===============================
+> tests/test_agent_policy.py::test_noncommand_shell_syntax_abstains
+>   /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/scripts/agent_policy.py:431: DeprecationWarning: invalid escape sequence '\q'
+>     value = codecs.decode(match.group(1), "unicode_escape")
+>
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[findings-no-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-record]
+> tests/test_stage2.py::test_review_refuses_a_held_record_lock[no-findings-no-record]
+>   /opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=5395) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     self.pid = os.fork()
+>
+> tests/test_stage2.py::test_a_failed_record_write_leaves_the_record_as_it_was
+>   /Users/mikypiky/coding-harness/.claude/worktrees/enqueue-pr/tests/test_stage2.py:28363: DeprecationWarning: This process (pid=5308) is multi-threaded, use of fork() may lead to deadlocks in the child.
+>     pid = os.fork()
+>
+> -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_review_lock_preserves_normal_flow - Asserti...
+> FAILED tests/test_stage2.py::test_each_call_runs_its_own_leak_check - Asserti...
+> 2 failed, 7409 passed, 17 skipped, 6 warnings in 879.29s (0:14:39)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 68179 earlier lines left out …]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 90]
+> tools/claude-code/README.md:20:81 error MD013/line-length Line length [Expected: 80; Actual: 94]
+> tools/claude-code/README.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 87]
+> tools/claude-code/README.md:25:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:25:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:25:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:27:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:30:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:31:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:40:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:40:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:45:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:46:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:47:81 error MD013/line-length Line length [Expected: 80; Actual: 155]
+> tools/claude-code/README.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 113]
+> tools/claude-code/README.md:71:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:136:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:136:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:136:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:137:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:138:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:139:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/enqueue-pr/stage2/attempts/enqueue-pr/attempt-1-20261127T033953283725Z-a1ce52ee.md
+> ````
+
+Stage-2 call, 2026-11-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1292 files, 6086 commits, 12 rules.
+
+Runner restoration, 2026-11-27: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
