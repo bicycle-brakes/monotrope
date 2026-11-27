@@ -1446,7 +1446,7 @@ def test_topic_correction_malformed_stored_time_has_no_allowance(sworld: SwarmWo
     run = stage2_research_run.Run(sworld.root, "demo", stage2, "feature", selection_for())
     run.limits = stage2_research_limits.load(sworld.root)
     record = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:04:00Z"}
-    assert run.remaining_topic_allowance(record) == 360.0
+    assert run.remaining_topic_allowance(record) == run.limits.role_seconds("topics") - 240.0
     record[field] = "malformed-time"
     assert run.remaining_topic_allowance(record) == 0.0, "unknown elapsed time must grant no correction allowance"
 
@@ -1551,7 +1551,7 @@ def test_topic_correction_keeps_security_and_time_boundaries(
     spent = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:20:00Z"}
     assert run.remaining_topic_allowance(spent) == 0.0, "no fresh allowance beyond the topic's own"
     fresh = {"slot_id": "topics-4-2", "started_at": "2026-11-10T10:00:00Z", "ended_at": "2026-11-10T10:04:00Z"}
-    assert run.remaining_topic_allowance(fresh) == 360.0
+    assert run.remaining_topic_allowance(fresh) == run.limits.role_seconds("topics") - 240.0
 
 
 def test_topic_correction_audit_names_the_corrected_attempt(sworld: SwarmWorld) -> None:
