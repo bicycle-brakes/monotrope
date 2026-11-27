@@ -721,6 +721,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/phase6-guard-evidence/decisions.md`](changes/phase6-guard-evidence/decisions.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/findings.md`](changes/phase6-guard-evidence/findings.md) | draft | none | 2026-11-27 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/plan.md`](changes/phase6-guard-evidence/plan.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/research.md`](changes/phase6-guard-evidence/research.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/spec.md`](changes/phase6-guard-evidence/spec.md) | draft | none | 2026-11-27 | coding-harness-mwzv.6 |
 | [`changes/red-first-baseline/decisions.md`](changes/red-first-baseline/decisions.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/findings.md`](changes/red-first-baseline/findings.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/plan.md`](changes/red-first-baseline/plan.md) | draft | none | 2026-11-21 | coding-harness-7aso |

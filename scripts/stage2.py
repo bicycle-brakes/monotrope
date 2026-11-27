@@ -383,10 +383,21 @@ def spec_review_answer_format(answer_format: str) -> str:
 SPEC_REVIEW_ANSWER_FORMAT = spec_review_answer_format(ANSWER_FORMAT)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
 # evidence; phase 6 explicitly refuses malformed evidence even beside findings.
+# The test is a node ID, optionally parametrized (`[<id>]`, never empty), written bare, wholly
+# in paired backticks, or with only its file path in backticks; a suffix after a backticked node
+# ID is refused. Only the verdict word is case-insensitive. After it a separator from
+# `[,;:.!—–-]` (spaces allowed before a dash) is followed by mandatory whitespace and text;
+# `yes` may also stand bare or end in `.` or `!`, and `no` needs a reason with a word character
+# (spec phase6-guard-evidence, criteria 1, 2 and 4).
+_GUARD_PATH = r"tests/[^\s:`]+\.py"
+_GUARD_NAME = r"test_\w+(?:\[[^\]]+\])?"
+_GUARD_SEPARATOR = r"(?:[,;:.!]|\s*[—–-])?\s+"
 GUARD_EVIDENCE_LINE = re.compile(
-    r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
-    r" — fault: (?P<fault>\S.+?)"
-    r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
+    rf"^Guard evidence: (?P<test>`{_GUARD_PATH}::{_GUARD_NAME}`|`{_GUARD_PATH}`::{_GUARD_NAME}"
+    rf"|{_GUARD_PATH}::{_GUARD_NAME})"
+    r" — fault: (?P<fault>\S.*?)"
+    rf" — catches without switch: (?P<catches>(?i:yes)(?:[.!]|{_GUARD_SEPARATOR}\S.*)?"
+    rf"|(?i:no){_GUARD_SEPARATOR}(?=.*\w)\S.*)$"
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 RAISING_FAULT_SENTENCE = (
