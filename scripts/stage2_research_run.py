@@ -1598,6 +1598,8 @@ class Run:
             **self.history["commits"],
             **self.live_history["commits"],
         }
+        self.binding = self.with_origin(self.binding)
+        self.store.set_append(self.run_id, self.binding)
         # Keep the prompt and publication packet frozen; only validation sees accumulated evidence.
         self.live_history = {**self.live_history, "commits": self.history_commits}
 
@@ -1657,7 +1659,7 @@ class Run:
         launched_in = record.get("launched_in") or getattr(getattr(self, "source", None), "run_id", None)
         origin_run_id = getattr(self, "origin_run_id", None)
         primary, alternate = (
-            (origin, live) if reused and origin_run_id and launched_in == origin_run_id else (live, origin)
+            (origin, None) if reused and origin_run_id and launched_in == origin_run_id else (live, origin)
         )
         return validate_research_report(
             topic_report_payload(record["stdout"]),

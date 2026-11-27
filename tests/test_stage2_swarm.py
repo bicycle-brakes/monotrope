@@ -5195,6 +5195,24 @@ def test_origin_launched_reused_heading_uses_origin_evidence() -> None:
     assert "Published finding." not in result["claims"][0]["resolved"][0]["excerpt"]
 
 
+def test_origin_report_cannot_gain_evidence_from_later_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Origin\nOld evidence.\n# Later\nNew evidence.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Later"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report), "launched_in": "run1"}, reused=True)
+    except stage2_research_run.ResearchReportError:
+        return
+    assert result["claims"][0]["evidence_status"] != "valid", "later evidence must not validate an origin report"
+
+
 def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
@@ -5224,7 +5242,7 @@ def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch
         return run
 
     run2 = make_run(first, None)
-    run3 = make_run(latest, run2.with_origin({}))
+    run3 = make_run(latest, run2.binding)
     run3.origin_sources = run3.sources = {"research.md": b"# Evidence\ntext\n"}
     run3.seat_id = lambda _entry: "endpoint:model"
     report = json.loads(repository_report(6))
