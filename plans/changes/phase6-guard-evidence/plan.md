@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-26
 last_reviewed: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-mwzv.6
@@ -52,10 +52,10 @@ Start the full verification detached with `python3 scripts/jobs.py start -- make
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_phase6_guard_evidence_accepts_sentence_punctuation — a specified punctuated verdict is rejected.
-- 2: not yet written tests/test_stage2.py::test_phase6_guard_evidence_accepts_test_reference_forms — a wrapped or parametrized reference is rejected.
-- 3: not yet written tests/test_stage2.py::test_phase6_guard_evidence_records_new_forms — a valid review is rejected or its evidence or verdict is lost.
-- 4: not yet written tests/test_stage2.py::test_phase6_guard_evidence_rejects_invalid_forms — malformed evidence passes beside a valid verdict.
+- 1: tests/test_stage2.py::test_phase6_guard_evidence_accepts_sentence_punctuation — a specified punctuated verdict is rejected.
+- 2: tests/test_stage2.py::test_phase6_guard_evidence_accepts_test_reference_forms — a wrapped or parametrized reference is rejected.
+- 3: tests/test_stage2.py::test_phase6_guard_evidence_records_new_forms — a valid review is rejected or its evidence or verdict is lost.
+- 4: tests/test_stage2.py::test_phase6_guard_evidence_rejects_invalid_forms — malformed evidence passes beside a valid verdict.
 - 5: tests/test_stage2.py::test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts — evidence alone releases a verdict.
 - 6: tests/test_stage2.py::test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards — previously accepted prose forms are rejected.
 - 6: tests/test_stage2.py::test_phase6_guard_evidence_survives_findings_and_no_finding_verdicts — previously accepted bare yes is rejected.
@@ -64,6 +64,11 @@ Start the full verification detached with `python3 scripts/jobs.py start -- make
 
 On 2026-11-26 explore used the Stage-1 route, `claude-haiku-5-5`, because GLM through Z.ai had reached its weekly limit until 2026-11-29 (`research.md`).
 
+## Runner route — 2026-11-27
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
+
 ## Time used
 
 2026-11-26 22:12:51–22:15:01 UTC, 130 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-27 02:11:28–02:34:38 UTC, 1390 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · full `make verify` ran (result: green) because the targeted coverage was not safe: `scripts/stage2.py` is shared execution infrastructure · measured by the runner
