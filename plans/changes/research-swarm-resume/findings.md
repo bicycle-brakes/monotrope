@@ -556,3 +556,15 @@ Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1290 files, 6105 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6108 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-1 | MAJOR | SPEC | fix-r5 | scripts/stage2_research_run.py:596, scripts/stage2_research_run.py:1668 | A pre-fix run can contain a valid seat carried forward from an earlier run. On the first resume after this fix, `launch_research` is empty, so validation rejects that seat because its original launch snapshot is unavailable—even when its binding, prompt hash and result still match. The seat is relaunched instead of reused. [Criterion 4; pre-fix stores non-goal] | Codex | taken — Criterion 4 & S-3: when launch_research has no entry for launched_in (pre-fix stored run), fall back to origin_sources (for origin_run_id) or live sources with origin fallback instead of refusing reuse, with regression test | — |
+| R-2 | MAJOR | SPEC | fix-r5 | scripts/stage2_research_run.py:1590, scripts/stage2_research_run.py:1611, scripts/stage2_research_run.py:1664 | A newly launched topic-6 seat can cite a commit that appeared in an intermediate run’s history but is absent from both the current live history and the origin history. The accumulated `history_commits` makes that citation valid, although the seat should be validated against the live view with the origin baseline as fallback. [Criterion 2] | Codex | taken — Criterion 2: for newly launched topic-6 seats (reused=False), validate against current live_history with origin_history as alternate (never accumulated intermediate history_commits); reserve accumulated history_commits strictly for reused seats, with regression test | — |
+
+Phase 6 verdict: codex 01a21c55-10a8-7111-a203-576f2c38fa6d, 2026-11-27
+Reviewer session: codex 01a21c55-10a8-7111-a203-576f2c38fa6d — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
