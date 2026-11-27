@@ -5179,6 +5179,22 @@ def test_reused_heading_evidence_includes_live_publication() -> None:
     assert "Published finding." in result["claims"][0]["resolved"][0]["excerpt"]
 
 
+def test_origin_launched_reused_heading_uses_origin_evidence() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.origin_sources = {"research.md": b"# Evidence\nOriginal.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nPublished finding.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    record = {"stdout": json.dumps(report), "launched_in": "run1"}
+    result = run.validate_topic({"topic": 4}, record, reused=True)
+    assert "Published finding." not in result["claims"][0]["resolved"][0]["excerpt"]
+
+
 def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 

@@ -279,7 +279,130 @@ Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| R-1 | MAJOR | SPEC | fix-r2 | scripts/stage2_research_run.py:1642 | A reused repository report is validated against the live sources first even when `reused=True`; that argument never changes the selected baseline. If a citation points to a heading in `research.md` whose section grew after publication, the reused report’s resolved excerpt includes the new publication instead of the origin-run evidence shown to the seat. The judge therefore receives evidence different from the replayed origin baseline. Reused reports must be validated against that baseline. [Criterion 2] | Codex | taken — Criterion 2: select baseline by origin vs resumed launch: when reused and launched in the origin run (origin_run_id), prefer origin primary (alternate=live); when launched in a resumed run (newly launched or reused from a post-origin run), prefer live primary (alternate=origin), keeping both test_reused_heading_evidence_includes_live_publication and a new regression for origin-launched reused heading evidence green | — |
+| R-1 | MAJOR | SPEC | fix-r2 | scripts/stage2_research_run.py:1642 | A reused repository report is validated against the live sources first even when `reused=True`; that argument never changes the selected baseline. If a citation points to a heading in `research.md` whose section grew after publication, the reused report’s resolved excerpt includes the new publication instead of the origin-run evidence shown to the seat. The judge therefore receives evidence different from the replayed origin baseline. Reused reports must be validated against that baseline. [Criterion 2] | Codex | fixed — tests/test_stage2_swarm.py::test_origin_launched_reused_heading_uses_origin_evidence | — |
 
 Phase 6 verdict: codex 01a21b61-b141-7c21-b86b-4f1264f0e058, 2026-11-27
 Reviewer session: codex 01a21b61-b141-7c21-b86b-4f1264f0e058 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6092 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2_research_run.py` +13 -1
+> - `tests/test_stage2_swarm.py` +16 -0
+>
+> Diagnostics:
+> ````text
+> - lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner verification scope: targeted verification, not the full `make verify`; result: red; test files `tests/test_atomic_test_log.py`, `tests/test_pi_contract.py`, `tests/test_research_capture.py`, `tests/test_stage2_availability.py`, `tests/test_stage2_declaration.py`, `tests/test_stage2_free.py`, `tests/test_stage2_go_access.py`, `tests/test_stage2_repository_pathlock.py`, `tests/test_stage2_research_availability.py`, `tests/test_stage2_research_catalog.py`, `tests/test_stage2_research_deep_review.py`, `tests/test_stage2_swarm.py`, `tests/test_stage2_terms_expiry.py`, `tests/test_standin_call_counter.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); a fresh full `make verify` is still required before phase 6
+> - Runner targeted checks: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> ........................................................................ [ 70%]
+> .......................................................................F [ 77%]
+> F....................................................................... [ 84%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 98%]
+> ...................                                                      [100%]
+> =================================== FAILURES ===================================
+> _ test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete _
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/popen-gw4/test_a_failed_store_write_keep0/home'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x109212840>
+>
+>     def test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete(
+>         sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         # Criteria 18, 57 (phase-6 F-15). Planted fault: after the first failed terminal write the siblings'
+>         # outcomes are dropped from the record, or a failed binding write loses the incomplete publication.
+>         def broken(*_args, **_kwargs):
+>             raise stage2_research_store.StoreWriteError("disk full")
+>     
+>         monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+>         monkeypatch.setattr(stage2_research_store.Store, "set_append", broken)
+>         sworld.complete()
+>         assert sworld.run() == 1
+>         text = sworld.research.read_text(encoding="utf-8")
+> >       slots = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+>
+> tests/test_stage2_swarm.py:3900: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> world = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/popen-gw4/test_a_failed_store_write_keep0/home'))
+>
+>     def manifest_of(world: SwarmWorld) -> dict:
+>         text = world.research.read_text(encoding="utf-8")
+>         blocks = re.findall(r"```research-swarm/v2 manifest\n(.*?)\n```", text, re.S)
+> >       return json.loads(blocks[-1])
+> E       IndexError: list index out of range
+>
+> tests/test_stage2_swarm.py:2198: IndexError
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research state store is unusable (disk full)
+> _______ test_a_failed_append_binding_write_ends_incomplete_with_exit_one _______
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/bin/python3
+>
+> sworld = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/popen-gw4/test_a_failed_append_binding_w0/home'))
+> monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1091ba3c0>
+>
+>     def test_a_failed_append_binding_write_ends_incomplete_with_exit_one(
+>         sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+>     ) -> None:
+>         # Criterion 57 (phase-6 F-20). Planted fault: a failure writing only the research-append binding is
+>         # suppressed, so the run publishes complete and exits 0 with no storage failure on record.
+>         def broken(*_args, **_kwargs):
+>             raise stage2_research_store.StoreWriteError("disk full")
+>     
+>         monkeypatch.setattr(stage2_research_store.Store, "set_append", broken)
+>         sworld.complete()
+>         assert sworld.run() == 1
+>         text = sworld.research.read_text(encoding="utf-8")
+> >       assert manifest_of(sworld)["status"].startswith("incomplete"), "the record must not read complete"
+>
+> tests/test_stage2_swarm.py:3918: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> world = SwarmWorld(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/pop...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4170/popen-gw4/test_a_failed_append_binding_w0/home'))
+>
+>     def manifest_of(world: SwarmWorld) -> dict:
+>         text = world.research.read_text(encoding="utf-8")
+>         blocks = re.findall(r"```research-swarm/v2 manifest\n(.*?)\n```", text, re.S)
+> >       return json.loads(blocks[-1])
+> E       IndexError: list index out of range
+>
+> tests/test_stage2_swarm.py:2198: IndexError
+> ----------------------------- Captured stderr call -----------------------------
+> failed: the research state store is unusable (disk full)
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete
+> FAILED tests/test_stage2_swarm.py::test_a_failed_append_binding_write_ends_incomplete_with_exit_one
+> 2 failed, 1025 passed in 209.35s (0:03:29)
+>
+> Standard error, last lines:
+> Exception ignored in atexit callback: <function cleanup_numbered_dir at 0x107d054e0>
+> Traceback (most recent call last):
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 372, in cleanup_numbered_dir
+>     try_cleanup(path, consider_lock_dead_if_created_before)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 341, in try_cleanup
+>     maybe_delete_a_numbered_dir(path)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 293, in maybe_delete_a_numbered_dir
+>     rm_rf(garbage)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 168, in rm_rf
+>     shutil.rmtree(str(path), onexc=onerror)
+>   File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/shutil.py", line 759, in rmtree
+>     _rmtree_safe_fd(stack, onexc)
+>   File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/shutil.py", line 674, in _rmtree_safe_fd
+>     topfd = os.open(name, os.O_RDONLY | os.O_NONBLOCK, dir_fd=dirfd)
+>             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/tests/stand_in_log_guard.py", line 134, in os_open
+>     check(path, "os.open")
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/tests/stand_in_log_guard.py", line 119, in check
+>     raise RawStandInLogAccess(message)
+> stand_in_log_guard.RawStandInLogAccess: raw os.open of the declared stand-in counter calls.jsonl.counts.json at /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm-resume/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:168: use atomic_test_log.append_counted
+> - the attempt's protected answer is saved at /Users/mikypiky/coding-harness/.git/worktrees/research-swarm-resume/stage2/attempts/research-swarm-resume/attempt-1-20261127T051007897872Z-4d2c4b31.md
+> ````
+
+Stage-2 call, 2026-11-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1290 files, 6094 commits, 12 rules.
+
+Runner restoration, 2026-11-27: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged

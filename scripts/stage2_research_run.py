@@ -474,6 +474,7 @@ class Run:
         self.history: dict | None = None  # the origin baseline's history: prompts, reuse, judge, publication
         self.live_history: dict | None = None  # this run's own freeze: validation of newly launched seats
         self.origin_head: str | None = None
+        self.origin_run_id: str | None = None
         self.origin_research: bytes | None = None
         self.origin_sources: dict[str, bytes] = {}
         self.sentence: str | None = None
@@ -593,6 +594,8 @@ class Run:
             if origin is None:
                 origin = (self.manifest["head"], self.research_bytes)
             self.origin_head, self.origin_research = origin
+            if previous is not None:
+                self.origin_run_id = previous.get("origin_run_id") or self.source.run_id
             self.origin_sources = {**self.sources, self.research_rel: self.origin_research}
             binding = stored_binding(
                 self.manifest,
@@ -604,6 +607,9 @@ class Run:
             )
             self.binding = self.with_origin(binding)
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
+            if self.origin_run_id is None:
+                self.origin_run_id = self.run_id
+            self.binding = self.with_origin(binding)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
         # A stored security refusal is named before any model call (F-37, criterion 56): run, slot, reason.
@@ -619,6 +625,7 @@ class Run:
         return {
             **binding,
             "origin": origin_record(self.origin_head, self.origin_research),
+            "origin_run_id": getattr(self, "origin_run_id", None),
             "history_commits": getattr(self, "history_commits", {}),
         }
 
@@ -1647,7 +1654,11 @@ class Run:
             reused = bool(record.get("reused_from"))
         origin = (self.origin_sources, self.history if topic == 6 else None)
         live = (self.sources, self.live_history if topic == 6 else None)
-        primary, alternate = live, origin
+        launched_in = record.get("launched_in") or getattr(getattr(self, "source", None), "run_id", None)
+        origin_run_id = getattr(self, "origin_run_id", None)
+        primary, alternate = (
+            (origin, live) if reused and origin_run_id and launched_in == origin_run_id else (live, origin)
+        )
         return validate_research_report(
             topic_report_payload(record["stdout"]),
             run_id=self.run_id,
