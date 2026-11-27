@@ -2248,6 +2248,173 @@ def test_a_resumed_run_is_a_new_run_within_its_slot_budget(sworld: SwarmWorld) -
     assert second["resume"]["source_run"] == first["run_id"] and second["resume"]["usable"] is True
 
 
+# A matching resume after a committed publication (research-swarm-resume, criteria 1, 2 and 5): the
+# finder map holds a locator into research.md, whose extent the appended publication grows, and every
+# run's publication is committed before the next run, so HEAD and the research.md tail both move.
+
+RESEARCH_REL = "plans/changes/demo/research.md"
+SEAT_A_KEY, SEAT_A_SLOT, SEAT_A_CALL = "repository:4:mimo-v2.6-pro", "topics-4-2", (4, "mimo-v2.6-pro")
+SEAT_B_KEY, SEAT_B_SLOT, SEAT_B_CALL = "repository:7:deepseek-v4.1-flash", "topics-7-1", (7, "deepseek-v4.1-flash")
+
+
+def research_locator_report() -> str:
+    """The fixture's locators plus one Markdown heading in research.md that runs to the end of the file."""
+    body = json.loads(locator_report())
+    body["rules"].append({"path": RESEARCH_REL, "reference": "Research", "reason": "the research so far"})
+    return json.dumps(body)
+
+
+@dataclass
+class ResumeChain:
+    """What three chained runs built and launched: per run its repository prompts, calls and record."""
+
+    codes: list[int]
+    prompts: list[dict[int, str]]
+    calls: list[list[dict]]
+    manifests: list[dict]
+    maps: list[dict]
+
+
+def three_run_chain(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, *, cite_publication: bool = False
+) -> ResumeChain:
+    """Run 1 fails seats A and B, run 2 resumes it and fails only B, run 3 resumes run 2.
+
+    The prompts are the ones the run itself builds (a spy around `repository_prompt`), so nothing
+    substitutes an equal prompt; the publication of runs 1 and 2 is committed before the next run,
+    and each run's own `updated:` restamp lands on the frozen file.
+    """
+    chain = ResumeChain([], [], [], [], [])
+    original = stage2_research_run.Run.repository_prompt
+
+    def spy(run, topic):
+        text = original(run, topic)
+        chain.prompts[-1][topic] = text
+        return text
+
+    monkeypatch.setattr(stage2_research_run.Run, "repository_prompt", spy)
+    failing = [{SEAT_A_KEY: [{"exit": 2}], SEAT_B_KEY: [{"exit": 2}]}, {SEAT_B_KEY: [{"exit": 2}]}, {}]
+    for number, faults in enumerate(failing):
+        if number == 1 and cite_publication:
+            report = json.loads(repository_report(4))
+            report["claims"][0]["evidence"] = [f"{RESEARCH_REL}::Run one evidence"]
+            faults[SEAT_A_KEY] = [{"stdout": json.dumps(report)}]
+        sworld.complete(finder={"stdout": research_locator_report()}, **faults)
+        (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
+        chain.prompts.append({})
+        chain.codes.append(sworld.run())
+        chain.calls.append(sworld.calls())
+        chain.manifests.append(manifest_of(sworld))
+        chain.maps.append(map_of(sworld.research.read_text(encoding="utf-8")))
+        if number < 2:
+            if number == 0 and cite_publication:
+                with sworld.research.open("a", encoding="utf-8") as output:
+                    output.write("\n## Run one evidence\nPublished evidence.\n")
+            commit_publication(sworld)
+    return chain
+
+
+def commit_publication(world: SwarmWorld) -> None:
+    """Commit the run's appended publication and restamp of research.md alone: HEAD moves, nothing else."""
+    subprocess.run(["git", "add", "--", RESEARCH_REL], cwd=world.root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+         "commit", "--quiet", "-m", "publish"],
+        cwd=world.root, check=True, capture_output=True,
+    )  # fmt: skip
+
+
+def test_a_stored_origin_round_trips_and_a_malformed_one_is_ignored() -> None:
+    # Planted fault: a tampered or malformed origin record is replayed, or a valid one does not round-trip.
+    head = "a" * 40
+    record = stage2_research_run.origin_record(head, b"# Research\n")
+    assert stage2_research_run.stored_origin({"origin": record}) == (head, b"# Research\n")
+    assert stage2_research_run.stored_origin({}) is None, "a pre-fix binding has no origin"
+    tampered = {**record, "research": {**record["research"], "sha256": "0" * 64}}
+    for bad in (tampered, {**record, "head": "HEAD"}, {"head": head}, {**record, "research": {"base64": "%"}}, "x"):
+        assert stage2_research_run.stored_origin({"origin": bad}) is None
+
+
+def data_section(prompt: str, title: str) -> object:
+    """The JSON value that follows one `# <title> (data)` heading of a prompt."""
+    marker = f"# {title} (data)\n\n"
+    assert marker in prompt, f"the prompt has no {title} section"
+    return json.JSONDecoder().raw_decode(prompt.split(marker, 1)[1])[0]
+
+
+def test_repository_prompts_stay_stable_across_published_resume(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 1. Planted fault: a resumed run rebuilds a repository-topic prompt from its moved HEAD
+    # or from the published, restamped research.md, so the prompt differs from the origin run's.
+    chain = three_run_chain(sworld, monkeypatch)
+    assert chain.codes == [1, 1, 0]
+    heads = [manifest["head"] for manifest in chain.manifests]
+    assert len(set(heads)) == 3, "each resumed run froze a HEAD moved by the committed publication"
+    assert all(manifest["resume"]["usable"] is True for manifest in chain.manifests[1:])
+    for number, prompts in enumerate(chain.prompts):
+        assert sorted(prompts) == list(range(1, 9)), f"run {number + 1} built every repository-topic prompt"
+        for topic in range(1, 9):
+            assert prompts[topic] == chain.prompts[0][topic], f"run {number + 1}: the topic {topic} prompt drifted"
+
+
+def test_repository_resume_reuses_all_successful_seats(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 2. Planted fault: a successful repository seat of run 1 or run 2 is launched again, or its
+    # stored result is rejected by validation against the drifted research.md or HEAD and not adopted.
+    chain = three_run_chain(sworld, monkeypatch)
+    assert chain.codes == [1, 1, 0]
+
+    def repository(number: int) -> list[tuple[int, str]]:
+        return sorted((call["topic"], call["model"]) for call in chain.calls[number] if call["kind"] == "repository")
+
+    assert len(repository(0)) == 24
+    assert repository(1) == sorted([SEAT_A_CALL, SEAT_B_CALL]), "run 2 launches only the two failed seats"
+    assert sorted(call["kind"] for call in chain.calls[1]) == ["repository", "repository"]
+    assert repository(2) == [SEAT_B_CALL], "run 3 launches only the seat that failed again"
+    assert sorted(call["kind"] for call in chain.calls[2]) == ["judge", "repository"], "run 3 reaches the judge"
+    first, second, _third = (manifest["run_id"] for manifest in chain.manifests)
+    third = chain.manifests[2]
+    assert third["status"] == "complete"
+    topics = {
+        slot["slot_id"]: slot
+        for slot in third["slots"]
+        if slot["stage"] == "topics" and isinstance(slot["topic"], int) and slot["topic"] <= 8
+    }
+    assert len(topics) == 24 and all(slot["outcome"] == "ok" for slot in topics.values())
+    reused = {slot_id for slot_id, slot in topics.items() if slot["reused_from"]}
+    assert reused == set(topics) - {SEAT_B_SLOT}, "every successful seat is adopted"
+    assert topics[SEAT_B_SLOT]["launched"] is True
+    assert topics[SEAT_A_SLOT]["reused_from"] == second and topics[SEAT_A_SLOT]["launched_in"] == second
+    carried = reused - {SEAT_A_SLOT}
+    assert all(topics[slot]["reused_from"] == second and topics[slot]["launched_in"] == first for slot in carried)
+
+
+def test_repository_prompts_preserve_mapped_excerpts_and_history(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 5. Planted fault: byte-identity is reached by dropping or blanking the resolved extent or
+    # excerpt hash or the topic-6 history, or the map and history follow the moved HEAD and grown file.
+    chain = three_run_chain(sworld, monkeypatch)
+    origin = chain.manifests[0]["head"]
+    first_map = data_section(chain.prompts[0][1], "Finder map")
+    research = [entry for entry in first_map["entries"] if entry["path"] == RESEARCH_REL]
+    assert len(research) == 1 and research[0]["status"] == "resolved"
+    extent = research[0]["extent"]
+    assert extent["start_line"] and extent["end_line"] >= extent["start_line"] and research[0]["excerpt_sha256"]
+    for number, prompts in enumerate(chain.prompts):
+        for topic in range(1, 9):
+            assert data_section(prompts[topic], "Finder map") == first_map, f"run {number + 1}, topic {topic}"
+        assert "# Mapped history (data)" not in prompts[1], "only topic 6 carries the mapped history"
+        history = data_section(prompts[6], "Mapped history")
+        assert isinstance(history, dict) and history["frozen_head"] == origin
+        assert history["paths"].get(RESEARCH_REL), "the mapped research.md keeps its origin history"
+        manifest = chain.manifests[number]
+        assert manifest["origin_head"] == origin, "the record names the replayed origin HEAD"
+        assert chain.maps[number] == chain.maps[0], "the published map is the replayed origin map"
+        assert chain.maps[number]["entries"] == first_map["entries"]
+    assert all(manifest["head"] != origin for manifest in chain.manifests[1:]), "head stays each run's own freeze"
+
+
 def test_only_finished_valid_results_are_reused_and_others_are_named(sworld: SwarmWorld) -> None:
     # Criterion 53. Planted fault: an invalid, timed-out or cancelled result is reused or left unnamed.
     sworld.complete(
@@ -4945,3 +5112,214 @@ def test_incompatible_schema_categories_stop_before_finders(sworld: SwarmWorld) 
     assert sworld.run() == 1
     assert not sworld.calls("finder")
     assert stage2_research_run.LOCATOR_SCHEMA in sworld.research.read_text(encoding="utf-8")
+
+
+def test_reused_report_accepts_live_publication_heading() -> None:
+    # A successful seat launched after publication must remain reusable on the next resume.
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_head = "origin"
+    run.manifest = {"head": "live"}
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Origin\nOld evidence.\n# Published\nNew evidence.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Published"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report)}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a valid live publication citation must remain reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_resumed_report_combines_origin_and_live_citations() -> None:
+    # One claim may cite an origin-only heading and a commit created by the publication.
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run2"
+    run.origin_head = "origin"
+    run.manifest = {"head": "live"}
+    run.origin_sources = {"research.md": b"# Origin only\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Current\nNew evidence.\n"}
+    commit = "a" * 40
+    run.history = {"commits": {}}
+    run.live_history = {"commits": {commit: {"hash": commit}}}
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = ["research.md::Origin only", commit]
+    try:
+        result = run.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=False)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"each citation is supported by an available baseline: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_three_run_resume_reuses_publication_citation(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    chain = three_run_chain(sworld, monkeypatch, cite_publication=True)
+    assert chain.codes == [1, 1, 0]
+    calls = [(call["topic"], call["model"]) for call in chain.calls[2] if call["kind"] == "repository"]
+    assert calls == [SEAT_B_CALL], "the successful seat citing run 1's publication must be reused"
+    slot = next(slot for slot in chain.manifests[2]["slots"] if slot["slot_id"] == SEAT_A_SLOT)
+    assert slot["reused_from"] == chain.manifests[1]["run_id"]
+
+
+def test_reused_heading_evidence_includes_live_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_sources = {"research.md": b"# Evidence\nOriginal.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nPublished finding.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report)}, reused=True)
+    assert "Published finding." in result["claims"][0]["resolved"][0]["excerpt"]
+
+
+def test_origin_launched_reused_heading_uses_origin_evidence() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.origin_sources = {"research.md": b"# Evidence\nOriginal.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nPublished finding.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    record = {"stdout": json.dumps(report), "launched_in": "run1"}
+    result = run.validate_topic({"topic": 4}, record, reused=True)
+    assert "Published finding." not in result["claims"][0]["resolved"][0]["excerpt"]
+
+
+def test_origin_report_cannot_gain_evidence_from_later_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Origin\nOld evidence.\n# Later\nNew evidence.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Later"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report), "launched_in": "run1"}, reused=True)
+    except stage2_research_run.ResearchReportError:
+        return
+    assert result["claims"][0]["evidence_status"] != "valid", "later evidence must not validate an origin report"
+
+
+def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    old = "a" * 40
+    origin = "b" * 40
+    first = "c" * 40
+    latest = "d" * 40
+    histories = {
+        origin: {"commits": {}},
+        first: {"commits": {old: {"hash": old, "subject": "publication"}}},
+        latest: {"commits": {}},
+    }
+    monkeypatch.setattr(stage2_research_run, "build_research_history", lambda _r, h, _p, **_k: histories[h])
+
+    def make_run(head, previous):
+        run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+        run.root = Path()
+        run.map = {"entries": [], "neighbours": []}
+        run.origin_head = origin
+        run.origin_research = b"origin"
+        run.manifest = {"head": head}
+        run.source = SimpleNamespace(usable=previous is not None, run={"binding": previous})
+        run.binding = {}
+        run.store = SimpleNamespace(set_append=lambda _id, binding: setattr(run, "binding", binding))
+        run.run_id = "run"
+        run.stage_history()
+        return run
+
+    run2 = make_run(first, None)
+    run3 = make_run(latest, run2.binding)
+    run3.origin_sources = run3.sources = {"research.md": b"# Evidence\ntext\n"}
+    run3.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = [old]
+    try:
+        result = run3.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a previously valid publication commit must remain reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_reused_seat_uses_launch_snapshot_not_later_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run1"
+    run.research_rel = "research.md"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nLater addition.\n# Later\nNew evidence.\n"}
+    launch = b"# Evidence\nOriginal.\n"
+    run.launch_research = {"run2": stage2_research_run.origin_record("a" * 40, launch)}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    second = dict(report["claims"][0])
+    second["evidence"] = ["research.md::Later"]
+    second["id"] = "C2"
+    report["claims"].append(second)
+    record = {"stdout": json.dumps(report), "launched_in": "run2"}
+    result = run.validate_topic({"topic": 4}, record, reused=True)
+    assert "Later addition." not in result["claims"][0]["resolved"][0]["excerpt"]
+    assert result["claims"][1]["evidence_status"] != "valid"
+
+
+def test_legacy_carried_seat_without_launch_snapshot_reuses_valid_result() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_run_id = "run2"
+    run.research_rel = "research.md"
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Live\nNew evidence.\n"}
+    run.launch_research = {}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Origin"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report), "launched_in": "run1"}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a legacy seat with valid origin evidence must be reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_new_topic_six_rejects_intermediate_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    old, origin, latest = "a" * 40, "b" * 40, "c" * 40
+    monkeypatch.setattr(stage2_research_run, "build_research_history", lambda *_args, **_kwargs: {"commits": {}})
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.root = Path()
+    run.map = {"entries": [], "neighbours": []}
+    run.origin_head = origin
+    run.origin_research = b"origin"
+    run.manifest = {"head": latest}
+    run.source = SimpleNamespace(usable=True, run={"binding": {"history_commits": {old: {"hash": old}}}})
+    run.binding = {}
+    run.store = SimpleNamespace(set_append=lambda *_args: None)
+    run.run_id = "run3"
+    run.stage_history()
+    run.origin_sources = run.sources = {"research.md": b"# Evidence\ntext\n"}
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = [old]
+    try:
+        result = run.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=False)
+    except stage2_research_run.ResearchReportError:
+        return
+    assert result["claims"][0]["evidence_status"] != "valid", "intermediate history must not validate a new seat"

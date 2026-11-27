@@ -1282,7 +1282,16 @@ in a store outside the repository (`stage2_research_store.py`). A later run of
 the same change resumes: a slot is reused only when its resume binding (the
 digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
 prompt hash match and its result was ok and validates; nothing else is reused,
-and the run gets its own run id, deadlines and receipt.
+and the run gets its own run id, deadlines and receipt. The stored run record
+also carries the origin baseline: the baseline HEAD and the frozen
+`research.md` bytes of the run that started the resume chain. A matching resume
+can run on a HEAD moved by an earlier run's committed publication. It replays
+that baseline for the finder map, the mapped history and the repository-topic
+prompts, so those prompts stay byte-identical. It also passes the baseline
+forward to the next run. Reused results validate against the baseline, and
+seats the resumed run launches validate against its own freeze or the baseline.
+The published manifest keeps its own `head` and `digest` and names the
+baseline as `origin_head`.
 
 **The handoff is checked (gate `research-handoff`).** The runner derives an
 obligation inventory from the reports (accepted `[DECISION]` questions, class
