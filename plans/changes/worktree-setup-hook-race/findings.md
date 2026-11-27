@@ -117,3 +117,119 @@ Stage-2 call, 2026-11-27: implement · attempt 1 · route stage-1 · endpoint cl
 > - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; make the change the plan names
 > - Runner cheap checks before post-run verification: the criterion ledger names tests that do not stand, and this attempt owes them: `tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget` (not yet written)
 > ```
+
+Stage-2 call, 2026-11-27: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1305 files, 6111 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/worktree-setup-hook-race/plan.md` +1 -1
+> - `tests/test_worktree_setup_hook.py` +117 -10
+>
+> Diagnostics:
+> ```text
+> - Runner format before post-run verification: ruff changed no file.
+> - Runner cheap checks before post-run verification: `.venv/bin/python3 -m pytest -q -n auto` exited 1
+> __ test_trust_check_does_not_consume_setup_budget[clock-ticks-on-every-read] ___
+> [gw5] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/bin/python3
+>
+> lane = Lane(main=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5...folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0'))
+> limit = '1', clock = {'STUB_DATE_STEP': '1'}
+>
+>     @pytest.mark.parametrize(
+>         ("limit", "clock"),
+>         [
+>             ("2", {"STUB_TRUST_ADVANCE": "5"}),
+>             ("10", {"STUB_TRUST_ADVANCE": "9"}),
+>             ("1", {"STUB_DATE_STEP": "1"}),
+>         ],
+>         ids=["trust-check-past-budget", "trust-check-limit-minus-one", "clock-ticks-on-every-read"],
+>     )
+>     def test_trust_check_does_not_consume_setup_budget(lane: Lane, limit: str, clock: dict[str, str]) -> None:
+>         """Criterion 1: the trust check leaves the setup budget whole, and step 1 starts with the full limit.
+>     
+>         A clock moved forward inside the trust check (past the budget, or by limit - 1) must shorten
+>         neither make venv nor, with make venv spending no time, bash tools/pi/install.sh. A clock that
+>         ticks one second on every read must not stop make venv either: step 1 takes the full limit
+>         without a second clock read after the deadline is set.
+>         """
+>         worktree = lane.quiet_worktree()
+>         proc = lane.new_worktree_hook(worktree, **_clock_env(lane, HARNESS_LANE_SETUP_TIMEOUT=limit, **clock))
+> >       assert "make venv not started" not in proc.stderr, proc.stderr
+> E       AssertionError: lane setup: start: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0/lane
+> E         LANE SETUP FAILED: make venv not started: the 1s limit (HARNESS_LANE_SETUP_TIMEOUT) was used up by the setup; log: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0/main/.git/worktrees/lane/lane-setup.log; retry: bash .beads/hooks/post-checkout --lane-setup
+> E         lane setup: failed (1 checks)
+> E         lane setup: log: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0/main/.git/worktrees/lane/lane-setup.log
+> E         
+> E       assert 'make venv not started' not in 'lane setup:...-setup.log\n'
+> E         
+> E         'make venv not started' is contained here:
+> E           P FAILED: make venv not started: the 1s limit (HARNESS_LANE_SETUP_TIMEOUT) was used up by the setup; log: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0/main/.git/worktrees/lane/lane-setup.log; retry: bash .beads/hooks/post-checkout --lane-setup
+> E         ?           +++++++++++++++++++++
+> E           lane setup: failed (1 checks)
+> E           lane setup: log: /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw5/test_trust_check_does_not_cons0/main/.git/worktrees/lane/lane-setup.log
+>
+> tests/test_worktree_setup_hook.py:656: AssertionError
+> _ test_trust_check_does_not_consume_setup_budget[trust-check-limit-minus-one] __
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/bin/python3
+>
+> lane = Lane(main=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw4...folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-4219/popen-gw4/test_trust_check_does_not_cons0'))
+> limit = '10', clock = {'STUB_TRUST_ADVANCE': '9'}
+>
+>     @pytest.mark.parametrize(
+>         ("limit", "clock"),
+>         [
+>             ("2", {"STUB_TRUST_ADVANCE": "5"}),
+>             ("10", {"STUB_TRUST_ADVANCE": "9"}),
+>             ("1", {"STUB_DATE_STEP": "1"}),
+>         ],
+>         ids=["trust-check-past-budget", "trust-check-limit-minus-one", "clock-ticks-on-every-read"],
+>     )
+>     def test_trust_check_does_not_consume_setup_budget(lane: Lane, limit: str, clock: dict[str, str]) -> None:
+>         """Criterion 1: the trust check leaves the setup budget whole, and step 1 starts with the full limit.
+>     
+>         A clock moved forward inside the trust check (past the budget, or by limit - 1) must shorten
+>         neither make venv nor, with make venv spending no time, bash tools/pi/install.sh. A clock that
+>         ticks one second on every read must not stop make venv either: step 1 takes the full limit
+>         without a second clock read after the deadline is set.
+>         """
+>         worktree = lane.quiet_worktree()
+>         proc = lane.new_worktree_hook(worktree, **_clock_env(lane, HARNESS_LANE_SETUP_TIMEOUT=limit, **clock))
+>         assert "make venv not started" not in proc.stderr, proc.stderr
+>         assert lane.record("make") == [f"{worktree}|venv"], proc.stderr
+> >       assert _alarms(lane, "make venv") == [limit], lane.record("perl")
+> E       AssertionError: ['1|make venv', '1|bash tools/pi/install.sh', '1|.venv/bin/python3 -c import yaml', '1|sh -c want=$1; [ -n "$want" ] |...failed"; exit 1; }; echo "tools/pi/pi --version printed $got; pinned $want"; [ "$got" = "$want" ] lane-setup-pi 1.2.3']
+> E       assert ['1'] == ['10']
+> E         
+> E         At index 0 diff: '1' != '10'
+> E         Use -v to get more diff
+>
+> tests/test_worktree_setup_hook.py:658: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget[trust-check-past-budget]
+> FAILED tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget[clock-ticks-on-every-read]
+> FAILED tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget[trust-check-limit-minus-one]
+> 3 failed, 3 passed in 8.01s
+>
+> Standard error, last lines:
+> Exception ignored in atexit callback: <function cleanup_numbered_dir at 0x1056a9260>
+> Traceback (most recent call last):
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 372, in cleanup_numbered_dir
+>     try_cleanup(path, consider_lock_dead_if_created_before)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 341, in try_cleanup
+>     maybe_delete_a_numbered_dir(path)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 293, in maybe_delete_a_numbered_dir
+>     rm_rf(garbage)
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py", line 168, in rm_rf
+>     shutil.rmtree(str(path), onexc=onerror)
+>   File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/shutil.py", line 759, in rmtree
+>     _rmtree_safe_fd(stack, onexc)
+>   File "/opt/homebrew/Cellar/python@3.12/3.12.15_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/shutil.py", line 674, in _rmtree_safe_fd
+>     topfd = os.open(name, os.O_RDONLY | os.O_NONBLOCK, dir_fd=dirfd)
+>             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/tests/stand_in_log_guard.py", line 134, in os_open
+>     check(path, "os.open")
+>   File "/Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/tests/stand_in_log_guard.py", line 119, in check
+>     raise RawStandInLogAccess(message)
+> stand_in_log_guard.RawStandInLogAccess: raw os.open of the declared stand-in counter calls.jsonl.counts.json at /Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:168: use atomic_test_log.append_counted
+> ```
