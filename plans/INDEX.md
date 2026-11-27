@@ -731,6 +731,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/phase6-guard-evidence/plan.md`](changes/phase6-guard-evidence/plan.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
 | [`changes/phase6-guard-evidence/research.md`](changes/phase6-guard-evidence/research.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
 | [`changes/phase6-guard-evidence/spec.md`](changes/phase6-guard-evidence/spec.md) | draft | none | 2026-11-27 | coding-harness-mwzv.6 |
+| [`changes/read-only-agents-no-shell/research.md`](changes/read-only-agents-no-shell/research.md) | draft | none | 2026-11-28 | coding-harness-5ane.22 |
 | [`changes/red-first-baseline/decisions.md`](changes/red-first-baseline/decisions.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/findings.md`](changes/red-first-baseline/findings.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/plan.md`](changes/red-first-baseline/plan.md) | draft | none | 2026-11-21 | coding-harness-7aso |
