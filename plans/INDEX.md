@@ -746,6 +746,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-seat-substitute/research.md`](changes/research-seat-substitute/research.md) | draft | none | 2026-11-27 | coding-harness-0ysc |
 | [`changes/research-swarm-resume/decisions.md`](changes/research-swarm-resume/decisions.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
 | [`changes/research-swarm-resume/findings.md`](changes/research-swarm-resume/findings.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
 | [`changes/research-swarm-resume/plan.md`](changes/research-swarm-resume/plan.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
