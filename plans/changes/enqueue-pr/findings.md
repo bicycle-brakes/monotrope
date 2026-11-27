@@ -773,3 +773,20 @@ Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-11-27: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-terra · reason first Codex post-run check failed · leak check clean over 1292 files, 6086 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 2 · route codex-repair — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6089 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:1105 | If a pull request is already queued but the checkout’s script differs from `origin/main` or the integrity fetch fails, the command exits 1 before checking queue state. It must report “already queued” and exit 0 before evaluating other conditions. [Criterion 15] | Codex | rejected — decisions.md S-33 explicitly orders the script-integrity check first before reading the pull request (Criterion 18 precedes Criterion 15 because a modified script cannot be trusted to inspect queue state) | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: the appended phase-6 verdict omits its reviewed-commit line — catches without switch: yes; the assertions check for the line and its commit independently of the switch.
+
+Reviewed commit: 83d4688c427276361bd31a397643d315e9755532
+
+Phase 6 verdict: codex 01a21b61-7578-7330-a15d-469f60f20712, 2026-11-27
+Reviewer session: codex 01a21b61-7578-7330-a15d-469f60f20712 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
