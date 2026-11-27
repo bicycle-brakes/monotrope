@@ -285,7 +285,7 @@ def test_undated_citations_outside_runner_envelopes_are_reported(
         assert _undatierte_zitate(zeile), zeile
     # Mutation through the tracked-file check: a real tracked file plus one planted undated citation
     # goes red at the planted line, while the file itself is clean.
-    echt = REPO_ROOT / "plans" / "changes" / "journal-citation-gate" / "spec.md"
+    echt = REPO_ROOT / "plans" / "changes" / "archive" / "2026-11-26-journal-citation-gate" / "spec.md"
     text = echt.read_text(encoding="utf-8")
     assert _hit_lines(echt, text) == []
     gepflanzt = text + "\nSee `docs/journal/handover/bootstrap.md`.\n"

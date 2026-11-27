@@ -10,14 +10,15 @@ checks whether Now is still true. This file becomes a kit template only after
 it stays true through two handovers; if a handover finds it stale twice, it is
 removed.
 
-Last checked: `2026-11-24`, `origin/main` at `a5b117f8`.
+Last checked: `2026-11-26`, `origin/main` at `b3391f6d`.
 
 ## Now
 
-1. **Calendar cliff and security boundaries.** Close or extend the 12 ramp
-   valves due `2026-11-30` (`coding-harness-5ane.1`) and re-read DeepSeek's
-   zero-retention terms (`coding-harness-hw7w`). Harden the concrete local and
-   runner trust boundaries surfaced by the `2026-11-24` audit
+1. **Security boundaries and ramp-valve enforcers.** With the `2026-11-30`
+   valves re-dated to `2026-12-31` (`coding-harness-5ane.1`, PR #463) and
+   DeepSeek's terms re-read (`coding-harness-hw7w`), deliver the six
+   enforcer tests (`coding-harness-5ane.20`–`5ane.25`) and harden the local
+   and runner trust boundaries surfaced by the `2026-11-24` audit
    (`coding-harness-5ane.2`–`5ane.6`, `coding-harness-s9r`).
 2. **State-first machine state, single kit manifest, and shared primitives.**
    Move mutable loop, lane, job, and attempt state onto locked JSON/JSONL with

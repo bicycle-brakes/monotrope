@@ -33,8 +33,11 @@ read-only: the reviewer merges nothing and pushes nothing.
 **Verdict first.** Write your verdict — the table and, under it, the line
 `Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop
 row. The loop rows are the findings of the loop's rounds — it runs until a
-round is clean: a free-model swarm, a Flash swarm, then the paid ladder, one
-round at a time (ADR 0021) — the reviewers of the
+round is clean or the ladder is consumed: a free-model swarm, a Flash swarm,
+then the paid ladder, one round at a time (ADR 0021). On a consumed ladder the
+loop names `next: repair <change>` while a taken row is unrepaired and
+`next: review <change>` once every taken row is repaired, so this phase can
+follow the last repair rather than a clean round — the reviewers of the
 loop before this phase (`docs/WORKFLOW.md` §4); they are held outside the
 repository until your verdict stands, so that they cannot shape it. Only then
 do the loop rows come in. On the Claude path you run

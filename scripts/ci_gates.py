@@ -269,6 +269,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "entry point of its own: the one address policy of every OpenCode Go launch (bead coding-harness-4tr4); "
         "tests/test_stage2_go_access.py runs it against synthetic address records"
     ),
+    "next_step.py": (
+        "Library of scripts/stage2.py, never an entry point of its own: the one validator against "
+        "scripts/next_step_schema.json and the one atomic writer of the `next.json` instruction beside the "
+        "loop record; tests/test_next_step.py runs it"
+    ),
     "time_records.py": (
         "Library — the one writer, parser and inserter of the fixed time records under `## Time used`; "
         "scripts/harness.py time-log and scripts/stage2.py persist through it and the run report reads "
