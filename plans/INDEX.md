@@ -690,6 +690,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/drift-lane-branches/plan.md`](changes/drift-lane-branches/plan.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/research.md`](changes/drift-lane-branches/research.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/spec.md`](changes/drift-lane-branches/spec.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/enqueue-pr/decisions.md`](changes/enqueue-pr/decisions.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/findings.md`](changes/enqueue-pr/findings.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/plan.md`](changes/enqueue-pr/plan.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/research.md`](changes/enqueue-pr/research.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/spec.md`](changes/enqueue-pr/spec.md) | draft | none | 2026-11-27 | coding-harness-va1l |
 | [`changes/findings-per-model/decisions.md`](changes/findings-per-model/decisions.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/findings.md`](changes/findings-per-model/findings.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/plan.md`](changes/findings-per-model/plan.md) | draft | none | 2026-11-18 | coding-harness-qut1 |

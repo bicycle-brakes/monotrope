@@ -45,6 +45,6 @@ Phase <n, name> of seven · stage <1> of three · touches: <component, path>
 </details>
 
 <!-- Decision PR: title "decide(<scope>): <decision>", label "decision".
-Agent merge only on the maintainer's explicit request. Restate first, in chat and as a PR comment:
-"Merging #<n> at <sha> on your request. It decides: <decision line>. It confirms: <bullets>. CI: <state>."
-Then: gh pr merge <n> --merge --match-head-commit <sha> -->
+Queued only on the maintainer's explicit request. Restate first, in chat and as a PR comment:
+"Queuing #<n> at <sha> on your request. It decides: <decision line>. It confirms: <bullets>. CI: <state>."
+Then: python3 scripts/enqueue_pr.py <n> --maintainer -->

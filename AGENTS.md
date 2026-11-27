@@ -75,10 +75,10 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 8. **A decision takes effect when the maintainer merges its pull request** (ADR 0008). A pull request touching a file
    `provenance.yaml` reserves for `human-decided` is a decision PR: title `decide(<scope>): …`, label `decision`, body
    from the decision template (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as the
-   maintainer stated it (`python3 scripts/harness.py decide adr … --stated-in …`), never one of your own. Merge only
-   when the maintainer asks in the conversation, after restating the decision block (`prompts/07-commit.md`, "The
-   merge"); `.claude/settings.json` asks before every merge command it recognises — a brake, not a lock: another
-   spelling passes (`docs/WORKFLOW.md`).
+   maintainer stated it (`python3 scripts/harness.py decide adr … --stated-in …`), never one of your own. Pull
+   requests enter the merge queue only through `scripts/enqueue_pr.py`; a decision PR only with `--maintainer` when the
+   maintainer asks, after restating the decision block (`prompts/07-commit.md`, "The merge"); ask rules stop every
+   other merge command — a brake, not a lock (`docs/WORKFLOW.md`).
 9. **One entry point and one writer per action — no side routes.** Every recurring action (starting a model, writing
    an artifact header, running a check, merging) has one entry point and one writer, carried by code at one choke
    point. Variants the maintainer decided (fallback models, routing by class, the text-only verify skip) are declared

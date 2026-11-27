@@ -10123,6 +10123,44 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
 
+def test_phase_six_records_reviewed_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 13 of enqueue-pr. Planted fault: a new verdict block omits the reviewed commit, or names
+    another commit than the head the review measured (a re-check after a later commit names the old one)."""
+
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        real_append = stage2.append
+
+        def omit_reviewed_commit(path: Path, text: str) -> None:
+            text = re.sub(r"^Reviewed commit: [0-9a-f]{40}\n\n", "", text, flags=re.M)
+            real_append(path, text)
+
+        monkeypatch.setattr(stage2, "append", omit_reviewed_commit)
+
+    def last_block_commits() -> list[str]:
+        text = world.text()
+        block = text[[m.start() for m in re.finditer(r"^## Phase 6", text, re.M)][-1] :]
+        assert stage2.REVIEWED_COMMIT_KEY in block, "reviewed commit line is missing"
+        assert "Phase 6 verdict: codex" in block, "phase 6 verdict line is missing"
+        assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
+        return re.findall(r"^Reviewed commit: ([0-9a-f]{40})$", block, re.M)
+
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    first = git(world.root, "rev-parse", "HEAD")
+    assert world.run("review") == 0
+    assert last_block_commits() == [first]
+
+    commit_review_findings(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a later change")
+    second = git(world.root, "rev-parse", "HEAD")
+    assert second != first
+    world.script(codex=[codex_ok("T6", "No finding.")])
+    assert world.run("review") == 0
+    assert last_block_commits() == [second], "the re-check recorded another commit than the one it reviewed"
+
+
 def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World) -> None:
     # Criterion 18. Planted fault: a re-check resumes the repair, an earlier verdict or the historical 2a thread,
     # or its verdict call gets write access.
@@ -35752,6 +35790,28 @@ def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.delenv(jobs.RECORD_ENV)
     stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
     assert len(jobs.read_record(path)["groups"]) == 1
+
+
+@pytest.mark.parametrize("change_kind", ["dirty", "head"])
+def test_phase_six_refuses_checkout_changed_during_review(
+    world: World, monkeypatch: pytest.MonkeyPatch, change_kind: str
+) -> None:
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    original = stage2.run_codex
+
+    def changing_reviewer(*args, **kwargs):
+        answer = original(*args, **kwargs)
+        (world.root / "src" / "app.py").write_text("changed during review\n", encoding="utf-8")
+        if change_kind == "head":
+            git(world.root, "add", "src/app.py")
+            git(world.root, "commit", "--quiet", "-m", "change during review")
+        return answer
+
+    monkeypatch.setattr(stage2, "run_codex", changing_reviewer)
+    assert world.run("review") != 0
+    assert "Reviewed commit:" not in world.text()
+    assert "Phase 6 verdict:" not in world.text()
 
 
 def test_released_earlier_unmarked_fixed_row_stops_next_step(world: World, capsys: pytest.CaptureFixture[str]) -> None:
