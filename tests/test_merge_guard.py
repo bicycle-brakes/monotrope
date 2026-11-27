@@ -164,6 +164,45 @@ def test_direct_merge_actions_are_guarded() -> None:
             )
 
 
+class EnqueueNotYetAllowed(AssertionError):
+    """The day settings must allow the guarded admission command."""
+
+
+# The guarded admission command as an agent's Bash call, typed here and never read from the script.
+ENQUEUE_DEFAULT = "Bash(python3 scripts/enqueue_pr.py 54)"
+ENQUEUE_MAINTAINER = "Bash(python3 scripts/enqueue_pr.py 54 --maintainer)"
+
+
+def test_enqueue_permission_preserves_merge_controls() -> None:
+    """Criterion 19 of enqueue-pr. Planted fault: the guarded command is not allowed, an allow rule for it lets a
+    direct merge through by day or at night, or its maintainer mode runs without approval by day or at all at
+    night (bead coding-harness-r7zc keeps that mode attended)."""
+    day = _settings()
+    permissions = day["permissions"]
+    allow, ask, deny = (permissions.get(kind) or [] for kind in ("allow", "ask", "deny"))
+    night_denies = _night_denies()
+    assert mg.problems(day) == [], "a day allow or deny rule covers a merge sample"
+    for behavior, calls in MERGE_ACTIONS.items():
+        for call in calls:
+            assert not [rule for rule in allow if mg.covers(rule, call)], f"allowed: {behavior} {call!r}"
+            assert any(mg.covers(rule, call) for rule in ask), f"no day ask: {behavior} {call!r}"
+            assert any(mg.covers(rule, call) for rule in night_denies), f"no night deny: {behavior} {call!r}"
+
+    if not any(mg.covers(rule, ENQUEUE_DEFAULT) for rule in allow):
+        raise EnqueueNotYetAllowed(f"no allow rule covers {ENQUEUE_DEFAULT!r}")
+    blocked = [rule for rule in [*ask, *deny, *night_denies] if mg.covers(rule, ENQUEUE_DEFAULT)]
+    assert not blocked, f"the guarded command is still stopped by {blocked}"
+    assert any(mg.covers(rule, ENQUEUE_MAINTAINER) for rule in ask), "maintainer mode runs without approval by day"
+    assert any(mg.covers(rule, ENQUEUE_MAINTAINER) for rule in night_denies), "maintainer mode is not denied at night"
+    venv_maintainer = "Bash(.venv/bin/python scripts/enqueue_pr.py 54 --maintainer)"
+    assert any(mg.covers(rule, venv_maintainer) for rule in ask), "venv maintainer mode runs without approval by day"
+    assert any(mg.covers(rule, venv_maintainer) for rule in night_denies), "venv maintainer mode is not denied at night"
+    import enqueue_pr as ep
+
+    with pytest.raises(ep.UsageError):
+        ep.parse_args(["--maintainer", "54"])
+
+
 def test_merge_field_reads_do_not_trigger_the_brake() -> None:
     """Criterion 4: a read naming merge fields prompts nowhere - not through a day ask, not through a night deny."""
     day = _settings()

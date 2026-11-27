@@ -383,10 +383,21 @@ def spec_review_answer_format(answer_format: str) -> str:
 SPEC_REVIEW_ANSWER_FORMAT = spec_review_answer_format(ANSWER_FORMAT)
 # One evidence line's whole form. A line that merely begins `Guard evidence:` is not
 # evidence; phase 6 explicitly refuses malformed evidence even beside findings.
+# The test is a node ID, optionally parametrized (`[<id>]`, never empty), written bare, wholly
+# in paired backticks, or with only its file path in backticks; a suffix after a backticked node
+# ID is refused. Only the verdict word is case-insensitive. After it a separator from
+# `[,;:.!—–-]` (spaces allowed before a dash) is followed by mandatory whitespace and text;
+# `yes` may also stand bare or end in `.` or `!`, and `no` needs a reason with a word character
+# (spec phase6-guard-evidence, criteria 1, 2 and 4).
+_GUARD_PATH = r"tests/[^\s:`]+\.py"
+_GUARD_NAME = r"test_\w+(?:\[[^\]]+\])?"
+_GUARD_SEPARATOR = r"(?:[,;:.!]|\s*[—–-])?\s+"
 GUARD_EVIDENCE_LINE = re.compile(
-    r"^Guard evidence: (?P<test>tests/[^\s:]+\.py::test_\w+)"
-    r" — fault: (?P<fault>\S.+?)"
-    r" — catches without switch: (?P<catches>yes(?:[,;:]?\s+\S.*)?|no[,;:]?\s+\S.*)$"
+    rf"^Guard evidence: (?P<test>`{_GUARD_PATH}::{_GUARD_NAME}`|`{_GUARD_PATH}`::{_GUARD_NAME}"
+    rf"|{_GUARD_PATH}::{_GUARD_NAME})"
+    r" — fault: (?P<fault>\S.*?)"
+    rf" — catches without switch: (?P<catches>(?i:yes)(?:[.!]|{_GUARD_SEPARATOR}\S.*)?"
+    rf"|(?i:no){_GUARD_SEPARATOR}(?=.*\w)\S.*)$"
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 RAISING_FAULT_SENTENCE = (
@@ -544,6 +555,8 @@ VERDICT_LINE = re.compile(
     r"^Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M
 )
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
+# The runner's own line in each new phase-6 block: the full id of the commit that block reviewed.
+REVIEWED_COMMIT_KEY = "Reviewed commit: "
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 CUT_ROUNDS_LINE = re.compile(r"^Cut rounds: (\d+(?:, \d+)*)\s*$", re.M)
@@ -4992,8 +5005,36 @@ def review_audit_only(before: bytes, after: bytes) -> bool:
     return stamped == clean_after
 
 
-def require_fresh_full_verification(root: Path, change: str) -> None:
+def review_tree_standing(
+    root: Path, change: str, env: dict[str, str] | None = None
+) -> tuple[str, list[str], tuple[bytes, bytes] | None]:
+    head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
+    dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
+    audit = None
+    name = f"plans/changes/{change}/findings.md"
+    path = root / name
+    entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
+    if (
+        name in dirty
+        and entries.startswith("100644 ")
+        and path.is_file()
+        and not path.is_symlink()
+        and not path.stat().st_mode & 0o111
+    ):
+        committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
+        indexed = _git_bytes(root, "show", f":{name}", env=env)
+        content = path.read_bytes()
+        if all(review_audit_only(committed, body) for body in (indexed, content)):
+            dirty.remove(name)
+            audit = (indexed, content)
+    return head, dirty, audit
+
+
+def require_fresh_full_verification(root: Path, change: str) -> str:
     """Phase 6's boundary: a fresh green full `make verify` of the current head, before any reviewer call.
+
+    Returns the full commit id of the head that was checked: the commit the reviewer reads, which the
+    verdict block records as its `Reviewed commit:` line (plans/changes/enqueue-pr, criterion 13).
 
     A repair's targeted check never stands for it (bead coding-harness-gxwg). The tree must be the
     committed head, except runner call audit lines and their current-date header stamp in
@@ -5015,24 +5056,8 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         root,
     )
 
-    def standing() -> tuple[str, list[str], tuple[bytes, bytes] | None]:
-        head = _git_output(root, "rev-parse", "HEAD", env=env).strip()
-        dirty = sorted(path.as_posix() for path in changed_paths(root, env=env))
-        audit = None
-        name = f"plans/changes/{change}/findings.md"
-        path = root / name
-        if name in dirty and path.is_file() and not path.is_symlink() and not path.stat().st_mode & 0o111:
-            committed = _git_bytes(root, "show", f"{head}:{name}", env=env)
-            indexed = _git_bytes(root, "show", f":{name}", env=env)
-            content = path.read_bytes()
-            entries = _git_output(root, "ls-files", "--stage", "--", name, env=env)
-            if entries.startswith("100644 ") and all(review_audit_only(committed, body) for body in (indexed, content)):
-                dirty.remove(name)
-                audit = (indexed, content)
-        return head, dirty, audit
-
     try:
-        head, dirty, audit = standing()
+        head, dirty, audit = review_tree_standing(root, change, env)
     except (Refused, OSError) as error:
         raise Refused(f"the current head could not be read for the full check before phase 6 ({error})") from error
     if dirty:
@@ -5043,7 +5068,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
         )
     problems = full_verify(root, env, None, change)
     try:
-        after = standing()
+        after = review_tree_standing(root, change, env)
     except (Refused, OSError) as error:
         raise Refused(f"the head could not be read after the full check before phase 6 ({error})") from error
     if after != (head, dirty, audit):
@@ -5056,6 +5081,7 @@ def require_fresh_full_verification(root: Path, change: str) -> None:
             "the full `make verify` before phase 6 did not pass; no reviewer was called:\n" + "\n".join(problems)
         )
     print(f"review: full `make verify` green on {head[:12]} before the reviewer starts")
+    return head
 
 
 def review(root: Path, change: str) -> None:
@@ -5090,7 +5116,7 @@ def review(root: Path, change: str) -> None:
         "\n\n".join(["Write only your verdict now.", PHASE6_GUARD_INSTRUCTION]),
         answer_format=PHASE6_ANSWER_FORMAT,
     )
-    require_fresh_full_verification(root, change)
+    reviewed = require_fresh_full_verification(root, change)
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
@@ -5110,11 +5136,22 @@ def review(root: Path, change: str) -> None:
     replaced_thread: str | None = None
     if german_verdict(rows):
         answer, rows, thread, replaced_thread = language_replacement(ctx, answer, rows, thread, notices)
+    try:
+        current_head, dirty, _ = review_tree_standing(root, change)
+        untracked = set(_git_output(root, "ls-files", "--others", "--exclude-standard", "-z").split("\0"))
+        dirty = [name for name in dirty if name not in untracked]
+    except (Refused, OSError) as error:
+        raise CallFailed(f"the checkout could not be read after the reviewer call ({error})") from error
+    if current_head != reviewed or dirty:
+        raise CallFailed("the head or working tree changed during phase 6 review; no verdict was recorded")
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
             answer_block(rows, answer, "Codex"),
             *notices,
+            # The commit this verdict reviewed, the head the fresh full check measured; the
+            # admission command (`scripts/enqueue_pr.py`) reads it back (enqueue-pr, criterion 13).
+            f"{REVIEWED_COMMIT_KEY}{reviewed}",
             f"Phase 6 verdict: codex {thread}, {today()}",
         ]
     )

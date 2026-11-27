@@ -10123,6 +10123,44 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
 
+def test_phase_six_records_reviewed_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 13 of enqueue-pr. Planted fault: a new verdict block omits the reviewed commit, or names
+    another commit than the head the review measured (a re-check after a later commit names the old one)."""
+
+    if os.environ.get("STAGE2_PLANT_FAULT") == "1":
+        real_append = stage2.append
+
+        def omit_reviewed_commit(path: Path, text: str) -> None:
+            text = re.sub(r"^Reviewed commit: [0-9a-f]{40}\n\n", "", text, flags=re.M)
+            real_append(path, text)
+
+        monkeypatch.setattr(stage2, "append", omit_reviewed_commit)
+
+    def last_block_commits() -> list[str]:
+        text = world.text()
+        block = text[[m.start() for m in re.finditer(r"^## Phase 6", text, re.M)][-1] :]
+        assert stage2.REVIEWED_COMMIT_KEY in block, "reviewed commit line is missing"
+        assert "Phase 6 verdict: codex" in block, "phase 6 verdict line is missing"
+        assert block.index(stage2.REVIEWED_COMMIT_KEY) < block.index("Phase 6 verdict: codex")
+        return re.findall(r"^Reviewed commit: ([0-9a-f]{40})$", block, re.M)
+
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    first = git(world.root, "rev-parse", "HEAD")
+    assert world.run("review") == 0
+    assert last_block_commits() == [first]
+
+    commit_review_findings(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a later change")
+    second = git(world.root, "rev-parse", "HEAD")
+    assert second != first
+    world.script(codex=[codex_ok("T6", "No finding.")])
+    assert world.run("review") == 0
+    assert last_block_commits() == [second], "the re-check recorded another commit than the one it reviewed"
+
+
 def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World) -> None:
     # Criterion 18. Planted fault: a re-check resumes the repair, an earlier verdict or the historical 2a thread,
     # or its verdict call gets write access.
@@ -23278,6 +23316,222 @@ def test_phase6_guard_instructions_require_a_real_fault_and_block_empty_guards()
     assert stage2.split_guard_evidence(bare_no)[0] == [], "a bare no without its reason became evidence"
 
 
+def phase6_guard_line(
+    verdict: str, test: str = "tests/test_fix.py::test_fix", fault: str = "value 2 becomes 3 in the fixed branch"
+) -> str:
+    """One guard-evidence line in the phase-6 form, with a multi-character fault by default."""
+    return f"Guard evidence: {test} — fault: {fault} — catches without switch: {verdict}"
+
+
+# The three phase-6 answers Codex gave on 2026-11-25 that were rejected only because their
+# guard evidence ended in `yes.` (spec phase6-guard-evidence, Definition of Done), verbatim.
+PHASE6_REJECTED_YES_JOBS = (
+    "| F-1 | MAJOR | SPEC | base | scripts/jobs.py:495–505 | If `tmux new-window` creates the window but its "
+    "response times out after the wrapper has published a running record, `start` returns 1 while `_fail` leaves "
+    "the record running. The command can continue even though the caller was told it failed to start; the record "
+    "must instead be in `failed to start` state. [Criterion 25] |\n"
+    "| F-2 | MAJOR | SPEC | base | scripts/jobs.py:547–570 | A short-lived command can exit before "
+    "`process_start(child.pid)` reads its identity. The wrapper then publishes a record with a command PID but a "
+    "null start time, although every recorded PID must have its process start time. [Criterion 4] |\n"
+    "\n"
+    "Guard evidence: tests/test_jobs.py::test_detached_verify_waits_for_slots_and_memory — fault: the launcher "
+    "passes the caller’s held verification admission to the detached job, allowing it to bypass occupied slots — "
+    "catches without switch: yes."
+)
+PHASE6_REJECTED_YES_HOOK = (
+    "| P6-5 | MAJOR | SPEC | base | .beads/hooks/post-checkout, `_ls_step` | Without Perl, the watchdog sends "
+    "signals only to the immediate setup process. If `make venv` starts a child such as pip and then times out, "
+    "the child can keep running and modifying the worktree after the hook reports failure and Git returns. The "
+    "timeout must stop the setup step, including its running children. [Criteria 10, 11] |\n"
+    "\n"
+    "Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: the lane "
+    "setup block’s opening marker is replaced, so the required setup block cannot be located before the Beads "
+    "block — catches without switch: yes.\n"
+    "\n"
+    "Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: text "
+    "inside the Beads-managed block is changed relative to `origin/main` — catches without switch: yes."
+)
+PHASE6_REJECTED_YES_HOOK_AGAIN = (
+    "| P6-1 | MAJOR | SPEC | base | tests/test_worktree_setup_hook.py | No test removes `origin/main` before a "
+    "new-worktree checkout. A regression that runs setup when the trusted reference is unknown would pass the "
+    "existing tests, even though setup must be skipped in that case. [Criterion 1] |\n"
+    "| P6-2 | MINOR | SPEC | base | tests/test_worktree_setup_hook.py | No test creates a worktree at an older "
+    "commit that is an ancestor of `origin/main`. A regression that trusts only the current tip would pass the "
+    "existing tests, even though setup must run for an ancestor. [Criterion 1] |\n"
+    "\n"
+    "Guard evidence: tests/test_worktree_setup_hook.py::test_lane_setup_precedes_managed_block — fault: removes the "
+    "setup section’s opening marker, preventing the test from establishing its position — catches without switch: "
+    "yes.\n"
+    "\n"
+    "Guard evidence: tests/test_worktree_setup_hook.py::test_managed_beads_block_matches_origin_main — fault: "
+    "changes text inside the protected Beads-managed block — catches without switch: yes."
+)
+PHASE6_REJECTED_YES_ANSWERS = (PHASE6_REJECTED_YES_JOBS, PHASE6_REJECTED_YES_HOOK, PHASE6_REJECTED_YES_HOOK_AGAIN)
+
+
+def assert_guard_line_accepted(line: str) -> None:
+    """The line is evidence on its own and beside both verdict forms, which stay valid."""
+    assert stage2.split_guard_evidence(line)[0] == [line], line
+    for verdict in (rows(1), "No finding."):
+        answer = f"{verdict}\n\n{line}\n"
+        assert stage2.split_guard_evidence(answer)[0] == [line], (verdict, line)
+        assert stage2.phase6_rows(answer) is not None, (verdict, line)
+
+
+def assert_guard_line_refused(line: str) -> None:
+    """The line is no evidence, and it makes an answer beside either verdict form malformed."""
+    assert stage2.split_guard_evidence(line)[0] == [], line
+    for verdict in (rows(1), "No finding."):
+        assert stage2.phase6_rows(f"{verdict}\n\n{line}\n") is None, (verdict, line)
+
+
+def test_phase6_guard_evidence_accepts_sentence_punctuation() -> None:
+    """Spec phase6-guard-evidence, criteria 1 and 6. Planted fault: a punctuated or capitalised
+    verdict, or a form accepted before, makes a valid phase-6 answer malformed."""
+    verdicts = (
+        # Criterion 1: trailing punctuation, separator punctuation and case.
+        "yes.",
+        "yes!",
+        "Yes.",
+        "YES",
+        "yes. the assertion fails on the real fault",
+        "yes! the assertion fails on the real fault",
+        "yes — the assertion fails on the real fault",
+        "yes— the assertion fails on the real fault",
+        "yes – the assertion fails on the real fault",
+        "yes - the assertion fails on the real fault",
+        "no. it only fails under the switch",
+        "no! it only fails under the switch",
+        "no — it only fails under the switch",
+        "no— it only fails under the switch",
+        "no – it only fails under the switch",
+        "no - it only fails under the switch",
+        "No, it only fails under the switch",
+        "NO; it only fails under the switch",
+        # Criterion 6: the forms accepted before this change.
+        "yes",
+        "yes the assertion fails on the real fault",
+        "yes, the child assertion rejects it",
+        "yes; the child assertion rejects it",
+        "yes: confirmed",
+        "no it only fails under the switch",
+        "no, it only fails under the switch",
+        "no; it only fails under the switch",
+        "no: it only fails under the switch",
+    )
+    for verdict in verdicts:
+        assert_guard_line_accepted(phase6_guard_line(verdict))
+    for answer in PHASE6_REJECTED_YES_ANSWERS:
+        evidence, rest = stage2.split_guard_evidence(answer)
+        assert evidence and all(line.endswith("catches without switch: yes.") for line in evidence), answer
+        assert "Guard evidence:" not in rest, "a real `yes.` line stayed in the verdict text"
+        assert stage2.phase6_rows(answer), "a real 2026-11-25 answer ending in `yes.` was rejected"
+
+
+def test_phase6_guard_evidence_accepts_test_reference_forms() -> None:
+    """Spec phase6-guard-evidence, criterion 2. Planted fault: a backticked or parametrized test
+    reference makes a valid answer malformed, or an empty, unpaired or split reference passes."""
+    accepted = (
+        "`tests/test_fix.py::test_fix`",
+        "`tests/test_fix.py::test_fix[case-1]`",
+        "`tests/test_fix.py`::test_fix",
+        "`tests/test_fix.py`::test_fix[case-1]",
+        "tests/test_fix.py::test_fix[case-1]",
+        "tests/test_fix.py::test_fix[a b]",
+        "tests/test_fix.py::test_fix[1.5-x/y]",
+        "tests/sub/test_fix.py::test_fix",
+    )
+    for test in accepted:
+        for verdict in ("yes.", "no — it only fails under the switch", "yes"):
+            assert_guard_line_accepted(phase6_guard_line(verdict, test=test))
+    refused = (
+        "tests/test_fix.py::test_fix[]",
+        "`tests/test_fix.py::test_fix[]`",
+        "`tests/test_fix.py::test_fix",
+        "tests/test_fix.py::test_fix`",
+        "`tests/test_fix.py`::test_fix`",
+        "`tests/test_fix.py::test_fix`[case]",
+        "`tests/test_fix.py::test_fix`[case-1]",
+    )
+    for test in refused:
+        for verdict in ("yes.", "no — it only fails under the switch"):
+            assert_guard_line_refused(phase6_guard_line(verdict, test=test))
+
+
+def test_phase6_guard_evidence_records_new_forms(world: World) -> None:
+    """Spec phase6-guard-evidence, criterion 3. Planted fault: a valid answer with a new evidence
+    form is rejected, or the recorded block loses the evidence or the verdict."""
+    beside_rows = phase6_guard_line("yes. it fails", test="`tests/test_fix.py::test_fix`")
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", f"{rows(1)}\n\n{beside_rows}"), codex_ok("T1", "X1: agree")])
+    commit_review_findings(world)
+    assert world.run("review") == 0, "a valid answer with `yes.` evidence beside a finding was rejected"
+    text = world.text()
+    assert beside_rows in text, "the evidence beside a finding was lost"
+    assert "| X1 |" in text, "a finding row beside the evidence was lost"
+    assert text.index(beside_rows) < text.index("Phase 6 verdict: codex T1")
+
+    world.findings.unlink()
+    (world.bin / "calls.jsonl").unlink()
+    beside_none = phase6_guard_line("no — only under the switch", test="tests/test_fix.py::test_fix[case-1]")
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T2", f"No finding.\n{beside_none}")])
+    commit_review_findings(world)
+    assert world.run("review") == 0, "a valid `No finding.` answer with `no —` evidence was rejected"
+    text = world.text()
+    assert beside_none in text and "No finding." in text
+    assert "Phase 6 verdict: codex T2" in text
+
+
+def test_phase6_guard_evidence_rejects_invalid_forms(world: World) -> None:
+    """Spec phase6-guard-evidence, criterion 4. Planted fault: a malformed evidence line hides beside
+    a valid verdict, wrong-case labels pass, or a one-character fault fails the fault check."""
+    fault_free = (
+        "Guard evidence: tests/test_fix.py::test_fix — fault:  — catches without switch: yes",
+        "Guard evidence: tests/test_fix.py::test_fix — fault: — catches without switch: yes.",
+        "Guard evidence: ...",
+        "Guard evidence: tests/test_fix.py::test_fix — FAULT: value 2 becomes 3 — catches without switch: yes",
+        "Guard evidence: tests/test_fix.py::test_fix — fault: value 2 becomes 3 — CATCHES WITHOUT SWITCH: yes",
+    )
+    for line in fault_free:
+        assert_guard_line_refused(line)
+    verdicts = (
+        "maybe",
+        "yes-ish",
+        "no-op",
+        "yes—text",
+        "yes?",
+        "yes…",
+        "no",
+        "No",
+        "no.",
+        "no!",
+        "no —",
+        "no -",
+        "no .",
+        "no – —",
+        "no, ...",
+    )
+    for verdict in verdicts:
+        assert_guard_line_refused(phase6_guard_line(verdict))
+        # A one-character fault is not empty: the verdict alone refuses these lines.
+        assert_guard_line_refused(phase6_guard_line(verdict, fault="x"))
+    assert_guard_line_accepted(phase6_guard_line("yes.", fault="x"))
+
+    wrong_prefix = phase6_guard_line("yes.").replace("Guard evidence:", "guard evidence:")
+    assert stage2.GUARD_EVIDENCE_LINE.fullmatch(wrong_prefix) is None, "a wrong-case prefix matched"
+    assert stage2.phase6_rows(f"No finding.\n{wrong_prefix}") is None, "a wrong-case prefix passed"
+
+    reasonless = phase6_guard_line("no.")
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", f"No finding.\n{reasonless}")])
+    commit_review_findings(world)
+    assert world.run("review") != 0, "a reasonless `no.` passed beside `No finding.`"
+    text = world.text()
+    assert "Phase 6 verdict" not in text
+    assert reasonless in text, "the rejected answer lost its evidence"
+
+
 def test_guard_doctrine_keeps_repeatable_repair_only_proofs() -> None:
     """Criterion 12. Planted fault: the doctrine drops the guard form, its authorisation, or a proof leg."""
     assert "`<ID>: fixed — guard test — tests/<path>::<function>`" in stage2.REPAIR_ANSWER
@@ -35536,6 +35790,28 @@ def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.delenv(jobs.RECORD_ENV)
     stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
     assert len(jobs.read_record(path)["groups"]) == 1
+
+
+@pytest.mark.parametrize("change_kind", ["dirty", "head"])
+def test_phase_six_refuses_checkout_changed_during_review(
+    world: World, monkeypatch: pytest.MonkeyPatch, change_kind: str
+) -> None:
+    world.script(codex=[codex_ok("T5", "No finding.")])
+    commit_review_findings(world)
+    original = stage2.run_codex
+
+    def changing_reviewer(*args, **kwargs):
+        answer = original(*args, **kwargs)
+        (world.root / "src" / "app.py").write_text("changed during review\n", encoding="utf-8")
+        if change_kind == "head":
+            git(world.root, "add", "src/app.py")
+            git(world.root, "commit", "--quiet", "-m", "change during review")
+        return answer
+
+    monkeypatch.setattr(stage2, "run_codex", changing_reviewer)
+    assert world.run("review") != 0
+    assert "Reviewed commit:" not in world.text()
+    assert "Phase 6 verdict:" not in world.text()
 
 
 def test_released_earlier_unmarked_fixed_row_stops_next_step(world: World, capsys: pytest.CaptureFixture[str]) -> None:

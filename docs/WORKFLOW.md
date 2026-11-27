@@ -954,13 +954,21 @@ for another repository is `templates/agents-mergeable-prs.md`.
   pushes. GitHub's server-side Update branch and merge buttons cannot run
   the helper; the unchanged `plans-registry` gate stays their backstop.
 - **Merging a series, one at a time.** With the merge queue active on
-  `main` (rule RB-G7, bead coding-harness-eh42), a pull request the
-  maintainer asked to merge, restated and green, is admitted with the same
-  `gh pr merge <n> --merge --match-head-commit <sha>` and no branch update
-  first; the queue tests it on the current `main` and merges it. Admission
-  is not a merge: it is reported as queued until the pull request shows
-  `MERGED`. The maintainer's request, the restatement, the exact head and
-  the ban on `--admin` hold as before. Without the queue ("branches must be
+  `main` (rule RB-G7, bead coding-harness-eh42), every pull request enters
+  through `scripts/enqueue_pr.py <n>` (bead coding-harness-va1l): the
+  orchestrator runs it itself once phase 6 is clean, and a decision PR or
+  another request the default refuses only with `--maintainer` on the
+  maintainer's request after the restatement (`prompts/07-commit.md`, "The
+  merge"). It admits through the enqueue call pinned to the checked head,
+  with no branch update first; the queue tests it on the current `main` and
+  merges it. Admission is not a merge: it is reported as queued until the
+  pull request shows `MERGED`. `--admin` stays banned. The maintainer mode
+  stays attended because in Claude Code an ask rule wins over an allow rule
+  for the same command (`Bash(*enqueue_pr.py*--maintainer*)` against the
+  allow rule for the script), and the night overlay turns that ask into a
+  deny; `tests/test_merge_guard.py` pins both. The pull request that adds or
+  changes the script itself, and a repository without a merge queue, are
+  merged by the maintainer (`prompts/07-commit.md`, "The merge", step 3). Without the queue ("branches must be
   up to date"), every merge puts the other open pull requests behind; each
   next one is brought up to date, its new checks are awaited until every
   check has completed (a pending check has no conclusion yet; an empty or
@@ -1274,7 +1282,16 @@ in a store outside the repository (`stage2_research_store.py`). A later run of
 the same change resumes: a slot is reused only when its resume binding (the
 digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
 prompt hash match and its result was ok and validates; nothing else is reused,
-and the run gets its own run id, deadlines and receipt.
+and the run gets its own run id, deadlines and receipt. The stored run record
+also carries the origin baseline: the baseline HEAD and the frozen
+`research.md` bytes of the run that started the resume chain. A matching resume
+can run on a HEAD moved by an earlier run's committed publication. It replays
+that baseline for the finder map, the mapped history and the repository-topic
+prompts, so those prompts stay byte-identical. It also passes the baseline
+forward to the next run. Reused results validate against the baseline, and
+seats the resumed run launches validate against its own freeze or the baseline.
+The published manifest keeps its own `head` and `digest` and names the
+baseline as `origin_head`.
 
 **The handoff is checked (gate `research-handoff`).** The runner derives an
 obligation inventory from the reports (accepted `[DECISION]` questions, class
@@ -2346,7 +2363,10 @@ day session would ask:
    fails too, Sonnet 5.5 takes that one step — a repair through
    `stage2.py repair <change> --stage2-off "<reason>"`, a phase-6 review or
    re-check through a read-only Sonnet 5.5 sub-agent whose rows the
-   orchestrator records unchanged. The step carries a note with the reason,
+   orchestrator records unchanged, in the runner's form: the block ends
+   with `Reviewed commit: <full sha of the reviewed head>` and, when no row
+   is found, the line `Sonnet reported no finding.`, so
+   `scripts/enqueue_pr.py` reads it like a runner verdict. The step carries a note with the reason,
    and the run continues. The runner automates this once bead
    coding-harness-m98e lands.
 2. **A further case of the same mechanism at a phase-6 re-check:** record

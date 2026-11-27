@@ -690,6 +690,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/drift-lane-branches/plan.md`](changes/drift-lane-branches/plan.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/research.md`](changes/drift-lane-branches/research.md) | draft | none | 2026-11-21 | coding-harness-l54q |
 | [`changes/drift-lane-branches/spec.md`](changes/drift-lane-branches/spec.md) | draft | none | 2026-11-21 | coding-harness-l54q |
+| [`changes/enqueue-pr/decisions.md`](changes/enqueue-pr/decisions.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/findings.md`](changes/enqueue-pr/findings.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/plan.md`](changes/enqueue-pr/plan.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/research.md`](changes/enqueue-pr/research.md) | draft | none | 2026-11-25 | coding-harness-va1l |
+| [`changes/enqueue-pr/spec.md`](changes/enqueue-pr/spec.md) | draft | none | 2026-11-27 | coding-harness-va1l |
 | [`changes/findings-per-model/decisions.md`](changes/findings-per-model/decisions.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/findings.md`](changes/findings-per-model/findings.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/plan.md`](changes/findings-per-model/plan.md) | draft | none | 2026-11-18 | coding-harness-qut1 |
@@ -721,6 +726,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ontology-relation-layer/decisions.md`](changes/ontology-relation-layer/decisions.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/interview-prep.md`](changes/ontology-relation-layer/interview-prep.md) | draft | none | 2026-11-19 | coding-harness-kpo7 |
 | [`changes/ontology-relation-layer/research.md`](changes/ontology-relation-layer/research.md) | draft | none | 2026-11-18 | coding-harness-kpo7 |
+| [`changes/phase6-guard-evidence/decisions.md`](changes/phase6-guard-evidence/decisions.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/findings.md`](changes/phase6-guard-evidence/findings.md) | draft | none | 2026-11-27 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/plan.md`](changes/phase6-guard-evidence/plan.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/research.md`](changes/phase6-guard-evidence/research.md) | draft | none | 2026-11-26 | coding-harness-mwzv.6 |
+| [`changes/phase6-guard-evidence/spec.md`](changes/phase6-guard-evidence/spec.md) | draft | none | 2026-11-27 | coding-harness-mwzv.6 |
 | [`changes/red-first-baseline/decisions.md`](changes/red-first-baseline/decisions.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/findings.md`](changes/red-first-baseline/findings.md) | draft | none | 2026-11-21 | coding-harness-7aso |
 | [`changes/red-first-baseline/plan.md`](changes/red-first-baseline/plan.md) | draft | none | 2026-11-21 | coding-harness-7aso |
@@ -736,6 +746,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-swarm-resume/decisions.md`](changes/research-swarm-resume/decisions.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
+| [`changes/research-swarm-resume/findings.md`](changes/research-swarm-resume/findings.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
+| [`changes/research-swarm-resume/plan.md`](changes/research-swarm-resume/plan.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
+| [`changes/research-swarm-resume/research.md`](changes/research-swarm-resume/research.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
+| [`changes/research-swarm-resume/spec.md`](changes/research-swarm-resume/spec.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
 | [`changes/review-diff-4000/decisions.md`](changes/review-diff-4000/decisions.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-diff-4000/findings.md`](changes/review-diff-4000/findings.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-diff-4000/plan.md`](changes/review-diff-4000/plan.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |

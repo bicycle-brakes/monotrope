@@ -26,6 +26,10 @@
     ]
   },
   "permissions": {
+    "allow": [
+      "Bash(python3 scripts/enqueue_pr.py *)",
+      "Bash(.venv/bin/python scripts/enqueue_pr.py *)"
+    ],
     "ask": [
       "Bash(gh pr merge *)",
       "Bash(gh -* pr merge*)",
