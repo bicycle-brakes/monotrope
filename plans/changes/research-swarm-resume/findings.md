@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-26
 created: 2026-11-26
 last_reviewed: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-f6qj
@@ -62,3 +62,149 @@ Spec review commit: 46e509abfb24ac7f370ac3350a74ef432e77cf6e
 | S-10 | MINOR | SPEC | base | Definition of Done (three-run regression); Acceptance criterion 2 ("fails another seat"); `Run.stage_topics`, `stage2_research_judge.build_research_judge_packet` | The three-run regression cannot be built as written. If run 2 "reuses all other seats", seat A is the only seat run 2 launches. A seat B other than A can only fail in run 2 if B also had no finished result in run 1, and "run 1 fails seat A" does not say that. Once B succeeds, run 3 also cannot "launch only seat B": the topic stage then completes, and the judge launches on every run that reaches it, because its packet is built with that run's own `run_id`. So the test author has to invent the scenario. B could be the judge. B could be a second repository seat that run 1 also failed or left interrupted, with "only" counted over repository-topic seats. Or B could be A failing a second time. In that last case no seat launched in run 2 is reused in run 3, so the S-5 carry-forward of a run-2 seat is never tested. | Opus | in spec — three-run scenario fixed in criterion 2, DoD & [DETAIL] S-5/S-10 (run 1 fails A+B; run 2 succeeds A, fails B; run 3 launches only B among repo-topic seats then judge) | — |
 
 Stage-2 call, 2026-11-26: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1290 files, 6053 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1290 files, 6055 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1290 files, 6056 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1290 files, 6057 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1290 files, 6059 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1290 files, 6060 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1290 files, 6060 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1290 files, 6060 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1290 files, 6061 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1290 files, 6062 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1290 files, 6063 commits, 12 rules.
+
+Stage-2 call, 2026-11-26: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1290 files, 6063 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model qwen3.8-flash · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model qwen3.7-plus · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model minimax-m3.1-flash · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model minimax-m3 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model kimi-k2.7-code · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model step-5-preview · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model grok-4.7 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model qwen3.8-max · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: prepare-loop · endpoint opencode-go · model kimi-k3 · leak check clean over 1290 files, 6069 commits, 12 rules.
+
+Stage-2 call, 2026-11-27: review-loop · endpoint opencode-go · model hy4-flash-free · leak check clean over 1290 files, 6069 commits, 12 rules.
