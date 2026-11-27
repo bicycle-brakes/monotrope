@@ -37,8 +37,8 @@ The admission command accepts readable ruleset-only protection and the runner's 
    *Refuted by:* an unrelated 404 or a 403 is treated as absent protection.
 4. When a released loop block contains the runner's `Loop state: {…}` line, including a pipe in its state, that line alone does not cause a refusal. "The runner's line" means: the line starts with exactly `Loop state: ` and the rest, stripped of trailing spaces and tabs, parses with `json.loads` as a JSON object (S-1, reading b).
    *Refuted by:* a released block with the runner's line is rejected as an unrecognised table line.
-5. When a different malformed pipe-bearing line occurs in a released loop block, admission is refused under the existing policy. This includes a `Loop state: ` line whose rest is not a JSON object (for example `Loop state: {not json | x}`), and any `Loop state:` line inside a `## Phase 6` block, where the runner never writes one (S-2).
-   *Refuted by:* a different unrecognised table line, a non-JSON `Loop state:` line, or a `Loop state:` line in a `## Phase 6` block is silently accepted.
+5. When a different malformed pipe-bearing line occurs in a released loop block or a `## Phase 6` block, admission is refused under the existing policy. Only lines that contain a pipe are in question, as today (S-4, reading a): this includes a pipe-bearing `Loop state: ` line whose rest is not a JSON object (for example `Loop state: {not json | x}`) and any pipe-bearing `Loop state:` line inside a `## Phase 6` block, where the runner never writes one (S-2). Lines without a pipe keep today's treatment; no new refusal is added.
+   *Refuted by:* a different pipe-bearing unrecognised line, a pipe-bearing non-JSON `Loop state:` line, or a pipe-bearing `Loop state:` line in a `## Phase 6` block is silently accepted.
 
 ## Non-goals
 
@@ -61,3 +61,5 @@ The runner and its state writer remain unchanged; this repair belongs in the adm
 [DETAIL] The implementation appetite is two hours including repairs; this reversible stop limit keeps this bounded fix small. The runner's anchored state-line form is the recognition boundary, so a prefix alone does not exempt a malformed pipe-bearing line.
 
 [DETAIL] Spec-review S-1..S-3 (round 1, decided under the bounded standing grant): S-1 reading b — a `Loop state: ` line is exempt only when its rest parses as a JSON object (AC4, AC5); S-2 — the exemption lives in `released_problems` only, not in the shared `malformed_table_line` helper, so `## Phase 6` blocks keep refusing the line (AC5); S-3 — `enqueue_pr.py` keeps its own copy of the `Loop state: ` prefix and does not import `scripts/stage2.py`, so the `script` self-check still covers everything the admission reads; a test pins the copy to `stage2.STATE_KEY` so drift goes red.
+
+[DETAIL] Spec-review S-4 (round 2): reading a — only pipe-bearing lines are refused, as `malformed_table_line` already does; a pipe-free `Loop state:` line keeps today's treatment, so no admission prerequisite is added (non-goal).
