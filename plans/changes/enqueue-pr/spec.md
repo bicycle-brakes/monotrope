@@ -3,8 +3,8 @@ title: "Spec — enqueue-pr"
 status: draft
 implementation_status: none
 date: 2026-11-25
-last_reviewed: 2026-11-25
-updated: 2026-11-25
+last_reviewed: 2026-11-27
+updated: 2026-11-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-va1l
@@ -104,7 +104,7 @@ Tracker data and other changes' findings are read-only; their writers retain own
 
 [DETAIL] Evaluate `pr`, `head`, `change`, `trailer`, `phase-6`, `reviewed-commit`, `post-review`, `checks`, then `decision`; a dependent condition reports `not evaluated: <earlier condition>`. This makes partial evidence actionable without inventing results. An already queued request ends before this sequence.
 
-[DETAIL] Fetch `origin/main`; follow the first-parent chain from the reviewed commit to the head. A merge of main is allowed only when its tree equals the clean merge result of its parents; record-only commits change only paths inside the change folder or `plans/INDEX.md`. This prevents conflict resolution from silently changing reviewed code.
+[DETAIL] Fetch `origin/main`; follow the first-parent chain from the reviewed commit to the head. A merge of main is allowed only when its tree equals the clean merge result of its parents, or differs from that clean merge result only in `plans/INDEX.md` and that file equals a fresh regeneration (`decisions.md` S-26); record-only commits change only `plans/changes/<change>/findings.md` or `plans/INDEX.md`. This prevents conflict resolution or post-review edits from silently changing reviewed code or specifications.
 
 [DETAIL] The self-check in criterion 18 detects accidental changes only: an edited script can remove its own check, and mutable imports are not protected. It is not a security boundary against a hostile checkout.
 
