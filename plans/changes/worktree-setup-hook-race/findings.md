@@ -62,3 +62,5 @@ Stage-2 call, 2026-11-27: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/INDEX.md`
 > - `plans/changes/worktree-setup-hook-race/plan.md`
 > - `plans/changes/worktree-setup-hook-race/spec.md`
+
+Stage-2 call, 2026-11-27: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1303 files, 6101 commits, 12 rules.
