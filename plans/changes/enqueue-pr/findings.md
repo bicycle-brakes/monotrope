@@ -628,3 +628,21 @@ Reviewer session: codex 01a21aa2-134f-78c1-ae40-4c9e30d0c5a4 — a fresh session
 Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6077 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr/plan.md, plans/changes/enqueue-pr/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6083 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:252 | Classic branch protection returns both `contexts` and app-specific `checks` for the same required check. The command treats both as separate requirements, so a failed check with the same name from another app causes refusal even when the required app’s check succeeded. The eligible head should be admitted. [Criteria 1, 8, 24] | Codex | taken — Criteria 1, 8, 24: when classic protection returns app-specific checks entries, do not also require the duplicate plain contexts string for that same check name, with regression test | — |
+| R2 | MAJOR | SPEC | base | scripts/stage2.py:5098 | If another process changes the checkout after the pre-review verification but before or during the reviewer call, the reviewer can read the changed files while the verdict still records the earlier commit. The runner does not recheck the head or working tree after the call, so the recorded commit can differ from what was reviewed. [Criterion 13] | Codex | taken — Criterion 13: recheck HEAD and working-tree cleanliness after the phase-6 reviewer call before recording Reviewed commit and refuse if HEAD or tracked files changed, with regression test | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: removes the `Reviewed commit` line from the verdict before it is appended — catches without switch: yes; the test independently asserts that the line exists and names the reviewed head.
+
+Reviewed commit: 0a4690aa2def89ae70299cd9ae05e1e112eac71b
+
+Phase 6 verdict: codex 01a21b0f-5cf0-7fc1-a19f-3404ea3fbf4f, 2026-11-27
+Reviewer session: codex 01a21b0f-5cf0-7fc1-a19f-3404ea3fbf4f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
