@@ -47,7 +47,7 @@ Check the detached verification job's exit with `python3 scripts/jobs.py list` b
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget — moving the deadline back before a controlled slow trust check prevents make from starting.
+- 1: tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget — moving the deadline back before a controlled slow trust check prevents make from starting.
 - 2: tests/test_worktree_setup_hook.py::test_a_step_never_started_names_the_step_that_used_the_budget — accepting a timeout or omitting the next step or preceding step name fails the strengthened test.
 - 3: tests/test_worktree_setup_hook.py::test_setup_timeout_stops_and_reports_step_and_limit — a not-started report or wrong limit fails the strengthened test.
 - 4: tests/test_worktree_setup_hook.py::test_a_step_never_started_names_the_step_that_used_the_budget — a later setup step running after the controlled deadline fails.

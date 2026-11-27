@@ -414,23 +414,25 @@ def test_setup_finishes_before_worktree_add_returns(lane: Lane) -> None:
     assert "lane setup: ok" in log or "lane setup: failed (" in log
 
 
-# Criterion 11
+# Criterion 11 (worktree-setup-hook-race, criteria 3 and 4)
 def test_setup_timeout_stops_and_reports_step_and_limit(lane: Lane) -> None:
     started = time.monotonic()
-    proc, worktree = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT="1", STUB_MAKE_SLEEP="5")
+    proc, worktree = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT="2", STUB_MAKE_SLEEP="6")
     elapsed = time.monotonic() - started
     assert proc.returncode == 0, proc.stderr
-    assert elapsed < 5, f"the overdue step ran on for {elapsed:.1f}s"
+    assert elapsed < 6, f"the overdue step ran on for {elapsed:.1f}s"
+    assert lane.record("make") == [f"{worktree}|venv"], "make venv never started"
+    assert "not started" not in proc.stderr, proc.stderr
     failures = _failures(proc.stderr)
     assert len(failures) == 1, proc.stderr
-    assert "make venv" in failures[0]
-    assert re.search(r"\b1s\b", failures[0]), failures[0]
+    assert "make venv timed out" in failures[0], failures[0]
+    assert re.search(r"\b2s\b", failures[0]), failures[0]
     assert str(lane.log(worktree)) in failures[0]
     for name in ("install", "python", "pi"):
         assert lane.record(name) == [], f"{name} ran after the limit"
     assert len(_results(proc.stderr)) == 1
 
-    time.sleep(max(0.0, 6.5 - (time.monotonic() - started)))
+    time.sleep(max(0.0, 7.5 - (time.monotonic() - started)))
     assert lane.record("make-woke") == [], "the overdue step was not stopped"
 
 
@@ -565,11 +567,116 @@ def test_without_perl_the_unenforced_limit_is_named(lane: Lane, tmp_path: Path) 
     assert any("perl not found" in line and "shell watchdog" in line for line in proc.stderr.splitlines()), proc.stderr
 
 
+# Controlled clock (worktree-setup-hook-race). The hook is invoked directly, so Git's exec-path
+# prepend cannot shadow these shims. `date +%s` answers from a clock file; `git` passes every call to
+# the real Git and, after a successful `merge-base` (the end of the trust check), moves the clock by
+# STUB_TRUST_ADVANCE; `perl` records the alarm it was given and runs the step without one.
+CLOCK_GIT_STUB = r"""#!/bin/sh
+"$STUB_REAL_GIT" "$@"
+rc=$?
+if [ "$1" = merge-base ] && [ "$rc" -eq 0 ] && [ -n "${STUB_TRUST_ADVANCE:-}" ]; then
+  now=$(cat "$STUB_CLOCK")
+  echo $((now + STUB_TRUST_ADVANCE)) >"$STUB_CLOCK"
+fi
+exit "$rc"
+"""
+
+CLOCK_DATE_STUB = r"""#!/bin/sh
+if [ "$1" != "+%s" ]; then exec "$STUB_REAL_DATE" "$@"; fi
+if [ -n "${STUB_DATE_AFTER_MAKE:-}" ] && [ -s "$STUB_RECORD_DIR/make" ]; then
+  echo "$STUB_DATE_AFTER_MAKE"
+  exit 0
+fi
+now=$(cat "$STUB_CLOCK")
+echo "$now"
+if [ -n "${STUB_DATE_STEP:-}" ]; then echo $((now + STUB_DATE_STEP)) >"$STUB_CLOCK"; fi
+exit 0
+"""
+
+# Called as `perl -e SCRIPT SECONDS COMMAND...`, the shape of both perl calls in the hook.
+CLOCK_PERL_STUB = r"""#!/bin/sh
+alarm=$3
+shift 3
+printf '%s|%s\n' "$alarm" "$*" >>"$STUB_RECORD_DIR/perl"
+exec "$@"
+"""
+
+CLOCK_START = 1_000_000
+
+
+def _clock_env(lane: Lane, **extra: str) -> dict[str, str]:
+    """Environment for a direct hook call under the controlled clock, shims first on PATH."""
+    real_git = shutil.which("git")
+    real_date = shutil.which("date")
+    assert real_git and real_date, "git and date must be installed"
+    clockbin = lane.root / "clockbin"
+    _write_exec(clockbin / "git", CLOCK_GIT_STUB)
+    _write_exec(clockbin / "date", CLOCK_DATE_STUB)
+    _write_exec(clockbin / "perl", CLOCK_PERL_STUB)
+    clock = lane.root / "clock"
+    clock.write_text(f"{CLOCK_START}\n", encoding="utf-8")
+    return {
+        "PATH": f"{clockbin}{os.pathsep}{lane.env['PATH']}",
+        "STUB_REAL_GIT": real_git,
+        "STUB_REAL_DATE": real_date,
+        "STUB_CLOCK": str(clock),
+        **extra,
+    }
+
+
+def _alarms(lane: Lane, command: str) -> list[str]:
+    """The alarm seconds the perl shim was given for one setup command, in call order."""
+    alarms = []
+    for line in lane.record("perl"):
+        seconds, _, called = line.partition("|")
+        if called == command:
+            alarms.append(seconds)
+    return alarms
+
+
+@pytest.mark.parametrize(
+    ("limit", "clock"),
+    [
+        ("2", {"STUB_TRUST_ADVANCE": "5"}),
+        ("10", {"STUB_TRUST_ADVANCE": "9"}),
+        ("1", {"STUB_DATE_STEP": "1"}),
+    ],
+    ids=["trust-check-past-budget", "trust-check-limit-minus-one", "clock-ticks-on-every-read"],
+)
+def test_trust_check_does_not_consume_setup_budget(lane: Lane, limit: str, clock: dict[str, str]) -> None:
+    """Criterion 1: the trust check leaves the setup budget whole, and step 1 starts with the full limit.
+
+    A clock moved forward inside the trust check (past the budget, or by limit - 1) must shorten
+    neither make venv nor, with make venv spending no time, bash tools/pi/install.sh. A clock that
+    ticks one second on every read must not stop make venv either: step 1 takes the full limit
+    without a second clock read after the deadline is set.
+    """
+    worktree = lane.quiet_worktree()
+    proc = lane.new_worktree_hook(worktree, **_clock_env(lane, HARNESS_LANE_SETUP_TIMEOUT=limit, **clock))
+    assert "make venv not started" not in proc.stderr, proc.stderr
+    assert lane.record("make") == [f"{worktree}|venv"], proc.stderr
+    assert _alarms(lane, "make venv") == [limit], lane.record("perl")
+    if "STUB_TRUST_ADVANCE" in clock:
+        assert _failures(proc.stderr) == [], proc.stderr
+        assert lane.record("install"), proc.stderr
+        assert _alarms(lane, "bash tools/pi/install.sh") == [limit], lane.record("perl")
+
+
 def test_a_step_never_started_names_the_step_that_used_the_budget(lane: Lane) -> None:
-    """L2-20: when the limit is spent, the next step is reported as not started, naming the previous one."""
-    proc, _ = lane.add_worktree(HARNESS_LANE_SETUP_TIMEOUT="1", STUB_MAKE_SLEEP="3")
-    text = proc.stderr
-    assert "not started" in text and "used up by make venv" in text or "make venv timed out" in text, text
+    """L2-20 (criteria 2 and 4): a completed make venv that spent the budget stops the next step."""
+    worktree = lane.quiet_worktree()
+    spent = str(CLOCK_START + 2)
+    proc = lane.new_worktree_hook(
+        worktree, **_clock_env(lane, HARNESS_LANE_SETUP_TIMEOUT="2", STUB_DATE_AFTER_MAKE=spent)
+    )
+    assert lane.record("make") == [f"{worktree}|venv"], proc.stderr
+    assert "timed out" not in proc.stderr, proc.stderr
+    failures = _failures(proc.stderr)
+    assert len(failures) == 1, proc.stderr
+    assert "bash tools/pi/install.sh not started" in failures[0], failures[0]
+    assert "used up by make venv" in failures[0], failures[0]
+    for name in ("install", "python", "pi"):
+        assert lane.record(name) == [], f"{name} ran after the budget was spent"
 
 
 def test_without_perl_a_hanging_step_still_stops(lane: Lane, tmp_path: Path) -> None:

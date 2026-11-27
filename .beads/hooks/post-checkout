@@ -31,7 +31,13 @@ _ls_step() {
   _ls_label=$1
   shift
   [ -z "$_ls_stopped" ] || return 0
-  _ls_left=$((_ls_deadline - $(date +%s)))
+  # Step 1 starts with the whole limit: the deadline was set just before it, so
+  # a second clock read here could only lose a whole-second boundary.
+  if [ -z "$_ls_prev" ]; then
+    _ls_left=$_ls_limit
+  else
+    _ls_left=$((_ls_deadline - $(date +%s)))
+  fi
   if [ "$_ls_left" -le 0 ]; then
     _ls_stopped=1
     _ls_fail "$_ls_label not started: the ${_ls_limit}s limit (HARNESS_LANE_SETUP_TIMEOUT) was used up by ${_ls_prev:-the setup}"
@@ -135,7 +141,6 @@ _lane_setup() {
       [ -z "$_ls_raw" ] || _ls_say "lane setup: warning: HARNESS_LANE_SETUP_TIMEOUT=$_ls_raw is not a positive whole number of seconds; using 600"
       _ls_limit=600 ;;
   esac
-  _ls_deadline=$(($(date +%s) + _ls_limit))
   _ls_perl_ok=
   if command -v perl >/dev/null 2>&1; then
     _ls_perl_ok=1
@@ -146,6 +151,8 @@ _lane_setup() {
     _ls_say "lane setup: skipped: the checked-out commit is not on origin/main (or origin/main is unknown); to set up deliberately: $_ls_retry"
     return 0
   fi
+  # The budget starts after the trust check, so its time never shortens a step.
+  _ls_deadline=$(($(date +%s) + _ls_limit))
   _ls_step "make venv" make venv
   _ls_step "bash tools/pi/install.sh" bash tools/pi/install.sh
   _ls_step "yaml import check" .venv/bin/python3 -c 'import yaml'
