@@ -2,7 +2,7 @@
 
 **Model:** none of its own — every round is called through Pi against
 OpenCode Go; started only by `python3 scripts/stage2.py review-loop <change>`.
-The loop runs until a round is clean (ADR 0021): round 1 is the **free
+The loop runs until a round is clean or the ladder is consumed (ADR 0021): round 1 is the **free
 swarm** — every model a forced live catalog refresh (`pi update --models`
 before `pi --list-models`) finds under the `opencode-go` provider that the
 `free_stage` rule in `model-endpoints.yaml` selects, called in parallel; round
@@ -17,9 +17,10 @@ once, and the swap is recorded. The rule, the set and the cost values are
 data: a one-line pull request changes any of them, and this text names no
 model. A round whose every row
 is decided and none accepted ends the loop; two consecutive rounds whose only
-accepted findings came from the repair trip the brake; a spent ladder stops
-the loop for the maintainer — no model is substituted for a spent ladder's
-last rung, and no model reviews twice in the completed run. Availability
+accepted findings came from the repair trip the brake; on a consumed ladder
+`review-loop` names the next step and exits 0 — `next: repair <change>` while a taken row is unrepaired, `next: review <change>` once every taken row is repaired (phase 6 follows the
+last repair). No model is substituted for a consumed ladder's last rung, and
+no model reviews twice in the completed run. Availability
 probes are additional audited calls, not reviews.
 **Input:** a paid round reads the change's diff against its merge base with
 `origin/main`, uncommitted changes included, and this text. A free round is
@@ -27,7 +28,7 @@ confined to the implementation diff alone — source and test code in bounded
 hunks, no tools, no repository access, and nothing else in its prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6
 verdict.
-**Gate:** rounds until a clean round, bounded by the declared ladder; the
+**Gate:** rounds until a clean round or a consumed ladder (then the named next step), bounded by the declared ladder; the
 repair brake and the maintainer stop stand above it; the repair's targeted
 check green after each repair (the full `make verify` on any fallback of the runner's targeted selection), and one full `make verify` on the final head before phase 6.
 

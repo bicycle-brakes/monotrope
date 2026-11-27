@@ -53,6 +53,7 @@ import check_decision_continuity  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import ci_gates  # noqa: E402
 import leakcheck  # noqa: E402
+import next_step  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import runner_clock_guard  # noqa: E402
@@ -11086,7 +11087,7 @@ def test_the_loop_refuses_without_the_key(world: World, verb: str) -> None:
 
 
 def test_the_loop_stops_at_three_rounds(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 9: the ladder's stages are the bound - once every stage is consumed, the loop stops and names the maintainer, also after the release."""
+    """Criterion 9: the ladder's stages are the bound - once every stage is consumed, no model is called; the loop names the next step, also after the release."""
     world.script(pi=[{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 0
     decide_record(world, status=FIXED)
@@ -11096,16 +11097,16 @@ def test_the_loop_stops_at_three_rounds(world: World, capsys: pytest.CaptureFixt
     assert len(world.reviews("pi")) == 5
     decide_record(world, status=FIXED)
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    refused = capsys.readouterr().err
-    assert "every stage of this run is consumed" in refused
-    assert "No model is substituted" in refused
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: review demo\n"
     assert len(world.reviews("pi")) == 5
     # also after the release: the consumed stages stay consumed
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     assert not world.record().exists()
-    assert world.run("review-loop") == 2
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: review demo\n"
     assert len(world.reviews("pi")) == 5
 
 
@@ -11832,7 +11833,7 @@ def test_round_two_is_the_flash_swarm_then_single_rungs(world: World) -> None:
 
 
 def test_the_loop_stops_when_the_ladder_ends(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 9: the last rung is not repeated and no model is substituted - the stop names the maintainer."""
+    """Criterion 9: the last rung is not repeated and no model is substituted - the spent ladder names the next step."""
     endpoints = world.root / "model-endpoints.yaml"
     pin_entry(endpoints, ("solo-rung",))
     data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
@@ -11846,10 +11847,8 @@ def test_the_loop_stops_when_the_ladder_ends(world: World, capsys: pytest.Captur
     assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, ("solo-rung",))
     decide_record(world, status=FIXED)
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    refused = capsys.readouterr().err
-    assert "every stage of this run is consumed and the last round was not clean" in refused
-    assert "No model is substituted" in refused
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: review demo\n"
     assert len(world.reviews("pi")) == 3, "the final rung was repeated or a substitute answered"
 
 
@@ -12309,8 +12308,8 @@ def test_round_history_survives_split_releases_and_config_edits(
     shutil.rmtree(world.record().parent)  # a release deletes the record it counted
     world.write_findings(VERDICT, block)
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    assert "every stage of this run is consumed" in capsys.readouterr().err, "a spent snapshot admitted a round"
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: repair demo\n", "a spent snapshot admitted a round"
 
 
 def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
@@ -25626,8 +25625,8 @@ def test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung(
     assert "rung:mimo-v2.6-pro" in state["consumed"] and "flash" in state["consumed"]
     decide_record(world, status=FIXED)
     capsys.readouterr()
-    assert world.run("review-loop") == 2, "the consumed replacement was called again as a later rung"
-    assert "every stage of this run is consumed" in capsys.readouterr().err
+    assert world.run("review-loop") == 0, "the consumed replacement was called again as a later rung"
+    assert capsys.readouterr().out == "next: review demo\n"
 
 
 def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
@@ -25864,8 +25863,12 @@ def test_free_round_needs_no_eligible_paid_ladder(world: World, capsys: pytest.C
     assert {rung_of(call) for call in world.reviews("pi")} == set(TEST_FREE)
     assert "skipped" in capsys.readouterr().out
     decide_record(world, status=FIXED)
-    assert world.run("review-loop") == 2
-    assert "every stage" in capsys.readouterr().err
+    # Unread paid terms leave no admissible stage: the consumed ladder names review
+    # (ladder-next-step, criteria 1 and 12), and no paid model is called.
+    calls = len(world.reviews("pi"))
+    assert world.run("review-loop") == 0
+    assert capsys.readouterr().out == "next: review demo\n"
+    assert len(world.reviews("pi")) == calls
 
 
 @pytest.mark.parametrize("member", [TEST_FLASH[0], "undeclared-paid"])
@@ -34783,6 +34786,736 @@ def test_old_runner_reviews_before_the_merge_day_stay_legacy(world: World) -> No
     assert "on or after the fingerprint rule" not in (admission.review_problem or "")
 
 
+# ---------------------------------------------------------------------------
+# A consumed ladder names its next step (bead coding-harness-hwll)
+# ---------------------------------------------------------------------------
+
+NS_SPENT = ("free", "flash", f"rung:{TEST_RUNGS[0]}")
+NS_TAKEN = "taken — test_a"
+NS_NOW = dt.datetime(2026, 11, 25, 10, 0, 0, tzinfo=dt.UTC)
+NS_STAMP = "2026-11-25T10:00:00Z"
+
+
+def ns_write_rounds(
+    w: World,
+    rounds: dict[int, list[tuple[str, str, str]]],
+    state: dict | None = None,
+    cut: tuple[int, ...] = (),
+) -> None:
+    """A loop record of several rounds, each row carrying (id, status, broke a test); `cut` marks rounds whose diff was cut."""
+    state = state if state is not None else loop_state(NS_SPENT)
+    blocks = []
+    for number, decided in rounds.items():
+        table = stage2.render_table(
+            stage2.ROW_COLUMNS,
+            [
+                [ident, "MAJOR", "MAINT", "base", "src/app.py:1", f"finding of {ident}", "deepseek-v4.1-flash", s, b]
+                for ident, s, b in decided
+            ],
+        )
+        note = f"\n{stage2.CUT_LINE} planted for the test\n" if number in cut else ""
+        blocks.append(f"## Round {number} — deepseek-v4.1-flash, 2026-09-30\n\n{table}\n{note}")
+    w.record().parent.mkdir(parents=True, exist_ok=True)
+    w.record().write_text(
+        f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n{stage2.STATE_KEY}{json.dumps(state, sort_keys=True)}\n\n"
+        + "\n".join(blocks),
+        encoding="utf-8",
+    )
+
+
+def ns_file(w: World) -> Path:
+    return stage2.record_dir("demo", w.root) / "next.json"
+
+
+def ns_run(w: World, capsys: pytest.CaptureFixture[str]) -> tuple[int, str, str]:
+    capsys.readouterr()
+    code = w.run("review-loop")
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err
+
+
+def ns_edit_entry(w: World, edit: Any) -> None:
+    """Edit the world's `opencode-go` declaration in place: `edit(entry, data)`."""
+    path = w.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    edit(entry, data)
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def ns_terms(w: World, models: tuple[str, ...], **changes: object) -> None:
+    """Change the terms record of each model; a value of None removes the field."""
+
+    def edit(entry: dict, _data: dict) -> None:
+        for model in models:
+            for field, value in changes.items():
+                if value is None:
+                    entry["modelle_terms"][model].pop(field, None)
+                else:
+                    entry["modelle_terms"][model][field] = value
+
+    ns_edit_entry(w, edit)
+
+
+def ns_stale(w: World, verb: str = "repair", producer: str = "repair") -> None:
+    """A valid instruction from an earlier moment, beside the record."""
+    next_step.publish(w.record().parent, next_step.build("demo", verb, producer, NS_NOW))
+
+
+def ns_pin_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    reading = stage2.ClockReading(monotonic=0.0, utc=NS_NOW, local_date=NS_NOW.date())
+    monkeypatch.setattr(stage2, "clock_now", lambda: reading)
+
+
+def test_spent_ladder_names_review_after_repair(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 1. Planted fault: a repaired, consumed run refuses, exits otherwise or prints more than the one line."""
+    ns_write_rounds(
+        world,
+        {1: [("L1-1", FIXED, "no")], 2: [("L2-1", FIXED, "no"), ("L2-2", "rejected — scope", "")]},
+    )
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert out == "next: review demo\n"
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize(
+    "rounds",
+    [
+        {1: [("L1-1", FIXED, "no")], 2: [("L2-1", NS_TAKEN, "no")]},
+        {1: [("L1-1", FIXED, "no")], 2: [("L2-1", NS_TAKEN, "")]},
+        {1: [("L1-1", NS_TAKEN, "")], 2: [("L2-1", FIXED, "no")]},
+        {1: [("L1-1", NS_TAKEN, "no")], 2: [("L2-1", FIXED, "no")], 3: [("L3-1", FIXED, "no")]},
+    ],
+    ids=["marked, last round", "unmarked, last round", "unmarked, earlier round", "marked, two rounds back"],
+)
+def test_spent_ladder_names_repair_for_taken_row(
+    world: World, capsys: pytest.CaptureFixture[str], rounds: dict[int, list[tuple[str, str, str]]]
+) -> None:
+    """Criterion 2. Planted fault: an unmarked or earlier taken row refuses or yields a review instruction."""
+    ns_write_rounds(world, rounds)
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert out == "next: repair demo\n"
+    assert world.calls() == []
+
+
+def test_spent_ladder_next_step_does_not_start_or_mutate(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 3. Planted fault: a reviewer or repair starts, or the loop record or findings change."""
+
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("the next-step request started a reviewer or a repair")
+
+    monkeypatch.setattr(stage2, "_review_round", forbidden)
+    monkeypatch.setattr(stage2, "repair", forbidden)
+    monkeypatch.setattr(stage2, "release", forbidden)
+    ns_write_rounds(world, {1: [("L1-1", NS_TAKEN, "")]})
+    record_before = world.record().read_bytes()
+    findings_before = world.findings.read_bytes()
+    for _ in range(2):
+        code, out, _err = ns_run(world, capsys)
+        assert (code, out) == (0, "next: repair demo\n")
+    assert world.record().read_bytes() == record_before
+    assert world.findings.read_bytes() == findings_before
+    world.findings.unlink()
+    code, out, _err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: repair demo\n")
+    assert not world.findings.exists()
+    assert world.calls() == []
+
+
+def test_spent_ladder_next_step_after_release(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 4. Planted fault: released history is read as a fresh run, rounds before a restart count, or a stage is admitted."""
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]})
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    # a later round of the same run, still without a release: the taken row of either place counts
+    ns_write_rounds(world, {2: [("L2-1", NS_TAKEN, "no")]})
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: repair demo\n"), err
+    shutil.rmtree(world.record().parent)
+
+    def released(status: str) -> str:
+        return "\n\n".join(
+            [
+                f"{stage2.RELEASE_HEADING} 2026-10-16",
+                render_row(["L1-1", "MAJOR", "MAINT", "base", "x.py:1", "f", "mimo-v2.6-pro", status, "no", "—"]),
+                "Rounds run: 1",
+                f"{stage2.STATE_KEY}{json.dumps(loop_state(NS_SPENT), sort_keys=True)}",
+                "Kept from the loop record:",
+            ]
+        )
+
+    # a released taken row names a repair too
+    world.write_findings(VERDICT, released(NS_TAKEN))
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: repair demo\n"), err
+    # after the maintainer's restart only the rounds that follow it count
+    world.write_findings(VERDICT, released(NS_TAKEN), "Loop restarted: 2026-11-25 after round 1 — planted reason")
+    ns_write_rounds(world, {2: [("L2-1", FIXED, "no")]})
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize(
+    ("case", "rounds", "code", "fragment"),
+    [
+        ("undecided row", {1: [("L1-1", "", "")]}, 2, "undecided rows"),
+        ("unmarked fixed row", {1: [("L1-1", FIXED, "")]}, 2, "without their `Broke a test` mark"),
+        (
+            "clean last round",
+            {1: [("L1-1", FIXED, "no")], 2: [("L2-1", "rejected — scope", "")]},
+            stage2.CLEAN_CODE,
+            "round 2 was clean",
+        ),
+        ("repair brake", {1: [("L1-1", FIXED, "no")], 2: [("L2-1", FIXED, "no")]}, 2, "repair brake"),
+        ("invalid origin", {1: [("L1-1", FIXED, "no")]}, 2, "invalid Origin"),
+        ("damaged record", {1: [("L1-1", FIXED, "no")]}, 2, "not a loop row"),
+    ],
+)
+def test_spent_ladder_preserves_prior_stops(
+    world: World,
+    capsys: pytest.CaptureFixture[str],
+    case: str,
+    rounds: dict[int, list[tuple[str, str, str]]],
+    code: int,
+    fragment: str,
+) -> None:
+    """Criterion 5. Planted fault: a next line bypasses an undecided or unmarked row, a bad origin or record, the clean stop or the brake."""
+    ns_write_rounds(world, rounds)
+    if case == "repair brake":
+        set_row_origin(world, "L1-1", "fix-r1")
+        set_row_origin(world, "L2-1", "fix-r2")
+    elif case == "invalid origin":
+        set_row_origin(world, "L1-1", "criterion 1")
+    elif case == "damaged record":
+        with world.record().open("a", encoding="utf-8") as stream:
+            stream.write("\n| L1-9 | MAJOR |\n")
+    got, out, err = ns_run(world, capsys)
+    assert got == code, (case, err)
+    assert fragment in err, (case, err)
+    assert out == "", f"{case}: a refused or finished loop printed {out!r}"
+    assert not ns_file(world).exists()
+    assert world.calls() == []
+
+
+def test_spent_ladder_retains_paid_exclusion_reasons(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6. Planted fault: a current reason is missing from standard error, is on standard output or outlives its declaration edit."""
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": [], "flash": [], "rungs": []}
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    ns_terms(world, TEST_LADDER, uebersprungen="2026-10-17", grund="planted skip reason")
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert out == "next: review demo\n"
+    for model in TEST_LADDER:
+        assert f"the model {model} was skipped on 2026-10-17: planted skip reason" in err, model
+    # the declaration is mended: the stale reason is not claimed
+    ns_terms(world, TEST_LADDER, uebersprungen=None, grund=None)
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n")
+    assert "planted skip reason" not in err
+    assert "no paid model of the declaration is admissible" not in err
+
+
+def test_spent_ladder_reports_current_paid_model_exclusions(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6: current exclusions are reported even when the snapshot has no paid stage."""
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": [], "flash": [], "rungs": []}
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    ns_edit_entry(
+        world,
+        lambda _entry, data: data.__setitem__(
+            "ausgeschlossen", [{"was": "planted", "klasse": "framework", "modelle": list(TEST_LADDER)}]
+        ),
+    )
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n")
+    for model in TEST_LADDER:
+        reason = stage2.paid_problem(world.root, stage2.endpoint_entry(world.root), model)
+        assert reason is not None and reason in err, model
+        assert reason not in out
+    ns_edit_entry(world, lambda _entry, data: data.__setitem__("ausgeschlossen", []))
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n")
+    assert "no paid model of the declaration is admissible" not in err
+
+
+def test_spent_ladder_with_no_completed_round_stops(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7. Planted fault: a run that completed no round exits other than 2, names a step or goes on to phase 6."""
+    world.record().parent.mkdir(parents=True, exist_ok=True)
+    world.record().write_text(
+        f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n"
+        f"{stage2.STATE_KEY}{json.dumps(loop_state(NS_SPENT), sort_keys=True)}\n",
+        encoding="utf-8",
+    )
+    code, out, err = ns_run(world, capsys)
+    assert code == 2
+    assert out == ""
+    assert "every stage of this run is consumed" in err
+    assert not ns_file(world).exists()
+    assert world.calls() == []
+
+
+def _ns_doctrine() -> dict[str, str]:
+    return {
+        name: flat((REPO_ROOT / name).read_text(encoding="utf-8"))
+        for name in ("docs/WORKFLOW.md", "prompts/04b-review-loop.md", "prompts/02a-spec-review.md", "AGENTS.md")
+    }
+
+
+def _ns_clean_only_claims(text: str) -> list[str]:
+    """Places that say the loop runs until a clean round without naming the consumed ladder soon after."""
+    return [
+        text[match.start() : match.start() + 80]
+        for match in re.finditer(r"until (?:a round is clean|a clean round)", text)
+        if "consumed" not in text[match.start() : match.start() + 260]
+    ]
+
+
+def test_spent_ladder_doctrine_names_next_steps() -> None:
+    """Criterion 8. Planted fault: a doctrine text omits a next step, asks the maintainer for a consumed ladder alone or says the loop always ends clean."""
+    for name, text in _ns_doctrine().items():
+        assert "next: repair <change>" in text, f"{name} omits the repair step"
+        assert "next: review <change>" in text, f"{name} omits the review step"
+        assert _ns_clean_only_claims(text) == [], f"{name} says the loop ends only with a clean round"
+        assert "stops the loop for the maintainer" not in text, name
+        assert "the loop stops and reports to the maintainer — no model is substituted" not in text, name
+    planted = "the loop runs until a round is clean — a swarm."
+    assert _ns_clean_only_claims(planted), "the claim check does not see a clean-only claim"
+
+
+def test_spent_ladder_workflow_describes_exit_zero() -> None:
+    """Criterion 9. Planted fault: the workflow says exit 0 always means a round was written."""
+    text = flat((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8"))
+    assert (
+        "Exit 0 means a round was written, or that a consumed ladder named its next step without writing a round"
+        in text
+    )
+    assert "Exit 0 means a round was written, exit 2" not in text
+
+
+def test_spent_ladder_review_prompt_names_exhaustion() -> None:
+    """Criterion 10. Planted fault: the phase-6 prompt says the loop always runs until a clean round, or omits the consumed path."""
+    text = flat((REPO_ROOT / "prompts" / "06-review.md").read_text(encoding="utf-8"))
+    assert "consumed ladder" in text, "the prompt omits the consumed-ladder path"
+    assert "last repair" in text, "the prompt does not say phase 6 can follow the last repair"
+    assert _ns_clean_only_claims(text) == []
+    assert "it runs until a round is clean:" not in text
+
+
+def test_spent_ladder_documents_full_verification_and_review() -> None:
+    """Criterion 11. Planted fault: the documented path after a consumed ladder skips the full verification or the whole-diff review."""
+    text = flat((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8"))
+    start = text.index("After the last repair, phase 6 follows as ever")
+    paragraph = text[start : start + 400]
+    assert "a fresh full `make verify`" in paragraph
+    assert "the independent reviewer's read of the whole diff" in paragraph
+    assert "also when the loop's diff was cut" in paragraph
+    assert "before the release" in paragraph
+
+
+@pytest.mark.parametrize(
+    "plant",
+    ["expired", "skipped", "malformed date", "missing date", "removed", "excluded", "training"],
+)
+def test_expired_rungs_count_as_consumed_for_next_step(
+    world: World, capsys: pytest.CaptureFixture[str], plant: str
+) -> None:
+    """Criterion 12. Planted fault: a rung the declaration no longer admits keeps the run refusing, or an admitted rung is treated as consumed."""
+    rung = TEST_RUNGS[0]
+    state = loop_state(("free", "flash"))
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    # the control: an admitted unconsumed rung is no consumed ladder - the next round is that rung's
+    world.script(pi=[{"stdout": rows(1)}])
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert "next:" not in out, "an admitted unconsumed rung was treated as consumed"
+    assert len(world.reviews("pi")) == 1
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    if plant == "expired":
+        ns_terms(world, (rung,), valid_until="2026-01-01")
+    elif plant == "skipped":
+        ns_terms(world, (rung,), uebersprungen="2026-10-17", grund="planted skip")
+    elif plant == "malformed date":
+        ns_terms(world, (rung,), valid_until="tomorrow")
+    elif plant == "missing date":
+        ns_terms(world, (rung,), valid_until=None)
+    elif plant == "removed":
+
+        def remove(entry: dict, _data: dict) -> None:
+            entry["modelle"] = [model for model in entry["modelle"] if model != rung]
+            entry["modelle_terms"].pop(rung)
+
+        ns_edit_entry(world, remove)
+    elif plant == "excluded":
+        ns_edit_entry(
+            world,
+            lambda _entry, data: data.__setitem__(
+                "ausgeschlossen", [{"was": "planted", "klasse": "framework", "modelle": [rung]}]
+            ),
+        )
+    else:
+        ns_terms(world, (rung,), training="Used")
+    calls_before = len(world.reviews("pi"))
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, (plant, err)
+    assert out == "next: review demo\n"
+    assert rung in err, f"{plant}: the passed-over rung is not named"
+    assert len(world.reviews("pi")) == calls_before
+
+
+def test_flash_eligibility_for_consumed_ladder(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 13. Planted fault: a Flash stage with an admitted member or replacement counts as consumed, or one with none keeps the run from its next step."""
+    flash = TEST_FLASH
+    rung = TEST_RUNGS[0]
+    state = loop_state(("free",))
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    # one member admitted: the stage stays eligible, the rung too
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    ns_terms(world, (flash[0],), valid_until="2026-01-01")
+    ns_terms(world, (rung,), valid_until="2026-01-01")
+    code, out, _err = ns_run(world, capsys)
+    assert "next:" not in out, "a Flash stage with an admitted member was treated as consumed"
+    assert not ns_file(world).exists()
+    # every member fails, the rung is admitted again and could replace one: still eligible
+    ns_terms(world, flash, valid_until="2026-01-01")
+    ns_terms(world, (rung,), valid_until="2099-01-01")
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    code, out, _err = ns_run(world, capsys)
+    assert "next:" not in out, "a replaceable Flash stage was treated as consumed"
+    # no member and no replacement is admitted: consumed, the next step is named
+    calls_before = len(world.calls())
+    ns_terms(world, (rung,), valid_until="2026-01-01")
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state)
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    for model in (*flash, rung):
+        assert model in err
+    # the same with the rung consumed already
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=loop_state(("free", f"rung:{rung}")))
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    assert len(world.calls()) == calls_before
+
+
+def test_cut_last_round_with_no_accepted_findings_names_review(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 14. Planted fault: a cut round without accepted rows ends in a clean stop or a refusal."""
+    for round_two in ([], [("L2-1", "rejected — scope", "")]):
+        ns_write_rounds(world, {1: [("L1-1", FIXED, "no")], 2: round_two}, cut=(2,))
+        code, out, err = ns_run(world, capsys)
+        assert (code, out) == (0, "next: review demo\n"), err
+    # the control: the same round over a whole diff is a clean stop
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")], 2: [("L2-1", "rejected — scope", "")]})
+    code, out, err = ns_run(world, capsys)
+    assert code == stage2.CLEAN_CODE and out == "", err
+    # an earlier unrepaired taken row still asks for its repair
+    ns_write_rounds(world, {1: [("L1-1", NS_TAKEN, "no")], 2: []}, cut=(2,))
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: repair demo\n"), err
+
+
+def test_spent_ladder_reports_each_inadmissible_model(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 15. Planted fault: a passed-over model or its reason is missing, or a diagnostic is on standard output."""
+    flash_a, flash_b = TEST_FLASH
+    rung = TEST_RUNGS[0]
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=loop_state(("free",)))
+    ns_terms(world, (flash_a,), uebersprungen="2026-10-17", grund="planted skip reason")
+    ns_terms(world, (flash_b,), training="Used")
+    ns_terms(world, (rung,), valid_until="2026-01-01")
+    entry = stage2.endpoint_entry(world.root)
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    for model in (flash_a, flash_b, rung):
+        reason = stage2.terms_problem(entry, model)
+        assert reason, model
+        assert f"passed over {model}: {reason}" in err, model
+
+
+def test_spent_ladder_publishes_matching_next_instruction(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 16. Planted fault: the file is missing, invalid, in another run's directory or differs from the printed line."""
+    for rounds, verb in (
+        ({1: [("L1-1", FIXED, "no")]}, "review"),
+        ({1: [("L1-1", NS_TAKEN, "")]}, "repair"),
+    ):
+        ns_write_rounds(world, rounds)
+        code, out, err = ns_run(world, capsys)
+        assert (code, out) == (0, f"next: {verb} demo\n"), err
+        written = json.loads(ns_file(world).read_text(encoding="utf-8"))
+        next_step.validate(written)
+        assert (written["change"], written["verb"]) == ("demo", verb)
+        assert f"next: {written['verb']} {written['change']}\n" == out
+        assert ns_file(world).parent == world.record().parent
+        assert list(stage2.record_base().rglob("next.json")) == [ns_file(world)]
+
+
+def test_next_instruction_has_producer_utc_time_and_no_rows(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 18. Planted fault: a wrong producer, a stale or non-UTC time, or row ids on a review or repair instruction."""
+    ns_pin_clock(monkeypatch)
+    for rounds, verb in (({1: [("L1-1", FIXED, "no")]}, "review"), ({1: [("L1-1", NS_TAKEN, "no")]}, "repair")):
+        ns_write_rounds(world, rounds)
+        code, _out, err = ns_run(world, capsys)
+        assert code == 0, err
+        assert json.loads(ns_file(world).read_text(encoding="utf-8")) == {
+            "schema_version": 1,
+            "change": "demo",
+            "verb": verb,
+            "row_ids": [],
+            "producer": "review-loop",
+            "written_at": NS_STAMP,
+        }
+
+
+@pytest.mark.parametrize("failure", ["write", "invalid record", "invalidation"])
+def test_next_instruction_failure_does_not_report_success(
+    world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Criterion 20. Planted fault: a failed validation, write or deletion exits other than 1, prints the instruction or says nothing."""
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]})
+    if failure == "write":
+
+        def broken(_directory: Path, _record: dict) -> Path:
+            raise OSError("planted write failure")
+
+        monkeypatch.setattr(next_step, "publish", broken)
+    elif failure == "invalid record":
+        real = next_step.build
+        monkeypatch.setattr(next_step, "build", lambda *args, **kwargs: {**real(*args, **kwargs), "verb": "advance"})
+    else:
+
+        def undeletable(_directory: Path) -> None:
+            raise PermissionError("planted deletion failure")
+
+        monkeypatch.setattr(next_step, "invalidate", undeletable)
+    code, out, err = ns_run(world, capsys)
+    assert code == 1, err
+    assert "next:" not in out and out == ""
+    assert err.strip(), "a failure with no diagnostic"
+    assert not ns_file(world).exists()
+
+
+def test_review_loop_invalidates_previous_instruction(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 21. Planted fault: an earlier instruction stays readable after a refusal, a new round or a clean stop."""
+    # a refusal
+    ns_write_rounds(world, {1: [("L1-1", "", "")]})
+    ns_stale(world)
+    code, _out, _err = ns_run(world, capsys)
+    assert code == 2
+    assert not ns_file(world).exists()
+    # a clean stop
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")], 2: [("L2-1", "rejected — scope", "")]})
+    ns_stale(world)
+    code, _out, _err = ns_run(world, capsys)
+    assert code == stage2.CLEAN_CODE
+    assert not ns_file(world).exists()
+    # a new round
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=loop_state(("free",)))
+    ns_stale(world)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert "next:" not in out
+    assert not ns_file(world).exists()
+    assert "## Round 2 — " in world.record().read_text(encoding="utf-8")
+
+
+def test_next_instruction_never_enters_markdown(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 22. Planted fault: the instruction is written into loop.md, findings.md or another Markdown file."""
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]})
+    world.write_findings(VERDICT)
+    code, out, err = ns_run(world, capsys)
+    assert (code, out) == (0, "next: review demo\n"), err
+    markdown = [*world.record().parent.rglob("*.md"), *(world.root / "plans").rglob("*.md")]
+    assert world.record() in markdown and world.findings in markdown
+    for path in markdown:
+        text = path.read_text(encoding="utf-8")
+        for needle in ("next: review", "schema_version", "next.json", '"verb"'):
+            assert needle not in text, f"{path} carries {needle!r}"
+
+
+def test_successful_repair_publishes_review_loop_instruction(world: World) -> None:
+    """Criterion 23. Planted fault: a repair leaves a stale instruction or writes a wrong change, verb, producer, time or rows."""
+    repair_world(world)
+    ns_stale(world, verb="review", producer="review-loop")
+    before = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    assert world.run("repair") == 0
+    after = dt.datetime.now(dt.UTC)
+    written = json.loads(ns_file(world).read_text(encoding="utf-8"))
+    next_step.validate(written)
+    assert {key: written[key] for key in ("schema_version", "change", "verb", "row_ids", "producer")} == {
+        "schema_version": 1,
+        "change": "demo",
+        "verb": "review-loop",
+        "row_ids": [],
+        "producer": "repair",
+    }
+    stamp = dt.datetime.strptime(written["written_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC)
+    assert before <= stamp <= after
+
+
+def test_lifecycle_invalidation_holds_locks(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A concurrent publisher cannot acquire the relevant locks before invalidation."""
+    other = other_worktree(world)
+    key = stage2.record_key("demo", other)
+    write_foreign_record(other, [1])
+    world.write_findings(VERDICT)
+    original = stage2.drop_next_step
+    observed = []
+
+    def checked_drop(root: Path, change: str) -> None:
+        held = []
+        for lock in (stage2.holding_supersession(change, root), stage2.holding_record(change, root)):
+            try:
+                with lock:
+                    held.append(False)
+            except stage2.Refused:
+                held.append(True)
+        observed.append(held)
+        original(root, change)
+
+    monkeypatch.setattr(stage2, "drop_next_step", checked_drop)
+    stage2.release(world.root, "demo")
+    stage2.supersede_loop(world.root, "demo", [key], "continue")
+    assert observed == [[True, False], [True, True]], "invalidation must occur under lifecycle locks"
+
+
+def test_lifecycle_actions_remove_next_instruction(world: World) -> None:
+    """Criterion 24. Planted fault: a successful triage, release, stage retirement, restart or phase-6 release leaves an instruction."""
+    world.write_record([("L1-1", "", "")], state=loop_state(("free", "flash")))
+    # a refused triage is no success: the instruction stands
+    ns_stale(world)
+    assert world.run("triage", "demo", "L9-9=rejected", "no such row") == 2
+    assert ns_file(world).exists()
+    # triage
+    assert world.run("triage", "demo", "L1-1=rejected", "out of scope") == 0
+    assert not ns_file(world).exists()
+    # stage retirement
+    ns_stale(world)
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_RUNGS[0], "--reason", "planted outage") == 0
+    assert not ns_file(world).exists()
+    # release
+    ns_stale(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    assert not ns_file(world).exists()
+    # the phase-6 release, the loop record already released
+    ns_stale(world)
+    assert world.record().parent.is_dir()
+    stage2.release(world.root, "demo")
+    assert not ns_file(world).exists()
+    # release-loop again with no record, and restart
+    ns_stale(world)
+    assert world.run("release-loop") == 0
+    assert not ns_file(world).exists()
+    ns_stale(world)
+    assert world.run("release-loop", "demo", "--restart", "--reason", "planted restart") == 0
+    assert not ns_file(world).exists()
+
+
+def test_held_only_repair_deletes_next_instruction_without_cycling(world: World) -> None:
+    """Round-5 S-19: a held-only repair deletes a stale next.json instead of writing review-loop."""
+    seed_tests(world)
+    table = stage2.render_table(
+        stage2.ROW_COLUMNS,
+        [["L1-1", "MAJOR", "MAINT", "base", "AGENTS.md:1", "held path finding", "deepseek-v4.1-flash", NS_TAKEN, ""]],
+    )
+    world.record().parent.mkdir(parents=True, exist_ok=True)
+    world.record().write_text(
+        f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n"
+        f"{stage2.STATE_KEY}{json.dumps(loop_state(NS_SPENT), sort_keys=True)}\n\n"
+        f"## Round 1 — deepseek-v4.1-flash, 2026-11-25\n\n{table}\n",
+        encoding="utf-8",
+    )
+    ns_stale(world, verb="repair", producer="review-loop")
+    assert world.run("repair") == 0
+    assert not ns_file(world).exists()
+
+
+def test_phase6_repair_publishes_review_instruction(world: World) -> None:
+    """Round-5 S-22: repairing a phase-6 row writes next.json with verb `review`, not `review-loop`."""
+    seed_tests(world)
+    p6_table = stage2.render_table(
+        stage2.ROW_COLUMNS,
+        [["P6-1", "MAJOR", "MAINT", "base", "src/app.py:1", "phase-6 finding", "Codex", "taken — test_a", ""]],
+    )
+    world.write_findings(f"## Phase 6 — Codex, 2026-11-25\n\n{p6_table}\n\nPhase 6 verdict: codex s1, 2026-11-25")
+    if world.record().exists():
+        world.record().unlink()
+    git(world.root, "add", "plans/changes/demo/findings.md")
+    git(world.root, "commit", "-m", "add phase-6 taken row")
+    script_repair(
+        world, [repair_step(stdout="P6-1: fixed — tests/test_fix.py::test_fix")], make=[{"stdout": "green\n"}]
+    )
+    ns_stale(world, verb="repair", producer="review-loop")
+    assert world.run("repair") == 0
+    written = json.loads(ns_file(world).read_text(encoding="utf-8"))
+    next_step.validate(written)
+    assert written["verb"] == "review"
+    assert written["producer"] == "repair"
+
+
+def test_stage_selection_passes_over_inadmissible_rung_and_replaces_inadmissible_flash(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Round-5 S-20 and S-21: inadmissible rungs are passed over to the next admissible rung, inadmissible Flash
+    members are replaced by admissible paid rungs, and a declaration-wide failure still refuses with exit 2."""
+    # 1. R1 inadmissible, R2 admissible -> passes over R1 and runs R2.
+    r1, r2 = TEST_RUNGS[0], "minimax-m3"
+
+    def add_r2(entry: dict, _data: dict) -> None:
+        entry["modelle"] = [*TEST_FLASH, r1, r2]
+        entry["modelle_terms"][r2] = {**admissible_terms(anfragen_5h=3250), "valid_until": "2099-01-01"}
+
+    ns_edit_entry(world, add_r2)
+    state_rungs = loop_state(("free", "flash"))
+    state_rungs["free"]["models_store"]["opencode-go"]["models"].append(
+        {"id": r2, "provider": "opencode-go", "api": "openai-completions"}
+    )
+    state_rungs["paid"] = {"ladder": [*TEST_FLASH, r1, r2], "flash": list(TEST_FLASH), "rungs": [r1, r2]}
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state_rungs)
+    ns_terms(world, (r1,), valid_until="2026-01-01")
+    world.script(pi=[{"stdout": "No finding."}])
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert "next:" not in out
+    assert f"passed over {r1}" in err
+    rec_text = world.record().read_text(encoding="utf-8")
+    assert f"## Round 2 — {r2}" in rec_text
+
+    # 2. All Flash members inadmissible, R2 admissible -> Flash runs R2 as replacement.
+    state_flash = loop_state(("free",))
+    state_flash["free"]["models_store"]["opencode-go"]["models"].append(
+        {"id": r2, "provider": "opencode-go", "api": "openai-completions"}
+    )
+    state_flash["paid"] = {"ladder": [*TEST_FLASH, r2], "flash": list(TEST_FLASH), "rungs": [r2]}
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state_flash)
+    ns_terms(world, tuple(TEST_FLASH), valid_until="2026-01-01")
+    world.script(pi=[{"stdout": "No finding."}])
+    code, out, err = ns_run(world, capsys)
+    assert code == 0, err
+    assert "next:" not in out
+    rec_text = world.record().read_text(encoding="utf-8")
+    assert f"replaced by {r2}" in rec_text
+
+    # 3. Declaration-wide failure (S-21) still refuses with exit 2.
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]}, state=state_rungs)
+    (world.root / "model-endpoints.yaml").write_text("::: not yaml :::\n", encoding="utf-8")
+    code, out, _err = ns_run(world, capsys)
+    assert code == 2
+    assert out == ""
+
+
 def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 20 of detached-job-launcher (bead coding-harness-a6ns.1): a process group the runner starts
     in a session of its own joins the job record the environment names, so `jobs.py stop` reaches it.
@@ -34803,3 +35536,26 @@ def test_job_records_separate_process_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.delenv(jobs.RECORD_ENV)
     stage2.launch([sys.executable, "-c", "pass"], tmp_path, {**os.environ}, timeout=30)
     assert len(jobs.read_record(path)["groups"]) == 1
+
+
+def test_released_earlier_unmarked_fixed_row_stops_next_step(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """An earlier released fixed row needs its evidence even when the latest row is marked."""
+    ns_write_rounds(world, {1: [("L1-1", FIXED, "no")]})
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.findings.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if "| L1-1 |" in line:
+            cells = stage2.split_row(line)
+            cells[8] = ""
+            lines[index] = render_row(cells) + "\n"
+            break
+    else:
+        pytest.fail("released row missing")
+    world.findings.write_text("".join(lines), encoding="utf-8")
+    ns_write_rounds(world, {2: [("L2-1", FIXED, "no")]})
+    code, out, err = ns_run(world, capsys)
+    assert code == 2, (out, err)
+    assert out == ""
+    assert "fixed rows without their `Broke a test` mark (L1-1)" in err
