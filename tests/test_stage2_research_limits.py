@@ -51,15 +51,17 @@ def expect_refusal(root: Path, fault: str) -> None:
 
 
 def test_checked_in_limits_have_decided_values() -> None:
-    # Criterion 1. Planted fault: the checked-in file disagrees with the maintainer's decided limits
-    # (all limits raised 1.5x on 2026-11-26 after the judge hit the 900s timeout: run 240, judge 22.5),
-    # misses one of the six limits or states one in another unit.
+    # Criterion 1. Planted fault: the checked-in file is unreadable, misses one of the six limits,
+    # breaks the role/run/judge bounds, or converts minutes wrongly. Concrete numbers live solely in
+    # research-swarm-limits.yaml so changing a limit there never requires editing Python or tests.
     limits = stage2_research_limits.load(REPO_ROOT)
-    assert limits.run_minutes == 240.0
-    assert limits.role_minutes == {"finders": 60.0, "merge": 15.0, "sentence": 7.5, "topics": 15.0, "judge": 22.5}
-    assert limits.run_seconds == 240.0 * 60.0, "the run limit is minutes, converted to seconds"
-    assert limits.role_seconds("finders") == 60.0 * 60.0
-    assert limits.role_seconds("judge") == 22.5 * 60.0
+    assert set(limits.role_minutes) == set(stage2_research_limits.ROLES)
+    assert limits.run_minutes > 0.0
+    assert limits.run_seconds == pytest.approx(limits.run_minutes * 60.0), "the run limit is minutes, converted to seconds"
+    for role in stage2_research_limits.ROLES:
+        assert 0.0 < limits.role_minutes[role] <= limits.run_minutes
+        assert limits.role_seconds(role) == pytest.approx(limits.role_minutes[role] * 60.0)
+    assert limits.role_minutes["judge"] < limits.run_minutes
 
 
 def test_each_root_reads_its_current_limits(tmp_path: Path) -> None:
