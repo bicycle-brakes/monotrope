@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-11-27
 last_reviewed: 2026-11-27
-updated: 2026-11-27
+updated: 2026-11-28
 supersedes: null
 superseded_by: null
 bead: coding-harness-3wtk
@@ -45,16 +45,21 @@ Inspect the detached job's exit with `python3 scripts/jobs.py list`; a successfu
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_enqueue_pr.py::test_ruleset_only_branch_without_classic_protection — the 404 refuses or a ruleset check disappears.
-- 2: not yet written tests/test_enqueue_pr.py::test_ruleset_only_branch_requires_head_checks — a missing or failing required check passes.
-- 3: not yet written tests/test_enqueue_pr.py::test_classic_protection_other_errors_refuse — an unrelated 404 or 403 passes.
-- 4: not yet written tests/test_enqueue_pr.py::test_released_runner_state_line_is_accepted — a runner state line containing a pipe is refused.
-- 5: not yet written tests/test_enqueue_pr.py::test_released_state_lookalikes_refuse — an unrelated malformed pipe-bearing line passes.
+- 1: tests/test_enqueue_pr.py::test_ruleset_only_branch_without_classic_protection — the 404 refuses or a ruleset check disappears.
+- 2: tests/test_enqueue_pr.py::test_ruleset_only_branch_requires_head_checks — a missing or failing required check passes.
+- 3: tests/test_enqueue_pr.py::test_classic_protection_other_errors_refuse — an unrelated 404 or 403 passes.
+- 4: tests/test_enqueue_pr.py::test_released_runner_state_line_is_accepted — a runner state line containing a pipe is refused.
+- 5: tests/test_enqueue_pr.py::test_released_state_lookalikes_refuse — an unrelated malformed pipe-bearing line passes.
 
 ## Do not touch
 
 Do not edit `scripts/stage2.py`, repository settings, tracker data, other changes, or held paths during the implementation attempt; do not change the required-check set or enqueue a real pull request in tests.
 
+## Runner route — 2026-11-27
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
+
 ## Time used
 
 2026-11-27 21:12:51–21:14:48 UTC, 118 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-27 22:58:45–23:00:51 UTC, 127 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · accepted · targeted verification, not the full `make verify`; result: green; test files `tests/test_agent_policy.py`, `tests/test_enqueue_pr.py`, `tests/test_merge_guard.py`, `tests/test_pr_templates.py`; extra ruff targets none beyond the cheap checks; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); reported without blocking: `docs-links` exited 1, `markdownlint` exited 1; a fresh full `make verify` is still required before phase 6 · measured by the runner
