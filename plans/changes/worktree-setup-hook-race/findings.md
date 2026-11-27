@@ -233,3 +233,15 @@ Stage-2 call, 2026-11-27: implement · attempt 1 · route stage-1 · endpoint cl
 >     raise RawStandInLogAccess(message)
 > stand_in_log_guard.RawStandInLogAccess: raw os.open of the declared stand-in counter calls.jsonl.counts.json at /Users/mikypiky/coding-harness/.claude/worktrees/worktree-setup-hook-race/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:168: use atomic_test_log.append_counted
 > ```
+
+Stage-2 call, 2026-11-27: implement · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason GLM through Z.ai at its weekly limit until 2026-11-29 · leak check clean over 1305 files, 6114 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - no work done: the attempt left no model work after runner bookkeeping, derived preparation and formatting; make the change the plan names
+> - Runner cheap checks before post-run verification: the criterion ledger names tests that do not stand, and this attempt owes them: `tests/test_worktree_setup_hook.py::test_trust_check_does_not_consume_setup_budget` (not yet written)
+> ```
