@@ -793,4 +793,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/worktree-setup-hook/plan.md`](changes/worktree-setup-hook/plan.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`changes/worktree-setup-hook/research.md`](changes/worktree-setup-hook/research.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`changes/worktree-setup-hook/spec.md`](changes/worktree-setup-hook/spec.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
+| [`changes/worktree-setup-hook-race/decisions.md`](changes/worktree-setup-hook-race/decisions.md) | draft | none | 2026-11-27 | coding-harness-1ba3 |
+| [`changes/worktree-setup-hook-race/findings.md`](changes/worktree-setup-hook-race/findings.md) | draft | none | 2026-11-27 | coding-harness-1ba3 |
+| [`changes/worktree-setup-hook-race/plan.md`](changes/worktree-setup-hook-race/plan.md) | draft | none | 2026-11-27 | coding-harness-1ba3 |
+| [`changes/worktree-setup-hook-race/research.md`](changes/worktree-setup-hook-race/research.md) | draft | none | 2026-11-27 | coding-harness-1ba3 |
+| [`changes/worktree-setup-hook-race/spec.md`](changes/worktree-setup-hook-race/spec.md) | draft | none | 2026-11-27 | coding-harness-1ba3 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
