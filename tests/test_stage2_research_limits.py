@@ -57,7 +57,9 @@ def test_checked_in_limits_have_decided_values() -> None:
     limits = stage2_research_limits.load(REPO_ROOT)
     assert set(limits.role_minutes) == set(stage2_research_limits.ROLES)
     assert limits.run_minutes > 0.0
-    assert limits.run_seconds == pytest.approx(limits.run_minutes * 60.0), "the run limit is minutes, converted to seconds"
+    assert limits.run_seconds == pytest.approx(limits.run_minutes * 60.0), (
+        "the run limit is minutes, converted to seconds"
+    )
     for role in stage2_research_limits.ROLES:
         assert 0.0 < limits.role_minutes[role] <= limits.run_minutes
         assert limits.role_seconds(role) == pytest.approx(limits.role_minutes[role] * 60.0)
