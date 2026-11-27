@@ -1619,37 +1619,25 @@ class Run:
         return entries
 
     def validate_topic(self, entry: dict, record: dict, *, reused: bool | None = None) -> dict:
-        """Validate one topic answer; a reused one against the replayed origin baseline only.
-
-        A seat this run launched read the live worktree: it validates against this run's own freeze
-        and, failing that, against the origin baseline its prompt packet carried (spec criterion 2).
-        """
+        """Validate citations against both frozen views, preferring the appropriate baseline."""
         assert self.map is not None
         topic = entry["topic"]
         if reused is None:
             reused = bool(record.get("reused_from"))
-
-        def check(sources: dict[str, bytes], history: dict | None) -> dict:
-            return validate_research_report(
-                topic_report_payload(record["stdout"]),
-                run_id=self.run_id,
-                topic=topic,
-                seat=self.seat_id(entry),
-                sources=sources,
-                history=history if topic == 6 else None,
-                receipts=stage2_swarm.parse_receipts(record.get("receipts", "")) if topic >= 9 else (),
-                neighbours=[item["path"] for item in self.map["neighbours"]] if topic == 5 else (),
-            )
-
-        if reused or not self.replayed:
-            return check(self.origin_sources, self.history)
-        try:
-            return check(self.sources, self.live_history)
-        except ResearchReportError as live_error:
-            try:
-                return check(self.origin_sources, self.history)
-            except ResearchReportError:
-                raise live_error from None
+        origin = (self.origin_sources, self.history if topic == 6 else None)
+        live = (self.sources, self.live_history if topic == 6 else None)
+        primary, alternate = (origin, live) if reused else (live, origin)
+        return validate_research_report(
+            topic_report_payload(record["stdout"]),
+            run_id=self.run_id,
+            topic=topic,
+            seat=self.seat_id(entry),
+            sources=primary[0],
+            history=primary[1],
+            alternate=alternate if topic <= 8 else None,
+            receipts=stage2_swarm.parse_receipts(record.get("receipts", "")) if topic >= 9 else (),
+            neighbours=[item["path"] for item in self.map["neighbours"]] if topic == 5 else (),
+        )
 
     def judge_instructions(self) -> str:
         return self.prompt_file("judge.md").rstrip() + "\n\n" + JUDGE_RUNNER_RULES

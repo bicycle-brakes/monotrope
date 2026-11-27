@@ -2275,7 +2275,9 @@ class ResumeChain:
     maps: list[dict]
 
 
-def three_run_chain(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> ResumeChain:
+def three_run_chain(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, *, cite_publication: bool = False
+) -> ResumeChain:
     """Run 1 fails seats A and B, run 2 resumes it and fails only B, run 3 resumes run 2.
 
     The prompts are the ones the run itself builds (a spy around `repository_prompt`), so nothing
@@ -2293,6 +2295,10 @@ def three_run_chain(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> Resu
     monkeypatch.setattr(stage2_research_run.Run, "repository_prompt", spy)
     failing = [{SEAT_A_KEY: [{"exit": 2}], SEAT_B_KEY: [{"exit": 2}]}, {SEAT_B_KEY: [{"exit": 2}]}, {}]
     for number, faults in enumerate(failing):
+        if number == 1 and cite_publication:
+            report = json.loads(repository_report(4))
+            report["claims"][0]["evidence"] = [f"{RESEARCH_REL}::Run one evidence"]
+            faults[SEAT_A_KEY] = [{"stdout": json.dumps(report)}]
         sworld.complete(finder={"stdout": research_locator_report()}, **faults)
         (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
         chain.prompts.append({})
@@ -2301,6 +2307,9 @@ def three_run_chain(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> Resu
         chain.manifests.append(manifest_of(sworld))
         chain.maps.append(map_of(sworld.research.read_text(encoding="utf-8")))
         if number < 2:
+            if number == 0 and cite_publication:
+                with sworld.research.open("a", encoding="utf-8") as output:
+                    output.write("\n## Run one evidence\nPublished evidence.\n")
             commit_publication(sworld)
     return chain
 
@@ -5103,3 +5112,54 @@ def test_incompatible_schema_categories_stop_before_finders(sworld: SwarmWorld) 
     assert sworld.run() == 1
     assert not sworld.calls("finder")
     assert stage2_research_run.LOCATOR_SCHEMA in sworld.research.read_text(encoding="utf-8")
+
+
+def test_reused_report_accepts_live_publication_heading() -> None:
+    # A successful seat launched after publication must remain reusable on the next resume.
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_head = "origin"
+    run.manifest = {"head": "live"}
+    run.origin_sources = {"research.md": b"# Origin\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Origin\nOld evidence.\n# Published\nNew evidence.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Published"]
+    try:
+        result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report)}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a valid live publication citation must remain reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_resumed_report_combines_origin_and_live_citations() -> None:
+    # One claim may cite an origin-only heading and a commit created by the publication.
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run2"
+    run.origin_head = "origin"
+    run.manifest = {"head": "live"}
+    run.origin_sources = {"research.md": b"# Origin only\nOld evidence.\n"}
+    run.sources = {"research.md": b"# Current\nNew evidence.\n"}
+    commit = "a" * 40
+    run.history = {"commits": {}}
+    run.live_history = {"commits": {commit: {"hash": commit}}}
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = ["research.md::Origin only", commit]
+    try:
+        result = run.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=False)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"each citation is supported by an available baseline: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"
+
+
+def test_three_run_resume_reuses_publication_citation(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    chain = three_run_chain(sworld, monkeypatch, cite_publication=True)
+    assert chain.codes == [1, 1, 0]
+    calls = [(call["topic"], call["model"]) for call in chain.calls[2] if call["kind"] == "repository"]
+    assert calls == [SEAT_B_CALL], "the successful seat citing run 1's publication must be reused"
+    slot = next(slot for slot in chain.manifests[2]["slots"] if slot["slot_id"] == SEAT_A_SLOT)
+    assert slot["reused_from"] == chain.manifests[1]["run_id"]

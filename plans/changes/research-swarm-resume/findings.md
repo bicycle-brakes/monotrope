@@ -215,8 +215,8 @@ Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1644` | A seat relaunched in run 2 can produce a valid report citing the publication commit or a new heading in the live `research.md`. Run 2 accepts it against live evidence, but run 3 validates that stored report only against the origin baseline, rejects it and launches the successful seat again. The three-run regression uses scripted reports that do not exercise this case. [Criterion 2] | Codex | taken — Criterion 2: reuse validation must also accept citations valid against live worktree evidence (not only origin baseline) so run 3 reuses run 2 reports citing live publication commits/headings, with regression test | — |
-| F-2 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1646` | A newly launched topic-6 report can cite both an origin-only reference from its prompt and the later publication commit visible in the live worktree. Neither complete validation pass supports both citations, so a report whose only claim uses both is rejected even though each citation is supported by one of the required baselines. [Criterion 2] | Codex | taken — Criterion 2: validate topic reports against merged origin+live sources/history per citation so a report combining origin-only and live references passes, with regression test | — |
+| F-1 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1644` | A seat relaunched in run 2 can produce a valid report citing the publication commit or a new heading in the live `research.md`. Run 2 accepts it against live evidence, but run 3 validates that stored report only against the origin baseline, rejects it and launches the successful seat again. The three-run regression uses scripted reports that do not exercise this case. [Criterion 2] | Codex | fixed — tests/test_stage2_swarm.py::test_reused_report_accepts_live_publication_heading | — |
+| F-2 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1646` | A newly launched topic-6 report can cite both an origin-only reference from its prompt and the later publication commit visible in the live worktree. Neither complete validation pass supports both citations, so a report whose only claim uses both is rejected even though each citation is supported by one of the required baselines. [Criterion 2] | Codex | fixed — tests/test_stage2_swarm.py::test_resumed_report_combines_origin_and_live_citations | — |
 
 Phase 6 verdict: codex 01a21ab9-c01c-7a52-b5bd-f688f27981fa, 2026-11-27
 Reviewer session: codex 01a21ab9-c01c-7a52-b5bd-f688f27981fa — a fresh session reviewed: no phase-2a session was recorded
@@ -252,3 +252,7 @@ Kept from the loop record:
 > No finding.
 
 <!-- End of released loop record -->
+
+Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6078 commits, 12 rules.
+
+Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
