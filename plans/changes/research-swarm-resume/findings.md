@@ -272,3 +272,14 @@ Reviewer session: codex 01a21b0f-71b0-7910-88d9-e6adf7268527 — a fresh session
 Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6085 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6089 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-1 | MAJOR | SPEC | fix-r2 | scripts/stage2_research_run.py:1642 | A reused repository report is validated against the live sources first even when `reused=True`; that argument never changes the selected baseline. If a citation points to a heading in `research.md` whose section grew after publication, the reused report’s resolved excerpt includes the new publication instead of the origin-run evidence shown to the seat. The judge therefore receives evidence different from the replayed origin baseline. Reused reports must be validated against that baseline. [Criterion 2] | Codex | taken — Criterion 2: select baseline by origin vs resumed launch: when reused and launched in the origin run (origin_run_id), prefer origin primary (alternate=live); when launched in a resumed run (newly launched or reused from a post-origin run), prefer live primary (alternate=origin), keeping both test_reused_heading_evidence_includes_live_publication and a new regression for origin-launched reused heading evidence green | — |
+
+Phase 6 verdict: codex 01a21b61-b141-7c21-b86b-4f1264f0e058, 2026-11-27
+Reviewer session: codex 01a21b61-b141-7c21-b86b-4f1264f0e058 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
