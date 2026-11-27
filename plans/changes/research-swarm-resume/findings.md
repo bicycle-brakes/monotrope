@@ -256,3 +256,15 @@ Kept from the loop record:
 Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6078 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6083 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | MAJOR | SPEC | base | `scripts/stage2_research_run.py`, `validate_topic`; `scripts/stage2_research_report.py`, `_evidence` | A seat launched in run 2 can cite a `research.md` heading whose section contains run 1’s appended publication. When run 3 reuses that seat, the same heading also resolves in the origin file, so validation accepts the shorter origin excerpt and never checks the live excerpt the seat cited. The reused report can therefore reach the judge with evidence that omits the cited publication. [Criterion 2] | Codex | taken — Criterion 2: structural fix in validate_topic / evidence resolution to resolve against live research.md first (falling back to origin only when absent in live) so live headings include appended publication rather than truncating to origin, with regression test | — |
+| F6-2 | MAJOR | SPEC | base | `scripts/stage2_research_run.py`, `stage_history` and `validate_topic`; `scripts/stage2_research_history.py`, `build_research_history` | A topic-6 seat launched on a resumed run can validly cite that run’s publication commit. After enough matching resumes commit further publications, that commit falls outside the live history’s ten-commit limit and is absent from the origin history. The next resume rejects and relaunches the previously valid seat instead of carrying it forward. [Criteria 2 and 5] | Codex | taken — Criteria 2 and 5: structural fix carrying forward accumulated history commits across resumed runs in the stored run record (union of origin + prior resumed runs + live history) so valid publication commits never age out of the 10-commit window, with regression test | — |
+
+Phase 6 verdict: codex 01a21b0f-71b0-7910-88d9-e6adf7268527, 2026-11-27
+Reviewer session: codex 01a21b0f-71b0-7910-88d9-e6adf7268527 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
