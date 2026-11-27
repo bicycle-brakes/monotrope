@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round or a consumed ladder — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a consumed ladder names `repair` for an open taken row and `review` once every one is repaired; a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -1334,9 +1334,10 @@ into a shell. Thirteen verbs exist:
   free swarm the `free_stage` rule selects live, round 2 the three cheapest
   reachable admitted models for an availability-enabled run (a legacy
   declaration uses `flash_swarm`), then one eligible ladder rung each, until a
-  round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
-  refusal and exit 3 a loop that finished with a clean round (R-11 of the
-  review-swarm review).
+  round is clean or the ladder is consumed (ADR 0021). Exit 0 means a round
+  was written, or that a consumed ladder named its next step without writing
+  a round (see below); exit 2 a refusal and exit 3 a loop that finished with
+  a clean round (R-11 of the review-swarm review).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
   With `--stage-failed <model> --reason <text>` it retires the stage that model
   belongs to instead: the stage is consumed, the reason and a `## Stage failed`
@@ -1796,7 +1797,7 @@ documented 2026-10-25 source re-read and expire 2026-10-31.
 
 After implementation and before phase 6, `review-loop` runs one round per
 call, and the loop runs **until a round is clean — every row of a round
-decided and none accepted (ADR 0021).** Round 1 is the **free swarm**: a
+decided and none accepted (ADR 0021) — or the ladder is consumed.** Round 1 is the **free swarm**: a
 forced live catalog refresh (`pi update --models` before `pi --list-models`,
 no stale cache listed) discovers the models the `opencode-go` provider offers,
 and the `free_stage` rule in `model-endpoints.yaml` — provider, id suffix,
@@ -1839,7 +1840,33 @@ A member whose answer is malformed — no six-cell row and not exactly `No findi
 format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
 keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).
 When every stage of a run is consumed and the last round was not clean, the
-loop stops and reports to the maintainer — no model is substituted. The rows
+ladder is consumed and the loop starts nothing: no model is substituted, and
+no maintainer decision is needed for that alone. A rung or Flash member the
+current declaration no longer admits (expired, missing or malformed terms, a
+dated skip, an exclusion, a removal, unread retention or training terms)
+counts as consumed; a Flash stage counts as consumed only when no member is
+admitted and no unconsumed admitted rung could replace one. With at least one
+completed round since the last restart, `review-loop` exits 0 after the
+existing stops (undecided rows, unmarked `fixed` rows, origin and record
+integrity, the clean stop, the repair brake) and prints exactly one line on
+standard output:
+`next: repair <change>` while any round of the run since the last restart holds
+a taken row that no repair has marked `fixed` — an unmarked taken row
+included — and `next: review <change>` once every taken row is repaired. A
+cut last round with no accepted finding names `review` as well. Diagnostics,
+such as each passed-over model with its reason, go to standard error. The same
+instruction is written as schema-validated JSON (`scripts/next_step_schema.json`:
+schema version 1, change, verb `review`, `repair`, `hand` or `review-loop`, row
+ids, producing verb and UTC time) to `next.json` beside `loop.md`, never into
+Markdown; a failed validation or write exits 1 without the line. Every
+`review-loop` call removes the previous `next.json` first; a successful
+`repair` writes one for `review-loop` (or `review` when the repaired batch held
+a phase-6 row); `triage`, `release-loop` (also
+`--stage-failed` and `--restart`) and the phase-6 release remove it. A run
+without a completed round whose stages are consumed still refuses with exit 2.
+After the last repair, phase 6 follows as ever: a fresh full `make verify` and
+the independent reviewer's read of the whole diff, also when the loop's diff was
+cut, come before the release. The rows
 go into a **loop record** outside the worktree and outside the git directory
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it

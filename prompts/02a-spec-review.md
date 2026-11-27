@@ -17,7 +17,8 @@ kept: phase 6 is Codex's (`gpt-6.1-terra`), in a fresh session. The runner adds
 the reviewer and the Status to each row it writes, and no session line. The
 review loop
 between the two phases runs until a round is clean — a free-model swarm, a
-Flash swarm, then the paid ladder (`docs/WORKFLOW.md` §4, ADR 0021).
+Flash swarm, then the paid ladder (`docs/WORKFLOW.md` §4, ADR 0021) — or until
+the ladder is consumed; then it names the next step: `next: repair <change>` while a taken row is unrepaired, `next: review <change>` once every taken row is repaired.
 
 Through the runner you answer in table rows of six cells — `| ID | Severity |
 Dimension | Origin | Where | Finding |` — and the runner adds the reviewer and

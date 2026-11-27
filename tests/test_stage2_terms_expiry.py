@@ -270,10 +270,14 @@ def test_saved_admission_cannot_authorize_an_expired_call(
     dispatched = len(world.reviews("pi"))
     clock["day"] = dt.date(2026, 11, 1)
     world.script(pi=[{"stdout": rows(1)}] * 2)
-    assert world.run("review-loop") == 2
-    assert len(world.reviews("pi")) == dispatched, "an expired member was dispatched on the receipt's selection"
-    assert world.record().read_text(encoding="utf-8") == record_after_round, "the refusal reset prior run history"
-    assert stage2.rounds_run(world.record().read_text(encoding="utf-8"), "") == 1, "the refusal fabricated a round"
+    # The Flash stage keeps its admissible members (ladder-next-step, criterion 13): the expired
+    # member is passed over and never dispatched; the others review.
+    assert world.run("review-loop") == 0
+    called = [rung_of(call) for call in world.reviews("pi")[dispatched:]]
+    assert called and TEST_LADDER[0] not in called, "an expired member was dispatched on the receipt's selection"
+    after = world.record().read_text(encoding="utf-8")
+    assert "## Round 1 — " in record_after_round and "## Round 1 — " in after, "the round reset prior run history"
+    assert "## Round 2 — " in after
     assert "expired on 2026-10-31" in capsys.readouterr().err
     capsys.readouterr()
     # Act 2: a saved selection whose terms expire after the parent's batch
@@ -573,8 +577,14 @@ def test_expiry_preserves_prior_admission_guards(
     assert world.run("review-loop") == 0
     assert sorted(rung_of(call) for call in world.reviews("pi")) == sorted(TEST_FREE)
     decide_record(world, status=FIXED)
-    assert world.run("review-loop") == 2, "an empty eligible selection was reported as a clean round"
-    assert stage2.CLEAN_CODE != 2 and "expired on 2026-10-25" in capsys.readouterr().err
+    capsys.readouterr()
+    # Expired rungs count as consumed: the spent ladder names review, never a clean stop
+    # (ladder-next-step, criteria 1, 6 and 12).
+    code = world.run("review-loop")
+    assert code == 0 and code != stage2.CLEAN_CODE, "an empty eligible selection was reported as a clean round"
+    output = capsys.readouterr()
+    assert output.out == "next: review demo\n"
+    assert "expired on 2026-10-25" in output.err
 
 
 # ---------------------------------------------------------------------------
@@ -750,8 +760,16 @@ def test_expiry_warnings_print_before_a_refused_call(
         world.write_record([("L1-1", FIXED, "no")], state=loop_state(("free",)))
         if case == "review-expired":
             set_terms(world, TEST_LADDER[0], valid_until="2026-10-25")
-        else:
-            monkeypatch.setattr(stage2, "checked_prompt", refuse)
+            # An expired Flash member is passed over, not a refusal, while another member is
+            # admissible (ladder-next-step, criterion 13): the warning still prints and the
+            # expired model is never dispatched.
+            world.script(pi=[{"stdout": rows(1)}] * 3)
+            assert world.run("review-loop") == 0
+            output = capsys.readouterr()
+            assert warning in output.out + output.err
+            assert TEST_LADDER[0] not in [rung_of(call) for call in world.reviews("pi")]
+            return
+        monkeypatch.setattr(stage2, "checked_prompt", refuse)
         verb = "review-loop"
     assert world.run(verb) == 2
     output = capsys.readouterr()
@@ -770,7 +788,8 @@ def test_expiry_warnings_print_before_a_refused_call(
 def test_spent_refusal_says_no_model_is_substituted(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """An expiry-enriched spent-run refusal retains the no-substitution guarantee."""
+    """An expiry-enriched spent run substitutes no model: it names review and states the expiry on
+    standard error (ladder-next-step, criteria 1 and 6)."""
     monkeypatch.setattr(stage2, "terms_today", lambda: dt.date(2026, 11, 1))
     for model in TEST_LADDER:
         set_terms(world, model, valid_until="2026-10-31")
@@ -778,10 +797,11 @@ def test_spent_refusal_says_no_model_is_substituted(
     state["paid"] = {"ladder": [], "flash": [], "rungs": []}
     world.write_record([("L1-1", FIXED, "no")], state=state)
     before = world.record().read_bytes()
-    assert world.run("review-loop") == 2
-    error = capsys.readouterr().err
-    assert "expired on 2026-10-31" in error
-    assert "No model is substituted." in error
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    output = capsys.readouterr()
+    assert output.out == "next: review demo\n"
+    assert "expired on 2026-10-31" in output.err
     assert world.reviews() == []
     assert world.record().read_bytes() == before
 
