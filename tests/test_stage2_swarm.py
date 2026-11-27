@@ -5163,3 +5163,58 @@ def test_three_run_resume_reuses_publication_citation(sworld: SwarmWorld, monkey
     assert calls == [SEAT_B_CALL], "the successful seat citing run 1's publication must be reused"
     slot = next(slot for slot in chain.manifests[2]["slots"] if slot["slot_id"] == SEAT_A_SLOT)
     assert slot["reused_from"] == chain.manifests[1]["run_id"]
+
+
+def test_reused_heading_evidence_includes_live_publication() -> None:
+    run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+    run.map = {"neighbours": []}
+    run.run_id = "run3"
+    run.origin_sources = {"research.md": b"# Evidence\nOriginal.\n"}
+    run.sources = {"research.md": b"# Evidence\nOriginal.\nPublished finding.\n"}
+    run.history = run.live_history = None
+    run.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(4))
+    report["claims"][0]["evidence"] = ["research.md::Evidence"]
+    result = run.validate_topic({"topic": 4}, {"stdout": json.dumps(report)}, reused=True)
+    assert "Published finding." in result["claims"][0]["resolved"][0]["excerpt"]
+
+
+def test_resumed_history_carries_aged_out_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    old = "a" * 40
+    origin = "b" * 40
+    first = "c" * 40
+    latest = "d" * 40
+    histories = {
+        origin: {"commits": {}},
+        first: {"commits": {old: {"hash": old, "subject": "publication"}}},
+        latest: {"commits": {}},
+    }
+    monkeypatch.setattr(stage2_research_run, "build_research_history", lambda _r, h, _p, **_k: histories[h])
+
+    def make_run(head, previous):
+        run = stage2_research_run.Run.__new__(stage2_research_run.Run)
+        run.root = Path()
+        run.map = {"entries": [], "neighbours": []}
+        run.origin_head = origin
+        run.origin_research = b"origin"
+        run.manifest = {"head": head}
+        run.source = SimpleNamespace(usable=previous is not None, run={"binding": previous})
+        run.binding = {}
+        run.store = SimpleNamespace(set_append=lambda _id, binding: setattr(run, "binding", binding))
+        run.run_id = "run"
+        run.stage_history()
+        return run
+
+    run2 = make_run(first, None)
+    run3 = make_run(latest, run2.with_origin({}))
+    run3.origin_sources = run3.sources = {"research.md": b"# Evidence\ntext\n"}
+    run3.seat_id = lambda _entry: "endpoint:model"
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = [old]
+    try:
+        result = run3.validate_topic({"topic": 6}, {"stdout": json.dumps(report)}, reused=True)
+    except stage2_research_run.ResearchReportError as exc:
+        pytest.fail(f"a previously valid publication commit must remain reusable: {exc}")
+    assert result["claims"][0]["evidence_status"] == "valid"

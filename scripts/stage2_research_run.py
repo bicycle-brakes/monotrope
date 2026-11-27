@@ -616,7 +616,11 @@ class Run:
     def with_origin(self, binding: dict) -> dict:
         """The stored binding plus the replayable origin baseline; the reuse comparison ignores it."""
         assert self.origin_head is not None and self.origin_research is not None
-        return {**binding, "origin": origin_record(self.origin_head, self.origin_research)}
+        return {
+            **binding,
+            "origin": origin_record(self.origin_head, self.origin_research),
+            "history_commits": getattr(self, "history_commits", {}),
+        }
 
     @property
     def replayed(self) -> bool:
@@ -1572,6 +1576,23 @@ class Run:
                 )
         except ResearchHistoryError as error:
             raise Stop(f"the local history could not be collected ({error}); no topic starts.", 1) from error
+        previous = self.source.run["binding"].get("history_commits", {}) if self.source and self.source.usable else {}
+        if not isinstance(previous, dict):
+            previous = {}
+        self.history_commits = {
+            **{
+                key: value
+                for key, value in previous.items()
+                if isinstance(key, str)
+                and _HEAD.fullmatch(key)
+                and isinstance(value, dict)
+                and value.get("hash") == key
+            },
+            **self.history["commits"],
+            **self.live_history["commits"],
+        }
+        # Keep the prompt and publication packet frozen; only validation sees accumulated evidence.
+        self.live_history = {**self.live_history, "commits": self.history_commits}
 
     def topic_entries(self) -> list[dict]:
         entries = []
@@ -1626,7 +1647,7 @@ class Run:
             reused = bool(record.get("reused_from"))
         origin = (self.origin_sources, self.history if topic == 6 else None)
         live = (self.sources, self.live_history if topic == 6 else None)
-        primary, alternate = (origin, live) if reused else (live, origin)
+        primary, alternate = live, origin
         return validate_research_report(
             topic_report_payload(record["stdout"]),
             run_id=self.run_id,
