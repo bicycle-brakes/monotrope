@@ -422,3 +422,14 @@ Reviewer session: codex 01a21bb0-fdda-7933-97b7-c12635a5e2be — a fresh session
 Stage-2 call, 2026-11-27: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6099 commits, 12 rules.
 
 Runner restoration, 2026-11-27: repair · attempt 1 · route codex — lifecycle fields: plans/changes/research-swarm-resume/plan.md, plans/changes/research-swarm-resume/spec.md — unchanged
+
+Stage-2 call, 2026-11-27: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1290 files, 6102 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-27
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| R-1 | MAJOR | SPEC | fix-r4 | `scripts/stage2_research_run.py:1657` | A seat launched in run 2 can return a valid claim and a second claim citing a heading that does not yet exist. The report is accepted with the second claim unsupported. If run 2’s publication later adds that heading, run 3 validates the reused report against run 3’s live file and changes the second claim to valid, sending newly acquired evidence to the judge. The stored result must retain the evidence available when the seat was launched. This also affects headings whose excerpts grow after the seat’s run. [Criterion 2] | Codex | taken — Criterion 2: structural choke-point fix persisting the launching run's frozen research.md bytes in the stored run record (keyed by run_id) so reusing any stored slot from launched_in validates strictly against that launching run's exact frozen snapshot (plus origin for origin-prompt refs on post-origin launches), never against a later run's newer live research.md, with regression test | — |
+
+Phase 6 verdict: codex 01a21c01-b242-7170-bb23-9e64c2c95680, 2026-11-27
+Reviewer session: codex 01a21c01-b242-7170-bb23-9e64c2c95680 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
