@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-11-25
 created: 2026-11-25
 last_reviewed: 2026-11-25
-updated: 2026-11-26
+updated: 2026-11-27
 supersedes: null
 superseded_by: null
 bead: coding-harness-va1l
@@ -583,3 +583,21 @@ The runner handed the taken rows below to the orchestrator before any model call
 Each row's Status and `Broke a test` cells live in: F-1 in findings.md.
 
 Book each row from your own evidence as `fixed — tests/<path>::<function>`, setting its `Broke a test` mark. Book `fixed — guard test — tests/<path>::<function>` only for a row taken as `taken — guard test — <reason>` with a nonempty unquoted reason. When no test fits, retake the row as `taken — not a test — <reason>` by editing its Status in the file named above by hand (correct its `Where` cell there first when `triage` refuses it); only then book it as `fixed — not a test — orchestrator hand edit <sha>`.
+
+Stage-2 call, 2026-11-26: review · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1292 files, 6063 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-11-26
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py::union_required; scripts/enqueue_pr.py::normalize_rollup | When a ruleset requires a check from a particular GitHub App, the command discards the required app identity and matches only the check name. A successful check with the same name from another app can therefore satisfy the command even though the required app’s check is absent. Admission must be refused in that case. [Criteria 8 and 24] | Codex | taken — preserve optional required `integration_id` (GitHub App id) per required check in `union_required` and read the CheckRun's `checkSuite.app.databaseId` (or app id) in `ROLLUP_QUERY`/`normalize_rollup` so when a ruleset pins a non-null `integration_id`, only a CheckRun from that app satisfies the required check (while null/unset integration_id still matches any app by check name); add unit tests in `tests/test_enqueue_pr.py` | — |
+| F-2 | MINOR | SPEC | base | tests/test_enqueue_pr.py; tests/test_pr_templates.py | No test checks that the documented merge procedure permits the orchestrator to use default mode without a separate maintainer request. The template test checks for the command and maintainer option, but a regression restoring a maintainer-request requirement to the procedure would pass it. [Criterion 20] | Codex | taken — not a test — add an assertion in `tests/test_pr_templates.py` verifying `prompts/07-commit.md` permits default-mode admission through `scripts/enqueue_pr.py` without a separate maintainer request (Criterion 20) | — |
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+> Guard evidence: tests/test_stage2.py::test_phase_six_records_reviewed_commit — fault: the patched append operation removes the reviewed-commit line from the verdict written by the runner — catches without switch: yes; the test reads the written verdict and checks its commit against each reviewed head.
+
+Reviewed commit: 6258e42c541958ab3a70c6236fa6316e1595fecb
+
+Phase 6 verdict: codex 01a219f8-987a-74e1-bb7b-0ae9e0d442fa, 2026-11-26
+Reviewer session: codex 01a219f8-987a-74e1-bb7b-0ae9e0d442fa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
