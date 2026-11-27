@@ -250,10 +250,20 @@ def union_required(rules: Any, branch: Any) -> set[str | tuple[str, int]]:
     checks = classic.get("checks", [])
     if not isinstance(contexts, list) or not isinstance(checks, list):
         raise Unreadable("the classic required status checks of main are of an unexpected shape")
-    for context in [*contexts, *(item.get("context") if isinstance(item, dict) else None for item in checks)]:
+    for context in contexts:
         if not isinstance(context, str) or not context:
             raise Unreadable("a classic required status check of main has no name")
         required.add(context)
+    for check in checks:
+        context = check.get("context") if isinstance(check, dict) else None
+        if not isinstance(context, str) or not context:
+            raise Unreadable("a classic required status check of main has no name")
+        app_id = check.get("app_id")
+        if app_id == -1:
+            app_id = None
+        if app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0):
+            raise Unreadable("a classic required check has an invalid app_id")
+        required.add((context, app_id) if app_id is not None else context)
     return required
 
 
@@ -357,7 +367,7 @@ class GitHub:
         if result.returncode:
             diagnostic = (result.stderr or result.stdout or "").strip()
             if "HTTP 404" in diagnostic and "Branch not protected" in diagnostic:
-                protection = {}
+                protection = {"protected": False}
             else:
                 raise Unreadable(f"gh api {endpoint} failed: {diagnostic}")
         else:
@@ -365,6 +375,27 @@ class GitHub:
                 protection = json.loads(result.stdout)
             except (json.JSONDecodeError, TypeError):
                 raise Unreadable(f"gh api {endpoint} answered no JSON") from None
+        if not isinstance(protection, dict) or not isinstance(protection.get("protected"), bool):
+            raise Unreadable("the classic branch protection of main could not be established")
+        if protection["protected"]:
+            endpoint = f"repos/{owner}/{name}/branches/{branch}/protection/required_status_checks"
+            result = self._gh("api", endpoint)
+            if result.returncode:
+                diagnostic = (result.stderr or result.stdout or "").strip()
+                if "HTTP 404" in diagnostic and "Required status checks not enabled" in diagnostic:
+                    classic = None
+                else:
+                    raise Unreadable(f"gh api {endpoint} failed: {diagnostic}")
+            else:
+                try:
+                    classic = json.loads(result.stdout)
+                except (json.JSONDecodeError, TypeError):
+                    raise Unreadable(f"gh api {endpoint} answered no JSON") from None
+                if not isinstance(classic, dict) or "checks" not in classic:
+                    raise Unreadable("the classic required status checks of main could not be established")
+            protection = {"protection": {"required_status_checks": classic}}
+        else:
+            protection = {"protection": None}
         return union_required(rules, protection)
 
     def head_checks(self, oid: str) -> list[tuple[str, str] | tuple[str, str, int]]:
@@ -751,12 +782,12 @@ def commit_problems(root: Path, commit: str, parents: list[str], folder: str, ma
         options = ("-r", "--no-commit-id", "--no-renames", "--name-only", "-z")
         raw = _git_bytes(root, "diff-tree", *options, parents[0], commit)
         paths = [path.decode("utf-8", errors="replace") for path in raw.split(b"\x00") if path]
-        outside = [p for p in paths if not (p.startswith(f"{CHANGES_DIR}{folder}/") or p == INDEX_PATH)]
+        outside = [p for p in paths if p not in {f"{CHANGES_DIR}{folder}/findings.md", INDEX_PATH}]
         if outside:
             listing = ", ".join(outside[:10]) + (" …" if len(outside) > 10 else "")
             return [
                 f"commit {short} changes {listing} after the reviewed commit; only record-only commits inside "
-                f"{CHANGES_DIR}{folder}/ or {INDEX_PATH}, empty commits and clean merges of main may follow it"
+                f"{CHANGES_DIR}{folder}/findings.md or {INDEX_PATH}, empty commits and clean merges of main may follow it"
             ]
         return []
     if len(parents) != 2:

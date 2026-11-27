@@ -549,7 +549,7 @@ def _empty(world: World, message: str) -> None:
 
 
 def _record_only(world: World, message: str) -> None:
-    world.commit({"plans/changes/demo/notes.md": "note\n", "plans/INDEX.md": "# Index 2\n"}, message)
+    world.commit({FINDINGS: phase6(world.reviewed) + "\nrecord\n", "plans/INDEX.md": "# Index 2\n"}, message)
 
 
 def _clean_main_merge(world: World, message: str) -> None:
@@ -714,7 +714,14 @@ def test_required_checks_union(make: Callable[..., World], capsys: pytest.Captur
 
     # The adapter reads both sources and unions them; a failed read of either is unreadable.
     repo = (0, json.dumps({"owner": {"login": "o"}, "name": "r"}), "")
-    fake = FakeRun([repo, (0, json.dumps(rules), ""), (0, json.dumps(branch), "")])
+    fake = FakeRun(
+        [
+            repo,
+            (0, json.dumps(rules), ""),
+            (0, json.dumps({"protected": True}), ""),
+            (0, json.dumps(branch["protection"]["required_status_checks"]), ""),
+        ]
+    )
     assert ep.GitHub(tmp_path, run=fake).required_checks("main") == {"verify", "lint", "legacy", "app"}
     assert fake.argv[1][:2] == ["gh", "api"] and fake.argv[1][2] == "repos/o/r/rules/branches/main?per_page=100"
     assert fake.argv[2] == ["gh", "api", "repos/o/r/branches/main"]
@@ -1194,3 +1201,28 @@ def test_required_check_respects_ruleset_app_identity() -> None:
     states = ep.normalize_rollup(nodes)
     assert not ep.checks_problems(github, "head")
     assert "checkSuite" in ep.ROLLUP_QUERY and "databaseId" in ep.ROLLUP_QUERY
+
+
+def test_post_review_spec_and_code_are_not_records(make: Callable[..., World]) -> None:
+    world = make()
+    for path in (SPEC, "plans/changes/demo/tool.py"):
+        head = world.commit({path: "substantive change\n"}, "unreviewed change")
+        assert ep.post_review_problems(world.root, world.reviewed, head, "demo", world.main_tip)
+
+
+def test_classic_required_check_uses_app_identity(tmp_path: Path) -> None:
+    repo = (0, json.dumps({"owner": {"login": "o"}, "name": "r"}), "")
+    branch = (0, json.dumps({"protected": True}), "")
+    checks = (0, json.dumps({"contexts": ["verify"], "checks": [{"context": "verify", "app_id": 42}]}), "")
+    fake = FakeRun([repo, (0, "[]", ""), branch, checks])
+    required = ep.GitHub(tmp_path, run=fake).required_checks("main")
+    assert ("verify", 42) in required
+    assert fake.argv[3] == ["gh", "api", "repos/o/r/branches/main/protection/required_status_checks"]
+    assert ep.checks_problems(
+        type(
+            "GH",
+            (),
+            {"required_checks": lambda _self, _: required, "head_checks": lambda _self, _: [("verify", "SUCCESS", 99)]},
+        )(),
+        "a",
+    )
