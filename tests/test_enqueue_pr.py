@@ -1161,3 +1161,36 @@ def test_failed_enqueue_rereads_queue_state(make, capsys):
     world.gh.pull_request = reread
     assert world.run("7") == 0
     assert "already queued" in capsys.readouterr().out
+
+
+def test_required_check_respects_ruleset_app_identity() -> None:
+    rules = [
+        {
+            "type": "required_status_checks",
+            "parameters": {
+                "required_status_checks": [
+                    {"context": "verify", "integration_id": 42},
+                ]
+            },
+        }
+    ]
+    required = ep.union_required(rules, {})
+    assert required == {("verify", 42)}
+    nodes = [
+        {
+            "__typename": "CheckRun",
+            "name": "verify",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "checkSuite": {"app": {"databaseId": 99}},
+        }
+    ]
+    states = ep.normalize_rollup(nodes)
+    github = type(
+        "Checks", (), {"required_checks": lambda _self, _branch: required, "head_checks": lambda _self, _head: states}
+    )()
+    assert ep.checks_problems(github, "head")
+    nodes[0]["checkSuite"]["app"]["databaseId"] = 42
+    states = ep.normalize_rollup(nodes)
+    assert not ep.checks_problems(github, "head")
+    assert "checkSuite" in ep.ROLLUP_QUERY and "databaseId" in ep.ROLLUP_QUERY

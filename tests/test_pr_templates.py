@@ -107,3 +107,11 @@ def test_both_templates_carry_what_it_touches() -> None:
         assert TOUCH_COMMAND in section[0], f"{path.name}: the section names the command"
         assert "Architecture delta:" in section[1] and "plans/changes/<name>/design.md" in section[1], path.name
     assert (REPO / "scripts" / "touch_map.py").is_file(), "the templates name a script that is not there"
+
+
+def test_merge_procedure_permits_orchestrator_default_admission() -> None:
+    text = (REPO / "prompts" / "07-commit.md").read_text(encoding="utf-8")
+    ordinary = text.split("**Ordinary pull request:**", 1)[1].split("\n2.", 1)[0]
+    normalized = " ".join(ordinary.split())
+    assert "the orchestrator runs `scripts/enqueue_pr.py <n>` itself" in normalized
+    assert "no request from the maintainer is" in normalized and "needed" in normalized

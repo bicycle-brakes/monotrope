@@ -127,7 +127,7 @@ ROLLUP_QUERY = (
     "            pageInfo { hasNextPage endCursor }\n"
     "            nodes {\n"
     "              __typename\n"
-    "              ... on CheckRun { name status conclusion }\n"
+    "              ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }\n"
     "              ... on StatusContext { context state }\n"
     "            }\n"
     "          }\n"
@@ -206,14 +206,14 @@ def parse_pull_request(payload: Any, number: int) -> PullRequest:
     return pr
 
 
-def union_required(rules: Any, branch: Any) -> set[str]:
+def union_required(rules: Any, branch: Any) -> set[str | tuple[str, int]]:
     """The required check names: every active ruleset's rule for the branch, plus classic branch protection.
 
     `rules` is the answer of `repos/{o}/{r}/rules/branches/{branch}` (the active rules of every ruleset that
     targets the branch), `branch` that of `repos/{o}/{r}/branches/{branch}`. A source of another shape is
     unreadable, never empty.
     """
-    required: set[str] = set()
+    required: set[str | tuple[str, int]] = set()
     if not isinstance(rules, list):
         raise Unreadable("the rulesets of main did not answer with a list of rules")
     if len(rules) >= PAGE:
@@ -230,7 +230,10 @@ def union_required(rules: Any, branch: Any) -> set[str]:
             context = check.get("context") if isinstance(check, dict) else None
             if not isinstance(context, str) or not context:
                 raise Unreadable("a required_status_checks rule of main names a check without a context")
-            required.add(context)
+            app_id = check.get("integration_id")
+            if app_id is not None and (not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0):
+                raise Unreadable("a required check has an invalid integration_id")
+            required.add((context, app_id) if app_id is not None else context)
     protection = branch.get("protection") if isinstance(branch, dict) else None
     if not isinstance(branch, dict):
         raise Unreadable("the classic branch protection of main could not be read")
@@ -254,11 +257,11 @@ def union_required(rules: Any, branch: Any) -> set[str]:
     return required
 
 
-def normalize_rollup(nodes: Any) -> list[tuple[str, str]]:
+def normalize_rollup(nodes: Any) -> list[tuple[str, str] | tuple[str, str, int]]:
     """`(name, state)` per check on the head: a conclusion, or `PENDING` while it has none."""
     if not isinstance(nodes, list):
         raise Unreadable("the head's check rollup is of an unexpected shape")
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str, str] | tuple[str, str, int]] = []
     for node in nodes:
         kind = node.get("__typename") if isinstance(node, dict) else None
         if kind == "CheckRun":
@@ -278,7 +281,16 @@ def normalize_rollup(nodes: Any) -> list[tuple[str, str]]:
             state = PENDING if raw in {"PENDING", "EXPECTED"} else raw
         else:
             raise Unreadable(f"the head's check rollup holds an unknown entry {kind!r}")
-        found.append((name, state))
+        if kind == "CheckRun" and node.get("checkSuite") is not None:
+            suite = node["checkSuite"]
+            if not isinstance(suite, dict) or not isinstance(suite.get("app"), dict):
+                raise Unreadable("a check run has an unreadable app")
+            app_id = suite["app"].get("databaseId")
+            if not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0:
+                raise Unreadable("a check run has an unreadable app id")
+            found.append((name, state, app_id))
+        else:
+            found.append((name, state))
     return found
 
 
@@ -337,7 +349,7 @@ class GitHub:
         )
         return parse_pull_request(payload, number)
 
-    def required_checks(self, branch: str) -> set[str]:
+    def required_checks(self, branch: str) -> set[str | tuple[str, int]]:
         owner, name = self.repository()
         rules = self._json("api", f"repos/{owner}/{name}/rules/branches/{branch}?per_page={PAGE}")
         endpoint = f"repos/{owner}/{name}/branches/{branch}"
@@ -355,9 +367,9 @@ class GitHub:
                 raise Unreadable(f"gh api {endpoint} answered no JSON") from None
         return union_required(rules, protection)
 
-    def head_checks(self, oid: str) -> list[tuple[str, str]]:
+    def head_checks(self, oid: str) -> list[tuple[str, str] | tuple[str, str, int]]:
         owner, name = self.repository()
-        found: list[tuple[str, str]] = []
+        found: list[tuple[str, str] | tuple[str, str, int]] = []
         after: str | None = None
         for _ in range(50):
             args = ["api", "graphql", "-f", f"query={ROLLUP_QUERY}", "-f", f"owner={owner}", "-f", f"name={name}"]
@@ -790,8 +802,9 @@ def checks_problems(github: Any, head: str) -> list[str]:
     except Unreadable as error:
         return [f"the checks on the head could not be read: {error}"]
     problems = []
-    for name in sorted(required):
-        found = [state for check, state in states if check == name]
+    for requirement in sorted(required, key=lambda item: (item, 0) if isinstance(item, str) else item):
+        name, app_id = (requirement, None) if isinstance(requirement, str) else requirement
+        found = [row[1] for row in states if row[0] == name and (app_id is None or len(row) == 3 and row[2] == app_id)]
         if not found:
             problems.append(f"required check `{name}` is absent on the head")
         elif PENDING in found:
