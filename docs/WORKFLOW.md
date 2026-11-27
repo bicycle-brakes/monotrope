@@ -86,7 +86,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round or a consumed ladder — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a consumed ladder names `repair` for an open taken row and `review` once every one is repaired; a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | the branch has merged `main` before the review, and the verdict holds only for the commit it saw (§3, "Pull requests stay mergeable"); no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -802,9 +802,20 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    writes the worktree's path into the tracked `.gitignore`, which is one more
    change in the diff. Sibling directories beside the repository are retired
    (D-5); worktrees that still sit there are finished and removed, not moved.
-3. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
+3. **Set up on creation.** The versioned hook `.beads/hooks/post-checkout`
+   runs `make venv`, `bash tools/pi/install.sh` and two checks (the venv imports
+   `yaml`, `tools/pi/pi --version` equals the pin) in the foreground when
+   `git worktree add` creates a worktree, bounded by
+   `HARNESS_LANE_SETUP_TIMEOUT` (default 600 s). It runs only for a trusted
+   state: the checked-out commit is on `origin/main`; otherwise it
+   skips and names the deliberate command `bash .beads/hooks/post-checkout
+   --lane-setup`, which also reruns a failed setup. `HARNESS_NO_LANE_SETUP=1`
+   skips it. Output: `lane setup: start`, one `LANE SETUP FAILED:` line per
+   failure, then `lane setup: ok` or `lane setup: failed (N checks)` and the
+   log path (`lane-setup.log` in the worktree's Git directory).
+4. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
    produces a pull request that is behind before it opens.
-4. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
+5. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
    checkout's tracker through the shared git directory — no variable, no
    redirect file, no copy. Concurrent writers lose nothing and a contested
    claim has exactly one winner (measured 2026-09-23 with bd 1.3.0). Who may
@@ -812,7 +823,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    other session claims its one bead with `tools/bd update <id> --claim
    --actor <session>` and leaves its handover comment on that bead, nothing
    more. After tracker writes: `tools/bd dolt push` first, `git push` second.
-5. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
+6. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
    authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
    is started from the worktree's directory, so its hooks, its
    `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
@@ -833,7 +844,7 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    and there only the rule in `.claude/settings.json` holds. Not yet measured: whether `omnigent claude`
    started inside a worktree keeps that directory as the session's working
    directory in every case.
-6. **After the merge, the worktree goes.** `git worktree remove
+7. **After the merge, the worktree goes.** `git worktree remove
    .claude/worktrees/<name>` and the branch with it. A worktree nobody works in
    is a place where a later session finds an old state and takes it for the
    current one.
@@ -851,7 +862,7 @@ is not a tool question but a division of work.
    environment, not an artefact in this repository — there is nothing to
    install and nothing to configure.
 3. **`permissions.deny` in `.claude/settings.json`.** It holds two things:
-   Omnigent's writing tools (item 5 above) and
+   Omnigent's writing tools (item 6 above) and
    `Edit(//**/.omnigent/config.yaml)`, so no session rewrites the policy that
    holds them. The template's brakes on the irreversible — production deploy,
    `bundle destroy`, force push, `rm -rf`, writes under `docs/decisions/` — are
@@ -1332,9 +1343,10 @@ into a shell. Thirteen verbs exist:
   free swarm the `free_stage` rule selects live, round 2 the three cheapest
   reachable admitted models for an availability-enabled run (a legacy
   declaration uses `flash_swarm`), then one eligible ladder rung each, until a
-  round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
-  refusal and exit 3 a loop that finished with a clean round (R-11 of the
-  review-swarm review).
+  round is clean or the ladder is consumed (ADR 0021). Exit 0 means a round
+  was written, or that a consumed ladder named its next step without writing
+  a round (see below); exit 2 a refusal and exit 3 a loop that finished with
+  a clean round (R-11 of the review-swarm review).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
   With `--stage-failed <model> --reason <text>` it retires the stage that model
   belongs to instead: the stage is consumed, the reason and a `## Stage failed`
@@ -1794,7 +1806,7 @@ documented 2026-10-25 source re-read and expire 2026-10-31.
 
 After implementation and before phase 6, `review-loop` runs one round per
 call, and the loop runs **until a round is clean — every row of a round
-decided and none accepted (ADR 0021).** Round 1 is the **free swarm**: a
+decided and none accepted (ADR 0021) — or the ladder is consumed.** Round 1 is the **free swarm**: a
 forced live catalog refresh (`pi update --models` before `pi --list-models`,
 no stale cache listed) discovers the models the `opencode-go` provider offers,
 and the `free_stage` rule in `model-endpoints.yaml` — provider, id suffix,
@@ -1837,7 +1849,33 @@ A member whose answer is malformed — no six-cell row and not exactly `No findi
 format reminder: the second call is checked, audited and under the round's one deadline like every other, the record
 keeps both answers, and a second malformed answer fails the member as today (bead coding-harness-70rw).
 When every stage of a run is consumed and the last round was not clean, the
-loop stops and reports to the maintainer — no model is substituted. The rows
+ladder is consumed and the loop starts nothing: no model is substituted, and
+no maintainer decision is needed for that alone. A rung or Flash member the
+current declaration no longer admits (expired, missing or malformed terms, a
+dated skip, an exclusion, a removal, unread retention or training terms)
+counts as consumed; a Flash stage counts as consumed only when no member is
+admitted and no unconsumed admitted rung could replace one. With at least one
+completed round since the last restart, `review-loop` exits 0 after the
+existing stops (undecided rows, unmarked `fixed` rows, origin and record
+integrity, the clean stop, the repair brake) and prints exactly one line on
+standard output:
+`next: repair <change>` while any round of the run since the last restart holds
+a taken row that no repair has marked `fixed` — an unmarked taken row
+included — and `next: review <change>` once every taken row is repaired. A
+cut last round with no accepted finding names `review` as well. Diagnostics,
+such as each passed-over model with its reason, go to standard error. The same
+instruction is written as schema-validated JSON (`scripts/next_step_schema.json`:
+schema version 1, change, verb `review`, `repair`, `hand` or `review-loop`, row
+ids, producing verb and UTC time) to `next.json` beside `loop.md`, never into
+Markdown; a failed validation or write exits 1 without the line. Every
+`review-loop` call removes the previous `next.json` first; a successful
+`repair` writes one for `review-loop` (or `review` when the repaired batch held
+a phase-6 row); `triage`, `release-loop` (also
+`--stage-failed` and `--restart`) and the phase-6 release remove it. A run
+without a completed round whose stages are consumed still refuses with exit 2.
+After the last repair, phase 6 follows as ever: a fresh full `make verify` and
+the independent reviewer's read of the whole diff, also when the loop's diff was
+cut, come before the release. The rows
 go into a **loop record** outside the worktree and outside the git directory
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it

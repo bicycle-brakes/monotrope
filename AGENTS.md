@@ -21,12 +21,12 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round or a consumed ladder (`next: repair <change>` / `next: review <change>`) — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); a targeted check after each runner repair and each orchestrator hand repair, the full `make verify` before phase 6 |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
 
-**Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi until a clean round (ADR 0021): round 1 is the free swarm, the models the `free_stage` rule selects from a forced live catalog refresh, on the implementation diff alone with no tools; round 2 is the Flash swarm, up to three cheapest reachable admitted paid models in parallel; then one id of the `opencode-go` entry's `modelle` set per round, cheapest first: the runner orders it by the declared `anfragen_5h` (requests per 5 hours, more is cheaper); a failed Flash member is replaced by the cheapest unconsumed one. GLM 5.3 Flash explores a `bounded` change or a `spike` (a `feature` or `architectural` change goes to the research swarm, ADR 0020) and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
+**Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi until a clean round or a consumed ladder, which names `next: repair <change>` while a taken row is unrepaired, `next: review <change>` once every taken row is repaired (ADR 0021): round 1 is the free swarm, the models the `free_stage` rule selects from a forced live catalog refresh, on the implementation diff alone with no tools; round 2 is the Flash swarm, up to three cheapest reachable admitted paid models in parallel; then one id of the `opencode-go` entry's `modelle` set per round, cheapest first: the runner orders it by the declared `anfragen_5h` (requests per 5 hours, more is cheaper); a failed Flash member is replaced by the cheapest unconsumed one. GLM 5.3 Flash explores a `bounded` change or a `spike` (a `feature` or `architectural` change goes to the research swarm, ADR 0020) and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
 `--stage2-off [REASON]` uses Haiku 5.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class, and so does phase 1 now (ADR 0020): a `feature` or `architectural` change explores through the research swarm (ADR 0020; a finder trio maps the sources, six seats research eleven topics, online topics on public sources only, Opus 5.5 reconciling; `prepare-explore <change>` first, its report shown to the maintainer, then `explore <change> --availability-reported <id>`; an aborted run resumes; the gate `research-handoff` holds interview and spec to the findings), a `bounded` change or a `spike` through GLM 5.3 Flash; `explore` reads the class from `--class` and the headers of `research.md` and `spec.md`, wherever stated, and refuses missing, invalid or disagreeing declarations (`docs/WORKFLOW.md` §4). Beyond that, explore, draft, implement and repair do not.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
@@ -154,7 +154,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
   A worktree lives under `.claude/worktrees/<name>`, is branched from a freshly fetched `origin/main`,
   and is removed after the merge; tracker access, claims and sibling directories: `docs/WORKFLOW.md` §3.
-  Each new checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  A new worktree is set up by `.beads/hooks/post-checkout` (venv and pinned Pi, only for a commit on `origin/main`; `HARNESS_NO_LANE_SETUP=1` skips it; `bash .beads/hooks/post-checkout --lane-setup` reruns it); otherwise run `make venv` and `bash tools/pi/install.sh` once before `make verify`
   (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
   coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
@@ -184,11 +184,11 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   MINOR rows on tests, security or false statements are repaired without asking; style rows
   are accepted limits named in the PR. A second finding of one mechanism ends case repair: the orchestrator takes the structural remedy at one choke point itself and names it in bead notes and handover (standing grant, maintainer 2026-11-25); a `Boundary` (a mechanism no choke point closes), a spec or criterion change and security stay the maintainer's; a hand repair marks the loop row `fixed`, regenerates the index after a header edit and stamps after local midnight (`docs/WORKFLOW.md` §4).
 - **An exhausted review ladder goes to phase 6** (maintainer, 2026-11-20): when
-  `review-loop` refuses because every stage of its run is consumed and the last
-  round was not clean, and every taken row of that round is repaired, the lane
-  goes to the phase-6 review instead of a new loop run; phase 6 checks that last
-  repair. Reason: a run's history cannot be reset, and asking each time stopped
-  lanes overnight.
+  every stage of a `review-loop` run is consumed and the last round was not
+  clean, the runner names the next step: `next: review <change>` once every
+  taken row since the last restart is repaired, `next: repair <change>` before;
+  phase 6 checks that last repair. Reason: a run's history cannot be reset, and
+  asking each time stopped lanes overnight.
 - **At most two review-loop rounds** (maintainer, 2026-11-23): taken rows of round two are repaired, then phase 6 checks that repair instead of a third round; this narrows phase 4b until the runner enforces it (coding-harness-3rtn).
 
 ## Sibling repositories
