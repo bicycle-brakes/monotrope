@@ -56,6 +56,27 @@ import leakcheck  # noqa: E402
 import next_step  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
+
+
+@pytest.mark.parametrize("failure", ["oserror", "encoding"])
+def test_bead_records_unreadable_export_returns_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    export = tmp_path / "beads.jsonl"
+    export.write_bytes(b"\xff" if failure == "encoding" else b"{}")
+    if failure == "oserror":
+
+        def fail_read(_self: Path, *_args: object, **_kwargs: object) -> str:
+            raise OSError("unreadable export")
+
+        monkeypatch.setattr(Path, "read_text", fail_read)
+    try:
+        records = plans_registry._bead_records(export)
+    except (OSError, UnicodeDecodeError) as exc:
+        pytest.fail(f"unreadable export should return None, raised {exc!r}")
+    assert records is None
+
+
 import runner_clock_guard  # noqa: E402
 import stage2  # noqa: E402
 import stage2_go  # noqa: E402

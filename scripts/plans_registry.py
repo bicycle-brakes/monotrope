@@ -131,10 +131,12 @@ def _bead_records(export_path: Path) -> dict[str, dict] | None:
     Returns None if the state is missing, unreadable, or holds not a single
     usable line.
     """
-    if not export_path.exists():
+    try:
+        lines = export_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
         return None
     records: dict[str, dict] = {}
-    for line in export_path.read_text(encoding="utf-8").splitlines():
+    for line in lines:
         line = line.strip()
         if not line:
             continue
