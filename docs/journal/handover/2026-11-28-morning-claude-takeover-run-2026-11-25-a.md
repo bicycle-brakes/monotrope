@@ -132,3 +132,9 @@ No unmerged branch gained released phase-4b or phase-6 rows in `findings.md` ove
 
 - `python3 scripts/check_frontmatter_current.py` and `python3 scripts/check_dangling_bead_ids.py` run in this worktree (results below the commit).
 - Not run: full `make verify` (text-only Markdown handover; CI is its gate).
+
+## Addendum — 2026-11-28 09:27 CET
+
+- `export-import-closure` (bead `coding-harness-5ane.7`) and `triage-where-cell` (bead `coding-harness-3ha6`) finished spec review round 3 with 1 and 2 rows and are parked for a fourth-round authorization; planned answers are in each bead's notes. The fourth-round list in "Needed from the maintainer" item 2 therefore has six lanes: `bd-trust-check`, `stamp-day-source`, `verify-lock-handle`, `restore-keeps-runner-entries`, `export-import-closure`, `triage-where-cell`.
+- No new lane was opened at 09:20: each of the last eight lanes parked after round 3, and the spec reviews spend the Claude budget whose limit stalled the run twice overnight. The orchestrator waits for the maintainer's answers before opening more, unless the maintainer asks otherwise.
+- Running jobs at 09:27: none besides `caffeinate`.
