@@ -59,6 +59,11 @@ The runner starts the full `make verify` through `python3 scripts/jobs.py start 
 - 5: not yet written tests/test_stage2.py::test_checkpoint_stamp_failure_prevents_commit — a failed stamp still produces a checkpoint
 - 6: not yet written tests/test_stage2.py::test_checkpoint_stamp_preserves_content_and_held_paths — refresh changes other content or commits a protected path
 
+## Runner route — 2026-11-28
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM through Z.ai at its weekly limit until 2026-11-29.
+
 ## Time used
 
 2026-11-28 00:14:51–00:16:51 UTC, 120 s — draft · attempt 1 · route codex · model gpt-6.1-terra · accepted · document checks only, no tests ran; result: green; gates `plans-registry` (block), `docs-links` (report), `frontmatter-current` (block), `dangling-beads` (block), `decision-continuity` (block), `adr-answers` (block), `interview-minimums` (block), `question-context` (block), `criterion-ledger` (block), `research-handoff` (block), `markdownlint` (report); not the full `make verify`; a fresh full `make verify` is still required before phase 6; reported without blocking: `docs-links` exited 1, `markdownlint` exited 1 · measured by the runner
+2026-11-28 03:15:14–03:40:47 UTC, 1534 s — implement · attempt 1 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
