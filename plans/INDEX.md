@@ -788,7 +788,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/test-ci-shared-tree/plan.md`](changes/test-ci-shared-tree/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/test-ci-shared-tree/research.md`](changes/test-ci-shared-tree/research.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
 | [`changes/test-ci-shared-tree/spec.md`](changes/test-ci-shared-tree/spec.md) | draft | none | 2026-11-25 | coding-harness-bxxt.12 |
+| [`changes/verify-lock-handle/decisions.md`](changes/verify-lock-handle/decisions.md) | draft | none | 2026-11-28 | coding-harness-42em |
+| [`changes/verify-lock-handle/findings.md`](changes/verify-lock-handle/findings.md) | draft | none | 2026-11-28 | coding-harness-42em |
+| [`changes/verify-lock-handle/plan.md`](changes/verify-lock-handle/plan.md) | draft | none | 2026-11-28 | coding-harness-42em |
 | [`changes/verify-lock-handle/research.md`](changes/verify-lock-handle/research.md) | draft | none | 2026-11-28 | coding-harness-42em |
+| [`changes/verify-lock-handle/spec.md`](changes/verify-lock-handle/spec.md) | draft | none | 2026-11-28 | coding-harness-42em |
 | [`changes/worktree-setup-hook/decisions.md`](changes/worktree-setup-hook/decisions.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`changes/worktree-setup-hook/findings.md`](changes/worktree-setup-hook/findings.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
 | [`changes/worktree-setup-hook/plan.md`](changes/worktree-setup-hook/plan.md) | draft | none | 2026-11-25 | coding-harness-wg4z |
