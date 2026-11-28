@@ -29,8 +29,8 @@ Runner checkpoint stamps and the frontmatter check agree on the commit's calenda
 
 ## Acceptance criteria
 
-1. When a runner checkpoint commits a changed document with a runner-maintained `updated:` stamp, its stamp is at least the checkpoint commit's calendar date in the commit's recorded offset.
-   *Refuted by:* the checkpoint commits a runner-maintained stamp older than its own recorded day.
+1. When a runner checkpoint commits a changed document with a runner-maintained `updated:` stamp, its stamp equals the checkpoint commit's calendar date in the commit's recorded offset.
+   *Refuted by:* a stamp later than that date (S-11), or the checkpoint commits a runner-maintained stamp older than its own recorded day.
 2. When stamping occurs before local midnight and the checkpoint commits after it, the resulting committed document passes the frontmatter-current check.
    *Refuted by:* the committed document is reported stale after that crossing.
 3. When a checkpoint is made at 00:30 at offset +0100, its runner-maintained stamp uses that commit's calendar day even though UTC is still on the preceding day.
@@ -65,3 +65,5 @@ Runner-held paths and human-decided content retain their existing protections; t
 - None open.
 
 [DETAIL] Spec-review S-1..S-6 (round 1, decided by the orchestrator under the bounded standing grant, 2026-11-28): S-1 reading A — the runner takes one clock reading at the checkpoint and uses it for the stamp and for `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` of the checkpoint commit (with the local offset), so the recorded commit day and the stamp cannot differ. S-2 reading A — every held document the checkpoint changes is covered, also those the model edited. S-3 — the stamp equals the commit day exactly; a later `updated:` in a changed document is lowered to it (AC 3 governs over AC 1). S-4 — AC 5's failures are: a held document that is not valid UTF-8 (`CannotStamp`), one without frontmatter, and one with two `updated:` lines. S-5 — such a refusal raises `CheckpointRolledBack`, saves the attempt through `save_attempt`, counts as a failed attempt and names the file and the reason. S-6 — a stamp-only difference after verification is accepted; only the frontmatter-current gate runs again on the refreshed tree before the commit.
+
+[DETAIL] Spec-review S-7..S-11 (round 2, orchestrator under the bounded standing grant, 2026-11-28): S-7 reading A — the gate rerun receives the checkpoint's own clock reading as `today` and `utc_today`; a red rerun is a refusal like AC 5 (`CheckpointRolledBack`, attempt saved). S-8 reading A — the refusal ends the run as every `CheckpointRolledBack` does today, no next route runs, and the attempt's already persisted time line is rewritten from `accepted` to `rejected`. S-9 — documents under a `human-decided` prefix are not refreshed (Protected areas governs); their own `updated:` stays as written. S-10 — `ClockReading` gains the local offset, computed in `clock_now()` from the same single read (the process time zone applied to `utc`), so no second raw clock read is added. S-11 — AC 1 now requires the stamp to equal the commit day, and a later stamp refutes it.
