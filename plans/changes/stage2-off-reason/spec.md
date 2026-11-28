@@ -38,8 +38,8 @@ On 2026-11-28, `research.md` found that `scripts/stage2.py` accepts a bare `--st
    *Refuted by:* The invocation launches a call without a change, or the old guard or its test is still present.
 5. When `--stage2-off` has a value on an unsupported verb, the runner refuses with exit 2 before a model call.
    *Refuted by:* An unsupported verb is accepted or starts a call.
-6. When the process report reads a valid invocation with a supplied reason, it never names the reason as the change. It identifies the positional change when the reason is one whitespace-free argument or the change precedes the flag; for a multi-word reason placed before the change, which `ps` output cannot split, it reports the change as unknown (S-1).
-   *Refuted by:* The report names the reason as the change, or fails to identify the change in one of the two identifiable cases.
+6. When the process report reads a valid invocation with a supplied reason, it never names the reason as the change. It identifies the positional change when the reason is one whitespace-free argument or the change precedes the flag; for a multi-word reason placed before the change, which `ps` output cannot split, it reports the change as unknown (S-1). Detached job records carry the original argument array, so a job record's change is always identified exactly, whatever the reason (S-5).
+   *Refuted by:* The report names the reason as the change; fails to identify the change in one of the two identifiable cases or in a job record; or, for an unsplittable `ps` line, names any change instead of unknown (S-7).
 7. When current runner instructions show the fallback invocation, they require a reason value. Current runner instructions are `docs/WORKFLOW.md`, `prompts/01-explore.md`, `prompts/04-implement.md`, `README.md`, the module docstring and `--help` text of `scripts/stage2.py`, and the runtime next-step messages of `scripts/stage2.py` (for example "rerun the verb or add --stage2-off", which becomes "… add --stage2-off <reason>") (S-3, S-4).
    *Refuted by:* One of these presents a bare flag or an optional reason as a valid invocation.
 
@@ -56,7 +56,7 @@ Historical records remain unchanged; their wording describes the behavior at the
 ## Definition of Done
 
 - `make verify` green.
-- Update `docs/WORKFLOW.md`, `prompts/01-explore.md`, `prompts/04-implement.md` and `README.md` with the code in the same pull request; `AGENTS.md` is human-written, so its wording is proposed to the maintainer in the pull request body, not edited; no ADR changes.
+- Update `docs/WORKFLOW.md`, `prompts/01-explore.md`, `prompts/04-implement.md` and `README.md` with the code in the same pull request; `AGENTS.md` is human-written, so its wording is proposed to the maintainer in the pull request body, not edited; the doctrine test `flash_runner_doctrine_problems` requires the new literal `--stage2-off <REASON>` in `docs/WORKFLOW.md`, `prompts/01-explore.md` and `prompts/04-implement.md`, and accepts the old or the new literal in `AGENTS.md` until the maintainer applies the proposed wording (S-6); no ADR changes.
 - Protected areas untouched and non-goals unbuilt, shown by the pull request file list.
 - The pull request closes bead `coding-harness-73gi.6` and its last commit carries `Closes-Bead: coding-harness-73gi.6`.
 - Special runs: none.
