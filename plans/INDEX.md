@@ -695,7 +695,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/enqueue-pr/plan.md`](changes/enqueue-pr/plan.md) | draft | none | 2026-11-25 | coding-harness-va1l |
 | [`changes/enqueue-pr/research.md`](changes/enqueue-pr/research.md) | draft | none | 2026-11-25 | coding-harness-va1l |
 | [`changes/enqueue-pr/spec.md`](changes/enqueue-pr/spec.md) | draft | none | 2026-11-27 | coding-harness-va1l |
+| [`changes/export-import-closure/decisions.md`](changes/export-import-closure/decisions.md) | draft | none | 2026-11-28 | coding-harness-5ane.7 |
+| [`changes/export-import-closure/findings.md`](changes/export-import-closure/findings.md) | draft | none | 2026-11-28 | coding-harness-5ane.7 |
+| [`changes/export-import-closure/plan.md`](changes/export-import-closure/plan.md) | draft | none | 2026-11-28 | coding-harness-5ane.7 |
 | [`changes/export-import-closure/research.md`](changes/export-import-closure/research.md) | draft | none | 2026-11-28 | coding-harness-5ane.7 |
+| [`changes/export-import-closure/spec.md`](changes/export-import-closure/spec.md) | draft | none | 2026-11-28 | coding-harness-5ane.7 |
 | [`changes/findings-per-model/decisions.md`](changes/findings-per-model/decisions.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/findings.md`](changes/findings-per-model/findings.md) | draft | none | 2026-11-17 | coding-harness-qut1 |
 | [`changes/findings-per-model/plan.md`](changes/findings-per-model/plan.md) | draft | none | 2026-11-18 | coding-harness-qut1 |
