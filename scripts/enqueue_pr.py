@@ -90,6 +90,9 @@ PAGE = 100
 PHASE6_HEADING = "## Phase 6"
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 KEPT_FROM = re.compile(r"Kept from the loop record:[ \t]*")
+# The runner's state line in a released loop block; a copy of `stage2.STATE_KEY`, pinned by a test, so this
+# command reads nothing it does not carry itself.
+LOOP_STATE_PREFIX = "Loop state: "
 FINDING_COLUMNS = 9
 RELEASED_COLUMNS = 10
 LOOP_ID = re.compile(r"L\d+-\d+")
@@ -384,7 +387,11 @@ class GitHub:
             result = self._gh("api", endpoint)
             if result.returncode:
                 diagnostic = (result.stderr or result.stdout or "").strip()
-                if "HTTP 404" in diagnostic and "Required status checks not enabled" in diagnostic:
+                if "HTTP 404" in diagnostic and (
+                    "Required status checks not enabled" in diagnostic or "Branch not protected" in diagnostic
+                ):
+                    # No classic required checks: a ruleset-only branch reports protected, yet its classic
+                    # protection is absent. The rulesets read above stay the required set.
                     classic = None
                 else:
                     raise Unreadable(f"gh api {endpoint} failed: {diagnostic}")
@@ -609,6 +616,18 @@ def phase6_problems(block: list[str]) -> list[str]:
     return problems
 
 
+def runner_state_line(line: str) -> bool:
+    """The runner's `Loop state: {…}` line: the exact prefix, then a JSON object (trailing spaces and tabs aside)."""
+    if not line.startswith(LOOP_STATE_PREFIX):
+        return False
+    payload = line[len(LOOP_STATE_PREFIX) :].rstrip(" \t")
+    try:
+        state = json.loads(payload)
+    except ValueError:
+        return False
+    return isinstance(state, dict)
+
+
 def released_problems(text: str) -> list[str]:
     """Released phase-4b loop rows that are unsettled or that phase 6 disagreed with; the latest row per id."""
     latest: dict[str, list[str]] = {}
@@ -620,6 +639,8 @@ def released_problems(text: str) -> list[str]:
             continue
         if inside and KEPT_FROM.fullmatch(line):
             inside = False
+            continue
+        if inside and runner_state_line(line):
             continue
         cells = split_row(line) if inside else None
         if inside and malformed_table_line(line, cells):

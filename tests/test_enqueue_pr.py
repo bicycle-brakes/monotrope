@@ -1252,3 +1252,119 @@ def test_classic_duplicate_context_respects_required_app() -> None:
     )()
     assert not ep.checks_problems(github, "head")
     assert ("verify", 42) in required and "verify" not in required
+
+
+# ---------------------------------------------------------------------------
+# enqueue-pr-rulesets: ruleset-only protection and the runner's state line
+# ---------------------------------------------------------------------------
+
+RULESET_ONLY_404 = "gh: Branch not protected (HTTP 404)"
+
+
+def _ruleset_only_github(tmp_path: Path, classic: tuple[int, str, str]) -> ep.GitHub:
+    """The adapter over a branch that reports protected, with `classic` as the required-checks answer."""
+    repo = (0, json.dumps({"owner": {"login": "o"}, "name": "r"}), "")
+    rules = (0, json.dumps([*_rules("verify"), {"type": "merge_queue", "parameters": {}}, *_rules("lint")]), "")
+    branch = (0, json.dumps({"protected": True}), "")
+    return ep.GitHub(tmp_path, run=FakeRun([repo, rules, branch, classic]))
+
+
+def test_ruleset_only_branch_without_classic_protection(tmp_path: Path) -> None:
+    """Criterion 1. Planted fault: the classic endpoint's `Branch not protected` 404 on a branch that reports
+    protected is refused, or a ruleset check disappears from the required set."""
+    github = _ruleset_only_github(tmp_path, (1, "", RULESET_ONLY_404))
+    try:
+        required = github.required_checks("main")
+    except ep.Unreadable as error:
+        pytest.fail(f"a ruleset-only branch must yield the ruleset checks: {error}")
+    assert required == {"verify", "lint"}
+
+
+@pytest.mark.parametrize(
+    ("states", "expected"),
+    [
+        ([("verify", "SUCCESS")], "required check `lint` is absent on the head"),
+        ([("verify", "SUCCESS"), ("lint", "FAILURE")], "required check `lint` concluded FAILURE on the head"),
+        ([("verify", "SUCCESS"), ("lint", ep.PENDING)], "required check `lint` is pending on the head"),
+    ],
+    ids=["missing", "failing", "pending"],
+)
+def test_ruleset_only_branch_requires_head_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, states: list[tuple[str, str]], expected: str
+) -> None:
+    """Criterion 2. Planted fault: on a ruleset-only branch a missing or unsuccessful ruleset check passes."""
+    github = _ruleset_only_github(tmp_path, (1, "", RULESET_ONLY_404))
+    monkeypatch.setattr(github, "head_checks", lambda _head: states)
+    problems = ep.checks_problems(github, "a" * 40)
+    assert expected in problems
+    passing = _ruleset_only_github(tmp_path, (1, "", RULESET_ONLY_404))
+    monkeypatch.setattr(passing, "head_checks", lambda _head: [("verify", "SUCCESS"), ("lint", "SUCCESS")])
+    assert ep.checks_problems(passing, "a" * 40) == []
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    ["gh: Not Found (HTTP 404)", "gh: Resource not accessible by integration (HTTP 403)", "Branch not protected"],
+    ids=["unrelated-404", "403", "no-404"],
+)
+def test_classic_protection_other_errors_refuse(tmp_path: Path, diagnostic: str) -> None:
+    """Criterion 3. Planted fault: an unrelated 404, a 403 or a message without the 404 at the classic
+    required-checks endpoint is taken as absent protection."""
+    with pytest.raises(ep.Unreadable):
+        _ruleset_only_github(tmp_path, (1, "", diagnostic)).required_checks("main")
+    problems = ep.checks_problems(_ruleset_only_github(tmp_path, (1, "", diagnostic)), "a" * 40)
+    assert len(problems) == 1 and "could not be read" in problems[0]
+
+
+def _released_with(line: str) -> str:
+    return released((FIXED, "agree")).replace("\n\nRounds run: 1", f"\n\n{line}\n\nRounds run: 1")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'Loop state: {"round": 2, "note": "a | b"}',
+        'Loop state: {"members": ["x|y"], "next": "review"} \t',
+        'Loop state: {"round": 1}',
+    ],
+    ids=["pipe", "pipe-trailing-space", "no-pipe"],
+)
+def test_released_runner_state_line_is_accepted(line: str) -> None:
+    """Criterion 4. Planted fault: the runner's `Loop state: {…}` line with a pipe in its state is refused as an
+    unrecognised table line in a released block."""
+    import stage2  # the copy of the prefix must not drift from the runner's own
+
+    assert stage2.STATE_KEY == ep.LOOP_STATE_PREFIX
+    assert ep.released_problems(_released_with(line)) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Loop state: {not json | x}",
+        'Loop state: ["a | b"]',
+        'Loop state: "a | b"',
+        'loop state: {"a": "b | c"}',
+        'Loop state:{"a": "b | c"}',
+        'Loop state: {"a": "b | c"} trailing',
+        ' Loop state: {"a": "b | c"}',
+        "an unrelated line | with a pipe",
+    ],
+    ids=["not-json", "array", "string", "case", "no-space", "trailing-text", "indented", "unrelated"],
+)
+def test_released_state_lookalikes_refuse(line: str) -> None:
+    """Criterion 5. Planted fault: a pipe-bearing line that is not the runner's state line passes in a released
+    block, or a pipe-bearing `Loop state:` line passes in a `## Phase 6` block."""
+    problems = ep.released_problems(_released_with(line))
+    assert any("unrecognised table line in the released block" in problem for problem in problems), problems
+    runner_line = 'Loop state: {"round": 2, "note": "a | b"}'
+    phase6_block = ep.last_phase6_block(phase6("a" * 40, body=f"{NO_FINDING}\n\n{runner_line}"))
+    assert phase6_block is not None
+    assert any("unrecognised table line" in problem for problem in ep.phase6_problems(phase6_block))
+
+
+def test_released_state_extra_whitespace_is_accepted() -> None:
+    """JSON whitespace after the exact prefix does not invalidate an object."""
+    for whitespace in (" ", "\t"):
+        line = f'Loop state: {whitespace}{{"a": "b | c"}}'
+        assert ep.released_problems(_released_with(line)) == []
