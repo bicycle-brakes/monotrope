@@ -40,18 +40,18 @@ At commit `03298ec1`, `scripts/verify_lock.py` refuses a second independent admi
    *Refuted by:* A child receives another concurrent admission's descriptor, token, slot record or measurement identity.
 4. When one of two concurrent admissions ends or fails to enter, the other retains its own ownership and remains usable until its own release.
    *Refuted by:* Releasing or failing one closes, removes or invalidates the other's lock, marker or holder record.
-5. When an admission publishes a holder record, its temporary publication name is specific to its token.
+5. When an admission publishes a holder record, its temporary publication name is specific to that admission and derived from its non-secret `admission_id`; the raw token never appears in a file name (S1-4, S2-3).
    *Refuted by:* Two admissions with the same process ID select the same temporary publication name.
 6. When a valid descendant enters nested verification, it reuses its validated ancestor's admission without acquiring another slot.
    *Refuted by:* A valid descendant queues for another slot or a stale or forged marker is accepted.
 7. While admissions contend, existing capacity, queue, memory-floor, exclusive-mode and descendant-survival protections continue to apply across processes and within one process.
    *Refuted by:* Protected work exceeds the configured capacity, bypasses the queue or memory floor, overlaps exclusive mode, or releases a surviving child's lock prematurely.
-8. When no owned admission is supplied for a child, only a validated inherited admission can supply its ownership marker, and unrelated or foreign calls receive no owned admission marker.
+8. When no owned admission is supplied for a child, the process's own admission supplies the marker if the process holds exactly one; if it holds two or more, the call is refused with an error naming it; if it holds none, only a validated inherited admission can supply the marker, and unrelated or foreign calls receive no owned admission marker (S1-1 reading b, S2-1).
    *Refuted by:* An unrelated child inherits an arbitrary concurrent admission or a foreign-model environment receives its token.
 
 ## Non-goals
 
-Changing slot counts, queue fairness, memory-floor policy, foreign-model allowlists, or the on-disk holder record format is outside this change. Queue record naming is unchanged; the token-specific name concerns temporary holder publication.
+Changing slot counts, queue fairness, memory-floor policy, foreign-model allowlists, or the on-disk holder record format is outside this change. Queue record naming is unchanged; the admission-specific name concerns temporary holder publication.
 
 ## Protected areas
 
@@ -71,3 +71,5 @@ Archived change artifacts are historical evidence and stay unchanged. Tracker da
 - [DETAIL] Four hours is the phase-4 appetite, including repairs; it is a reversible planning limit and no earlier appetite is recorded.
 
 [DETAIL] Spec-review S1-1..S1-5 (round 1, decided by the orchestrator under the bounded standing grant, 2026-11-28): S1-1 reading b — a call without a handle uses the process's admission when it holds exactly one (today's call sites `scripts/verify_run.py:928` and `scripts/stage2.py:8518` keep working); with two or more held and no handle it refuses with an error naming the call, never guessing. S1-2 — `admission_context()` takes the same optional handle and follows the same rule. S1-3 — a request that could only wait on admissions this same process already holds is refused at once with a message naming the held admissions, instead of queueing forever and stalling later waiters. S1-4 reading b — temporary file names derive from the non-secret `admission_id`, never from the raw token. S1-5 — after release, every accessor of the handle (`inherit_fds`, `inherit_env`, `admission_context`, the descriptor list) raises a released-admission error; a stale handle hands out nothing.
+
+[DETAIL] Spec-review S2-1..S2-3 (round 2, orchestrator under the bounded standing grant, 2026-11-28): S2-1 — criterion 8 now states the sole-admission rule of S1-1 itself, so the existing `inherit_env` calls inside `hold_admission` keep their marker. S2-2 — S1-3 is widened to one simple rule: while a process holds an admission, a further request of that process is admitted only if a slot is free at request time and it would be queue head; otherwise it is refused at once (it never enters the queue), so no wait can depend on the process's own release, directly or through another waiter. S2-3 — criterion 5 and the non-goals now speak of the admission-specific, `admission_id`-derived name.
