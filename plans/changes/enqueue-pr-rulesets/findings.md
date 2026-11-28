@@ -112,7 +112,7 @@ Stage-2 call, 2026-11-28: review · endpoint openai-codex · model gpt-6.1-terra
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:624; tests/test_enqueue_pr.py:1361 | A released block containing `Loop state:  {"note":"a \| b"}` is refused, although the text after the exact prefix parses as a JSON object with `json.loads`. The reader requires `{` immediately after the prefix, and the added whitespace test enforces that extra restriction. [AC4] | Codex | taken — AC4: the rest after the exact prefix only has to parse with json.loads as a JSON object (leading whitespace allowed); undo the stricter brace-first check and its test from the L1-1 repair | — |
+| F-1 | MAJOR | SPEC | base | scripts/enqueue_pr.py:624; tests/test_enqueue_pr.py:1361 | A released block containing `Loop state:  {"note":"a \| b"}` is refused, although the text after the exact prefix parses as a JSON object with `json.loads`. The reader requires `{` immediately after the prefix, and the added whitespace test enforces that extra restriction. [AC4] | Codex | fixed — tests/test_enqueue_pr.py::test_released_state_extra_whitespace_is_accepted | — |
 
 Reviewed commit: 6c4e405eb182f31a8d3670eb66342fb4d95edcee
 
@@ -146,3 +146,7 @@ Kept from the loop record:
 <!-- End of released loop record -->
 
 Stage-2 call, 2026-11-28: review (loop marks) · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1323 files, 6204 commits, 12 rules.
+
+Stage-2 call, 2026-11-28: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-terra · leak check clean over 1323 files, 6205 commits, 12 rules.
+
+Runner restoration, 2026-11-28: repair · attempt 1 · route codex — lifecycle fields: plans/changes/enqueue-pr-rulesets/plan.md, plans/changes/enqueue-pr-rulesets/spec.md — unchanged

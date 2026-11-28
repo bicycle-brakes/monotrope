@@ -1363,9 +1363,8 @@ def test_released_state_lookalikes_refuse(line: str) -> None:
     assert any("unrecognised table line" in problem for problem in ep.phase6_problems(phase6_block))
 
 
-def test_released_state_extra_whitespace_refuses() -> None:
-    """A JSON object must immediately follow the runner's exact prefix."""
+def test_released_state_extra_whitespace_is_accepted() -> None:
+    """JSON whitespace after the exact prefix does not invalidate an object."""
     for whitespace in (" ", "\t"):
         line = f'Loop state: {whitespace}{{"a": "b | c"}}'
-        problems = ep.released_problems(_released_with(line))
-        assert any("unrecognised table line" in problem for problem in problems), problems
+        assert ep.released_problems(_released_with(line)) == []

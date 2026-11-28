@@ -621,8 +621,6 @@ def runner_state_line(line: str) -> bool:
     if not line.startswith(LOOP_STATE_PREFIX):
         return False
     payload = line[len(LOOP_STATE_PREFIX) :].rstrip(" \t")
-    if not payload.startswith("{"):
-        return False
     try:
         state = json.loads(payload)
     except ValueError:
