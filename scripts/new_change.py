@@ -10,7 +10,7 @@ frontmatter by hand — and easily missed a required field that
 This script closes the gap without opening a second one:
 
   - It **imports** `plans_registry` and reads its `REQUIRED`,
-    `_bead_statuses`, `_bead_export_path`, `render_index` and `check` at run
+    `_bead_records`, `_bead_export_path`, `render_index` and `check` at run
     time — never copied at import time, so that a test that redirects
     `reg.REPO`, `reg.PLANS` and `reg.INDEX` with `monkeypatch` redirects this
     script too (the same pattern as the `plans` fixture in
@@ -75,6 +75,35 @@ file is empty until it has run.
 > `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
 > `review_required: true`).
 """
+
+# Characters `str.splitlines` breaks on besides LF and CR (bead coding-harness-5vts, spec-review S-4):
+# each becomes a space, so every reader of `research.md` sees the same lines as the LF split below.
+_FOREIGN_LINE_BREAKS = dict.fromkeys((0x0B, 0x0C, 0x1C, 0x1D, 0x1E, 0x85, 0x2028, 0x2029), " ")
+
+
+def topic_section(bead: str, description: object) -> str:
+    """The research skeleton's topic: the bead's tracker description, quoted (bead coding-harness-5vts).
+
+    It stands below the generated notices and outside `BODY_TEMPLATE`, so the publication's notice
+    removal (derived from the template) never sees the dynamic text, and the section's own `##`
+    heading ends the opening region the publication edits. The description is a Markdown blockquote —
+    every line prefixed with `> `, a blank or spaces-and-tabs line written as `>` — so no fence,
+    heading or runner line in it changes the structure of the file. An absent, non-string, empty or
+    whitespace-only description is named as missing, never invented.
+    """
+    heading = f"## Topic (bead {bead})\n\n"
+    text = description if isinstance(description, str) else ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n").translate(_FOREIGN_LINE_BREAKS).strip()
+    if not text:
+        missing = f"The tracker export holds no description for {bead}: the description is missing or empty."
+        return f"{heading}{missing}\n"
+    quoted = [">" if not line.strip(" \t") else f"> {line}" for line in text.split("\n")]
+    return heading + "\n".join(quoted) + "\n"
+
+
+def research_body(titel: str, bead: str, description: object) -> str:
+    """The skeleton's body: the template's title and notices, byte for byte, then the topic section."""
+    return BODY_TEMPLATE.format(titel=titel) + "\n" + topic_section(bead, description)
 
 
 def _frontmatter_template(name: str, bead: str, owner: str, heute: str) -> str:
@@ -205,14 +234,15 @@ def main(argv: list[str] | None = None) -> int:
 
     # Step 2 · Bead
     export_path = reg._bead_export_path()
-    bead_statuses = reg._bead_statuses(export_path)
-    if bead_statuses is None:
+    bead_records = reg._bead_records(export_path)
+    if bead_records is None:
         return _abort(
             verdict,
             f"Bead export {export_path} missing or empty",
             "Without the export it cannot be checked whether the bead exists. Fix: `bd export` or let the export hook run.",
         )
-    status = bead_statuses.get(args.bead)
+    record = bead_records.get(args.bead)
+    status = record["status"] if record is not None else None
     if status is None:
         return _abort(
             verdict,
@@ -263,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
 
     frontmatter = _frontmatter_template(args.name, args.bead, args.owner, heute)
     titel = args.name.replace("-", " ")
-    inhalt = frontmatter + BODY_TEMPLATE.format(titel=titel)
+    inhalt = frontmatter + research_body(titel, args.bead, record.get("description"))
     research_path = ziel / "research.md"
 
     if args.dry_run:

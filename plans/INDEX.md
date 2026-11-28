@@ -679,6 +679,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/availability-scrub-import/plan.md`](changes/availability-scrub-import/plan.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
 | [`changes/availability-scrub-import/research.md`](changes/availability-scrub-import/research.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
 | [`changes/availability-scrub-import/spec.md`](changes/availability-scrub-import/spec.md) | draft | none | 2026-11-25 | coding-harness-vg9.2 |
+| [`changes/bead-topic-in-research/decisions.md`](changes/bead-topic-in-research/decisions.md) | draft | none | 2026-11-28 | coding-harness-5vts |
+| [`changes/bead-topic-in-research/findings.md`](changes/bead-topic-in-research/findings.md) | draft | none | 2026-11-28 | coding-harness-5vts |
+| [`changes/bead-topic-in-research/plan.md`](changes/bead-topic-in-research/plan.md) | draft | none | 2026-11-28 | coding-harness-5vts |
+| [`changes/bead-topic-in-research/research.md`](changes/bead-topic-in-research/research.md) | draft | none | 2026-11-28 | coding-harness-5vts |
+| [`changes/bead-topic-in-research/spec.md`](changes/bead-topic-in-research/spec.md) | draft | none | 2026-11-28 | coding-harness-5vts |
 | [`changes/cheap-checks-admission/decisions.md`](changes/cheap-checks-admission/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
 | [`changes/cheap-checks-admission/findings.md`](changes/cheap-checks-admission/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |
 | [`changes/cheap-checks-admission/plan.md`](changes/cheap-checks-admission/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.13 |

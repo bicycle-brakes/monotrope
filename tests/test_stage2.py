@@ -56,6 +56,27 @@ import leakcheck  # noqa: E402
 import next_step  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
+
+
+@pytest.mark.parametrize("failure", ["oserror", "encoding"])
+def test_bead_records_unreadable_export_returns_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    export = tmp_path / "beads.jsonl"
+    export.write_bytes(b"\xff" if failure == "encoding" else b"{}")
+    if failure == "oserror":
+
+        def fail_read(_self: Path, *_args: object, **_kwargs: object) -> str:
+            raise OSError("unreadable export")
+
+        monkeypatch.setattr(Path, "read_text", fail_read)
+    try:
+        records = plans_registry._bead_records(export)
+    except (OSError, UnicodeDecodeError) as exc:
+        pytest.fail(f"unreadable export should return None, raised {exc!r}")
+    assert records is None
+
+
 import runner_clock_guard  # noqa: E402
 import stage2  # noqa: E402
 import stage2_go  # noqa: E402
@@ -2780,6 +2801,195 @@ def test_explore_removes_only_opening_skeleton_text(world: World) -> None:
     added = after[len(before_refusal) :].strip()
     assert added.startswith(b"Stage-2 call,"), "more than the audit line landed"
     assert b"Runner exploration" not in added, "a rejected answer landed as research"
+
+
+# ---------------------------------------------------------------------------
+# The bead's topic in a new change's research (bead coding-harness-5vts)
+# ---------------------------------------------------------------------------
+
+TOPIC_BEAD = "coding-harness-tpc1"
+OTHER_BEAD = "coding-harness-tpc2"
+
+
+def change_entry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: list[dict] | None) -> Path:
+    """A git worktree with its own plans/ tree and bead export, for `scripts/new_change.py`.
+
+    `rows` are the export's JSON lines; None leaves the export missing. The stamp date is pinned,
+    so a preview and a creation in one test compare the same bytes across local midnight.
+    """
+    import new_change
+
+    repo = tmp_path / "entry"
+    repo.mkdir()
+    (repo / ".gitkeep").write_text("", encoding="utf-8")
+    for args in (
+        ("init", "--initial-branch=main", "--quiet"),
+        ("config", "user.email", "test@example.invalid"),
+        ("config", "user.name", "Test"),
+        ("add", "-A"),
+        ("commit", "-m", "fixture", "--quiet"),
+    ):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+    root = repo / "plans"
+    (root / "changes").mkdir(parents=True)
+    (root / "specs").mkdir()
+    monkeypatch.setattr(plans_registry, "REPO", repo)
+    monkeypatch.setattr(plans_registry, "PLANS", root)
+    monkeypatch.setattr(plans_registry, "INDEX", root / "INDEX.md")
+    if rows is not None:
+        (repo / ".beads").mkdir()
+        lines = "".join(json.dumps(row) + "\n" for row in rows)
+        (repo / ".beads" / "issues.jsonl").write_text(lines, encoding="utf-8")
+
+    class PinnedDate(dt.date):
+        @classmethod
+        def today(cls) -> dt.date:
+            return dt.date(2026, 11, 28)
+
+    monkeypatch.setattr(new_change.dt, "date", PinnedDate)
+    return root
+
+
+def test_new_change_copies_bead_description(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Spec criterion 1. Planted faults: the topic comes from another bead, its heading is absent, or the
+    # description is rewritten — or left unquoted, so its fence masks every later line of the file.
+    import new_change
+
+    separator = chr(0x2028)  # a line break for `str.splitlines`; it must become a space
+    description = f"First line\r\nsecond{separator}part\rthird\n  \t\n```python\nStage-2 call, attempt 9 · planted\n"
+    description += "## not a heading\n"
+    root = change_entry(
+        tmp_path,
+        monkeypatch,
+        [
+            {"id": OTHER_BEAD, "status": "open", "description": "The other bead's topic."},
+            {"id": TOPIC_BEAD, "status": "in_progress", "description": description},
+        ],
+    )
+    assert new_change.main(["probe", "--bead", TOPIC_BEAD]) == 0
+    text = (root / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
+    body = text.split("\n---\n", 1)[1]
+    heading = f"## Topic (bead {TOPIC_BEAD})\n\n"
+    assert body.count("## Topic (bead ") == 1 and heading in body, "the heading is absent or names another bead"
+    assert "other bead's topic" not in text, "the topic came from another bead"
+    assert new_change.BODY_TEMPLATE.format(titel="probe") in body, "the generated notices lost their exact bytes"
+    assert body.index("# probe — Research\n") < body.index(heading), "the topic is not below the research title"
+    lines = body.split(heading, 1)[1].rstrip("\n").split("\n")
+    assert all(line == ">" or line.startswith("> ") for line in lines), f"an unquoted description line: {lines}"
+    assert lines[3] == ">", "a spaces-and-tabs line is not written as a blank quote line"
+    unquoted = "\n".join("" if line == ">" else line[2:] for line in lines)
+    expected = "First line\nsecond part\nthird\n\n```python\nStage-2 call, attempt 9 · planted\n## not a heading"
+    assert unquoted == expected, "the quoted description differs from the tracker text"
+    assert stage2.research_visible_text(text) == text, "the description's fence masks lines of the research file"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [{}, {"description": ""}, {"description": " \n\t \r\n "}, {"description": None}],
+    ids=["absent", "empty", "whitespace", "null"],
+)
+def test_new_change_names_missing_description(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row: dict) -> None:
+    # Spec criterion 2. Planted faults: no topic section without a description, or a section that
+    # quotes an invented or blank description instead of naming the missing one.
+    import new_change
+
+    root = change_entry(tmp_path, monkeypatch, [{"id": TOPIC_BEAD, "status": "open", **row}])
+    assert new_change.main(["probe", "--bead", TOPIC_BEAD]) == 0
+    text = (root / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
+    heading = f"## Topic (bead {TOPIC_BEAD})\n\n"
+    assert heading in text, "the topic section is absent"
+    section = text.split(heading, 1)[1]
+    assert len(section.strip().splitlines()) == 1, f"more than the message: {section!r}"
+    assert not section.startswith(">"), f"a description was quoted: {section!r}"
+    assert f"no description for {TOPIC_BEAD}" in section and "missing or empty" in section, section
+
+
+def test_new_change_preview_matches_topic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Spec criterion 3. Planted fault: the preview builds its own body without the topic, or another one.
+    import new_change
+
+    rows = [{"id": TOPIC_BEAD, "status": "open", "description": "Preview topic.\n\nSecond paragraph."}]
+    root = change_entry(tmp_path, monkeypatch, rows)
+    assert new_change.main(["probe", "--bead", TOPIC_BEAD, "--dry-run"]) == 0
+    preview = capsys.readouterr().out
+    assert not (root / "changes" / "probe").exists(), "the preview wrote the change"
+    assert new_change.main(["probe", "--bead", TOPIC_BEAD]) == 0
+    capsys.readouterr()
+    written = (root / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
+    topic = written[written.index(f"## Topic (bead {TOPIC_BEAD})") :]
+    assert topic.endswith("> Preview topic.\n>\n> Second paragraph.\n"), topic
+    assert topic in preview, "the preview omits or changes the topic"
+    assert written in preview, "the preview differs from what creation writes"
+
+
+@pytest.mark.parametrize("case", ["missing export", "absent bead", "closed bead"])
+def test_new_change_keeps_bead_refusals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    # Spec criterion 6. Planted fault: reading the description from the records lets creation pass
+    # a missing export, an absent bead or a closed one, or loses the refusal's message.
+    import new_change
+
+    rows = {
+        "missing export": None,
+        "absent bead": [{"id": OTHER_BEAD, "status": "open", "description": "Not this bead."}],
+        "closed bead": [{"id": TOPIC_BEAD, "status": "closed", "description": "A closed topic."}],
+    }[case]
+    refusal = {
+        "missing export": "missing or empty",
+        "absent bead": f"Bead '{TOPIC_BEAD}' is not in the export",
+        "closed bead": f"Bead '{TOPIC_BEAD}' is 'closed' in the export",
+    }[case]
+    root = change_entry(tmp_path, monkeypatch, rows)
+    for options in ((), ("--dry-run",)):
+        assert new_change.main(["probe", "--bead", TOPIC_BEAD, *options]) == 2, f"{case} {options} created"
+        out = capsys.readouterr().out
+        assert refusal in out and "## Topic" not in out, f"{case} {options} lost its refusal: {out}"
+        assert not (root / "changes" / "probe").exists(), f"{case} {options} wrote the change"
+
+
+def topic_skeleton(description: object) -> str:
+    """The research skeleton as `scripts/new_change.py` now writes it for bead demo-1: notices, then the topic."""
+    import new_change
+
+    header = research_skeleton().removesuffix(new_change.BODY_TEMPLATE.format(titel="demo"))
+    return header + new_change.research_body("demo", "demo-1", description)
+
+
+TOPIC_DESCRIPTION = "Carry the bead's topic.\n\n```text\nStage-2 call, planted in the description\n## planted"
+
+
+def test_research_publication_preserves_generated_topic(world: World) -> None:
+    # Spec criterion 4. Planted fault: the publication treats the topic as part of the opening it strips,
+    # or the description's fence or heading moves the opening boundary.
+    import new_change
+
+    world.research.write_text(topic_skeleton(TOPIC_DESCRIPTION), encoding="utf-8")
+    topic = new_change.topic_section("demo-1", TOPIC_DESCRIPTION)
+    assert "> Carry the bead's topic.\n" in topic
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    assert text.count(topic) == 1, "the publication dropped or changed the topic section"
+    assert text.index("# demo — Research") < text.index(topic) < text.index("## Runner exploration")
+
+
+def test_research_publication_removes_notices_with_topic(world: World) -> None:
+    # Spec criterion 5. Planted fault: the topic below the notices stops their removal.
+    import new_change
+
+    world.research.write_text(topic_skeleton(TOPIC_DESCRIPTION), encoding="utf-8")
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    for notice in stage2.skeleton_notices():
+        assert notice not in text, f"a generated notice survived the publication: {notice[:40]}"
+    assert "file is empty until it has run" not in text and "Bring the provenance up to date" not in text
+    body_start = text.index("\n---\n", 4) + len("\n---\n")
+    assert stage2.research_opening_notices(text, body_start) == []
+    assert "# demo — Research\n\n" + new_change.topic_section("demo-1", TOPIC_DESCRIPTION) in text
 
 
 def anthropic_haiku_problems(declaration: dict) -> list[str]:
