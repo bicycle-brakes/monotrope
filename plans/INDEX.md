@@ -751,6 +751,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-swarm-resume/plan.md`](changes/research-swarm-resume/plan.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
 | [`changes/research-swarm-resume/research.md`](changes/research-swarm-resume/research.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
 | [`changes/research-swarm-resume/spec.md`](changes/research-swarm-resume/spec.md) | draft | none | 2026-11-26 | coding-harness-f6qj |
+| [`changes/restore-keeps-runner-entries/research.md`](changes/restore-keeps-runner-entries/research.md) | draft | none | 2026-11-28 | coding-harness-7awf |
 | [`changes/review-diff-4000/decisions.md`](changes/review-diff-4000/decisions.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-diff-4000/findings.md`](changes/review-diff-4000/findings.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
 | [`changes/review-diff-4000/plan.md`](changes/review-diff-4000/plan.md) | draft | none | 2026-11-21 | coding-harness-mwzv.4 |
