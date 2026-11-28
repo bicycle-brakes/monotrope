@@ -773,7 +773,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stamp-day-source/decisions.md`](changes/stamp-day-source/decisions.md) | draft | none | 2026-11-28 | coding-harness-5v6t |
+| [`changes/stamp-day-source/findings.md`](changes/stamp-day-source/findings.md) | draft | none | 2026-11-28 | coding-harness-5v6t |
+| [`changes/stamp-day-source/plan.md`](changes/stamp-day-source/plan.md) | draft | none | 2026-11-28 | coding-harness-5v6t |
 | [`changes/stamp-day-source/research.md`](changes/stamp-day-source/research.md) | draft | none | 2026-11-28 | coding-harness-5v6t |
+| [`changes/stamp-day-source/spec.md`](changes/stamp-day-source/spec.md) | draft | none | 2026-11-28 | coding-harness-5v6t |
 | [`changes/standin-call-counter/decisions.md`](changes/standin-call-counter/decisions.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
 | [`changes/standin-call-counter/findings.md`](changes/standin-call-counter/findings.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
 | [`changes/standin-call-counter/plan.md`](changes/standin-call-counter/plan.md) | draft | none | 2026-11-25 | coding-harness-bxxt.14 |
