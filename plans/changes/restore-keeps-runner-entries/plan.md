@@ -41,6 +41,8 @@ Explore used Stage 1 via `claude-code-plan`, model `claude-haiku-5-5`, because G
 - 3: tests/test_stage2_fail_fast.py::test_the_runners_scan_record_is_not_an_attempt_edit — a runner-only record triggers an edit notice.
 - 4: not yet written tests/test_stage2_fail_fast.py::test_record_preservation_respects_restoration_refusal — findings are written after a safety refusal.
 - 5: not yet written tests/test_stage2_fail_fast.py::test_implement_and_repair_preserve_only_runner_records — either verb loses the genuine record or keeps an attempt edit.
+- 1: not yet written tests/test_stage2_fail_fast.py::test_runner_records_survive_restore_of_an_untouched_findings_file — a scan record written before a put_findings_back exit is gone although the attempt never edited findings.md.
+- 6: not yet written tests/test_stage2_fail_fast.py::test_runner_record_is_not_duplicated_within_one_attempt — one attempt's record appears twice, or an earlier attempt's identical text suppresses it.
 
 ## Verification
 
