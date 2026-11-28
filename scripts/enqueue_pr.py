@@ -620,8 +620,11 @@ def runner_state_line(line: str) -> bool:
     """The runner's `Loop state: {…}` line: the exact prefix, then a JSON object (trailing spaces and tabs aside)."""
     if not line.startswith(LOOP_STATE_PREFIX):
         return False
+    payload = line[len(LOOP_STATE_PREFIX) :].rstrip(" \t")
+    if not payload.startswith("{"):
+        return False
     try:
-        state = json.loads(line[len(LOOP_STATE_PREFIX) :].rstrip(" \t"))
+        state = json.loads(payload)
     except ValueError:
         return False
     return isinstance(state, dict)

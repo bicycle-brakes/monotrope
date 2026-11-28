@@ -1361,3 +1361,11 @@ def test_released_state_lookalikes_refuse(line: str) -> None:
     phase6_block = ep.last_phase6_block(phase6("a" * 40, body=f"{NO_FINDING}\n\n{runner_line}"))
     assert phase6_block is not None
     assert any("unrecognised table line" in problem for problem in ep.phase6_problems(phase6_block))
+
+
+def test_released_state_extra_whitespace_refuses() -> None:
+    """A JSON object must immediately follow the runner's exact prefix."""
+    for whitespace in (" ", "\t"):
+        line = f'Loop state: {whitespace}{{"a": "b | c"}}'
+        problems = ep.released_problems(_released_with(line))
+        assert any("unrecognised table line" in problem for problem in problems), problems
