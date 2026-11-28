@@ -119,20 +119,21 @@ def _anzeige(pfad: Path) -> str:
         return str(pfad)
 
 
-def _bead_statuses(export_path: Path) -> dict[str, str] | None:
-    """`id -> status` from the tracker state (JSON Lines, one line per bead).
+def _bead_records(export_path: Path) -> dict[str, dict] | None:
+    """`id -> row` from the tracker state (JSON Lines, one line per bead).
 
     The path comes from the ONE access point (bead 1jg.3); this parsing stays
-    file reading — the access point decides WHICH file that is.
+    file reading — the access point decides WHICH file that is. A row counts
+    only when it carries a string `id` and a string `status`; the whole row is
+    kept, so a caller reads further fields (the description, bead
+    coding-harness-5vts) from the same records the status comes from.
 
     Returns None if the state is missing, unreadable, or holds not a single
-    usable line -- that is the case in which the coupling check below itself
-    measures nothing, and the caller reports it as a finding of its own (BLOCK,
-    RB-G7) instead of staying silent.
+    usable line.
     """
     if not export_path.exists():
         return None
-    statuses: dict[str, str] = {}
+    records: dict[str, dict] = {}
     for line in export_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -142,8 +143,22 @@ def _bead_statuses(export_path: Path) -> dict[str, str] | None:
         except json.JSONDecodeError:
             continue
         if isinstance(row, dict) and isinstance(row.get("id"), str) and isinstance(row.get("status"), str):
-            statuses[row["id"]] = row["status"]
-    return statuses or None
+            records[row["id"]] = row
+    return records or None
+
+
+def _bead_statuses(export_path: Path) -> dict[str, str] | None:
+    """`id -> status` from the tracker state, derived from `_bead_records`.
+
+    Returns None if the state is missing, unreadable, or holds not a single
+    usable line -- that is the case in which the coupling check below itself
+    measures nothing, and the caller reports it as a finding of its own (BLOCK,
+    RB-G7) instead of staying silent.
+    """
+    records = _bead_records(export_path)
+    if records is None:
+        return None
+    return {bead_id: row["status"] for bead_id, row in records.items()}
 
 
 # The stock on the day the reverse direction went live (2026-09-15).
