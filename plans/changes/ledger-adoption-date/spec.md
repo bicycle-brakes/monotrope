@@ -38,8 +38,8 @@ On 2026-11-28, research found that `scripts/check_criterion_ledger.py` hard-code
    *Refuted by:* a live plan before the adoption day is exempt.
 5. When an archived plan has a ledger, the gate checks it regardless of its date.
    *Refuted by:* an old archived ledger with a missing test is ignored.
-6. If the adoption record or the gate's entry cannot be read as a valid recorded date, the gate reports not measured with the record's remedy and exits 3. The existing root checks (a root that is not a directory, without `plans/changes/`, or whose `plans/changes/` cannot be listed) run first and keep their own diagnostics; the record check runs only after them (S-3).
-   *Refuted by:* a missing, unreadable, malformed, absent, quoted or impossible entry is accepted, or the diagnostic or exit differs; or a root without `plans/changes/` reports the adoption-record remedy instead of its own diagnostic.
+6. If the adoption record or the gate's entry cannot be read as a valid recorded date, the gate reports not measured with the record's remedy and exits 3. The existing root checks (a root that is not a directory, without `plans/changes/`, or whose `plans/changes/` cannot be listed) run first and keep their own diagnostics; the record check runs only after them and before any plan is measured, so an unreadable record prints only the not-measured line with its remedy and lists no plan findings (S-3, S-5 reading A).
+   *Refuted by:* a missing, unreadable, malformed, absent, quoted or impossible entry is accepted, or the diagnostic or exit differs; or a root without `plans/changes/` reports the adoption-record remedy instead of its own diagnostic; or ledger findings are listed although the record could not be read.
 7. When the gate reports its exemption summary, it names the recorded adoption date.
    *Refuted by:* the summary names the old constant or another date.
 8. When the workflow describes the exemption, the "Criterion tests" row of `docs/WORKFLOW.md` names the source (the `criterion-ledger` entry of `decisions/adoption.yaml`), this repository's current value 2026-10-29, and that changing it takes a decision pull request (S-1 reading A).
