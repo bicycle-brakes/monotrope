@@ -28,16 +28,18 @@ At commit `5e5313ce`, the research traces a credential scan writing a skipped-sc
 
 ## Acceptance criteria
 
-1. When an attempt edits findings and the runner writes a record before restoring that edit, the runner-written record survives restoration.
-   *Refuted by:* a genuine scan or audit record written in that interval is absent after restoration.
+1. When the runner restores findings.md (any `put_findings_back` exit or the `CheckpointRolledBack` restore), every line the runner wrote to findings.md before that restore survives it, whether or not the attempt edited the file. Excepted are only the `fixed —` status cells and the `updated:` stamp that `mark_repaired_findings` wrote for the rolled-back commit, which the `CheckpointRolledBack` restore exists to remove (S-7, reading B).
+   *Refuted by:* checked on the file directly after the restore and before any later scan, a genuine scan or audit record, restoration notice or restoration line the runner wrote in that interval is absent — including when the attempt did not touch findings.md (S-10); or a rolled-back `fixed —` cell survives.
 2. When an attempt edits findings, restoration removes the attempt's edits.
    *Refuted by:* an attempt-authored line, including one imitating a runner record, survives.
 3. When the runner alone writes a findings record after an attempt, that record is not attributed to the attempt as an edit.
    *Refuted by:* a runner-only scan record triggers the attempt-edit notice.
 4. When recovery refuses restoration for safety, the runner does not bypass that refusal to preserve a record.
    *Refuted by:* the refusal results in an additional findings write.
-5. When implement or repair restores findings, the same preservation and attribution rules apply.
+5. When implement or repair restores findings, the same preservation and attribution rules apply (repair writes restoration notices and lines under `protect_lifecycle=True`, so it is covered; S-8 reading A, superseding S-4).
    *Refuted by:* either verb loses a genuine record or retains an attempt-authored edit in the same circumstances.
+6. A runner record identical to one already written in the same attempt's interval (since that attempt's own snapshot) is not appended a second time; records from earlier attempts or runs do not suppress a new one (S-9, reading B).
+   *Refuted by:* the same record appears twice for one attempt, or an attempt's own scan record is missing because an earlier attempt wrote the same text.
 
 ## Non-goals
 
@@ -60,3 +62,5 @@ The runner's recovery preflight and safety refusals retain their protective beha
 [DETAIL] Preserve trusted runner writes separately from attempt output and restore them through the shared recovery path; this reversible choice avoids trusting lines merely because they resemble a runner record. No maintainer decision is open.
 
 [DETAIL] Spec-review S-1..S-6 (round 1, decided by the orchestrator under the bounded standing grant, 2026-11-28): S-1 reading B — every line the runner itself writes to findings.md (restoration notices and lines, scan and audit records, attempt records) is a runner-written record and survives; only content the model wrote is reverted. S-2 — every restoration is covered: `put_findings_back` on any failure (credential found, verifier refusal, any other failure, the parent-gone batch) and the `CheckpointRolledBack` restore, whether or not the attempt touched findings.md. S-3 — criterion 1 is checked on the file directly after the restore and before any later scan; the refuting test plants a record that the scan writes exactly once, so a re-append cannot hide the loss. S-4 — repair writes no scan record (`key = None`), so criterion 5 covers the draft and implement paths only; repair is named as out of scope for it. S-5 — a record the scan produced is written before the preflight, as today, and stays after a safety refusal (criterion 4 forbids only writes after the refusal). S-6 — a runner record identical to one already present after the restore is not appended a second time.
+
+[DETAIL] Spec-review S-7..S-10 (round 2, orchestrator under the bounded standing grant, 2026-11-28): S-7 reading B — the rolled-back `fixed —` cells and stamp are the one exception to preservation (criterion 1); S-8 reading A — repair stays in criterion 5, superseding S-4; S-9 reading B — duplicates are compared within one attempt's interval only (new criterion 6); S-10 — criterion 1 now covers restores of an untouched findings.md and is checked right after the restore.
