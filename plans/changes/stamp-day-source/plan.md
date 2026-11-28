@@ -37,6 +37,8 @@ The change is bounded, so no design or ADR is due. Explore used Stage 1, endpoin
 
 The refresh changes only the `updated:` line on eligible runner-maintained documents and must not admit a held path to the checkpoint. If a refresh after verification changes bytes, rerun the relevant frontmatter check on the final bytes before committing; do not silently commit when that check fails. Do not touch `scripts/check_frontmatter_current.py`, historical commits, unrelated clocks or other change folders.
 
+Scope note (orchestrator, 2026-11-28): spec [DETAIL] S-4 is read under S-12 — the refusal for a document without frontmatter applies only to runner-maintained documents (held, `frontmatter: required`, outside every `human-decided` prefix). Generated or frontmatter-free held files such as `plans/INDEX.md` are not stamped and never refuse a checkpoint; implement attempt 1 was rejected because it refused every checkpoint on `plans/INDEX.md`.
+
 ## Verification
 
 ```sh
